@@ -77,7 +77,7 @@ class Server < ::Sinatra::Base
         return json.length > 0
     end
 
-    def data_for(station, year:Time.now.year)
+    def tide_data_for(station, year:Time.now.year)
         return nil unless station
 
         filename = "#{settings.cache_dir}/#{station}_#{year}.json"
@@ -233,7 +233,7 @@ class Server < ::Sinatra::Base
         filename = "#{settings.cache_dir}/#{id}_#{year}.ics"
 
         ics = File.read filename rescue begin
-            data     = data_for(id) or halt 404
+            data     = tide_data_for(id) or halt 404
             calendar = calendar_for(data, station:station_for(id)) or halt 500
             calendar.publish
             logger.info "caching to #{filename}"
