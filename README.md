@@ -1,15 +1,16 @@
 # WebCalTides
 
 A neat little Ruby/Sinatra server for serving out tides and sunset data.
-Written to replace sailwx.info, which was awesome for what it was but doesn't
-seem to work anymore.  Who knows, maybe it'll come back... in the meantime,
-enjoy.
+Written to replace `sailwx.info`'s "Tide calendars to go"
+(`http://tides.mobilegeographics.com/`), which was awesome for what it was but
+doesn't seem to work anymore.  Who knows, maybe it'll come back... in the
+meantime, enjoy!
 
-This can be found on `webcaltides.org`.
+This service can be found at [webcaltides.org](https://webcaltides.org).
 
 ## Setup
 
-First, `bundler install`.
+First, `bundle install`.
 
 Then you'll need a Geonames account for lat/long => timezone conversion --
 they're free, [go get one](https://www.geonames.org/login).  After you register,
@@ -31,4 +32,4 @@ Check [server.rb](https://github.com/jpr5/webcaltides/blob/master/server.rb) hea
 
 ## Bugs/Patches
 
-Use GitHub, patches welcome.
+Use GitHub for issues, patches welcome.
