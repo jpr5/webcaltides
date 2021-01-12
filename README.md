@@ -21,6 +21,8 @@ access](https://www.geonames.org/manageaccount).
 Then update `server.rb:Server#configure` with your username and you're off to
 the races.
 
+OR, just use this one at [webcaltides.org](https://webcaltides.org)!
+
 ## Invocation
 
 `rackup` or `unicorn` works great.  Writes to a cache directory, basically
@@ -33,3 +35,7 @@ Check [server.rb](https://github.com/jpr5/webcaltides/blob/master/server.rb) hea
 ## Bugs/Patches
 
 Use GitHub for issues, patches welcome.
+
+## LICENSE
+
+Free as in beer, IFF you give me visible credit!  Mmm, beer..
