@@ -57,7 +57,7 @@ class Server < ::Sinatra::Base
     ###############
 
     def cache_tide_data_for(station, at:nil, year:)
-        return unless station
+        return false unless station
         at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
 
         agent = Mechanize.new
