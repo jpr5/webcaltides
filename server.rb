@@ -249,7 +249,7 @@ class Server < ::Sinatra::Base
         erb :index
     end
 
-    post "/search" do
+    post "/" do
         text = params['searchtext'].downcase rescue ""
 
         results = stations.select do |s|
@@ -260,7 +260,7 @@ class Server < ::Sinatra::Base
             s['region'].downcase.include?(text) rescue false
         end
 
-        erb :search, locals: { results: results, request_url: request.url }
+        erb :index, locals: { results: results, request_url: request.url }
     end
 
 end
