@@ -65,7 +65,7 @@ class Server < ::Sinatra::Base
         agent = Mechanize.new
         url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{year}0101&end_date=#{year}1231&station=#{station}"
 
-        logger.debug "getting json from #{url}"
+        logger.info "getting json from #{url}"
         json = agent.get(url).body
         logger.debug "json.length = #{json.length}"
 
@@ -98,7 +98,7 @@ class Server < ::Sinatra::Base
         agent = Mechanize.new
         url = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/tidepredstations.json?q='
 
-        logger.debug "getting station list from #{url}"
+        logger.info "getting station list from #{url}"
         json = agent.get(url).body
         logger.debug "json.length = #{json.length}"
 
@@ -222,7 +222,7 @@ class Server < ::Sinatra::Base
 
         end
 
-        logger.debug "calendar for #{station["name"]} generated with #{cal.events.length} events"
+        logger.info "calendar for #{station["name"]} generated with #{cal.events.length} events"
 
         return cal
     end
