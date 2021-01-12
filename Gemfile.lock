@@ -26,6 +26,7 @@ GEM
     irb (1.2.1)
       reline (>= 0.0.1)
     json (2.5.1)
+    kgio (2.11.3)
     mechanize (2.7.6)
       domain_name (~> 0.5, >= 0.5.1)
       http-cookie (~> 1.0)
@@ -57,6 +58,7 @@ GEM
     rack (2.2.3)
     rack-protection (2.1.0)
       rack
+    raindrops (0.19.1)
     reline (0.2.1)
       io-console (~> 0.5)
     ruby2_keywords (0.0.2)
@@ -72,6 +74,9 @@ GEM
     unf (0.1.4)
       unf_ext
     unf_ext (0.0.7.7)
+    unicorn (5.8.0)
+      kgio (~> 2.6)
+      raindrops (~> 0.7)
     webrobots (0.1.2)
     zeitwerk (2.4.2)
 
@@ -89,6 +94,7 @@ DEPENDENCIES
   pry (= 0.12.2)
   sinatra (= 2.1.0)
   timezone
+  unicorn
 
 RUBY VERSION
    ruby 2.7.1p83
