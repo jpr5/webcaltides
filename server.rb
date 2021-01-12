@@ -68,9 +68,7 @@ class Server < ::Sinatra::Base
         logger.debug "json.length = #{json.length}"
 
         logger.debug "storing tide data at #{at}"
-        File.open(at, "w+") do |f|
-            f.write json
-        end
+        File.write(at, json)
 
         return json.length > 0
     end
@@ -101,9 +99,7 @@ class Server < ::Sinatra::Base
         logger.debug "json.length = #{json.length}"
 
         logger.debug "storing station list at #{at}"
-        File.open(at, "w+") do |f|
-            f.write json
-        end
+        File.write(at, json)
 
         return json.length > 0
     end
