@@ -1,13 +1,11 @@
 ##
-## WebCal server for Tides & Sunset information.  Point iCal subscription at
-## /tides/$station_id.ics and voila.
-##
-## Meant to replace sailwx.info, which as of 2021 appears no longer to work.
-##
 ## Copyright (C) 2021 Jordan Ritter <jpr5@darkridge.com>
 ##
+## WebCal server for Tides & Sunset information.  Meant to replace
+## sailwx.info/tides.mobilegraphics.com, which as of 2021 appears no longer to
+## work.
+##
 
-# TODO: implement index page: explain what this is
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
 require 'bundler/setup'
