@@ -1,0 +1,27 @@
+<h1>WebCalTides Server</h1>
+
+<p>
+
+<table class="table table-condensed table-striped table-bordered" id="stationTable" style="table-layout: fixed; width: 100%">
+<thead><tr>
+<th style="width: 10%;">ID</th>
+<th style="width: 40%;">Name</th>
+<th style="width: 42%;">Region</th>
+<th style="width: 8%;">.ICS</th>
+</tr></thead>
+<tbody>
+<% uri = URI.parse(request_url)
+   uri.scheme = "webcal"
+   results.each do |r| %>
+<tr onMouseOver="style.backgroundColor='#F0F0F0'" onMouseOut="style.backgroundColor='#FFFFFF'">
+    <td style="width:10%;"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=<%= r['stationId'] %>"><%= r['stationId'] %></a></td>
+    <td style="width:40%;"><%= r["commonName"] %></td>
+    <td style="width:42%;"><%= r["region"]%></td>
+
+    <% uri.path = "/tides/#{r['stationId']}.ics"
+       webcal_url = uri.to_s %>
+    <td style="width:8%;"><a href="<%= webcal_url %>" target="_blank">iCal</a></td>
+</tr>
+<% end %>
+</tbody>
+</table>

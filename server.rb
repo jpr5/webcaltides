@@ -8,7 +8,6 @@
 ##
 
 # TODO: implement index page: explain what this is
-# TODO: implement station search on index page
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
 require 'bundler/setup'
@@ -257,7 +256,21 @@ class Server < ::Sinatra::Base
     end
 
     get "/" do
-        # TODO
+        erb :index
+    end
+
+    post "/search" do
+        text = params['searchtext'].downcase rescue ""
+
+        results = stations.select do |s|
+            s['stationId'] == text ||
+            s['etidesStnName'].downcase.include?(text) rescue false ||
+            s['commonName'].downcase.include?(text) rescue false ||
+            s['stationFullName'].downcase.include?(text) rescue false ||
+            s['region'].downcase.include?(text) rescue false
+        end
+
+        erb :search, locals: { results: results, request_url: request.url }
     end
 
 end
