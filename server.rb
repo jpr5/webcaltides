@@ -45,8 +45,6 @@ class Server < ::Sinatra::Base
 
     configure :development do
         enable :show_exceptions
-
-        before(/debug(|ger)/) { debugger }
     end
 
     configure :production do
