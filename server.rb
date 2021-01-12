@@ -54,14 +54,6 @@ class Server < ::Sinatra::Base
         disable :reload_templates, :reloader
     end
 
-    def self.route(verb, path, options={}, &block)
-        case path
-        when String then path += "/?" if path[-1] != ?/
-        when Regexp then path = Regexp.new(path.source + "/?") if path.source[-1] != ?/
-        end
-        super(verb, path, options, &block)
-    end
-
     ###############
     ### Methods ###
     ###############
