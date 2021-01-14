@@ -1,8 +1,10 @@
-<form action="/" accept-charset="UTF-8" method="POST">
-    <div class="field">
-        <label for="searchtext">Station Search (name, id, region, etc)</label>
-        <input type="text" name="searchtext" id="searchtext" />
-        <input type="submit" name="search" value="Search" data-disable-with="Search" />
+<form action="/" accept-charset="UTF-8" method="POST" class="w-50">
+    <label for="searchtext" class="form-label">Station Search</label>
+
+    <div class="input-group">
+        <span class="input-group-text" id="searchtext_prompt">Name, ID, Region, etc:</span>
+        <input type="text" class="form-control" name="searchtext" id="searchtext"/>
+        <button class="btn btn-primary" type="submit">Search</button>
     </div>
 </form>
 
@@ -13,24 +15,25 @@
    end
 %>
 
-<% if defined? tide_results and tide_results.length %>
-<table class="table table-condensed table-striped table-bordered" id="stationTable" style="table-layout: fixed; width: 100%">
-<thead>
-<tr><th style="width: 10%;">ID</th>
-<th style="width: 40%;">Name</th>
-<th style="width: 42%;">Region</th>
-<th style="width: 8%;">.ICS</th>
-</tr></thead>
+<% if (tide_results.count > 0 rescue false) %>
+<table class="table table-striped table-hover caption-top">
+    <caption>Tide Stations</caption>
+    <thead class="table-light"><tr>
+        <th scope="col">ID</th>
+        <th scope="col">Name</th>
+        <th scope="col">Region</th>
+        <th scope="col">.ICS</th>
+    </tr></thead>
 <tbody>
 <% tide_results.each do |r| %>
-<tr onMouseOver="style.backgroundColor='#F0F0F0'" onMouseOut="style.backgroundColor='#FFFFFF'">
-    <td style="width:10%;"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=<%= r['stationId'] %>"><%= r['stationId'] %></a></td>
-    <td style="width:40%;"><%= r["commonName"] %></td>
-    <td style="width:42%;"><%= r["region"]%></td>
+    <tr>
+    <th scope="row"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=<%= r['stationId'] %>"><%= r['stationId'] %></a></th>
+    <td><%= r["commonName"] %></td>
+    <td><%= r["region"]%></td>
 
     <% uri.path = "/tides/#{r['stationId']}.ics"
        webcal_url = uri.to_s %>
-    <td style="width:8%;"><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+    <td><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
 </tr>
 <% end %>
 </tbody>
@@ -39,26 +42,27 @@
 <% end %>
 
 
-<% if defined? current_results and current_results.length %>
-<table class="table table-condensed table-striped table-bordered" id="stationTable" style="table-layout: fixed; width: 100%">
-<thead><tr>
-<th style="width: 10%;">ID</th>
-<th style="width: 5%;">Bin</th>
-<th style="width: 5%;">Depth (ft)</th>
-<th style="width: 60%;">Name</th>
-<th style="width: 10%;">.ICS</th>
-</tr></thead>
+<% if (current_results.count > 0 rescue false) %>
+<table class="table table-striped table-hover caption-top">
+    <caption>Current Stations</caption>
+    <thead class="table-light"><tr>
+        <th scope="col">ID</th>
+        <th scope="col">Bin</th>
+        <th scope="col">Depth (ft)</th>
+        <th scope="col">Name</th>
+        <th scope="col">.ICS</th>
+    </tr></thead>
 <tbody>
 <% current_results.each do |r| %>
-<tr onMouseOver="style.backgroundColor='#F0F0F0'" onMouseOut="style.backgroundColor='#FFFFFF'">
-    <td style="width:10%;"><a href="https://tidesandcurrents.noaa.gov/noaacurrents/Predictions?id=<%= r['bid'] %>"><%= r['id'] %></a></td>
-    <td style="width:5%;"><%= r["currbin"] %></td>
-    <td style="width:5%;"><%= r["depth"].to_i %></td>
-    <td style="width:60%;"><%= r["name"] %></td>
+<tr>
+    <th scope="row"><a href="https://tidesandcurrents.noaa.gov/noaacurrents/Predictions?id=<%= r['bid'] %>"><%= r['id'] %></a></td>
+    <td><%= r["currbin"] %></td>
+    <td><%= r["depth"].to_i %></td>
+    <td><%= r["name"] %></td>
 
     <% uri.path = "/currents/#{r['bid']}.ics"
        webcal_url = uri.to_s %>
-    <td style="width:10%;"><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+    <td><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
 </tr>
 <% end %>
 </tbody>
