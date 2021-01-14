@@ -6,7 +6,6 @@
 ## work.
 ##
 
-# TODO: Rework main index page to allow searching on tide vs. current stations
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
 require 'bundler/setup'
