@@ -56,73 +56,6 @@ class Server < ::Sinatra::Base
     ### Methods ###
     ###############
 
-    def cache_tide_data_for(station, at:nil, year:)
-        return false unless station
-        at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
-
-        agent = Mechanize.new
-        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{year}0101&end_date=#{year}1231&station=#{station}"
-
-        logger.info "getting json from #{url}"
-        json = agent.get(url).body
-        logger.debug "json.length = #{json.length}"
-
-        logger.debug "storing tide data at #{at}"
-        File.write(at, json)
-
-        return json.length > 0
-    end
-
-    def tide_data_for(station, year:Time.now.year)
-        return nil unless station
-
-        filename = "#{settings.cache_dir}/#{station}_#{year}.json"
-        File.exists? filename or cache_tide_data_for(station, at: filename, year: year)
-
-        logger.debug "reading #{filename}"
-        json = File.read(filename)
-
-        logger.debug "parsing tides for #{station}"
-        data = JSON.parse(json)["predictions"] rescue nil
-
-        return data
-    end
-
-    def cache_stations(at:nil)
-        at ||= "#{settings.cache_dir}/stations.json"
-
-        agent = Mechanize.new
-        url = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/tidepredstations.json?q='
-
-        logger.info "getting station list from #{url}"
-        json = agent.get(url).body
-        logger.debug "json.length = #{json.length}"
-
-        logger.debug "storing station list at #{at}"
-        File.write(at, json)
-
-        return json.length > 0
-    end
-
-    def stations
-        return @stations ||= begin
-            filename = "#{settings.cache_dir}/stations.json"
-
-            File.exists? filename or cache_stations(at:filename)
-
-            logger.debug "reading #{filename}"
-            json = File.read(filename)
-
-            logger.debug "parsing station list"
-            data = JSON.parse(json)["stationList"] rescue {}
-        end
-    end
-
-    def station_for(id)
-        return nil if id.blank?
-        return stations.find { |s| s["stationId"] == id }
-    end
-
     def timezone_for(lat, long)
         filename = "#{settings.cache_dir}/tzs.json"
 
@@ -155,7 +88,74 @@ class Server < ::Sinatra::Base
         end
     end
 
-    def calendar_for(station_data, station:)
+    def cache_tide_stations(at:nil)
+        at ||= "#{settings.cache_dir}/tide_stations.json"
+
+        agent = Mechanize.new
+        url = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/tidepredstations.json?q='
+
+        logger.info "getting tide station list from #{url}"
+        json = agent.get(url).body
+        logger.debug "json.length = #{json.length}"
+
+        logger.debug "storing tide station list at #{at}"
+        File.write(at, json)
+
+        return json.length > 0
+    end
+
+    def tide_stations
+        return @tide_stations ||= begin
+            filename = "#{settings.cache_dir}/tide_stations.json"
+
+            File.exists? filename or cache_tide_stations(at:filename)
+
+            logger.debug "reading #{filename}"
+            json = File.read(filename)
+
+            logger.debug "parsing station list"
+            data = JSON.parse(json)["stationList"] rescue {}
+        end
+    end
+
+    def tide_station_for(id)
+        return nil if id.blank?
+        return tide_stations.find { |s| s["stationId"] == id }
+    end
+
+    def cache_tide_data_for(station, at:nil, year:)
+        return false unless station
+        at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
+
+        agent = Mechanize.new
+        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{year}0101&end_date=#{year}1231&station=#{station}"
+
+        logger.info "getting json from #{url}"
+        json = agent.get(url).body
+        logger.debug "json.length = #{json.length}"
+
+        logger.debug "storing tide data at #{at}"
+        File.write(at, json)
+
+        return json.length > 0
+    end
+
+    def tide_data_for(station, year:Time.now.year)
+        return nil unless station
+
+        filename = "#{settings.cache_dir}/#{station}_#{year}.json"
+        File.exists? filename or cache_tide_data_for(station, at: filename, year: year)
+
+        logger.debug "reading #{filename}"
+        json = File.read(filename)
+
+        logger.debug "parsing tides for #{station}"
+        data = JSON.parse(json)["predictions"] rescue nil
+
+        return data
+    end
+
+    def tide_calendar_for(station_data, station:)
         tideurl = "https://tidesandcurrents.noaa.gov/noaatidepredictions.html"
         cal = Icalendar::Calendar.new
 
@@ -221,14 +221,55 @@ class Server < ::Sinatra::Base
         return cal
     end
 
+    ##
+    ## Currents
+    ##
+
+    def cache_current_stations(at:nil)
+        at ||= "#{settings.cache_dir}/stations.json"
+
+        agent = Mechanize.new
+        url = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=currents&units=english'
+        # ...
+    end
+    def current_stations; end
+    def current_station_for(id); end
+
+    def cache_current_data_for(station, at:nil, year:); end
+    def current_data_for(id); end
+
+    def current_calendar_for(id); end
+
+    ##
+    ## URL entry points
+    ##
+
+    get "/" do
+        erb :index
+    end
+
+    post "/" do
+        text = params['searchtext'].downcase rescue ""
+
+        results = tide_stations.select do |s|
+            s['stationId'] == text ||
+            s['etidesStnName'].downcase.include?(text) rescue false ||
+            s['commonName'].downcase.include?(text) rescue false ||
+            s['stationFullName'].downcase.include?(text) rescue false ||
+            s['region'].downcase.include?(text) rescue false
+        end
+
+        erb :index, locals: { results: results, request_url: request.url }
+    end
+
     get "/tides/:station.ics" do
         id       = params[:station]
         year     = Time.now.year
-        filename = "#{settings.cache_dir}/#{id}_#{year}.ics"
+        filename = "#{settings.cache_dir}/tides_#{id}_#{year}.ics"
 
         ics = File.read filename rescue begin
             data     = tide_data_for(id) or halt 404
-            calendar = calendar_for(data, station:station_for(id)) or halt 500
+            calendar = tide_calendar_for(data, station:tide_station_for(id)) or halt 500
             calendar.publish
             logger.info "caching to #{filename}"
             File.write filename, ical = calendar.to_ical
@@ -239,22 +280,22 @@ class Server < ::Sinatra::Base
         body ics
     end
 
-    get "/" do
-        erb :index
-    end
+    get "/currents/:station.ics" do
+        id       = params[:station]
+        year     = Time.now.year
+        filename = "#{settings.cache_dir}/currents_#{id}_#{year}.ics"
 
-    post "/" do
-        text = params['searchtext'].downcase rescue ""
-
-        results = stations.select do |s|
-            s['stationId'] == text ||
-            s['etidesStnName'].downcase.include?(text) rescue false ||
-            s['commonName'].downcase.include?(text) rescue false ||
-            s['stationFullName'].downcase.include?(text) rescue false ||
-            s['region'].downcase.include?(text) rescue false
+        ics = File.read filename rescue begin
+            data     = current_data_for(id) or halt 404
+            calendar = current_calendar_for(data, station:current_station_for(id)) or halt 500
+            calendar.publish
+            logger.info "caching to #{filename}"
+            File.write filename, ical = calendar.to_ical
+            ical
         end
 
-        erb :index, locals: { results: results, request_url: request.url }
+        content_type 'text/calendar'
+        body ics
     end
 
 end
