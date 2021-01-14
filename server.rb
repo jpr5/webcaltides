@@ -71,7 +71,7 @@ class Server < ::Sinatra::Base
     post "/" do
         text = params['searchtext'].downcase rescue ""
 
-        results = tide_stations.select do |s|
+        tide_results = tide_stations.select do |s|
             s['stationId'] == text ||
             s['etidesStnName'].downcase.include?(text) rescue false ||
             s['commonName'].downcase.include?(text) rescue false ||
@@ -79,7 +79,13 @@ class Server < ::Sinatra::Base
             s['region'].downcase.include?(text) rescue false
         end
 
-        erb :index, locals: { results: results, request_url: request.url }
+        current_results = current_stations.select do |s|
+            s['id'].downcase.start_with?(text.downcase) rescue false ||
+            s['id'].downcase.include?(text.downcase) rescue false ||
+            s['name'].downcase.include?(text) rescue false
+        end
+
+        erb :index, locals: { tide_results: tide_results, current_results: current_results, request_url: request.url }
     end
 
     get "/tides/:station.ics" do

@@ -6,18 +6,23 @@
     </div>
 </form>
 
-<% if defined? results %>
+<%
+   if defined? request_url
+       uri = URI.parse(request_url)
+       uri.scheme = "webcal"
+   end
+%>
+
+<% if defined? tide_results and tide_results.length %>
 <table class="table table-condensed table-striped table-bordered" id="stationTable" style="table-layout: fixed; width: 100%">
-<thead><tr>
-<th style="width: 10%;">ID</th>
+<thead>
+<tr><th style="width: 10%;">ID</th>
 <th style="width: 40%;">Name</th>
 <th style="width: 42%;">Region</th>
 <th style="width: 8%;">.ICS</th>
 </tr></thead>
 <tbody>
-<% uri = URI.parse(request_url)
-   uri.scheme = "webcal"
-   results.each do |r| %>
+<% tide_results.each do |r| %>
 <tr onMouseOver="style.backgroundColor='#F0F0F0'" onMouseOut="style.backgroundColor='#FFFFFF'">
     <td style="width:10%;"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=<%= r['stationId'] %>"><%= r['stationId'] %></a></td>
     <td style="width:40%;"><%= r["commonName"] %></td>
@@ -30,4 +35,33 @@
 <% end %>
 </tbody>
 </table>
+<p/>
+<% end %>
+
+
+<% if defined? current_results and current_results.length %>
+<table class="table table-condensed table-striped table-bordered" id="stationTable" style="table-layout: fixed; width: 100%">
+<thead><tr>
+<th style="width: 10%;">ID</th>
+<th style="width: 5%;">Bin</th>
+<th style="width: 5%;">Depth (ft)</th>
+<th style="width: 60%;">Name</th>
+<th style="width: 10%;">.ICS</th>
+</tr></thead>
+<tbody>
+<% current_results.each do |r| %>
+<tr onMouseOver="style.backgroundColor='#F0F0F0'" onMouseOut="style.backgroundColor='#FFFFFF'">
+    <td style="width:10%;"><a href="https://tidesandcurrents.noaa.gov/noaacurrents/Predictions?id=<%= r['bid'] %>"><%= r['id'] %></a></td>
+    <td style="width:5%;"><%= r["currbin"] %></td>
+    <td style="width:5%;"><%= r["depth"].to_i %></td>
+    <td style="width:60%;"><%= r["name"] %></td>
+
+    <% uri.path = "/currents/#{r['bid']}.ics"
+       webcal_url = uri.to_s %>
+    <td style="width:10%;"><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+</tr>
+<% end %>
+</tbody>
+</table>
+<p/>
 <% end %>
