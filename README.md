@@ -1,9 +1,11 @@
 # WebCalTides
 
-A neat little Ruby/Sinatra server for serving out tides and sunset data.
+WebCalTides is a neat little Ruby/Sinatra server for putting tides, currents and
+solar data on your calendar.
+
 Written to replace `sailwx.info`'s "Tide calendars to go"
 (`http://tides.mobilegeographics.com/`), which was awesome for what it was but
-doesn't seem to work anymore.  Who knows, maybe it'll come back... in the
+doesn't seem to work anymore.  Who knows, maybe it'll come back... but in the
 meantime, enjoy!
 
 This service can be found at [webcaltides.org](https://webcaltides.org).
