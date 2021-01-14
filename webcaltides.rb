@@ -99,10 +99,10 @@ module WebCalTides
 
         by_stations = tide_stations.select do |s|
             s['stationId'] == by ||
-            s['etidesStnName'].downcase.include?(by) rescue false ||
-            s['commonName'].downcase.include?(by) rescue false ||
-            s['stationFullName'].downcase.include?(by) rescue false ||
-            s['region'].downcase.include?(by) rescue false
+            (s['etidesStnName'].downcase.include?(by) rescue false) ||
+            (s['commonName'].downcase.include?(by) rescue false) ||
+            (s['stationFullName'].downcase.include?(by) rescue false) ||
+            (s['region'].downcase.include?(by)) rescue false
         end
 
         # can only do radius search with one result, ignore otherwise
@@ -229,13 +229,13 @@ module WebCalTides
     def find_current_stations(by:nil, within:nil, units:'mi')
         by ||= "" # any
 
-        logger.debug("finding current stations by '#{by}' within '#{within}'")
+        logger.debug "finding current stations by '#{by}' within '#{within}'"
 
         by_stations = current_stations.select do |s|
-            s['bid'].downcase.start_with?(by) rescue false ||
-            s['id'].downcase.start_with?(by) rescue false ||
-            s['id'].downcase.include?(by) rescue false ||
-            s['name'].downcase.include?(by) rescue false
+            (s['bid'].downcase.start_with?(by) rescue false) ||
+            (s['id'].downcase.start_with?(by) rescue false) ||
+            (s['id'].downcase.include?(by) rescue false) ||
+            (s['name'].downcase.include?(by)) rescue false
         end
 
         # can only do radius search with one result, ignore otherwise
