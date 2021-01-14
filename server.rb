@@ -31,7 +31,7 @@ class Server < ::Sinatra::Base
             c.username = ENV['USER']
         end
 
-        FileUtils.mkdir Server.settings.cache_dir unless File.directory? Server.settings.cache_dir
+        FileUtils.mkdir settings.cache_dir unless File.directory? settings.cache_dir
 
         not_found do
             msg = "URL not recognized: %s" % env['REQUEST_URI']
