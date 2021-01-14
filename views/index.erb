@@ -3,7 +3,7 @@
 
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Name, ID, Region, etc:</span>
-        <input type="text" class="form-control" name="searchtext" id="searchtext"/>
+        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="Station..."/>
         <button class="btn btn-primary" type="submit">Search</button>
     </div>
 </form>
@@ -23,6 +23,7 @@
         <th scope="col">Name</th>
         <th scope="col">Region</th>
         <th scope="col">.ICS</th>
+        <th scope="col" class="text-right">Refine</th>
     </tr></thead>
 <tbody>
 <% tide_results.each do |r| %>
@@ -34,6 +35,28 @@
     <% uri.path = "/tides/#{r['stationId']}.ics"
        webcal_url = uri.to_s %>
     <td><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+
+    <td>
+
+        <div class="btn-group dropdown">
+            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                Radius
+            </a>
+            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                <form action="/" method="POST">
+                    <label for="within" class="form-label">Any stations within</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="within" id="within" />
+                        <input type="hidden" name="searchtext" value="<%= r['stationId'] %>" />
+                        <span class="input-group-text" id="radius_units">mi</span>
+                        <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </td>
+
 </tr>
 <% end %>
 </tbody>
@@ -51,6 +74,7 @@
         <th scope="col">Depth (ft)</th>
         <th scope="col">Name</th>
         <th scope="col">.ICS</th>
+        <th scope="col">Refine</th>
     </tr></thead>
 <tbody>
 <% current_results.each do |r| %>
@@ -63,6 +87,28 @@
     <% uri.path = "/currents/#{r['bid']}.ics"
        webcal_url = uri.to_s %>
     <td><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+
+    <td>
+
+        <div class="btn-group dropdown">
+            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                Radius
+            </a>
+            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                <form action="/" method="POST">
+                    <label for="within" class="form-label">Any stations within</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="within" id="within" />
+                        <input type="hidden" name="searchtext" value="<%= r['bid'] %>" />
+                        <span class="input-group-text" id="radius_units">mi</span>
+                        <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </td>
+
 </tr>
 <% end %>
 </tbody>

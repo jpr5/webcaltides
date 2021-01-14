@@ -52,21 +52,11 @@ class Server < ::Sinatra::Base
     end
 
     post "/" do
-        text = params['searchtext'].downcase rescue ""
+        text   = params['searchtext'].downcase rescue nil
+        radius = params['within'] rescue nil
 
-        tide_results = WebCalTides.tide_stations.select do |s|
-            s['stationId'] == text ||
-            s['etidesStnName'].downcase.include?(text) rescue false ||
-            s['commonName'].downcase.include?(text) rescue false ||
-            s['stationFullName'].downcase.include?(text) rescue false ||
-            s['region'].downcase.include?(text) rescue false
-        end
-
-        current_results = WebCalTides.current_stations.select do |s|
-            s['id'].downcase.start_with?(text.downcase) rescue false ||
-            s['id'].downcase.include?(text.downcase) rescue false ||
-            s['name'].downcase.include?(text) rescue false
-        end
+        tide_results    = WebCalTides.find_tide_stations(by:text, within:radius)
+        current_results = WebCalTides.find_current_stations(by:text, within:radius)
 
         erb :index, locals: { tide_results: tide_results, current_results: current_results, request_url: request.url }
     end

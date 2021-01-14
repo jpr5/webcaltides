@@ -4,6 +4,7 @@
 
 require 'icalendar/tzinfo'
 require 'solareventcalculator'
+require 'geocoder'
 
 
 module WebCalTides
@@ -88,6 +89,31 @@ module WebCalTides
     def tide_station_for(id)
         return nil if id.blank?
         return tide_stations.find { |s| s["stationId"] == id }
+    end
+
+    # nil == any, units == [ mi, km ]
+    def find_tide_stations(by:nil, within:nil, units:'mi')
+        by ||= "" # any
+
+        logger.debug("finding tide stations by '#{by}' within '#{within}'")
+
+        by_stations = tide_stations.select do |s|
+            s['stationId'] == by ||
+            s['etidesStnName'].downcase.include?(by) rescue false ||
+            s['commonName'].downcase.include?(by) rescue false ||
+            s['stationFullName'].downcase.include?(by) rescue false ||
+            s['region'].downcase.include?(by) rescue false
+        end
+
+        # can only do radius search with one result, ignore otherwise
+        return by_stations unless within and by_stations.size == 1
+
+        station = by_stations.first
+        within = within.to_i
+
+        return tide_stations.select do |s|
+            Geocoder::Calculations.distance_between([station["lat"], station["lon"]], [s["lat"],s["lon"]], units: units.to_sym) <= within
+        end
     end
 
     def cache_tide_data_for(station, at:nil, year:)
@@ -197,6 +223,30 @@ module WebCalTides
     def current_station_for(id)
         return nil if id.blank?
         return current_stations.select { |s| s["id"] == id || s["bid"] == id }.first
+    end
+
+    # nil == any, units == [ mi, km ]
+    def find_current_stations(by:nil, within:nil, units:'mi')
+        by ||= "" # any
+
+        logger.debug("finding current stations by '#{by}' within '#{within}'")
+
+        by_stations = current_stations.select do |s|
+            s['bid'].downcase.start_with?(by) rescue false ||
+            s['id'].downcase.start_with?(by) rescue false ||
+            s['id'].downcase.include?(by) rescue false ||
+            s['name'].downcase.include?(by) rescue false
+        end
+
+        # can only do radius search with one result, ignore otherwise
+        return by_stations unless within and by_stations.size == 1
+
+        station = by_stations.first
+        within = within.to_i
+
+        return current_stations.select do |s|
+            Geocoder::Calculations.distance_between([station["lat"], station["lng"]], [s["lat"],s["lng"]], units: units.to_sym) <= within
+        end
     end
 
     def cache_current_data_for(station, at:nil, year:)
