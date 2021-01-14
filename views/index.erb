@@ -70,7 +70,6 @@
     <caption>Current Stations</caption>
     <thead class="table-light"><tr>
         <th scope="col">ID</th>
-        <th scope="col">Bin</th>
         <th scope="col">Depth (ft)</th>
         <th scope="col">Name</th>
         <th scope="col">.ICS</th>
@@ -80,7 +79,6 @@
 <% current_results.each do |r| %>
 <tr>
     <th scope="row"><a href="https://tidesandcurrents.noaa.gov/noaacurrents/Predictions?id=<%= r['bid'] %>"><%= r['id'] %></a></td>
-    <td><%= r["currbin"] %></td>
     <td><%= r["depth"].to_i %></td>
     <td><%= r["name"] %></td>
 
