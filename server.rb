@@ -32,17 +32,6 @@ class Server < ::Sinatra::Base
         end
 
         FileUtils.mkdir settings.cache_dir unless File.directory? settings.cache_dir
-
-        not_found do
-            msg = "URL not recognized: %s" % env['REQUEST_URI']
-            puts msg
-            halt 404
-        end
-
-        error do
-            e = env['sinatra.error']
-            puts "exception raised during processing: #{e.inspect}"
-        end
     end
 
     configure :development do
