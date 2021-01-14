@@ -12,8 +12,8 @@
 require 'bundler/setup'
 Bundler.require
 
-$LOAD_PATH << "."
-require 'methods'
+$: << "."
+require 'webcaltides'
 
 
 class Server < ::Sinatra::Base
@@ -54,12 +54,6 @@ class Server < ::Sinatra::Base
         disable :reload_templates, :reloader
     end
 
-    ###############
-    ### Methods ###
-    ###############
-
-    include WebCalTides
-
     ##
     ## URL entry points
     ##
@@ -71,7 +65,7 @@ class Server < ::Sinatra::Base
     post "/" do
         text = params['searchtext'].downcase rescue ""
 
-        tide_results = tide_stations.select do |s|
+        tide_results = WebCalTides.tide_stations.select do |s|
             s['stationId'] == text ||
             s['etidesStnName'].downcase.include?(text) rescue false ||
             s['commonName'].downcase.include?(text) rescue false ||
@@ -79,7 +73,7 @@ class Server < ::Sinatra::Base
             s['region'].downcase.include?(text) rescue false
         end
 
-        current_results = current_stations.select do |s|
+        current_results = WebCalTides.current_stations.select do |s|
             s['id'].downcase.start_with?(text.downcase) rescue false ||
             s['id'].downcase.include?(text.downcase) rescue false ||
             s['name'].downcase.include?(text) rescue false
@@ -94,7 +88,7 @@ class Server < ::Sinatra::Base
         filename = "#{settings.cache_dir}/tides_#{id}_#{year}.ics"
 
         ics = File.read filename rescue begin
-            calendar = tide_calendar_for(id, year:year) or halt 500
+            calendar = WebCalTides.tide_calendar_for(id, year:year) or halt 500
             calendar.publish
             logger.info "caching to #{filename}"
             File.write filename, ical = calendar.to_ical
@@ -112,7 +106,7 @@ class Server < ::Sinatra::Base
         filename = "#{settings.cache_dir}/currents_#{id}_#{year}.ics"
 
         ics = File.read filename rescue begin
-            calendar = current_calendar_for(id, year:year) or halt 500
+            calendar = WebCalTides.current_calendar_for(id, year:year) or halt 500
             calendar.publish
             logger.info "caching to #{filename}"
             File.write filename, ical = calendar.to_ical
