@@ -215,7 +215,12 @@ module WebCalTides
             logger.debug "parsing current station list"
             data = JSON.parse(json)["stations"] rescue {}
 
-            # Since different bins/depths use the same ID, we massage each entry with a unique "bin id" aka bid
+            # Tho we get records, anything "weak and variable" won't have a lookup page,
+            # so we exclude them.
+            data.reject! { |s| s["type"] == "W" }
+
+            # Since different bins/depths use the same ID, we massage each entry with a
+            # unique "bin id" aka bid.
             data.map! { |s| s["bid"] = s["id"] + "_" + s["currbin"].to_s; s }
         end
     end
