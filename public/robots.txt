@@ -1,0 +1,3 @@
+Sitemap: https://webcaltides.org/sitemap.xml
+User-agent:*
+Disallow:

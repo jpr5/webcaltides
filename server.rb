@@ -17,10 +17,12 @@ require 'webcaltides'
 
 class Server < ::Sinatra::Base
 
-    set :app_file,   File.expand_path(__FILE__)
-    set :root,       File.expand_path(File.dirname(__FILE__))
-    set :views,      settings.root + '/views'
-    set :cache_dir,  settings.root + '/cache'
+    set :app_file,      File.expand_path(__FILE__)
+    set :root,          File.expand_path(File.dirname(__FILE__))
+    set :cache_dir,     settings.root + '/cache'
+    set :static,        true
+    set :public_folder, settings.root + '/public'
+    set :views,         settings.root + '/views'
 
     configure do
         set :logging, Logger::DEBUG
