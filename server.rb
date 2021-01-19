@@ -41,7 +41,7 @@ class Server < ::Sinatra::Base
 
     configure :production do
         set :logging, Logger::INFO
-        disable :reload_templates, :reloader
+        disable :reload_templates, :reloader, :show_exceptions
     end
 
     ##
