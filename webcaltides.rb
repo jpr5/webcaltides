@@ -165,7 +165,7 @@ module WebCalTides
         data.each do |tide|
             date     = DateTime.parse(tide['t']).strftime("%Y%m%d")
             title    = tide["type"] == "H" ? "High" : "Low"
-            title   += " Tide   #{tide["v"]} feet"
+            title   += " Tide   #{tide["v"]} ft"
 
             cal.event do |e|
                 e.summary     = title
