@@ -11,8 +11,7 @@
 require 'bundler/setup'
 Bundler.require
 
-$: << "."
-require 'webcaltides'
+require_relative 'webcaltides'
 
 
 class Server < ::Sinatra::Base
