@@ -63,31 +63,19 @@ class Server < ::Sinatra::Base
         erb :index, locals: { tide_results: tide_results, current_results: current_results, request_url: request.url }
     end
 
-    get "/tides/:station.ics" do
+    # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
+    get "/:type/:station.ics" do
+        type     = params[:type]
         id       = params[:station]
         year     = params[:year] || Time.now.year
-        filename = "#{settings.cache_dir}/tides_#{id}_#{year}.ics"
+        filename = "#{settings.cache_dir}/#{type}_#{id}_#{year}.ics"
 
         ics = File.read filename rescue begin
-            calendar = WebCalTides.tide_calendar_for(id, year:year) or halt 500
-            calendar.publish
-            logger.info "caching to #{filename}"
-            File.write filename, ical = calendar.to_ical
-            ical
-        end
-
-        content_type 'text/calendar'
-        body ics
-    end
-
-    # station can be either an ID (we'll use the first bin) or a BID (specific bin)
-    get "/currents/:station.ics" do
-        id      = params[:station]
-        year     = Time.now.year
-        filename = "#{settings.cache_dir}/currents_#{id}_#{year}.ics"
-
-        ics = File.read filename rescue begin
-            calendar = WebCalTides.current_calendar_for(id, year:year) or halt 500
+            calendar = case type
+                       when "tides"    then WebCalTides.tide_calendar_for(id, year:year)    or halt 500
+                       when "currents" then WebCalTides.current_calendar_for(id, year:year) or halt 500
+                       else halt 404
+                       end
             calendar.publish
             logger.info "caching to #{filename}"
             File.write filename, ical = calendar.to_ical
