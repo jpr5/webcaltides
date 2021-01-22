@@ -55,6 +55,8 @@ class Server < ::Sinatra::Base
         text   = params['searchtext'].downcase rescue nil
         radius = params['within'] rescue nil
 
+        logger.info "searching for '#{text}' within '#{radius}'"
+
         tide_results    = WebCalTides.find_tide_stations(by:text, within:radius)
         current_results = WebCalTides.find_current_stations(by:text, within:radius)
 
