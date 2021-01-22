@@ -155,7 +155,7 @@ module WebCalTides
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station["name"].titleize
 
-        tideurl = "https://tidesandcurrents.noaa.gov/noaatidepredictions.html"
+        url      = "https://tidesandcurrents.noaa.gov/noaatidepredictions.html"
         location = [
                 station["etidesStnName"], station["region"], station["state"]
             ].join(", ")
@@ -163,16 +163,16 @@ module WebCalTides
         logger.debug "generating tide calendar for #{station["name"]}"
 
         data.each do |tide|
-            date     = DateTime.parse(tide['t']).strftime("%Y%m%d")
-            title    = tide["type"] == "H" ? "High" : "Low"
-            title   += " Tide   #{tide["v"]} ft"
+            date   = DateTime.parse(tide['t']).strftime("%Y%m%d")
+            title  = tide["type"] == "H" ? "High" : "Low"
+            title += " Tide   #{tide["v"]} ft"
 
             cal.event do |e|
-                e.summary     = title
-                e.dtstart     = Icalendar::Values::DateTime.new(DateTime.parse(tide["t"]), tzid: 'GMT')
-                e.dtend       = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
-                e.url         = tideurl + "?id=" + station["stationId"] + "&bdate=" + date
-                e.location    = location
+                e.summary  = title
+                e.dtstart  = Icalendar::Values::DateTime.new(DateTime.parse(tide["t"]), tzid: 'GMT')
+                e.dtend    = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
+                e.url      = url + "?id=" + station["stationId"] + "&bdate=" + date
+                e.location = location
             end
         end
 
@@ -275,7 +275,6 @@ module WebCalTides
         return json.length > 0
     end
 
-    # https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=currentpredictions&units=english
     def current_data_for(station, year:Time.now.year)
         return nil unless station
 
@@ -304,7 +303,7 @@ module WebCalTides
         logger.debug "generating current calendar for #{location}"
 
         data.each do |current|
-            date     = DateTime.parse(current['Time']).strftime("%Y-%m-%d")
+            date  = DateTime.parse(current['Time']).strftime("%Y-%m-%d")
             title = case current["Type"]
                     when "ebb"   then "Ebb #{current["Velocity_Major"].to_f.abs}kts #{current["meanEbbDir"]}T #{current["Depth"]}ft"
                     when "flood" then "Flood #{current["Velocity_Major"]}kts #{current["meanFloodDir"]}T #{current["Depth"]}ft"
@@ -312,11 +311,11 @@ module WebCalTides
                     end
 
             cal.event do |e|
-                e.summary     = title
-                e.dtstart     = Icalendar::Values::DateTime.new(DateTime.parse(current["Time"]), tzid: 'GMT')
-                e.dtend       = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
-                e.url         = url + "?id=" + station["bid"] + "&d=" + date
-                e.location    = location if location
+                e.summary  = title
+                e.dtstart  = Icalendar::Values::DateTime.new(DateTime.parse(current["Time"]), tzid: 'GMT')
+                e.dtend    = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
+                e.url      = url + "?id=" + station["bid"] + "&d=" + date
+                e.location = location if location
             end
         end
 

@@ -5,8 +5,8 @@
     <meta name="description" content="Generate webcal tide + sunrise/sunset calendars for ical and google calendar.">
     <meta name="viewport"    content="width=device-width, initial-scale=1">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" type="text/css" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
-    <link href="/favicon.png"     rel="icon"       type="image/png">
+    <link rel="icon"       type="image/png" href="/favicon.png">
+    <link rel="stylesheet" type="text/css"  href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
 </head>
 
 <body class="container">
@@ -14,14 +14,10 @@
 <h1 class="display-4">WebCalTides Service</h1>
 
 <p class="lead">
-WebCalTides is a free service that provides tides, currents and sunrise/sunset
-calendars for your favorite NOAA station.  Data is pulled from
-<a href="https://tidesandcurrents.noaa.gov/tide_predictions.html">tidesandcurrents.noaa.gov</a>.
-Just search for a station, then click the webcal link to subscribe.  Works on
-Apple iCal & Google Calendar; maybe Outlook too.
+WebCalTides is a free service that provides tides, currents and sunrise/sunset calendars for your favorite NOAA station.  Data is pulled from <a href="https://tidesandcurrents.noaa.gov/tide_predictions.html">tidesandcurrents.noaa.gov</a>. Just search for a station, then click the webcal link to subscribe.  Works on Apple iCal & Google Calendar; maybe Outlook too.
 </p>
 
-    <%= yield %>
+<%= yield %>
 
 <p/>
 
