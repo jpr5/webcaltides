@@ -11,7 +11,6 @@
 <%
    if defined? request_url
        uri = URI.parse(request_url)
-       uri.scheme = "webcal"
    end
 %>
 
@@ -32,9 +31,30 @@
     <td><%= r["commonName"] %></td>
     <td><%= r["region"]%></td>
 
-    <% uri.path = "/tides/#{r['stationId']}.ics"
-       webcal_url = uri.to_s %>
-    <td><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+    <%
+       uri.path = "/tides/#{r['stationId']}.ics"
+
+       uri.scheme = "webcal"
+       webcal_url = uri.to_s
+       uri.scheme = "https"
+       https_url  = uri.to_s
+       url_id     = "url_#{r['stationId']}"
+    %>
+    <td>
+
+        <div class="btn-group dropdown">
+            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                webcal
+            </a>
+            <div class="dropdown-menu" style="min-width: 100px;" aria-labelledby="dropdownMenuButton">
+                <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
+                <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" decoding="async" width="29" height="29"></a>
+                <a href="<%= https_url %>" target="_blank"><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/0/0c/Gnome-document-save-as.svg" decoding="async" width="25" height="30" ></a>
+                <a href="<%= webcal_url %>" target="_blank"><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Google_Calendar_icon.svg" decoding="async" width="29" height="29"></a>
+            </div>
+        </div>
+
+    </td>
 
     <td>
 
@@ -82,9 +102,31 @@
     <td><%= r["depth"].to_i %></td>
     <td><%= r["name"] %></td>
 
-    <% uri.path = "/currents/#{r['bid']}.ics"
-       webcal_url = uri.to_s %>
-    <td><a href="<%= webcal_url %>" target="_blank">webcal</a></td>
+    <%
+       uri.path = "/currents/#{r['bid']}.ics"
+
+       uri.scheme = "webcal"
+       webcal_url = uri.to_s
+       uri.scheme = "https"
+       https_url  = uri.to_s
+       url_id     = "url_#{r['bid']}"
+    %>
+    <td>
+
+        <div class="btn-group dropdown">
+            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                webcal
+            </a>
+            <div class="dropdown-menu" style="min-width: 100px;" aria-labelledby="dropdownMenuButton">
+
+                <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
+                <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" decoding="async" width="29" height="29"></a>
+                <a href="<%= https_url %>" target="_blank"><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/0/0c/Gnome-document-save-as.svg" decoding="async" width="25" height="30" ></a>
+                <a href="<%= webcal_url %>" target="_blank"><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Google_Calendar_icon.svg" decoding="async" width="29" height="29"></a>
+            </div>
+        </div>
+
+    </td>
 
     <td>
 
