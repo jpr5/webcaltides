@@ -56,7 +56,6 @@ class Server < ::Sinatra::Base
         radius = params['within']
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
-        # Currently only works with Decimal (no Deg/Min/Secs)
         if ((lat, long) = WebCalTides.parse_gps(text))
             radius ||= "10" # mi
 
@@ -74,7 +73,8 @@ class Server < ::Sinatra::Base
         tide_results    ||= []
         current_results ||= []
 
-        erb :index, locals: { tide_results: tide_results, current_results: current_results, request_url: request.url }
+        erb :index, locals: { tide_results: tide_results, current_results: current_results,
+                              request_url: request.url, searchtext: text }
     end
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)

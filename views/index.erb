@@ -14,7 +14,11 @@
    end
 %>
 
-<% if (tide_results.count > 0 rescue false) %>
+<% if defined? tide_results and defined? current_results %>
+
+<p><em>Search '<%= searchtext %>' yields <%= tide_results.count + current_results.count %> results</em></p>
+
+<% if tide_results.count > 0 %>
 <table class="table table-striped table-hover caption-top">
     <caption>Tide Stations</caption>
     <thead class="table-light"><tr>
@@ -85,7 +89,7 @@
 <% end %>
 
 
-<% if (current_results.count > 0 rescue false) %>
+<% if current_results.count > 0 %>
 <table class="table table-striped table-hover caption-top">
     <caption>Current Stations</caption>
     <thead class="table-light"><tr>
@@ -153,5 +157,8 @@
 <% end %>
 </tbody>
 </table>
+
+<% end %>
+
 <p/>
 <% end %>
