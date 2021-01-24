@@ -20,6 +20,16 @@ module WebCalTides
     ## Util
     ##
 
+    # Currently only works with Decimal (no Deg/Min/Secs)
+    def parse_gps(str)
+        res = str.split(/[, ]+/)
+        return nil if res.length != 2 or
+                      res.any? { |s| s.scan(/^[\d\.\-]+$/).empty? } or
+                      !res[0].to_f.between?(-90,90) or
+                      !res[1].to_f.between?(-180,180)
+        return res
+    end
+
     def timezone_for(lat, long)
         filename = "#{settings.cache_dir}/tzs.json"
 
@@ -109,10 +119,14 @@ module WebCalTides
         return by_stations unless within and by_stations.size == 1
 
         station = by_stations.first
-        within = within.to_i
 
+        return find_tide_stations_by_gps(station["lat"], station["lon"], within:within, units:units)
+    end
+
+    def find_tide_stations_by_gps(lat, long, within:nil, units:'mi')
+        within = within.to_i
         return tide_stations.select do |s|
-            Geocoder::Calculations.distance_between([station["lat"], station["lon"]], [s["lat"],s["lon"]], units: units.to_sym) <= within
+            Geocoder::Calculations.distance_between([lat, long], [s["lat"],s["lon"]], units: units.to_sym) <= within
         end
     end
 
@@ -247,10 +261,15 @@ module WebCalTides
         return by_stations unless within and by_stations.size == 1
 
         station = by_stations.first
+
+        return find_current_stations_by_gps(station["lat"], station["lng"], within:within, units:units)
+    end
+
+    def find_current_stations_by_gps(lat, long, within:nil, units:'mi')
         within = within.to_i
 
         return current_stations.select do |s|
-            Geocoder::Calculations.distance_between([station["lat"], station["lng"]], [s["lat"],s["lng"]], units: units.to_sym) <= within
+            Geocoder::Calculations.distance_between([lat, long], [s["lat"],s["lng"]], units: units.to_sym) <= within
         end
     end
 
