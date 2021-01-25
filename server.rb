@@ -55,16 +55,19 @@ class Server < ::Sinatra::Base
         text   = params['searchtext'].downcase rescue nil
         radius = params['within']
 
+        for_what  = "[#{text}]"
+        for_what += " within [#{radius}]" if radius
+
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(text))
-            radius ||= "10" # mi
+            for_what.insert(0, "near ")
 
-            logger.info "searching for stations near '#{lat}, #{long}' within '#{radius}'"
+            radius ||= "10" # default; in mi
 
             tide_results    = WebCalTides.find_tide_stations_by_gps(lat, long, within:radius)
             current_results = WebCalTides.find_current_stations_by_gps(lat, long, within:radius)
         else
-            logger.info "searching for '#{text}' within '#{radius}'"
+            for_what.insert(0, "by ")
 
             tide_results    = WebCalTides.find_tide_stations(by:text, within:radius)
             current_results = WebCalTides.find_current_stations(by:text, within:radius)
@@ -72,6 +75,8 @@ class Server < ::Sinatra::Base
 
         tide_results    ||= []
         current_results ||= []
+
+        logger.info "search: #{for_what} => #{tide_results.count + current_results.count} results"
 
         erb :index, locals: { tide_results: tide_results, current_results: current_results,
                               request_url: request.url, searchtext: text }
