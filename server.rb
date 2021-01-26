@@ -2,8 +2,8 @@
 ## Copyright (C) 2021 Jordan Ritter <jpr5@darkridge.com>
 ##
 ## WebCal server for Tides & Sunset information.  Meant to replace
-## sailwx.info/tides.mobilegraphics.com, which as of 2021 appears no longer to
-## work.
+## sailwx.info/tides.mobilegeographics.com, which as of 2021 appears no longer
+## to work.
 ##
 
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
@@ -31,7 +31,7 @@ class Server < ::Sinatra::Base
             c.username = ENV['USER']
         end
 
-        FileUtils.mkdir settings.cache_dir unless File.directory? settings.cache_dir
+        FileUtils.mkdir_p settings.cache_dir
     end
 
     configure :development do
