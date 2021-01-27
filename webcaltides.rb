@@ -150,7 +150,7 @@ module WebCalTides
     def tide_data_for(station, year:Time.now.year)
         return nil unless station
 
-        filename = "#{settings.cache_dir}/#{station}_#{year}.json"
+        filename = "#{settings.cache_dir}/tides_#{station}_#{year}.json"
         File.exists? filename or cache_tide_data_for(station, at:filename, year:year)
 
         logger.debug "reading #{filename}"
@@ -297,7 +297,7 @@ module WebCalTides
     def current_data_for(station, year:Time.now.year)
         return nil unless station
 
-        filename = "#{settings.cache_dir}/#{station}_#{year}.json"
+        filename = "#{settings.cache_dir}/currents_#{station}_#{year}.json"
         File.exists? filename or cache_current_data_for(station, at:filename, year:year)
 
         logger.debug "reading #{filename}"
