@@ -103,16 +103,19 @@ module WebCalTides
 
     # nil == any, units == [ mi, km ]
     def find_tide_stations(by:nil, within:nil, units:'mi')
-        by ||= "" # any
+        by ||= [""]
+        by &&= Array(by).map(&:downcase)
 
         logger.debug("finding tide stations by '#{by}' within '#{within}'")
 
         by_stations = tide_stations.select do |s|
-            s['stationId'] == by ||
-            (s['etidesStnName'].downcase.include?(by) rescue false) ||
-            (s['commonName'].downcase.include?(by) rescue false) ||
-            (s['stationFullName'].downcase.include?(by) rescue false) ||
-            (s['region'].downcase.include?(by)) rescue false
+            by.any? do |b|
+                s['stationId'].downcase == b ||
+                (s['etidesStnName'].downcase.include?(b) rescue false) ||
+                (s['commonName'].downcase.include?(b) rescue false) ||
+                (s['stationFullName'].downcase.include?(b) rescue false) ||
+                (s['region'].downcase.include?(b)) rescue false
+            end
         end
 
         # can only do radius search with one result, ignore otherwise
@@ -246,15 +249,18 @@ module WebCalTides
 
     # nil == any, units == [ mi, km ]
     def find_current_stations(by:nil, within:nil, units:'mi')
-        by ||= "" # any
+        by ||= [""]
+        by &&= Array(by).map(&:downcase)
 
         logger.debug "finding current stations by '#{by}' within '#{within}'"
 
         by_stations = current_stations.select do |s|
-            (s['bid'].downcase.start_with?(by) rescue false) ||
-            (s['id'].downcase.start_with?(by) rescue false) ||
-            (s['id'].downcase.include?(by) rescue false) ||
-            (s['name'].downcase.include?(by)) rescue false
+            by.any? do |b|
+                (s['bid'].downcase.start_with?(b) rescue false) ||
+                (s['id'].downcase.start_with?(b) rescue false) ||
+                (s['id'].downcase.include?(b) rescue false) ||
+                (s['name'].downcase.include?(b)) rescue false
+            end
         end
 
         # can only do radius search with one result, ignore otherwise

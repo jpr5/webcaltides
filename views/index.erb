@@ -16,7 +16,7 @@
 
 <% if defined? tide_results and defined? current_results %>
 
-<p><em>Search '<%= searchtext %>' yields <%= tide_results.count + current_results.count %> results</em></p>
+<p><em>Search '<%= searchtext.join(" OR ") %>' yields <%= tide_results.count + current_results.count %> results</em></p>
 
 <% if tide_results.count > 0 %>
 <table class="table table-striped table-hover caption-top">
