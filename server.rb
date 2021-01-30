@@ -58,6 +58,7 @@ class Server < ::Sinatra::Base
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(text))
             how = "near"
+            tokens = [lat, long]
 
             radius ||= "10" # default; in mi
 
@@ -66,10 +67,14 @@ class Server < ::Sinatra::Base
         else
             how = "by"
 
-            text = text.split(/[, ]+/).reject(&:empty?)
+            # Parse search terms.  Matched quotes are taken as-is (still
+            # lowercased), while everything else is tokenized via [ ,]+.
+            tokens = text.scan(/["']([^"']+)["']/).flatten
+            text.gsub!(/["']([^"']+)["']/, '')
+            tokens += text.split(/[, ]+/).reject(&:empty?)
 
-            tide_results    = WebCalTides.find_tide_stations(by:text, within:radius)
-            current_results = WebCalTides.find_current_stations(by:text, within:radius)
+            tide_results    = WebCalTides.find_tide_stations(by:tokens, within:radius)
+            current_results = WebCalTides.find_current_stations(by:tokens, within:radius)
         end
 
         tide_results    ||= []
@@ -81,7 +86,7 @@ class Server < ::Sinatra::Base
         logger.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
         erb :index, locals: { tide_results: tide_results, current_results: current_results,
-                              request_url: request.url, searchtext: text }
+                              request_url: request.url, searchtext: tokens }
     end
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
