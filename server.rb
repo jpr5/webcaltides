@@ -108,7 +108,7 @@ class Server < ::Sinatra::Base
             ical
         end
 
-        content_type 'text/calendar'
+        content_type 'text/calendar', charset: 'utf-8'
         body ics
     end
 
