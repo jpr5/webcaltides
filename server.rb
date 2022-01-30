@@ -9,6 +9,7 @@
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
 require 'bundler/setup'
+require 'pry'
 Bundler.require
 
 require_relative 'webcaltides'
@@ -22,16 +23,18 @@ class Server < ::Sinatra::Base
     set :static,        true
     set :public_folder, settings.root + '/public'
     set :views,         settings.root + '/views'
+    set :bind,          '0.0.0.0'
 
     configure do
         set :logging, Logger::DEBUG
         disable :sessions
 
         Timezone::Lookup.config(:geonames) do |c|
-            c.username = ENV['USER']
+            c.username = 'pauljschellenberg'
         end
 
         FileUtils.mkdir_p settings.cache_dir
+        Dir.glob("#{settings.cache_dir}/*.json").each { |file| File.delete(file)}
     end
 
     configure :development do
@@ -54,27 +57,28 @@ class Server < ::Sinatra::Base
     post "/" do
         text   = params['searchtext'].downcase rescue nil
         radius = params['within']
+        radius_units = params['units'] == 'metric' ? 'km' : 'mi'
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(text))
             how = "near"
             tokens = [lat, long]
 
-            radius ||= "10" # default; in mi
+            radius ||= "10" # default;
 
-            tide_results    = WebCalTides.find_tide_stations_by_gps(lat, long, within:radius)
-            current_results = WebCalTides.find_current_stations_by_gps(lat, long, within:radius)
+            tide_results    = WebCalTides.find_tide_stations_by_gps(lat, long, within:radius, units: radius_units)
+            current_results = WebCalTides.find_current_stations_by_gps(lat, long, within:radius, units: radius_units)
         else
             how = "by"
 
             # Parse search terms.  Matched quotes are taken as-is (still
             # lowercased), while everything else is tokenized via [ ,]+.
-            tokens = text.scan(/["']([^"']+)["']/).flatten
-            text.gsub!(/["']([^"']+)["']/, '')
+            tokens = text.scan(/["]([^"]+)["]/).flatten
+            text.gsub!(/["]([^"]+)["]/, '')
             tokens += text.split(/[, ]+/).reject(&:empty?)
-
-            tide_results    = WebCalTides.find_tide_stations(by:tokens, within:radius)
-            current_results = WebCalTides.find_current_stations(by:tokens, within:radius)
+            
+            tide_results    = WebCalTides.find_tide_stations(by:tokens, within:radius, units: radius_units)
+            current_results = WebCalTides.find_current_stations(by:tokens, within:radius, units: radius_units)
         end
 
         tide_results    ||= []
@@ -86,7 +90,7 @@ class Server < ::Sinatra::Base
         logger.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
         erb :index, locals: { tide_results: tide_results, current_results: current_results,
-                              request_url: request.url, searchtext: tokens }
+                              request_url: request.url, searchtext: tokens, params: params }
     end
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
@@ -94,11 +98,12 @@ class Server < ::Sinatra::Base
         type     = params[:type]
         id       = params[:station]
         year     = params[:year] || Time.now.year
-        filename = "#{settings.cache_dir}/#{type}_#{id}_#{year}.ics"
+        units    = params[:units] || 'imperial'
+        filename = "#{settings.cache_dir}/#{type}_#{id}_#{year}_#{units}.ics"
 
         ics = File.read filename rescue begin
             calendar = case type
-                       when "tides"    then WebCalTides.tide_calendar_for(id, year:year)    or halt 500
+                       when "tides"    then WebCalTides.tide_calendar_for(id, year:year, units: units) or halt 500
                        when "currents" then WebCalTides.current_calendar_for(id, year:year) or halt 500
                        else halt 404
                        end

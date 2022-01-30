@@ -1,9 +1,13 @@
 <form action="/" accept-charset="UTF-8" method="POST" class="w-50">
-    <label for="searchtext" class="form-label">Station Search <em>(use quotes for multi-word, e.g. shilshole "puget sound")</em></label>
-
+    <label for="searchtext" class="form-label">Station Search <em>(use double quotes for multi-word, e.g. shilshole "puget sound")</em></label>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or ID:</span>
-        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="Station..."/>
+        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder=<%= params['searchtext'].nil? ? 'Station...' : params['searchtext'] %> />
+        <span class="input-group-text" id="searchtext_prompt">Units:</span>
+        <select class="form-control" name="units" id="searchunits">
+            <option value="imperial" <%= selected='selected' if params['units'] == 'imperial'%>>ft/mi</option>
+            <option value="metric" <%= selected='selected' if params['units'] == 'metric'%>>m/km</option>
+        </select>
         <button class="btn btn-primary" type="submit">Search</button>
     </div>
 </form>
@@ -31,18 +35,18 @@
 <tbody>
 <% tide_results.each do |r| %>
     <tr>
-    <th scope="row"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=<%= r['stationId'] %>"><%= r['stationId'] %></a></th>
-    <td><%= r["commonName"] %></td>
-    <td><%= r["region"]%></td>
+    <th scope="row"><a href=<%= r.url %>><%= r.public_id %></a></th>
+    <td><%= r.name %></td>
+    <td><%= r.region%></td>
 
     <%
-       uri.path = "/tides/#{r['stationId']}.ics"
-
+       uri.path = "/tides/#{r.id}.ics"
+       uri.query = "units=#{params['units']}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
-       uri.scheme = "https"
+       uri.scheme = "http"
        https_url  = uri.to_s
-       url_id     = "url_#{r['stationId']}"
+       url_id     = "url_#{r.id}"
     %>
     <td>
 
@@ -71,8 +75,9 @@
                     <label for="within" class="form-label">Any stations within</label>
                     <div class="input-group">
                         <input type="text" class="form-control" name="within" id="within" />
-                        <input type="hidden" name="searchtext" value="<%= r['stationId'] %>" />
-                        <span class="input-group-text" id="radius_units">mi</span>
+                        <input type="hidden" name="searchtext" value="<%= r.id %>" />
+                        <input type="hidden" name="units" value="<%= params['units'] %>" />
+                        <span class="input-group-text" id="radius_units"> <%= params['units'] == 'imperial' ? 'mi' : 'km' %></span>
                         <button class="btn btn-secondary btn-sm" type="submit">Search</button>
                     </div>
                 </form>
@@ -108,7 +113,7 @@
 
     <%
        uri.path = "/currents/#{r['bid']}.ics"
-
+       uri.query = "units=#{params['units']}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
        uri.scheme = "https"
@@ -144,7 +149,8 @@
                     <div class="input-group">
                         <input type="text" class="form-control" name="within" id="within" />
                         <input type="hidden" name="searchtext" value="<%= r['bid'] %>" />
-                        <span class="input-group-text" id="radius_units">mi</span>
+                        <input type="hidden" name="units" value="<%= params['units'] %>" />
+                        <span class="input-group-text" id="radius_units"><%= params['units'] == 'imperial' ? 'mi' : 'km' %></span>
                         <button class="btn btn-secondary btn-sm" type="submit">Search</button>
                     </div>
                 </form>

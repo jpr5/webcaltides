@@ -5,6 +5,8 @@
 require 'icalendar/tzinfo'
 require 'solareventcalculator'
 require 'geocoder'
+require_relative 'clients/noaa_client'
+require_relative 'clients/chs_client'
 
 
 module WebCalTides
@@ -17,8 +19,29 @@ module WebCalTides
     def logger; Server.logger rescue @logger ||= Logger.new(STDOUT); end
 
     ##
+    ## Clients
+    ##
+
+    def tide_clients
+        @tide_clients ||= {
+            noaa: Clients::NoaaClient.new(logger),
+            chs: Clients::ChsClient.new(logger)
+        }
+    end
+
+    ##
     ## Util
     ##
+
+    def convert_depth_to_correct_units(val, curr_units, desired_units)
+        if desired_units == curr_units
+            val
+        elsif desired_units == 'ft' # convert to feet
+            (val.to_f * 3.28084).round(3)
+        else # convert to meters
+            (val.to_f / 3.28084).round(3)
+        end
+    end
 
     # Currently only works with Decimal (no Deg/Min/Secs)
     def parse_gps(str)
@@ -69,17 +92,12 @@ module WebCalTides
     def cache_tide_stations(at:nil)
         at ||= "#{settings.cache_dir}/tide_stations.json"
 
-        agent = Mechanize.new
-        url = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/tidepredstations.json?q='
-
-        logger.info "getting tide station list from #{url}"
-        json = agent.get(url).body
-        logger.debug "json.length = #{json.length}"
-
+        stations = []
+        tide_clients.each_value { |c| stations.concat(c.tide_stations) }
         logger.debug "storing tide station list at #{at}"
-        File.write(at, json)
+        File.write(at, stations.map{ |station| station.to_hash }.to_json )
 
-        return json.length > 0
+        return stations.length > 0
     end
 
     def tide_stations
@@ -92,13 +110,15 @@ module WebCalTides
             json = File.read(filename)
 
             logger.debug "parsing tide station list"
-            data = JSON.parse(json)["stationList"] rescue {}
+            data = JSON.parse(json) rescue []
+
+            data.map{ |js| DataModels::Station.from_hash(js) }
         end
     end
 
     def tide_station_for(id)
         return nil if id.blank?
-        return tide_stations.find { |s| s["stationId"] == id }
+        return tide_stations.find { |s| s.id == id }
     end
 
     # nil == any, units == [ mi, km ]
@@ -106,15 +126,14 @@ module WebCalTides
         by ||= [""]
         by &&= Array(by).map(&:downcase)
 
-        logger.debug("finding tide stations by '#{by}' within '#{within}'")
-
+        logger.debug("finding tide stations by '#{by}' within '#{within}' #{units}")
         by_stations = tide_stations.select do |s|
             by.any? do |b|
-                s['stationId'].downcase == b ||
-                (s['etidesStnName'].downcase.include?(b) rescue false) ||
-                (s['commonName'].downcase.include?(b) rescue false) ||
-                (s['stationFullName'].downcase.include?(b) rescue false) ||
-                (s['region'].downcase.include?(b)) rescue false
+                s.id.downcase == b ||
+                s.alternate_names.any? { |n| (n.downcase.include?(b) rescue false) } ||
+                (s.region.downcase.include?(b) rescue false) ||
+                (s.name.downcase.include?(b) rescue false) ||
+                s.public_id.downcase.include?(b) rescue false
             end
         end
 
@@ -123,79 +142,71 @@ module WebCalTides
 
         station = by_stations.first
 
-        return find_tide_stations_by_gps(station["lat"], station["lon"], within:within, units:units)
+        return find_tide_stations_by_gps(station.lat, station.lon, within:within, units:units)
     end
 
     def find_tide_stations_by_gps(lat, long, within:nil, units:'mi')
         within = within.to_i
         return tide_stations.select do |s|
-            Geocoder::Calculations.distance_between([lat, long], [s["lat"],s["lon"]], units: units.to_sym) <= within
+            Geocoder::Calculations.distance_between([lat, long], [s.lat,s.lon], units: units.to_sym) <= within
         end
     end
 
     def cache_tide_data_for(station, at:nil, year:)
         return false unless station
+
+        id = station.id
         at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
-
-        agent = Mechanize.new
-        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{year}0101&end_date=#{year}1231&station=#{station}"
-
-        logger.info "getting json from #{url}"
-        json = agent.get(url).body
-        logger.debug "json.length = #{json.length}"
+        tide_data = tide_clients[station.provider.to_sym].tide_data_for(id, year, station.public_id)
 
         logger.debug "storing tide data at #{at}"
-        File.write(at, json)
+        File.write(at, tide_data.map{ |td| td.to_hash }.to_json)
 
-        return json.length > 0
+        return tide_data.length > 0
     end
 
     def tide_data_for(station, year:Time.now.year)
         return nil unless station
 
-        filename = "#{settings.cache_dir}/tides_#{station}_#{year}.json"
+        id = station.id
+        filename = "#{settings.cache_dir}/tides_#{id}_#{year}.json"
         File.exists? filename or cache_tide_data_for(station, at:filename, year:year)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
 
-        logger.debug "parsing tides for #{station}"
-        data = JSON.parse(json)["predictions"] rescue nil
+        logger.debug "parsing tides for #{id}"
+        data = JSON.parse(json) rescue []
 
-        return data
+        data.map{ |js| DataModels::TideData.from_hash(js) }
     end
 
-    def tide_calendar_for(id, year:Time.now.year)
+    def tide_calendar_for(id, year:Time.now.year, units: 'imperial')
+        depth_units = units == 'imperial' ? 'ft' : 'm'
         station = tide_station_for(id) or return nil
-        data    = tide_data_for(id, year:year)
+        data    = tide_data_for(station, year:year)
 
         cal = Icalendar::Calendar.new
-        cal.x_wr_calname = station["name"].titleize
+        cal.x_wr_calname = station.name.titleize
 
-        url      = "https://tidesandcurrents.noaa.gov/noaatidepredictions.html"
-        location = [
-                station["etidesStnName"], station["region"], station["state"]
-            ].join(", ")
-
-        logger.debug "generating tide calendar for #{station["name"]}"
+        logger.debug "generating tide calendar for #{station.name}"
 
         data.each do |tide|
-            date   = DateTime.parse(tide['t']).strftime("%Y%m%d")
-            title  = tide["type"] == "H" ? "High" : "Low"
-            title += " Tide   #{tide["v"]} ft"
+
+            title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
 
             cal.event do |e|
                 e.summary  = title
-                e.dtstart  = Icalendar::Values::DateTime.new(DateTime.parse(tide["t"]), tzid: 'GMT')
-                e.dtend    = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
-                e.url      = url + "?id=" + station["stationId"] + "&bdate=" + date
-                e.location = location
+                e.dtstart  = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                e.dtend    = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                e.url      = tide.url
+                e.location = station.location
             end
         end
 
-        solar_calendar_for(station["lat"], station["lon"], year:year, location:location).events.each { |e| cal.add_event(e) }
+        solar_calendar_for(station.lat, station.lon, year:year, location:station.location).events.each { |e| cal.add_event(e) }
 
-        logger.info "tide calendar for #{station["name"]} generated with #{cal.events.length} events"
+        logger.info "tide calendar for #{station.name} generated with #{cal.events.length} events"
 
         return cal
     end
