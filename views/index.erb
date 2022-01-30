@@ -44,7 +44,7 @@
        uri.query = "units=#{params['units']}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
-       uri.scheme = "http"
+       uri.scheme = "https"
        https_url  = uri.to_s
        url_id     = "url_#{r.id}"
     %>

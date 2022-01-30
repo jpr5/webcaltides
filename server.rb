@@ -9,7 +9,6 @@
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
 require 'bundler/setup'
-require 'pry'
 Bundler.require
 
 require_relative 'webcaltides'
@@ -23,14 +22,13 @@ class Server < ::Sinatra::Base
     set :static,        true
     set :public_folder, settings.root + '/public'
     set :views,         settings.root + '/views'
-    set :bind,          '0.0.0.0'
 
     configure do
         set :logging, Logger::DEBUG
         disable :sessions
 
         Timezone::Lookup.config(:geonames) do |c|
-            c.username = 'pauljschellenberg'
+            c.username = ENV['USER']
         end
 
         FileUtils.mkdir_p settings.cache_dir

@@ -1,6 +1,6 @@
 require './data_models/station'
 require './data_models/tide_data'
-require 'pry'
+
 module Clients
     class NoaaClient
         API_URL = 'https://api.tidesandcurrents.noaa.gov'
