@@ -1,5 +1,5 @@
-require './data_models/station'
-require './data_models/tide_data'
+require_relative '../data_models/station'
+require_relative '../data_models/tide_data'
 
 module Clients
     class NoaaClient

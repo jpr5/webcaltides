@@ -1,5 +1,6 @@
-require './data_models/station'
-require './data_models/tide_data'
+require_relative '../data_models/station'
+require_relative '../data_models/tide_data'
+
 module Clients
     class ChsClient
         API_URL = 'https://api-iwls.dfo-mpo.gc.ca/api/v1'

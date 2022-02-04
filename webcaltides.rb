@@ -102,7 +102,7 @@ module WebCalTides
 
     def tide_stations
         return @tide_stations ||= begin
-            filename = "#{settings.cache_dir}/tide_stations.json"
+            filename = "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}.json"
 
             File.exists? filename or cache_tide_stations(at:filename)
 
@@ -169,7 +169,7 @@ module WebCalTides
         return nil unless station
 
         id = station.id
-        filename = "#{settings.cache_dir}/tides_#{id}_#{year}.json"
+        filename = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{year}.json"
         File.exists? filename or cache_tide_data_for(station, at:filename, year:year)
 
         logger.debug "reading #{filename}"

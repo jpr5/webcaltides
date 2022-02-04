@@ -1,10 +1,10 @@
-<form action="/" accept-charset="UTF-8" method="POST" class="w-50">
+<form action="/" accept-charset="UTF-8" method="POST" class="w-100">
     <label for="searchtext" class="form-label">Station Search <em>(use double quotes for multi-word, e.g. shilshole "puget sound")</em></label>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or ID:</span>
         <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder=<%= params['searchtext'].nil? ? 'Station...' : params['searchtext'] %> />
         <span class="input-group-text" id="searchtext_prompt">Units:</span>
-        <select class="form-control" name="units" id="searchunits">
+        <select class="form-select" style="flex: 0.3 0.3 auto;" name="units" id="searchunits">
             <option value="imperial" <%= selected='selected' if params['units'] == 'imperial'%>>ft/mi</option>
             <option value="metric" <%= selected='selected' if params['units'] == 'metric'%>>m/km</option>
         </select>

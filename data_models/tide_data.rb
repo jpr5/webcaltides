@@ -1,5 +1,11 @@
 module DataModels
     class TideData
+
+        # When modifying this class, bump this version
+        def self.version
+            1
+        end
+
         attr_accessor :type
         attr_accessor :units
         attr_accessor :prediction

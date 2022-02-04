@@ -32,7 +32,6 @@ class Server < ::Sinatra::Base
         end
 
         FileUtils.mkdir_p settings.cache_dir
-        Dir.glob("#{settings.cache_dir}/*.json").each { |file| File.delete(file)}
     end
 
     configure :development do

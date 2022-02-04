@@ -1,5 +1,11 @@
 module DataModels
     class Station
+
+        # When modifying this class, bump this version
+        def self.version
+            1
+        end
+
         attr_accessor :name
         attr_accessor :alternate_names
         attr_accessor :id
