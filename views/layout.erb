@@ -14,7 +14,7 @@
 <h1 class="display-4">WebCalTides Service</h1>
 
 <p class="lead">
-WebCalTides is a free service that provides tides, currents and sunrise/sunset calendars for your favorite NOAA station.  Data is pulled from <a href="https://tidesandcurrents.noaa.gov/tide_predictions.html">tidesandcurrents.noaa.gov</a>. Just search for a station, then click the webcal link to subscribe.  Works on Apple iCal & Google Calendar; maybe Outlook too.
+WebCalTides is a free service that provides tides, currents and sunrise/sunset calendars for your favorite tide stations.  Data is pulled from NOAA (US/etc) and DFO-CHS (Canada). Just search for a station, then click the webcal link to subscribe.  Works on Apple iCal & Google Calendar; maybe Outlook too.
 </p>
 
 <%= yield %>
@@ -22,12 +22,13 @@ WebCalTides is a free service that provides tides, currents and sunrise/sunset c
 <p/>
 
 <p>
-    <em>Update: More international/non-US stations coming soon.  Sourcing as many of the old harmonics files as I can find (before they were privatized), then will wire up to XTide.  Drop me a note if you've got something to share...</em>
+    Written by <a href="mailto:jpr5@darkridge.com">Jordan Ritter</a>, with contributions from <a href="https://github.com/PaulJSchellenberg">Paul Schellenberg</a> to support Canadian stations.  Project source at <a href="https://github.com/jpr5/webcaltides">GitHub</a>.
 </p>
 
 <p>
-    Written by <a href="mailto:jpr5@darkridge.com">Jordan Ritter</a>, with contributions from <a href="https://github.com/PaulJSchellenberg">Paul Schellenberg</a> to support Canadian stations.  Project source at <a href="https://github.com/jpr5/webcaltides">GitHub</a>.
+    <em>Update: I'd like to add more international/non-US stations, and I've amassed quite a few old harmonics files (before they were privatized), but I haven't quite figured out how to wire them up to XTide on Linux.  Drop me a note if you know how, then I can incorporate many of the international stations..</em>
 </p>
+
 
 <button class="btn btn-primary" onclick="document.getElementById('license-acknowledgements').removeAttribute('hidden')">Show License Acknowledgements</button>
 <p hidden id="license-acknowledgements">
