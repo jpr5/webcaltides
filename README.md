@@ -41,3 +41,9 @@ Use GitHub for issues, patches welcome.
 ## LICENSE
 
 Free as in beer, IFF you give me visible credit!  Mmm, beer..
+
+## CREDITS
+
+Originally written by [Jordan Ritter](https://github.com/jpr5), with contributions
+from [Paul Schellenberg](https://github.com/PaulJSchellenberg) to support Canadian
+stations.
