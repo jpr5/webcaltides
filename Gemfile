@@ -16,5 +16,5 @@ gem 'RubySunrise'
 gem 'timezone'
 gem 'geocoder'
 
-gem 'sinatra', '= 2.1.0'
+gem 'sinatra', '2.2.0'
 gem 'unicorn'
