@@ -8,13 +8,15 @@ gem 'pry'
 
 gem 'activesupport'
 
+gem 'nokogiri',  '= 1.13.7'
 gem 'json'
-gem 'mechanize'
+gem 'mechanize', '= 2.8.5'
 
 gem 'icalendar'
 gem 'RubySunrise'
 gem 'timezone'
 gem 'geocoder'
 
-gem 'sinatra', '= 2.1.0'
+gem 'rack',    '= 2.2.4'
+gem 'sinatra', '= 2.2.0'
 gem 'unicorn'
