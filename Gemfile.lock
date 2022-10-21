@@ -52,7 +52,7 @@ GEM
     net-http-digest_auth (1.4.1)
     net-http-persistent (4.0.1)
       connection_pool (~> 2.2)
-    nokogiri (1.13.7)
+    nokogiri (1.13.9)
       mini_portile2 (~> 2.8.0)
       racc (~> 1.4)
     pry (0.13.1)
@@ -99,7 +99,7 @@ DEPENDENCIES
   irb
   json
   mechanize (= 2.8.5)
-  nokogiri (= 1.13.7)
+  nokogiri (= 1.13.9)
   pry
   rack (= 2.2.4)
   sinatra (= 2.2.0)
