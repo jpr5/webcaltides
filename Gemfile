@@ -8,7 +8,7 @@ gem 'pry'
 
 gem 'activesupport'
 
-gem 'nokogiri',  '= 1.13.7'
+gem 'nokogiri',  '= 1.13.9'
 gem 'json'
 gem 'mechanize', '= 2.8.5'
 
