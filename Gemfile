@@ -6,7 +6,7 @@ gem 'irb'
 gem 'byebug'
 gem 'pry'
 
-gem 'activesupport'
+gem 'activesupport', '>= 7.0.4.1'
 
 gem 'nokogiri',  '= 1.13.9'
 gem 'json'
@@ -17,6 +17,6 @@ gem 'RubySunrise'
 gem 'timezone'
 gem 'geocoder'
 
-gem 'rack',    '= 2.2.4'
+gem 'rack', '= 2.2.6.2'
 gem 'sinatra', '= 2.2.0'
 gem 'unicorn'
