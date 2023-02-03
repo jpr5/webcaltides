@@ -17,6 +17,6 @@ gem 'RubySunrise'
 gem 'timezone'
 gem 'geocoder'
 
-gem 'rack', '= 2.2.6.2'
+gem 'rack', '2.2.6.2'
 gem 'sinatra', '= 2.2.3'
 gem 'unicorn'
