@@ -3,7 +3,7 @@ GEM
   specs:
     RubySunrise (0.3.3)
       tzinfo
-    activesupport (7.0.4.3)
+    activesupport (7.0.7.1)
       concurrent-ruby (~> 1.0, >= 1.0.2)
       i18n (>= 1.6, < 2)
       minitest (>= 5.1)
@@ -19,7 +19,7 @@ GEM
     geocoder (1.8.1)
     http-cookie (1.0.5)
       domain_name (~> 0.5)
-    i18n (1.13.0)
+    i18n (1.14.1)
       concurrent-ruby (~> 1.0)
     icalendar (2.8.0)
       ice_cube (~> 0.16)
@@ -45,7 +45,7 @@ GEM
       mime-types-data (~> 3.2015)
     mime-types-data (3.2022.0105)
     mini_portile2 (2.8.1)
-    minitest (5.18.0)
+    minitest (5.20.0)
     mustermann (2.0.2)
       ruby2_keywords (~> 0.0.1)
     net-http-digest_auth (1.4.1)
