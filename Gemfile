@@ -6,7 +6,7 @@ gem 'irb'
 gem 'byebug'
 gem 'pry'
 
-gem 'activesupport', '>= 7.0.4.3'
+gem 'activesupport', '>= 7.0.7.1'
 
 gem 'nokogiri', '= 1.13.10'
 gem 'json'
