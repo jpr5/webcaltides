@@ -367,7 +367,7 @@ module WebCalTides
     ## Solar
     ##
 
-    def solar_calendar_for(lat, long, year:Time.now.year, location:nil)
+    def solar_calendar_for(lat, long, year:Time.current.year, location:nil)
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = "Solar Events"
 
