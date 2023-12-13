@@ -38,9 +38,14 @@ module Clients
             return stations
         end
 
-        def tide_data_for(station, year, public_id)
+        # around: base date, with a +/- N month window.  More processing per year, but this at least
+        # solves the EOY data starvation problem, data is cached to disk and the 12x processing
+        # (monthly vs. yearly) is cheap. 🤷‍♂️
+        def tide_data_for(station, around, public_id)
             agent = Mechanize.new
-            url = "#{API_URL}/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{year}0101&end_date=#{year}1231&station=#{station}"
+            from = (around.utc.beginning_of_month - 12.months).strftime("%Y%m%d")
+            to   = (around.utc.end_of_month + 12.months).strftime("%Y%m%d")
+            url = "#{API_URL}/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{from}&end_date=#{to}&station=#{station}"
 
             logger.info "getting json from #{url}"
             json = agent.get(url).body

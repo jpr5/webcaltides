@@ -94,14 +94,14 @@ class Server < ::Sinatra::Base
     get "/:type/:station.ics" do
         type     = params[:type]
         id       = params[:station]
-        year     = params[:year] || Time.now.year
+        date     = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
         units    = params[:units] || 'imperial'
         filename = "#{settings.cache_dir}/#{type}_#{id}_#{year}_#{units}.ics"
 
         ics = File.read filename rescue begin
             calendar = case type
-                       when "tides"    then WebCalTides.tide_calendar_for(id, year:year, units: units) or halt 500
-                       when "currents" then WebCalTides.current_calendar_for(id, year:year) or halt 500
+                       when "tides"    then WebCalTides.tide_calendar_for(id, around: date, units: units) or halt 500
+                       when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 500
                        else halt 404
                        end
             calendar.publish

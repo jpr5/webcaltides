@@ -151,12 +151,11 @@ module WebCalTides
         end
     end
 
-    def cache_tide_data_for(station, at:nil, year:)
+    def cache_tide_data_for(station, at:, around:)
         return false unless station
 
         id = station.id
-        at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
-        tide_data = tide_clients[station.provider.to_sym].tide_data_for(id, year, station.public_id)
+        tide_data = tide_clients[station.provider.to_sym].tide_data_for(id, around, station.public_id)
 
         logger.debug "storing tide data at #{at}"
         File.write(at, tide_data.map{ |td| td.to_hash }.to_json)
@@ -164,12 +163,13 @@ module WebCalTides
         return tide_data.length > 0
     end
 
-    def tide_data_for(station, year:Time.now.year)
+    def tide_data_for(station, around: Time.current.utc)
         return nil unless station
 
         id = station.id
-        filename = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{year}.json"
-        File.exists? filename or cache_tide_data_for(station, at:filename, year:year)
+        datestamp = around.utc.strftime("%Y%m")
+        filename  = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{datestamp}.json"
+        File.exists? filename or cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -180,10 +180,10 @@ module WebCalTides
         data.map{ |js| DataModels::TideData.from_hash(js) }
     end
 
-    def tide_calendar_for(id, year:Time.now.year, units: 'imperial')
+    def tide_calendar_for(id, around: Time.current.utc, units: 'imperial')
         depth_units = units == 'imperial' ? 'ft' : 'm'
         station = tide_station_for(id) or return nil
-        data    = tide_data_for(station, year:year)
+        data    = tide_data_for(station, around: around)
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
@@ -288,15 +288,16 @@ module WebCalTides
         end
     end
 
-    def cache_current_data_for(station, at:nil, year:)
+    def cache_current_data_for(station, at:, around:)
         return false unless station
-        at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
 
         (_, id, bin) = /(\w+)_(\d+)/.match(station).to_a
         id = station unless id
 
         agent = Mechanize.new
-        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=currents_predictions&begin_date=#{year}0101&end_date=#{year}1231&station=#{id}&time_zone=gmt&interval=MAX_SLACK&units=english&format=json"
+        from = (around.utc.beginning_of_month - 12.months).strftime("%Y%m%d")
+        to   = (around.utc.end_of_month + 12.months).strftime("%Y%m%d")
+        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=currents_predictions&begin_date=#{from}&end_date=#{to}&station=#{id}&time_zone=gmt&interval=MAX_SLACK&units=english&format=json"
         url += "&bin=#{bin}" if bin
 
         logger.info "getting json from #{url}"
@@ -309,11 +310,12 @@ module WebCalTides
         return json.length > 0
     end
 
-    def current_data_for(station, year:Time.now.year)
+    def current_data_for(station, around: Time.current.utc)
         return nil unless station
 
-        filename = "#{settings.cache_dir}/currents_#{station}_#{year}.json"
-        File.exists? filename or cache_current_data_for(station, at:filename, year:year)
+        datestamp = around.utc.strftime("%Y%m") # 202312
+        filename  = "#{settings.cache_dir}/currents_#{station}_#{datestamp}.json"
+        File.exists? filename or cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -324,9 +326,9 @@ module WebCalTides
         return data
     end
 
-    def current_calendar_for(id, year:Time.now.year)
+    def current_calendar_for(id, around: Time.current.utc)
         station = current_station_for(id) or return nil
-        data    = current_data_for(id, year:year)
+        data    = current_data_for(id, around: around)
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station["name"].titleize
