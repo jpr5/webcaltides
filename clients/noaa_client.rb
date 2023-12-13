@@ -43,8 +43,8 @@ module Clients
         # (monthly vs. yearly) is cheap. 🤷‍♂️
         def tide_data_for(station, around, public_id)
             agent = Mechanize.new
-            from = (around.utc.beginning_of_month - 12.months).strftime("%Y%m%d")
-            to   = (around.utc.end_of_month + 12.months).strftime("%Y%m%d")
+            from = (around.utc.beginning_of_month - WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
+            to   = (around.utc.end_of_month + WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
             url = "#{API_URL}/api/prod/datagetter?product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=english&application=web_services&format=json&begin_date=#{from}&end_date=#{to}&station=#{station}"
 
             logger.info "getting json from #{url}"

@@ -11,6 +11,8 @@ require 'active_support/core_ext'
 
 module WebCalTides
 
+    WINDOW_SIZE = 12.months
+
     # Hacks to interact with outside of Server instance
 
     extend self
@@ -296,8 +298,8 @@ module WebCalTides
         id = station unless id
 
         agent = Mechanize.new
-        from = (around.utc.beginning_of_month - 12.months).strftime("%Y%m%d")
-        to   = (around.utc.end_of_month + 12.months).strftime("%Y%m%d")
+        from = (around.utc.beginning_of_month - WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
+        to   = (around.utc.end_of_month + WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
         url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=currents_predictions&begin_date=#{from}&end_date=#{to}&station=#{id}&time_zone=gmt&interval=MAX_SLACK&units=english&format=json"
         url += "&bin=#{bin}" if bin
 
@@ -372,8 +374,8 @@ module WebCalTides
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = "Solar Events"
 
-        from = (around.utc.beginning_of_month - 12.months).strftime("%Y%m%d")
-        to   = (around.utc.end_of_month + 12.months).strftime("%Y%m%d")
+        from = (around.utc.beginning_of_month - WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
+        to   = (around.utc.end_of_month + WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
 
         logger.debug "generating solar calendar for #{from}-#{to}"
 
