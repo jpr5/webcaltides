@@ -96,7 +96,8 @@ class Server < ::Sinatra::Base
         id       = params[:station]
         date     = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
         units    = params[:units] || 'imperial'
-        filename = "#{settings.cache_dir}/#{type}_#{id}_#{year}_#{units}.ics"
+        stamp    = date.utc.strftime("%Y%m")
+        filename = "#{settings.cache_dir}/#{type}_#{id}_#{stamp}_#{units}.ics"
 
         ics = File.read filename rescue begin
             calendar = case type

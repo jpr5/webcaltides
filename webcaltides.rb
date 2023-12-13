@@ -203,7 +203,7 @@ module WebCalTides
             end
         end
 
-        solar_calendar_for(station.lat, station.lon, year:year, location:station.location).events.each { |e| cal.add_event(e) }
+        solar_calendar_for(station.lat, station.lon, around:around, location:station.location).events.each { |e| cal.add_event(e) }
 
         logger.info "tide calendar for #{station.name} generated with #{cal.events.length} events"
 
@@ -356,7 +356,7 @@ module WebCalTides
             end
         end
 
-        solar_calendar_for(station["lat"], station["lng"], year:year, location:location).events.each { |e| cal.add_event(e) }
+        solar_calendar_for(station["lat"], station["lng"], around:around, location:location).events.each { |e| cal.add_event(e) }
 
         logger.info "current calendar for #{location} generated with #{cal.events.length} events"
 
@@ -368,13 +368,16 @@ module WebCalTides
     ## Solar
     ##
 
-    def solar_calendar_for(lat, long, year:Time.current.year, location:nil)
+    def solar_calendar_for(lat, long, around:Time.current.utc, location:nil)
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = "Solar Events"
 
-        logger.debug "generating solar calendar for #{year}"
+        from = (around.utc.beginning_of_month - 12.months).strftime("%Y%m%d")
+        to   = (around.utc.end_of_month + 12.months).strftime("%Y%m%d")
 
-        (Date.parse("#{year}0101")..Date.parse("#{year}1231")).each do |date|
+        logger.debug "generating solar calendar for #{from}-#{to}"
+
+        (Date.parse(from)..Date.parse(to)).each do |date|
             tz      = timezone_for(lat, long)
             calc    = SolarEventCalculator.new(date, lat, long)
             sunrise = calc.compute_official_sunrise(tz)
@@ -396,7 +399,7 @@ module WebCalTides
             end
         end
 
-        logger.info "solar calendar for #{year} generated with #{cal.events.length} events"
+        logger.info "solar calendar for #{from}-#{to} generated with #{cal.events.length} events"
 
         return cal
     end
