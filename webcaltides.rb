@@ -7,6 +7,7 @@ require 'solareventcalculator'
 require 'geocoder'
 require_relative 'clients/noaa_client'
 require_relative 'clients/chs_client'
+require 'active_support/core_ext'
 
 module WebCalTides
 
