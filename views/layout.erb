@@ -26,11 +26,14 @@ WebCalTides is a free service that provides tides, currents and sunrise/sunset c
 </p>
 
 <p>
-    <em>Update: I'd like to add more international/non-US stations, and I've amassed quite a few old harmonics files (before they were privatized), but I haven't quite figured out how to wire them up to XTide on Linux.  Drop me a note if you know how, then I can incorporate many of the international stations..</em>
+    <em><b>Update 12/2023</b>: The logic was improved to include 1 year before + ahead of the current month.  This solves the issue of calendars running out before EOY -- before, calendars only had data for current year, and would only show the next year starting Jan 1.</em>
 </p>
 
 
-<button class="btn btn-primary" onclick="document.getElementById('license-acknowledgements').removeAttribute('hidden')">Show License Acknowledgements</button>
+<div class="float-end">
+    <button class="btn btn-primary" onclick="document.getElementById('license-acknowledgements').removeAttribute('hidden')">Show License Acknowledgements</button>
+</div>
+
 <p hidden id="license-acknowledgements">
     <em>This product has been produced by or for WebCalTides Service and includes data and services provided by the Canadian Hydrographic Service of the Department of Fisheries and Oceans. The incorporation of data sourced from the Canadian Hydrographic Service of the Department of Fisheries and Oceans within this product does NOT constitute an endorsement by the Canadian Hydrographic Service or the Department of Fisheries and Oceans of this product.</em>
 </p>

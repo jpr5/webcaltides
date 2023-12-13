@@ -7,16 +7,18 @@ require 'solareventcalculator'
 require 'geocoder'
 require_relative 'clients/noaa_client'
 require_relative 'clients/chs_client'
-
+require 'active_support/core_ext'
 
 module WebCalTides
+
+    WINDOW_SIZE = 12.months
 
     # Hacks to interact with outside of Server instance
 
     extend self
 
     def settings; return Server.settings; end
-    def logger; Server.logger rescue @logger ||= Logger.new(STDOUT); end
+    def logger; @logger ||= Server.logger || Logger.new(STDOUT) rescue Logger.new(STDOUT); end
 
     ##
     ## Clients
@@ -152,12 +154,11 @@ module WebCalTides
         end
     end
 
-    def cache_tide_data_for(station, at:nil, year:)
+    def cache_tide_data_for(station, at:, around:)
         return false unless station
 
         id = station.id
-        at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
-        tide_data = tide_clients[station.provider.to_sym].tide_data_for(id, year, station.public_id)
+        tide_data = tide_clients[station.provider.to_sym].tide_data_for(id, around, station.public_id)
 
         logger.debug "storing tide data at #{at}"
         File.write(at, tide_data.map{ |td| td.to_hash }.to_json)
@@ -165,12 +166,13 @@ module WebCalTides
         return tide_data.length > 0
     end
 
-    def tide_data_for(station, year:Time.now.year)
+    def tide_data_for(station, around: Time.current.utc)
         return nil unless station
 
         id = station.id
-        filename = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{year}.json"
-        File.exists? filename or cache_tide_data_for(station, at:filename, year:year)
+        datestamp = around.utc.strftime("%Y%m")
+        filename  = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{datestamp}.json"
+        File.exists? filename or cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -181,10 +183,10 @@ module WebCalTides
         data.map{ |js| DataModels::TideData.from_hash(js) }
     end
 
-    def tide_calendar_for(id, year:Time.now.year, units: 'imperial')
+    def tide_calendar_for(id, around: Time.current.utc, units: 'imperial')
         depth_units = units == 'imperial' ? 'ft' : 'm'
         station = tide_station_for(id) or return nil
-        data    = tide_data_for(station, year:year)
+        data    = tide_data_for(station, around: around)
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
@@ -192,7 +194,6 @@ module WebCalTides
         logger.debug "generating tide calendar for #{station.name}"
 
         data.each do |tide|
-
             title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
 
             cal.event do |e|
@@ -204,7 +205,7 @@ module WebCalTides
             end
         end
 
-        solar_calendar_for(station.lat, station.lon, year:year, location:station.location).events.each { |e| cal.add_event(e) }
+        solar_calendar_for(station.lat, station.lon, around:around, location:station.location).events.each { |e| cal.add_event(e) }
 
         logger.info "tide calendar for #{station.name} generated with #{cal.events.length} events"
 
@@ -290,15 +291,16 @@ module WebCalTides
         end
     end
 
-    def cache_current_data_for(station, at:nil, year:)
+    def cache_current_data_for(station, at:, around:)
         return false unless station
-        at ||= "#{settings.cache_dir}/#{station}_#{year}.json"
 
         (_, id, bin) = /(\w+)_(\d+)/.match(station).to_a
         id = station unless id
 
         agent = Mechanize.new
-        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=currents_predictions&begin_date=#{year}0101&end_date=#{year}1231&station=#{id}&time_zone=gmt&interval=MAX_SLACK&units=english&format=json"
+        from = (around.utc.beginning_of_month - WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
+        to   = (around.utc.end_of_month + WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
+        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=currents_predictions&begin_date=#{from}&end_date=#{to}&station=#{id}&time_zone=gmt&interval=MAX_SLACK&units=english&format=json"
         url += "&bin=#{bin}" if bin
 
         logger.info "getting json from #{url}"
@@ -311,11 +313,12 @@ module WebCalTides
         return json.length > 0
     end
 
-    def current_data_for(station, year:Time.now.year)
+    def current_data_for(station, around: Time.current.utc)
         return nil unless station
 
-        filename = "#{settings.cache_dir}/currents_#{station}_#{year}.json"
-        File.exists? filename or cache_current_data_for(station, at:filename, year:year)
+        datestamp = around.utc.strftime("%Y%m") # 202312
+        filename  = "#{settings.cache_dir}/currents_#{station}_#{datestamp}.json"
+        File.exists? filename or cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -326,9 +329,9 @@ module WebCalTides
         return data
     end
 
-    def current_calendar_for(id, year:Time.now.year)
+    def current_calendar_for(id, around: Time.current.utc)
         station = current_station_for(id) or return nil
-        data    = current_data_for(id, year:year)
+        data    = current_data_for(id, around: around)
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station["name"].titleize
@@ -355,7 +358,7 @@ module WebCalTides
             end
         end
 
-        solar_calendar_for(station["lat"], station["lng"], year:year, location:location).events.each { |e| cal.add_event(e) }
+        solar_calendar_for(station["lat"], station["lng"], around:around, location:location).events.each { |e| cal.add_event(e) }
 
         logger.info "current calendar for #{location} generated with #{cal.events.length} events"
 
@@ -367,13 +370,16 @@ module WebCalTides
     ## Solar
     ##
 
-    def solar_calendar_for(lat, long, year:Time.now.year, location:nil)
+    def solar_calendar_for(lat, long, around:Time.current.utc, location:nil)
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = "Solar Events"
 
-        logger.debug "generating solar calendar for #{year}"
+        from = (around.utc.beginning_of_month - WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
+        to   = (around.utc.end_of_month + WebCalTides::WINDOW_SIZE).strftime("%Y%m%d")
 
-        (Date.parse("#{year}0101")..Date.parse("#{year}1231")).each do |date|
+        logger.debug "generating solar calendar for #{from}-#{to}"
+
+        (Date.parse(from)..Date.parse(to)).each do |date|
             tz      = timezone_for(lat, long)
             calc    = SolarEventCalculator.new(date, lat, long)
             sunrise = calc.compute_official_sunrise(tz)
@@ -395,7 +401,7 @@ module WebCalTides
             end
         end
 
-        logger.info "solar calendar for #{year} generated with #{cal.events.length} events"
+        logger.info "solar calendar for #{from}-#{to} generated with #{cal.events.length} events"
 
         return cal
     end
