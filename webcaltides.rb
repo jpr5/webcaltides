@@ -8,7 +8,6 @@ require 'geocoder'
 require_relative 'clients/noaa_client'
 require_relative 'clients/chs_client'
 
-
 module WebCalTides
 
     # Hacks to interact with outside of Server instance
@@ -16,7 +15,7 @@ module WebCalTides
     extend self
 
     def settings; return Server.settings; end
-    def logger; Server.logger rescue @logger ||= Logger.new(STDOUT); end
+    def logger; @logger ||= Server.logger || Logger.new(STDOUT) rescue Logger.new(STDOUT); end
 
     ##
     ## Clients
@@ -192,7 +191,6 @@ module WebCalTides
         logger.debug "generating tide calendar for #{station.name}"
 
         data.each do |tide|
-
             title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
 
             cal.event do |e|

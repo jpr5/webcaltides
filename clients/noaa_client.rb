@@ -46,7 +46,6 @@ module Clients
             json = agent.get(url).body
             logger.debug "json.length = #{json.length}"
 
-
             logger.debug "parsing tide station list"
             data = JSON.parse(json)["predictions"] rescue []
 

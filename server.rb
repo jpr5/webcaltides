@@ -73,7 +73,7 @@ class Server < ::Sinatra::Base
             tokens = text.scan(/["]([^"]+)["]/).flatten
             text.gsub!(/["]([^"]+)["]/, '')
             tokens += text.split(/[, ]+/).reject(&:empty?)
-            
+
             tide_results    = WebCalTides.find_tide_stations(by:tokens, within:radius, units: radius_units)
             current_results = WebCalTides.find_current_stations(by:tokens, within:radius, units: radius_units)
         end
