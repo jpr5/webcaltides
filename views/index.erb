@@ -127,11 +127,10 @@
                 webcal
             </a>
             <div class="dropdown-menu" style="min-width: 100px;" aria-labelledby="dropdownMenuButton">
-
                 <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
-                <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" decoding="async" width="29" height="29"></a>
-                <a href="<%= https_url %>" target="_blank"><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/0/0c/Gnome-document-save-as.svg" decoding="async" width="25" height="30" ></a>
-                <a href="<%= webcal_url %>" target="_blank"><img alt="" src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Google_Calendar_icon.svg" decoding="async" width="29" height="29"></a>
+                <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'><img alt="Google Calendar link (copies to clipboard)" title="Google Calendar link (copies to clipboard)" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" decoding="async" width="29" height="29"></a>
+                <a href="<%= https_url %>" target="_blank"><img alt="Google Calendar link (downloads)" title="Google Calendar link (downloads)" src="/images/gcal.png" decoding="async" width="25" height="30" ></a>
+                <a href="<%= webcal_url %>" target="_blank"><img alt="Apple Calendar link (invokes Calendar)" title="Apple Calendar link (invokes Calendar)" src="/images/ical.png" decoding="async" width="29" height="29"></a>
             </div>
         </div>
 
