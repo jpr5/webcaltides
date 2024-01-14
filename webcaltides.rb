@@ -71,7 +71,7 @@ module WebCalTides
         filename = "#{settings.cache_dir}/tzs.json"
 
         @tzcache ||= begin
-            if File.exists? filename
+            if File.exist? filename
                 logger.debug "reading #{filename}"
                 json = File.read(filename)
                 logger.debug "parsing tzcache"
@@ -118,7 +118,7 @@ module WebCalTides
         return @tide_stations ||= begin
             filename = "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}.json"
 
-            File.exists? filename or cache_tide_stations(at:filename)
+            File.exist? filename or cache_tide_stations(at:filename)
 
             logger.debug "reading #{filename}"
             json = File.read(filename)
@@ -184,7 +184,7 @@ module WebCalTides
         id = station.id
         datestamp = around.utc.strftime("%Y%m")
         filename  = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{datestamp}.json"
-        File.exists? filename or cache_tide_data_for(station, at:filename, around:around)
+        File.exist? filename or cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -248,7 +248,7 @@ module WebCalTides
         return @current_stations ||= begin
             filename = "#{settings.cache_dir}/current_stations.json"
 
-            File.exists? filename or cache_current_stations(at:filename)
+            File.exist? filename or cache_current_stations(at:filename)
 
             logger.debug "reading #{filename}"
             json = File.read(filename)
@@ -330,7 +330,7 @@ module WebCalTides
 
         datestamp = around.utc.strftime("%Y%m") # 202312
         filename  = "#{settings.cache_dir}/currents_#{station}_#{datestamp}.json"
-        File.exists? filename or cache_current_data_for(station, at:filename, around:around)
+        File.exist? filename or cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
