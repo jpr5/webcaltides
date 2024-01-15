@@ -1,33 +1,9 @@
 module DataModels
-    class TideData
+    class TideData < Struct.new(:type, :units, :prediction, :time, :url)
 
         # When modifying this class, bump this version
         def self.version
             1
-        end
-
-        attr_accessor :type
-        attr_accessor :units
-        attr_accessor :prediction
-        attr_accessor :time
-        attr_accessor :url
-        
-        def initialize(type:, units:, prediction:, time:, url:)
-            @type = type
-            @prediction = prediction
-            @time = time
-            @url = url
-            @units = units
-        end
-
-        def to_hash
-            {
-                type: type,
-                prediction: prediction,
-                time: time,
-                url: url,
-                units: units
-            }
         end
 
         def self.from_hash(h)

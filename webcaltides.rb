@@ -109,7 +109,7 @@ module WebCalTides
         stations = []
         tide_clients.each_value { |c| stations.concat(c.tide_stations) }
         logger.debug "storing tide station list at #{at}"
-        File.write(at, stations.map{ |station| station.to_hash }.to_json )
+        File.write(at, stations.map(&:to_h).to_json )
 
         return stations.length > 0
     end
@@ -172,7 +172,7 @@ module WebCalTides
         tide_data = tide_clients(station.provider).tide_data_for(station, around)
 
         logger.debug "storing tide data at #{at}"
-        File.write(at, tide_data.map{ |td| td.to_hash }.to_json)
+        File.write(at, tide_data.map(&:to_h).to_json)
 
         return tide_data.length > 0
     end
@@ -234,7 +234,7 @@ module WebCalTides
         stations = []
         current_clients.each_value { |c| stations.concat(c.current_stations) }
         logger.debug "storing current station list at #{at}"
-        File.write(at, stations.map(&:to_hash).to_json)
+        File.write(at, stations.map(&:to_h).to_json)
 
         return stations.length > 0
     end
