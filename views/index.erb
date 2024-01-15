@@ -13,10 +13,9 @@
 </form>
 
 <%
-   if defined? request_url
-       uri = URI.parse(request_url)
-   end
-%>
+    uri = URI.parse(request.url)
+    scheme = uri.scheme
+ %>
 
 <% if defined? tide_results and defined? current_results %>
 
@@ -35,7 +34,7 @@
 <tbody>
 <% tide_results.each do |r| %>
     <tr>
-    <th scope="row"><a href=<%= r.url %>><%= r.public_id %></a></th>
+    <th scope="row"><a href="<%= r.url %>"><%= r.public_id %></a></th>
     <td><%= r.name %></td>
     <td><%= r.region%></td>
 
@@ -44,7 +43,7 @@
        uri.query = "units=#{params['units']}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
-       uri.scheme = "https"
+       uri.scheme = scheme
        https_url  = uri.to_s
        url_id     = "url_#{r.id}"
     %>
@@ -107,18 +106,18 @@
 <tbody>
 <% current_results.each do |r| %>
 <tr>
-    <th scope="row"><a href="https://tidesandcurrents.noaa.gov/noaacurrents/Predictions?id=<%= r['bid'] %>"><%= r['id'] %></a></td>
-    <td><%= r["depth"].to_i %></td>
-    <td><%= r["name"] %></td>
+    <th scope="row"><a href="<%= r.url %>"><%= r.id %></a></td>
+    <td><%= r.depth.to_i %></td>
+    <td><%= r.name %></td>
 
     <%
-       uri.path = "/currents/#{r['bid']}.ics"
+       uri.path = "/currents/#{r.bid}.ics"
        uri.query = "units=#{params['units']}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
-       uri.scheme = "https"
+       uri.scheme = scheme
        https_url  = uri.to_s
-       url_id     = "url_#{r['bid']}"
+       url_id     = "url_#{r.bid}"
     %>
     <td>
 
@@ -147,7 +146,7 @@
                     <label for="within" class="form-label">Any stations within</label>
                     <div class="input-group">
                         <input type="text" class="form-control" name="within" id="within" />
-                        <input type="hidden" name="searchtext" value="<%= r['bid'] %>" />
+                        <input type="hidden" name="searchtext" value="<%= r.bid %>" />
                         <input type="hidden" name="units" value="<%= params['units'] %>" />
                         <span class="input-group-text" id="radius_units"><%= params['units'] == 'imperial' ? 'mi' : 'km' %></span>
                         <button class="btn btn-secondary btn-sm" type="submit">Search</button>

@@ -87,7 +87,7 @@ class Server < ::Sinatra::Base
         logger.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
         erb :index, locals: { tide_results: tide_results, current_results: current_results,
-                              request_url: request.url, searchtext: tokens, params: params }
+                              request: request, searchtext: tokens, params: params }
     end
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
@@ -97,7 +97,8 @@ class Server < ::Sinatra::Base
         date     = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
         units    = params[:units] || 'imperial'
         stamp    = date.utc.strftime("%Y%m")
-        filename = "#{settings.cache_dir}/#{type}_#{id}_#{stamp}_#{units}.ics"
+        version  = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
+        filename = "#{settings.cache_dir}/#{type}_#{version}_#{id}_#{stamp}_#{units}.ics"
 
         ics = File.read filename rescue begin
             calendar = case type
@@ -105,6 +106,17 @@ class Server < ::Sinatra::Base
                        when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 500
                        else halt 404
                        end
+
+            # There are two cases where calendar might be nil:
+            #
+            #   1. Some internal shit fucked up (500)
+            #   2. Station went away (should be a 404 but a 500 is more "temporary" to callers and
+            #      gives us time to understand and fix if in fact it's our fault)
+            #
+            # So always return 500 if we don't have a calendar to serve.
+
+            halt 500 unless calendar
+
             calendar.publish
             logger.info "caching to #{filename}"
             File.write filename, ical = calendar.to_ical

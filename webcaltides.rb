@@ -2,45 +2,45 @@
 ## Primary library of functions.  Included on Server.
 ##
 
+require 'active_support'
+require 'active_support/core_ext'
 require 'icalendar/tzinfo'
 require 'solareventcalculator'
 require 'geocoder'
-require_relative 'clients/noaa_client'
-require_relative 'clients/chs_client'
-require 'active_support/core_ext'
+
+require_relative 'clients/base'
+require_relative 'clients/noaa_tides'
+require_relative 'clients/chs_tides'
+require_relative 'clients/noaa_currents'
 
 module WebCalTides
 
-    # Hacks to interact with outside of Server instance
-
     extend self
+
+    include Clients::TimeWindow
 
     def settings; return Server.settings; end
     def logger; @logger ||= Server.logger || Logger.new(STDOUT) rescue Logger.new(STDOUT); end
 
     ##
-    ## Sliding Time Window for data generation
-    ##
-
-    WINDOW_SIZE = 12.months
-
-    def beginning_of_window(around)
-        return around.utc.beginning_of_month - WebCalTides::WINDOW_SIZE
-    end
-
-    def end_of_window(around)
-        return around.utc.end_of_month + WebCalTides::WINDOW_SIZE
-    end
-
-    ##
     ## Clients
     ##
 
-    def tide_clients
+    def tide_clients(provider = nil)
         @tide_clients ||= {
-            noaa: Clients::NoaaClient.new(logger),
-            chs: Clients::ChsClient.new(logger)
+            noaa: Clients::NoaaTides.new(logger),
+            chs:  Clients::ChsTides.new(logger)
         }
+
+        provider ? @tide_clients[provider.to_sym] : @tide_clients
+    end
+
+    def current_clients(provider = nil)
+        @current_clients ||= {
+            noaa: Clients::NoaaCurrents.new(logger)
+        }
+
+        provider ? @current_clients[provider.to_sym] : @current_clients
     end
 
     ##
@@ -92,7 +92,7 @@ module WebCalTides
 
             @tzcache[key] = tz.name
 
-            logger.debug "storing tzcache at #{filename}"
+            logger.debug "updating tzcache at #{filename}"
             File.write(filename, @tzcache.to_json)
 
             tz.name
@@ -169,8 +169,7 @@ module WebCalTides
     def cache_tide_data_for(station, at:, around:)
         return false unless station
 
-        id = station.id
-        tide_data = tide_clients[station.provider.to_sym].tide_data_for(id, around, station.public_id)
+        tide_data = tide_clients(station.provider).tide_data_for(station, around)
 
         logger.debug "storing tide data at #{at}"
         File.write(at, tide_data.map{ |td| td.to_hash }.to_json)
@@ -181,15 +180,14 @@ module WebCalTides
     def tide_data_for(station, around: Time.current.utc)
         return nil unless station
 
-        id = station.id
         datestamp = around.utc.strftime("%Y%m")
-        filename  = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{id}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{station.id}_#{datestamp}.json"
         File.exist? filename or cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
 
-        logger.debug "parsing tides for #{id}"
+        logger.debug "parsing tides for #{station.id}"
         data = JSON.parse(json) rescue []
 
         data.map{ |js| DataModels::TideData.from_hash(js) }
@@ -199,6 +197,8 @@ module WebCalTides
         depth_units = units == 'imperial' ? 'ft' : 'm'
         station = tide_station_for(id) or return nil
         data    = tide_data_for(station, around: around)
+
+        return nil unless data
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
@@ -229,24 +229,19 @@ module WebCalTides
     ##
 
     def cache_current_stations(at:nil)
-        at ||= "#{settings.cache_dir}/stations.json"
+        at ||= "#{settings.cache_dir}/current_stations.json"
 
-        agent = Mechanize.new
-        url = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=currentpredictions&units=english'
-
-        logger.info "getting current station list from #{url}"
-        json = agent.get(url).body
-        logger.debug "json.length = #{json.length}"
-
+        stations = []
+        current_clients.each_value { |c| stations.concat(c.current_stations) }
         logger.debug "storing current station list at #{at}"
-        File.write(at, json)
+        File.write(at, stations.map(&:to_hash).to_json)
 
-        return json.length > 0
+        return stations.length > 0
     end
 
     def current_stations
         return @current_stations ||= begin
-            filename = "#{settings.cache_dir}/current_stations.json"
+            filename = "#{settings.cache_dir}/current_stations_v#{DataModels::Station.version}.json"
 
             File.exist? filename or cache_current_stations(at:filename)
 
@@ -254,21 +249,15 @@ module WebCalTides
             json = File.read(filename)
 
             logger.debug "parsing current station list"
-            data = JSON.parse(json)["stations"] rescue {}
+            data = JSON.parse(json) rescue []
 
-            # Tho we get records, anything "weak and variable" won't have a lookup page,
-            # so we exclude them.
-            data.reject! { |s| s["type"] == "W" }
-
-            # Since different bins/depths use the same ID, we massage each entry with a
-            # unique "bin id" aka bid.
-            data.map! { |s| s["bid"] = s["id"] + "_" + s["currbin"].to_s; s }
+            data.map { |js| DataModels::Station.from_hash(js) }
         end
     end
 
     def current_station_for(id)
         return nil if id.blank?
-        return current_stations.select { |s| s["id"] == id || s["bid"] == id }.first
+        return current_stations.select { |s| s.id == id || s.bid == id }.first
     end
 
     # nil == any, units == [ mi, km ]
@@ -280,10 +269,10 @@ module WebCalTides
 
         by_stations = current_stations.select do |s|
             by.any? do |b|
-                (s['bid'].downcase.start_with?(b) rescue false) ||
-                (s['id'].downcase.start_with?(b) rescue false) ||
-                (s['id'].downcase.include?(b) rescue false) ||
-                (s['name'].downcase.include?(b)) rescue false
+                (s.bid.downcase.start_with?(b) rescue false) ||
+                (s.id.downcase.start_with?(b) rescue false) ||
+                (s.id.downcase.include?(b) rescue false) ||
+                (s.name.downcase.include?(b)) rescue false
             end
         end
 
@@ -292,7 +281,7 @@ module WebCalTides
 
         station = by_stations.first
 
-        return find_current_stations_by_gps(station["lat"], station["lng"], within:within, units:units)
+        return find_current_stations_by_gps(station.lat, station.lon, within:within, units:units)
     end
 
     def find_current_stations_by_gps(lat, long, within:nil, units:'mi')
@@ -306,71 +295,61 @@ module WebCalTides
     def cache_current_data_for(station, at:, around:)
         return false unless station
 
-        (_, id, bin) = /(\w+)_(\d+)/.match(station).to_a
-        id = station unless id
-
-        agent = Mechanize.new
-        from = beginning_of_window(around).strftime("%Y%m%d")
-        to   = end_of_window(around).strftime("%Y%m%d")
-        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=currents_predictions&begin_date=#{from}&end_date=#{to}&station=#{id}&time_zone=gmt&interval=MAX_SLACK&units=english&format=json"
-        url += "&bin=#{bin}" if bin
-
-        logger.info "getting json from #{url}"
-        json = agent.get(url).body
-        logger.debug "json.length = #{json.length}"
+        current_data = current_clients(station.provider).current_data_for(station, around)
 
         logger.debug "storing current data at #{at}"
-        File.write(at, json)
+        File.write(at, current_data.map(&:to_h).to_json)
 
-        return json.length > 0
+        return current_data.length > 0
     end
 
     def current_data_for(station, around: Time.current.utc)
         return nil unless station
 
         datestamp = around.utc.strftime("%Y%m") # 202312
-        filename  = "#{settings.cache_dir}/currents_#{station}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/currents_v#{DataModels::CurrentData.version}_#{station.bid}_#{datestamp}.json"
         File.exist? filename or cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
 
-        logger.debug "parsing currents for #{station}"
-        data = JSON.parse(json)["current_predictions"]["cp"] rescue nil
+        logger.debug "parsing currents for #{station.bid}"
+        data = JSON.parse(json) rescue []
 
-        return data
+        data.map { |jc| DataModels::CurrentData.from_hash(jc) }
     end
 
     def current_calendar_for(id, around: Time.current.utc)
         station = current_station_for(id) or return nil
-        data    = current_data_for(id, around: around)
+        data    = current_data_for(station, around: around)
+
+        return nil unless data
 
         cal = Icalendar::Calendar.new
-        cal.x_wr_calname = station["name"].titleize
+        cal.x_wr_calname = station.name.titleize
 
-        url      = "https://tidesandcurrents.noaa.gov/noaacurrents/Predictions"
-        location = "#{station["name"]} (#{station["bid"]})"
+        location = "#{station.name} (#{station.bid})"
 
         logger.debug "generating current calendar for #{location}"
 
         data.each do |current|
-            date  = DateTime.parse(current['Time']).strftime("%Y-%m-%d")
-            title = case current["Type"]
-                    when "ebb"   then "Ebb #{current["Velocity_Major"].to_f.abs}kts #{current["meanEbbDir"]}T #{current["Depth"]}ft"
-                    when "flood" then "Flood #{current["Velocity_Major"]}kts #{current["meanFloodDir"]}T #{current["Depth"]}ft"
+            date  = current.time.strftime("%Y-%m-%d")
+            title = case current.type
+                    when "ebb"   then "Ebb #{current.velocity_major.to_f.abs}kts #{current.mean_ebb_dir}T #{current.depth}ft"
+                    when "flood" then "Flood #{current.velocity_major}kts #{current.mean_flood_dir}T #{current.depth}ft"
                     when "slack" then "Slack"
                     end
 
             cal.event do |e|
                 e.summary  = title
-                e.dtstart  = Icalendar::Values::DateTime.new(DateTime.parse(current["Time"]), tzid: 'GMT')
+                e.dtstart  = Icalendar::Values::DateTime.new(current.time, tzid: 'GMT')
                 e.dtend    = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
-                e.url      = url + "?id=" + station["bid"] + "&d=" + date
+                e.url      = station.url + "?id=" + station.bid + "&d=" + date
                 e.location = location if location
             end
         end
 
-        solar_calendar_for(station["lat"], station["lng"], around:around, location:location).events.each { |e| cal.add_event(e) }
+        solar_calendar_for(station.lat, station.lon, around:around, location:location).events.each { |e| cal.add_event(e) }
 
         logger.info "current calendar for #{location} generated with #{cal.events.length} events"
 

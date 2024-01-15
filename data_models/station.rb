@@ -2,8 +2,9 @@ module DataModels
     class Station
 
         # When modifying this class, bump this version
+        # v2: extended to support current stations, in addition to tide stations
         def self.version
-            1
+            2
         end
 
         attr_accessor :name
@@ -16,11 +17,14 @@ module DataModels
         attr_accessor :lon
         attr_accessor :url
         attr_accessor :provider
+        attr_accessor :bid
+        attr_accessor :depth
 
-        def initialize(name:, alternate_names:, id:, public_id:, region:, location:, lat:, lon:, url:, provider:)
+        def initialize(name:, alternate_names:nil, bid:nil, id:, public_id:nil, region:nil, location:nil, lat:, lon:, url:, provider:, depth:nil)
             @name = name
             @alternate_names = alternate_names
             @id = id
+            @bid = bid
             @public_id = public_id
             @region = region
             @location = location
@@ -28,6 +32,7 @@ module DataModels
             @lon = lon
             @url = url
             @provider = provider
+            @depth = depth
         end
 
         def to_hash
@@ -41,7 +46,9 @@ module DataModels
                 lat: lat,
                 lon: lon,
                 url: url,
-                provider: provider
+                provider: provider,
+                bid: bid,
+                depth: depth,
             }
         end
 
@@ -56,7 +63,9 @@ module DataModels
                 lat: h['lat'],
                 lon: h['lon'],
                 url: h['url'],
-                provider: h['provider']
+                provider: h['provider'],
+                bid: h['bid'],
+                depth: h['depth'],
             )
         end
     end
