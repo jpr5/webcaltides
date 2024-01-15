@@ -10,6 +10,9 @@ module Clients
 
         include TimeWindow
 
+        # Get a full year (1 month behind + now + 11 ahead)
+        self.window_size = 13.months
+
         def tide_stations
             url = "#{API_URL}/mdapi/prod/webapi/tidepredstations.json?q="
 

@@ -28,9 +28,12 @@ module Clients
     end
 
     module TimeWindow
-        # around: base date, with a +/- N month window.  More processing per year, but this at least
-        # solves the EOY data starvation problem, data is cached to disk and the 12x processing
-        # (monthly vs. yearly) is cheap. 🤷‍♂️
+
+        # around: base date, with a sliding window around the date -- PRIOR_MONTHS months before,
+        # and current month + window_size - (PRIOR_MONTHS + 1.month) after.
+        #
+        # More processing per year, but this at least solves the EOY data starvation problem, data
+        # is cached to disk and the 12x processing (monthly vs. yearly) is still super cheap. 🤷‍♂️
 
         def self.included(klass)
             klass.class_eval do
@@ -39,12 +42,16 @@ module Clients
             end
         end
 
+        # Always do 1 month prior - so beginning of range is this month + last month.
+        PRIOR_MONTHS = 1.month
+
         def beginning_of_window(around)
-            return around.utc.beginning_of_month - self.window_size
+            return around.utc.beginning_of_month - PRIOR_MONTHS
         end
 
         def end_of_window(around)
-            return around.utc.end_of_month + self.window_size
+            # subtract prior + current month
+            return around.utc.end_of_month + self.window_size - (PRIOR_MONTHS + 1.month)
         end
 
     end

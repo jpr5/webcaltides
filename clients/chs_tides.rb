@@ -10,8 +10,8 @@ module Clients
 
         include TimeWindow
 
-        ## NOAA currents generation won't do more than 366 days - so we can't do 1 year back/forwards.
-        self.window_size = 5.months
+        ## CHS tides generation won't do more than 366 days.
+        self.window_size = 12.months
 
         def tide_stations
             url = "#{API_URL}/stations"
