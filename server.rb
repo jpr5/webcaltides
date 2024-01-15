@@ -98,7 +98,7 @@ class Server < ::Sinatra::Base
         units    = params[:units] || 'imperial'
         stamp    = date.utc.strftime("%Y%m")
         version  = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
-        filename = "#{settings.cache_dir}/#{type}_#{version}_#{id}_#{stamp}_#{units}.ics"
+        filename = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}.ics"
 
         ics = File.read filename rescue begin
             calendar = case type
