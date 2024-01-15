@@ -124,9 +124,9 @@ module WebCalTides
             json = File.read(filename)
 
             logger.debug "parsing tide station list"
-            data = JSON.parse(json) rescue []
 
-            data.map{ |js| DataModels::Station.from_hash(js) }
+            data = JSON.parse(json) rescue []
+            data.map { |js| DataModels::Station.from_hash(js) }
         end
     end
 

@@ -19,7 +19,7 @@ module Clients
                 logger.debug "json.length = #{json.length}"
             rescue Mechanize::ResponseCodeError => e
                 logger.error "GET #{url} failed: #{e.detailed_message} (#{e.page&.content})"
-                return nil
+                raise e # doing this will pop out to an HTTP 500
             end
 
             return json

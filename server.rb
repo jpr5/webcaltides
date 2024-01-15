@@ -100,22 +100,17 @@ class Server < ::Sinatra::Base
         version  = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
         filename = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}.ics"
 
+        # NOTE: Changed my mind on retval's.  In the shit-fucked-up case, we end up sending out a
+        # full stack trace + 500, so really if we muck something up internally we should let the
+        # exception float up.  Then we can assume that if we arrive without a calendar, then it's
+        # simply not there -> 404.
+
         ics = File.read filename rescue begin
             calendar = case type
-                       when "tides"    then WebCalTides.tide_calendar_for(id, around: date, units: units) or halt 500
-                       when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 500
+                       when "tides"    then WebCalTides.tide_calendar_for(id, around: date, units: units) or halt 404
+                       when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 404
                        else halt 404
                        end
-
-            # There are two cases where calendar might be nil:
-            #
-            #   1. Some internal shit fucked up (500)
-            #   2. Station went away (should be a 404 but a 500 is more "temporary" to callers and
-            #      gives us time to understand and fix if in fact it's our fault)
-            #
-            # So always return 500 if we don't have a calendar to serve.
-
-            halt 500 unless calendar
 
             calendar.publish
             logger.info "caching to #{filename}"
