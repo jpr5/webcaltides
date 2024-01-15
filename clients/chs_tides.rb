@@ -5,10 +5,13 @@ require_relative '../data_models/tide_data'
 module Clients
     class ChsTides < Base
 
-        include TimeWindow
-
         API_URL            = 'https://api-iwls.dfo-mpo.gc.ca/api/v1'
         PUBLIC_STATION_URL = "https://www.tides.gc.ca/en/stations/%s"
+
+        include TimeWindow
+
+        ## NOAA currents generation won't do more than 366 days - so we can't do 1 year back/forwards.
+        self.window_size = 5.months
 
         def tide_stations
             url = "#{API_URL}/stations"
