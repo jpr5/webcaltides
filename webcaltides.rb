@@ -288,7 +288,7 @@ module WebCalTides
         within = within.to_i
 
         return current_stations.select do |s|
-            Geocoder::Calculations.distance_between([lat, long], [s["lat"],s["lng"]], units: units.to_sym) <= within
+            Geocoder::Calculations.distance_between([lat, long], [s.lat,s.lon], units: units.to_sym) <= within
         end
     end
 
