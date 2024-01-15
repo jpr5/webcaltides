@@ -40,7 +40,6 @@ module Clients
         end
 
         def beginning_of_window(around)
-            puts "window_size = #{self.window_size}"
             return around.utc.beginning_of_month - self.window_size
         end
 
