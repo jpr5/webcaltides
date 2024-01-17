@@ -140,7 +140,7 @@ module WebCalTides
         by ||= [""]
         by &&= Array(by).map(&:downcase)
 
-        logger.debug("finding tide stations by '#{by}' within '#{within}' #{units}")
+        logger.debug("finding tide stations by #{by} within '#{within}' #{units}")
         by_stations = tide_stations.select do |s|
             by.any? do |b|
                 s.id.downcase == b ||
@@ -265,7 +265,7 @@ module WebCalTides
         by ||= [""]
         by &&= Array(by).map(&:downcase)
 
-        logger.debug "finding current stations by '#{by}' within '#{within}'"
+        logger.debug "finding current stations by #{by} within '#{within}' #{units}"
 
         by_stations = current_stations.select do |s|
             by.any? do |b|
