@@ -2,7 +2,7 @@
     <label for="searchtext" class="form-label">Station Search <em>(use double quotes for multi-word, e.g. shilshole "puget sound")</em></label>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or ID:</span>
-        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= params['searchtext'].nil? ? 'Station...' : params['searchtext'] %>" />
+        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= escape_html(params['searchtext'].nil? ? 'Station...' : params['searchtext']) %>" />
         <span class="input-group-text" id="searchtext_prompt">Units:</span>
         <select class="form-select" style="flex: 0.3 0.3 auto;" name="units" id="searchunits">
             <option value="imperial" <%= selected='selected' if params['units'] == 'imperial'%>>ft/mi</option>

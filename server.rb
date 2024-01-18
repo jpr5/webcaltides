@@ -13,6 +13,7 @@ Bundler.require
 
 require_relative 'webcaltides'
 
+::Sinatra::Helpers.send(:include, ::Rack::Utils)
 
 class Server < ::Sinatra::Base
 
