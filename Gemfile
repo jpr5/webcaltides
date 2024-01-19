@@ -18,5 +18,5 @@ gem 'timezone'
 gem 'geocoder'
 
 gem 'rack', '= 2.2.6.4'
-gem 'sinatra', '= 2.2.3'
+gem 'sinatra', '= 4.0.0'
 gem 'unicorn'
