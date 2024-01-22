@@ -181,7 +181,7 @@ module WebCalTides
         return nil unless station
 
         datestamp = around.utc.strftime("%Y%m")
-        filename  = "#{settings.cache_dir}/tide_data_v#{DataModels::TideData.version}_#{station.id}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/tides_v#{DataModels::TideData.version}_#{station.id}_#{datestamp}.json"
         File.exist? filename or cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
