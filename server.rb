@@ -53,7 +53,8 @@ class Server < ::Sinatra::Base
     end
 
     post "/" do
-        text   = params['searchtext'].downcase rescue nil
+        # Depending on your font these quotes may look the same -- but they're not
+        text   = params['searchtext'].downcase.tr('“”', '""') rescue nil
         radius = params['within']
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
 
