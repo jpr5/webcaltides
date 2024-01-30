@@ -27,7 +27,7 @@ OR, just use this one at [webcaltides.org](https://webcaltides.org)!
 
 ## Invocation
 
-`rackup` or `unicorn` works great.  Writes to a cache directory, basically
+`rackup` or `puma` works great.  Writes to a cache directory, basically
 stores every bit of intermediate work.
 
 ## TODO
