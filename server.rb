@@ -18,20 +18,21 @@ Bundler.require
 
 require_relative 'webcaltides'
 
-::Sinatra::Helpers.send(:include, ::Rack::Utils)
 
 class Server < ::Sinatra::Base
 
     set :app_file,      File.expand_path(__FILE__)
     set :root,          File.expand_path(File.dirname(__FILE__))
     set :cache_dir,     settings.root + '/cache'
-    set :static,        true
     set :public_folder, settings.root + '/public'
     set :views,         settings.root + '/views'
+    set :static,        true
 
     configure do
-        set :logging, Logger::DEBUG
-        disable :sessions
+        enable :show_exceptions
+        disable :sessions, :logging
+
+        helpers ::Rack::Utils
 
         Timezone::Lookup.config(:geonames) do |c|
             c.username = ENV['USER']
