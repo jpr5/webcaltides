@@ -1,2 +1,2 @@
-require "./server"
+require_relative "server"
 run Server
