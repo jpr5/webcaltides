@@ -2,12 +2,6 @@
 ## Primary library of functions.  Included on Server.
 ##
 
-require 'active_support'
-require 'active_support/core_ext'
-require 'icalendar/tzinfo'
-require 'solareventcalculator'
-require 'geocoder'
-
 require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
