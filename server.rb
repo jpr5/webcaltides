@@ -94,20 +94,20 @@ class Server < ::Sinatra::Base
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
     get "/:type/:station.ics" do
-        type     = params[:type]
-        id       = params[:station]
-        date     = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
-        units    = params[:units] || 'imperial'
-        stamp    = date.utc.strftime("%Y%m")
-        version  = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
-        filename = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}.ics"
+        type       = params[:type]
+        id         = params[:station]
+        date       = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
+        units      = params[:units] || 'imperial'
+        stamp      = date.utc.strftime("%Y%m")
+        version    = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
+        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}.ics"
 
         # NOTE: Changed my mind on retval's.  In the shit-fucked-up case, we end up sending out a
         # full stack trace + 500, so really if we muck something up internally we should let the
         # exception float up.  Then we can assume that if we arrive without a calendar, then it's
         # simply not there -> 404.
 
-        ics = File.read filename rescue begin
+        ics = File.read cached_ics rescue begin
             calendar = case type
                        when "tides"    then WebCalTides.tide_calendar_for(id, around: date, units: units) or halt 404
                        when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 404
@@ -116,7 +116,7 @@ class Server < ::Sinatra::Base
 
             calendar.publish
             $LOG.info "caching to #{cached_ics}"
-            File.write filename, ical = calendar.to_ical
+            File.write cached_ics, ical = calendar.to_ical
             ical
         end
 
