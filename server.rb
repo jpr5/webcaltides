@@ -8,6 +8,11 @@
 
 # FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
+require 'logger'
+$LOG = Logger.new(STDOUT).tap do |log|
+    log.formatter = proc { |s, d, _, m| "#{d.strftime("%Y-%m-%d %H:%M:%S")} #{s} #{m}\n" }
+end
+
 require 'bundler/setup'
 Bundler.require
 
@@ -36,12 +41,7 @@ class Server < ::Sinatra::Base
     end
 
     configure :development do
-        enable :show_exceptions
-    end
-
-    configure :production do
-        set :logging, Logger::INFO
-        disable :reload_templates, :reloader, :show_exceptions
+        set :logging, $LOG
     end
 
     ##
@@ -86,7 +86,7 @@ class Server < ::Sinatra::Base
         for_what  = "#{text}"
         for_what += " within [#{radius}]" if radius
 
-        logger.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
+        $LOG.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
         erb :index, locals: { tide_results: tide_results, current_results: current_results,
                               request: request, searchtext: tokens, params: params }
@@ -115,7 +115,7 @@ class Server < ::Sinatra::Base
                        end
 
             calendar.publish
-            logger.info "caching to #{filename}"
+            $LOG.info "caching to #{cached_ics}"
             File.write filename, ical = calendar.to_ical
             ical
         end

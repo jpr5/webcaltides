@@ -14,7 +14,7 @@ module WebCalTides
     include Clients::TimeWindow
 
     def settings; return Server.settings; end
-    def logger; @logger ||= Server.logger || Logger.new(STDOUT) rescue Logger.new(STDOUT); end
+    def logger; $LOG; end
 
     ##
     ## Clients
