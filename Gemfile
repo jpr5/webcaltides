@@ -8,7 +8,7 @@ gem 'pry'
 
 gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/core_ext']
 
-gem 'nokogiri', '1.14.3'
+gem 'nokogiri', '>= 1.16.2'
 gem 'json'
 gem 'mechanize', '= 2.8.5'
 

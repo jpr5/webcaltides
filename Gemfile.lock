@@ -61,8 +61,8 @@ GEM
     net-http-persistent (4.0.2)
       connection_pool (~> 2.2)
     nio4r (2.7.0)
-    nokogiri (1.14.3)
-      mini_portile2 (~> 2.8.0)
+    nokogiri (1.16.2)
+      mini_portile2 (~> 2.8.2)
       racc (~> 1.4)
     pry (0.14.2)
       coderay (~> 1.1)
@@ -107,7 +107,7 @@ DEPENDENCIES
   irb
   json
   mechanize (= 2.8.5)
-  nokogiri (= 1.14.3)
+  nokogiri (>= 1.16.2)
   pry
   puma
   rack (= 2.2.6.4)
