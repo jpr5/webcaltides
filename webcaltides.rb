@@ -97,11 +97,14 @@ module WebCalTides
     ## Tides
     ##
 
-    def cache_tide_stations(at:nil)
-        at ||= "#{settings.cache_dir}/tide_stations.json"
+    def tide_station_cache_file
+        "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}.json"
+    end
 
-        stations = []
-        tide_clients.each_value { |c| stations.concat(c.tide_stations) }
+    def cache_tide_stations(at:tide_station_cache_file, stations:[])
+        # stations: is used in the re-cache scenario
+        tide_clients.each_value { |c| stations.concat(c.tide_stations) } if stations.empty?
+
         logger.debug "storing tide station list at #{at}"
         File.write(at, stations.map(&:to_h).to_json )
 
@@ -110,18 +113,26 @@ module WebCalTides
 
     def tide_stations
         return @tide_stations ||= begin
-            filename = "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}.json"
+            cache_file = tide_station_cache_file
+            File.exist? cache_file or cache_tide_stations(at:cache_file)
 
-            File.exist? filename or cache_tide_stations(at:filename)
-
-            logger.debug "reading #{filename}"
-            json = File.read(filename)
+            logger.debug "reading #{cache_file}"
+            json = File.read(cache_file)
 
             logger.debug "parsing tide station list"
 
             data = JSON.parse(json) rescue []
             data.map { |js| DataModels::Station.from_hash(js) }
         end
+    end
+
+    # This is primarily for CHS tide stations, whose metadata is such a broken mess as to not
+    # reliably indicate, in any way, whether the station is producing tide data or not.  See
+    # chs_tides.rb for details.
+
+    def remove_tide_station(station_id)
+        @tide_stations.delete_if { |s| s.id == station_id }
+        cache_tide_stations(stations:@tide_stations)
     end
 
     def tide_station_for(id)
@@ -222,11 +233,13 @@ module WebCalTides
     ## Currents
     ##
 
-    def cache_current_stations(at:nil)
-        at ||= "#{settings.cache_dir}/current_stations.json"
+    def current_station_cache_file
+        "#{settings.cache_dir}/current_stations_v#{DataModels::Station.version}.json"
+    end
 
-        stations = []
-        current_clients.each_value { |c| stations.concat(c.current_stations) }
+    def cache_current_stations(at:current_station_cache_file, stations: [])
+        current_clients.each_value { |c| stations.concat(c.current_stations) } if stations.empty?
+
         logger.debug "storing current station list at #{at}"
         File.write(at, stations.map(&:to_h).to_json)
 
@@ -235,18 +248,22 @@ module WebCalTides
 
     def current_stations
         return @current_stations ||= begin
-            filename = "#{settings.cache_dir}/current_stations_v#{DataModels::Station.version}.json"
+            cache_file = current_station_cache_file
+            File.exist? cache_file or cache_current_stations(at:cache_file)
 
-            File.exist? filename or cache_current_stations(at:filename)
-
-            logger.debug "reading #{filename}"
-            json = File.read(filename)
+            logger.debug "reading #{cache_file}"
+            json = File.read(cache_file)
 
             logger.debug "parsing current station list"
             data = JSON.parse(json) rescue []
 
             data.map { |js| DataModels::Station.from_hash(js) }
         end
+    end
+
+    def remove_current_station(station_id)
+        @current_stations.delete_if { |s| s.id == station_id }
+        cache_current_stations(stations:@current_stations)
     end
 
     def current_station_for(id)

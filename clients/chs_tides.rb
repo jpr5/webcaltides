@@ -58,22 +58,24 @@ module Clients
             # from the list, however a different station 5cebf1df3d0f4a073c4bbcb9 also has the same
             # type/operating but *DOES* return tide data.
             #
-            # Not sure what to do ... obviously the prev_value calc errors out if there's no data,
-            # so it seems dumb to just let that happen if we know to maybe expect this condition and
-            # could handle it.
+            # Upon further research, it turns out the CHS metadata is a fucking mess.  Of the tons
+            # of possible indicators in the metadata, none are reliable as way to know if an
+            # "active" server in the station list will return actual tide data.  This is to say,
+            # some stations that are Temporary, Discontinued, or operating:false, etc, will return
+            # data, while others that are status:OK, Permanent, etc, won't.  The only way to know is
+            # to try to retrieve it.
             #
-            # We could filter out stations that are not operating/discontinued, but clearly there's
-            # at least one example where data is still being returned so it feels like we could end
-            # up cutting the station list short.
-            # TODO: need to do more research to see how many stations in the list are non-operating
-            # but returning tide data.
+            # Which means we can't filter them out of the list ahead of time, since there are API
+            # ratelimits and over 1k stations to double-check.  All we can do is (1) return nil to
+            # the caller, and (2) nuke the station from the list post-facto.  This means bad
+            # stations will show up in the search results until someone attempts to use one -- then
+            # it will get nuked.
             #
-            # We can return nil but that will result in a 404 to the caller, despite the station
-            # showing up in the search list.  Until I have time for the TODO above, this is the
-            # least shitty option..
+            # Super lame.
 
             if data.length == 0
-                logger.error "!! got empty tide data for station #{station.id}"
+                logger.error "!! got empty tide data for station #{station.id}, nuking from list"
+                WebCalTides.remove_tide_station(station.id)
                 return nil
             end
 
