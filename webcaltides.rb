@@ -97,8 +97,11 @@ module WebCalTides
     ## Tides
     ##
 
+    # Cache quarterly / every three months
     def tide_station_cache_file
-        "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}.json"
+        now = Time.current.utc
+        datestamp = now.strftime("%YQ#{now.quarter}")
+        "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}_#{datestamp}.json"
     end
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
@@ -112,10 +115,10 @@ module WebCalTides
     end
 
     def tide_stations
-        return @tide_stations ||= begin
-            cache_file = tide_station_cache_file
-            File.exist? cache_file or cache_tide_stations(at:cache_file)
+        cache_file = tide_station_cache_file
+        File.exist? cache_file or cache_tide_stations(at:cache_file) and @tide_stations = nil
 
+        return @tide_stations ||= begin
             logger.debug "reading #{cache_file}"
             json = File.read(cache_file)
 
@@ -234,7 +237,9 @@ module WebCalTides
     ##
 
     def current_station_cache_file
-        "#{settings.cache_dir}/current_stations_v#{DataModels::Station.version}.json"
+        now = Time.current.utc
+        datestamp = now.strftime("%YQ#{now.quarter}")
+        "#{settings.cache_dir}/current_stations_v#{DataModels::Station.version}_#{datestamp}.json"
     end
 
     def cache_current_stations(at:current_station_cache_file, stations: [])
@@ -247,10 +252,10 @@ module WebCalTides
     end
 
     def current_stations
-        return @current_stations ||= begin
-            cache_file = current_station_cache_file
-            File.exist? cache_file or cache_current_stations(at:cache_file)
+        cache_file = current_station_cache_file
+        File.exist? cache_file or cache_current_stations(at:cache_file) and @current_stations = nil
 
+        return @current_stations ||= begin
             logger.debug "reading #{cache_file}"
             json = File.read(cache_file)
 
