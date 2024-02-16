@@ -51,13 +51,29 @@ module WebCalTides
         end
     end
 
-    # Currently only works with Decimal (no Deg/Min/Secs)
+    # Handles decimal (-)X.YYY or deg/min/sec format:
+    # Supported deg/min/sec format:
+    #     "1°2.3" or "1'2.3" with explicit negative
+    #     "1°2.3N" or "1'2.3W" with implicit negative (S+E -> -)
     def parse_gps(str)
+        if str.match(/\d['°]/)
+            str = str# blindly fix NSEW, no-op if DNE
+                .gsub(/(\d['°])(\s*)/, '\1') # remove any space b/w deg
+                .gsub(/([^\s])\s+([NSEW])/, '\1\2') # remove any space b/w cardinal
+                .gsub(/([^\s]+)[SE]/, '-\1') # if SE exists, remove + convert to -
+                .gsub(/([^\s]+)[NW]/, '\1') # if NW exists, remove + ignore (+)
+                .gsub(/([-]*)(\d+)['°]\s*(\d+)\.(\d+)/) do |m| # Convert to decimal
+                    $1 + ($2.to_f + $3.to_f/60 + $4.to_f/3600).to_s
+                end
+        end
+
+        # In decimal form now
         res = str.split(/[, ]+/)
+
         return nil if res.length != 2 or
-                      res.any? { |s| s.scan(/^[\d\.\-]+$/).empty? } or
-                      !res[0].to_f.between?(-90,90) or
-                      !res[1].to_f.between?(-180,180)
+                      res.any? { |s| s.scan(/^[\d\.-]+$/).empty? } or
+                     !res[0].to_f.between?(-90,90) or
+                     !res[1].to_f.between?(-180,180)
         return res
     end
 

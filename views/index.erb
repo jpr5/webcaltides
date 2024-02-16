@@ -1,5 +1,5 @@
 <form action="/" accept-charset="UTF-8" method="POST" class="w-100">
-    <label for="searchtext" class="form-label">Station Search <em>(<b>use double quotes for multi-word</b>, e.g. "puget sound", "san diego", "san francisco")</em></label>
+    <label for="searchtext" class="form-label">Station Search <em>(<b>use double quotes for multi-word</b>, e.g. "puget sound", "san diego", "san francisco"; <b>GPS format</b>: decimal X.YYY, or degrees 1°2.3, -1'2.3, 1°2.3N or 1'2.3E)</em></label>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or ID:</span>
         <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= escape_html(params['searchtext'].nil? ? 'Station...' : params['searchtext']) %>" />
