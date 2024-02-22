@@ -55,9 +55,9 @@ class Server < ::Sinatra::Base
 
     post "/" do
         # Depending on your font these quotes may look the same -- but they're not
-        text   = params['searchtext'].downcase.tr('“”', '""') rescue nil
-        radius = params['within']
+        radius       = params['within']
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
+        text         = params['searchtext'].downcase.tr('“”', '""') rescue ''
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(text))
@@ -116,8 +116,10 @@ class Server < ::Sinatra::Base
                        end
 
             calendar.publish
+
             $LOG.info "caching to #{cached_ics}"
             File.write cached_ics, ical = calendar.to_ical
+
             ical
         end
 
