@@ -84,7 +84,7 @@ class Server < ::Sinatra::Base
         tide_results    ||= []
         current_results ||= []
 
-        for_what  = "#{text}"
+        for_what  = "#{tokens}"
         for_what += " within [#{radius}]" if radius
 
         $LOG.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
