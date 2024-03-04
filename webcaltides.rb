@@ -97,7 +97,16 @@ module WebCalTides
 
         return @tzcache[key] ||= begin
             logger.debug "looking up tz for GPS #{key}"
-            tz = Timezone.lookup(lat, long)
+
+            i = 0
+            begin
+                i += 1
+                tz = Timezone.lookup(lat, long)
+            rescue Timezone::Error::GeoNames
+                sleep(i)
+                retry unless i >= 3
+            end
+
             logger.debug "GPS #{key} => #{tz.name}"
 
             @tzcache[key] = tz.name
