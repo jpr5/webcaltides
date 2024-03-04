@@ -198,7 +198,7 @@ module WebCalTides
             File.write(at, tide_data.map(&:to_h).to_json)
         end
 
-        return tide_data && tide_data&.length > 0
+        return tide_data && tide_data.length > 0
     end
 
     def tide_data_for(station, around: Time.current.utc)
@@ -332,7 +332,7 @@ module WebCalTides
             File.write(at, current_data.map(&:to_h).to_json)
         end
 
-        return current_data && current.length > 0
+        return current_data && current_data.length > 0
     end
 
     def current_data_for(station, around: Time.current.utc)
