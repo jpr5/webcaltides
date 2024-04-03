@@ -1,3 +1,4 @@
+
 <form action="/" accept-charset="UTF-8" method="POST" class="w-100">
     <label for="searchtext" class="form-label">
         <h4>Station Search</h4>
@@ -6,11 +7,11 @@
     </label>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or GPS:</span>
-        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= escape_html(params['searchtext'].nil? ? 'Station...' : params['searchtext']) %>" />
+        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= searchtext %>" />
         <span class="input-group-text" id="searchtext_prompt">Units:</span>
         <select class="form-select" style="flex: 0.3 0.3 auto;" name="units" id="searchunits">
-            <option value="imperial" <%= selected='selected' if params['units'] == 'imperial'%>>ft/mi</option>
-            <option value="metric" <%= selected='selected' if params['units'] == 'metric'%>>m/km</option>
+            <option value="imperial" <%= selected='selected' if units == 'imperial'%>>ft/mi</option>
+            <option value="metric" <%= selected='selected' if units == 'metric'%>>m/km</option>
         </select>
         <button class="btn btn-primary" type="submit">Search</button>
     </div>
@@ -23,7 +24,7 @@
 
 <% if defined? tide_results and defined? current_results %>
 
-<p><em>Search '<%= searchtext.join(" OR ") %>' yields <%= tide_results.count + current_results.count %> results</em></p>
+<p><em>Search '<%= searchtokens.join(" OR ") %>' yields <%= tide_results.count + current_results.count %> results</em></p>
 
 <% if tide_results.count > 0 %>
 <table class="table table-striped table-hover caption-top">
@@ -44,7 +45,7 @@
 
     <%
        uri.path = "/tides/#{r.id}.ics"
-       uri.query = "units=#{params['units']}"
+       uri.query = "units=#{units}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
        uri.scheme = scheme
@@ -79,8 +80,8 @@
                     <div class="input-group">
                         <input type="text" class="form-control" name="within" id="within" />
                         <input type="hidden" name="searchtext" value="<%= r.id %>" />
-                        <input type="hidden" name="units" value="<%= params['units'] %>" />
-                        <span class="input-group-text" id="radius_units"> <%= params['units'] == 'imperial' ? 'mi' : 'km' %></span>
+                        <input type="hidden" name="units" value="<%= units %>" />
+                        <span class="input-group-text" id="radius_units"><%= units == 'imperial' ? 'mi' : 'km' %></span>
                         <button class="btn btn-secondary btn-sm" type="submit">Search</button>
                     </div>
                 </form>
@@ -116,7 +117,7 @@
 
     <%
        uri.path = "/currents/#{r.bid}.ics"
-       uri.query = "units=#{params['units']}"
+       uri.query = "units=#{units}"
        uri.scheme = "webcal"
        webcal_url = uri.to_s
        uri.scheme = scheme
@@ -151,8 +152,8 @@
                     <div class="input-group">
                         <input type="text" class="form-control" name="within" id="within" />
                         <input type="hidden" name="searchtext" value="<%= r.bid %>" />
-                        <input type="hidden" name="units" value="<%= params['units'] %>" />
-                        <span class="input-group-text" id="radius_units"><%= params['units'] == 'imperial' ? 'mi' : 'km' %></span>
+                        <input type="hidden" name="units" value="<%= units %>" />
+                        <span class="input-group-text" id="radius_units"><%= units == 'imperial' ? 'mi' : 'km' %></span>
                         <button class="btn btn-secondary btn-sm" type="submit">Search</button>
                     </div>
                 </form>

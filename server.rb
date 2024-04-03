@@ -50,17 +50,17 @@ class Server < ::Sinatra::Base
     ##
 
     get "/" do
-        erb :index
+        erb :index, locals: { searchtext: nil, units: nil }
     end
 
     post "/" do
         # Depending on your font these quotes may look the same -- but they're not
         radius       = params['within']
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
-        text         = params['searchtext'].downcase.tr('“”', '""') rescue ''
+        searchtext   = params['searchtext'].downcase.tr('“”', '""') rescue ''
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
-        if ((lat, long) = WebCalTides.parse_gps(text))
+        if ((lat, long) = WebCalTides.parse_gps(searchtext))
             how = "near"
             tokens = [lat, long]
 
@@ -73,9 +73,9 @@ class Server < ::Sinatra::Base
 
             # Parse search terms.  Matched quotes are taken as-is (still
             # lowercased), while everything else is tokenized via [ ,]+.
-            tokens = text.scan(/["]([^"]+)["]/).flatten
-            text.gsub!(/["]([^"]+)["]/, '')
-            tokens += text.split(/[, ]+/).reject(&:empty?)
+            tokens = searchtext.scan(/["]([^"]+)["]/).flatten
+            searchtext.gsub!(/["]([^"]+)["]/, '')
+            tokens += searchtext.split(/[, ]+/).reject(&:empty?)
 
             tide_results    = WebCalTides.find_tide_stations(by:tokens, within:radius, units: radius_units)
             current_results = WebCalTides.find_current_stations(by:tokens, within:radius, units: radius_units)
@@ -89,8 +89,10 @@ class Server < ::Sinatra::Base
 
         $LOG.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
-        erb :index, locals: { tide_results: tide_results, current_results: current_results,
-                              request: request, searchtext: tokens, params: params }
+        erb :index, locals: { searchtext: escape_html(searchtext || "Station..."),
+                              tide_results: tide_results, current_results: current_results,
+                              searchtokens: tokens, units: params['units']
+                            }
     end
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
