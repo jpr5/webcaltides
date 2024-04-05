@@ -11,15 +11,27 @@ module Clients
         end
 
         def get_url(url)
-            agent = Mechanize.new
-            json  = nil
+            agent   = Mechanize.new
+            json    = nil
+            retries = 0
 
             begin
+
                 json = agent.get(url).body
                 logger.debug "json.length = #{json.length}"
+
             rescue Mechanize::ResponseCodeError => e
-                logger.error "GET #{url} failed: #{e.detailed_message} (#{e.page&.content})"
+
+                # seeing gateway timeouts from time to time
+                if e.response_code == "502" || e.response_code == "504" and retries < 3
+                    retries += 1
+                    sleep rand(0..Float(2**retries))
+                    retry
+                end
+
+                logger.error "GET failed: #{e.detailed_message} (#{e.page&.content})"
                 raise e # doing this will pop out to an HTTP 500
+
             end
 
             return json
