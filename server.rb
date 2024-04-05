@@ -91,7 +91,7 @@ class Server < ::Sinatra::Base
 
         erb :index, locals: { searchtext: escape_html(searchtext || "Station..."),
                               tide_results: tide_results, current_results: current_results,
-                              searchtokens: tokens, units: params['units']
+                              searchtokens: tokens, units: escape_html(params['units'])
                             }
     end
 
