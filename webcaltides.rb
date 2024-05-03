@@ -250,7 +250,8 @@ module WebCalTides
             end
         end
 
-        solar_calendar_for(station.lat, station.lon, around:around, location:station.location).events.each { |e| cal.add_event(e) }
+        cal.define_singleton_method(:station)  { station }
+        cal.define_singleton_method(:location) { station.location }
 
         logger.info "tide calendar for #{station.name} generated with #{cal.events.length} events"
 
@@ -390,7 +391,8 @@ module WebCalTides
             end
         end
 
-        solar_calendar_for(station.lat, station.lon, around:around, location:location).events.each { |e| cal.add_event(e) }
+        cal.define_singleton_method(:station)  { station  }
+        cal.define_singleton_method(:location) { location }
 
         logger.info "current calendar for #{location} generated with #{cal.events.length} events"
 
@@ -402,18 +404,21 @@ module WebCalTides
     ## Solar
     ##
 
-    def solar_calendar_for(lat, long, around:Time.current.utc, location:nil)
+    def solar_calendar_for(calendar, around:Time.current.utc)
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = "Solar Events"
 
         from = beginning_of_window(around).strftime("%Y%m%d")
         to   = end_of_window(around).strftime("%Y%m%d")
 
+        station  = calendar.station
+        location = calendar.location
+
         logger.debug "generating solar calendar for #{from}-#{to}"
 
         (Date.parse(from)..Date.parse(to)).each do |date|
-            tz      = timezone_for(lat, long)
-            calc    = SolarEventCalculator.new(date, lat, long)
+            tz      = timezone_for(station.lat, station.lon)
+            calc    = SolarEventCalculator.new(date, station.lat, station.lon)
             sunrise = calc.compute_official_sunrise(tz)
             sunset  = calc.compute_official_sunset(tz)
 
@@ -434,6 +439,10 @@ module WebCalTides
         end
 
         logger.info "solar calendar for #{from}-#{to} generated with #{cal.events.length} events"
+
+        cal.events.each do |e|
+            calendar.add_event(e)
+        end
 
         return cal
     end

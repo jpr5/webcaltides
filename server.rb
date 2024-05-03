@@ -101,6 +101,7 @@ class Server < ::Sinatra::Base
         id         = params[:station]
         date       = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
         units      = params[:units] || 'imperial'
+        solar      = !!params[:solar] || true
         stamp      = date.utc.strftime("%Y%m")
         version    = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
         cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}.ics"
@@ -116,6 +117,8 @@ class Server < ::Sinatra::Base
                        when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 404
                        else halt 404
                        end
+
+            WebCalTides.solar_calendar_for(calendar, around:date) if solar
 
             calendar.publish
 
