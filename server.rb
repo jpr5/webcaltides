@@ -104,7 +104,7 @@ class Server < ::Sinatra::Base
         no_solar   = ["0", "false"].include?(params[:solar])
         stamp      = date.utc.strftime("%Y%m")
         version    = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
-        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}.ics"
+        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}.ics"
 
         # NOTE: Changed my mind on retval's.  In the shit-fucked-up case, we end up sending out a
         # full stack trace + 500, so really if we muck something up internally we should let the
