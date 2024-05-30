@@ -8,9 +8,9 @@ gem 'pry'
 
 gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/core_ext']
 
-gem 'nokogiri', '>= 1.16.2'
+gem 'nokogiri', '>= 1.16.5'
 gem 'json'
-gem 'mechanize', '= 2.8.5'
+gem 'mechanize', '= 2.9.0'
 
 gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
