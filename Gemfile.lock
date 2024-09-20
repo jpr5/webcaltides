@@ -59,7 +59,7 @@ GEM
     net-http-digest_auth (1.4.1)
     net-http-persistent (4.0.2)
       connection_pool (~> 2.2)
-    nio4r (2.7.1)
+    nio4r (2.7.3)
     nokogiri (1.16.7)
       mini_portile2 (~> 2.8.2)
       racc (~> 1.4)
@@ -69,7 +69,7 @@ GEM
     psych (5.1.2)
       stringio
     public_suffix (6.0.1)
-    puma (6.4.2)
+    puma (6.4.3)
       nio4r (~> 2.0)
     racc (1.8.1)
     rack (3.0.10)
@@ -116,7 +116,7 @@ DEPENDENCIES
   mechanize (= 2.9.0)
   nokogiri (>= 1.16.5)
   pry
-  puma
+  puma (>= 6.4.3)
   rack
   rackup
   sinatra (~> 4.0.0)
@@ -126,4 +126,4 @@ RUBY VERSION
    ruby 3.2.2p53
 
 BUNDLED WITH
-   2.4.22
+   2.4.6
