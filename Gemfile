@@ -18,6 +18,6 @@ gem 'timezone'
 gem 'geocoder'
 
 gem 'rack'
-gem 'rackup'
+gem 'rackup', '>= 2.1.0'
 gem 'sinatra', '~> 4.0.0'
 gem 'puma', '>= 6.4.3'

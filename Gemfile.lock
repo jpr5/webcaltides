@@ -118,7 +118,7 @@ DEPENDENCIES
   pry
   puma (>= 6.4.3)
   rack
-  rackup
+  rackup (>= 2.1.0)
   sinatra (~> 4.0.0)
   timezone
 
