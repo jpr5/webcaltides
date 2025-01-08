@@ -10,7 +10,7 @@ gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/c
 
 gem 'nokogiri', '>= 1.16.8'
 gem 'json'
-gem 'mechanize', '= 2.9.0'
+gem 'mechanize', '>= 2.9.0'
 
 gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
@@ -18,6 +18,7 @@ gem 'timezone'
 gem 'geocoder'
 
 gem 'rack'
+gem 'webrick', '>= 1.8.2'
 gem 'rackup', '>= 2.1.0'
 gem 'sinatra', '~> 4.1.0'
 gem 'puma', '>= 6.4.3'
