@@ -89,9 +89,9 @@ class Server < ::Sinatra::Base
 
         $LOG.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
-        erb :index, locals: { searchtext: escape_html(searchtext || "Station..."),
+        erb :index, locals: { searchtext: ERB::Util.html_escape_once(searchtext || "Station..."),
                               tide_results: tide_results, current_results: current_results,
-                              searchtokens: tokens, units: escape_html(params['units'])
+                              searchtokens: tokens, units: ERB::Util.html_escape_once(params['units'])
                             }
     end
 
