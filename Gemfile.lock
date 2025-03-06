@@ -73,7 +73,7 @@ GEM
     puma (6.4.3)
       nio4r (~> 2.0)
     racc (1.8.1)
-    rack (3.1.10)
+    rack (3.1.11)
     rack-protection (4.1.1)
       base64 (>= 0.1.0)
       logger (>= 1.6.0)
@@ -121,7 +121,7 @@ DEPENDENCIES
   nokogiri (>= 1.18.3)
   pry
   puma (>= 6.4.3)
-  rack (>= 3.0.12)
+  rack (>= 3.1.11)
   rackup (>= 2.1.0)
   sinatra (~> 4.1.0)
   timezone
@@ -131,4 +131,4 @@ RUBY VERSION
    ruby 3.2.2p53
 
 BUNDLED WITH
-   2.4.22
+   2.4.6

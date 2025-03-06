@@ -17,7 +17,7 @@ gem 'RubySunrise', require: 'solareventcalculator'
 gem 'timezone'
 gem 'geocoder'
 
-gem 'rack', ">= 3.0.12"
+gem 'rack', '>= 3.1.11'
 gem 'webrick', '>= 1.8.2'
 gem 'rackup', '>= 2.1.0'
 gem 'sinatra', '~> 4.1.0'
