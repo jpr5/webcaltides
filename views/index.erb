@@ -1,5 +1,11 @@
 
 <form action="/" accept-charset="UTF-8" method="POST" class="w-100">
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        var search = document.getElementById('searchtext');
+        if (search) search.focus();
+      });
+    </script>
     <label for="searchtext" class="form-label">
         <h4>Station Search</h4>
         <em><b>Use double quotes for multi-word</b>: e.g. "puget sound", "san diego", "san francisco"<br>
