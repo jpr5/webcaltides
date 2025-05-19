@@ -6,11 +6,13 @@
         if (search) search.focus();
       });
     </script>
-    <label for="searchtext" class="form-label">
-        <h4>Station Search</h4>
-        <em><b>Use double quotes for multi-word</b>: e.g. "puget sound", "san diego", "san francisco"<br>
-            <b>GPS format</b>: decimal 1.23, or degrees 1°2.3, -1'2.3, 1°2.3N or 1'2.3E)</em>
-    </label>
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h3 class="mb-0">Station Search</h3>
+        <em class="text-end" style="max-width: 60%; font-size: 0.97em;">
+            <b>Use double quotes for multi-word</b>: e.g. "puget sound", "san diego", "san francisco"<br>
+            <b>GPS format</b>: decimal 1.23, or degrees 1°2.3, -1'2.3, 1°2.3N or 1'2.3E
+        </em>
+    </div>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or GPS:</span>
         <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= searchtext %>" />
