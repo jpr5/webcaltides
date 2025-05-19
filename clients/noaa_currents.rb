@@ -7,7 +7,7 @@ module Clients
     class NoaaCurrents < Base
 
         API_URL            = 'https://api.tidesandcurrents.noaa.gov'
-        PUBLIC_STATION_URL = 'https://tidesandcurrents.noaa.gov/noaacurrents/Predictions?id=%s'
+        PUBLIC_STATION_URL = 'https://tidesandcurrents.noaa.gov/noaacurrents/predictions?id=%s'
 
         include TimeWindow
 
