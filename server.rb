@@ -57,7 +57,8 @@ class Server < ::Sinatra::Base
         # Depending on your font these quotes may look the same -- but they're not
         radius       = params['within']
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
-        searchtext   = params['searchtext'].downcase.tr('“”', '""') rescue ''
+        searchparam  = (params['searchtext'] || '').strip
+        searchtext   = searchparam.dup.downcase.tr('“”', '""')
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(searchtext))
@@ -89,9 +90,9 @@ class Server < ::Sinatra::Base
 
         $LOG.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
 
-        erb :index, locals: { searchtext: ERB::Util.html_escape_once(searchtext || "Station..."),
-                              tide_results: tide_results, current_results: current_results,
-                              searchtokens: tokens, units: ERB::Util.html_escape_once(params['units'])
+        erb :index, locals: { tide_results: tide_results, current_results: current_results,
+                              searchtokens: tokens, units: ERB::Util.html_escape_once(params['units'] || 'imperial'),
+                              placeholder: ERB::Util.html_escape_once(searchparam.empty? ? 'Station...' : searchparam)
                             }
     end
 

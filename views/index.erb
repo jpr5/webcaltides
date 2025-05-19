@@ -3,7 +3,24 @@
     <script>
       document.addEventListener('DOMContentLoaded', function() {
         var search = document.getElementById('searchtext');
-        if (search) search.focus();
+        if (search) {
+          search.focus();
+
+          // Retain prior search value if ^E or RightArrow
+          search.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey && e.key === 'e') || e.key === 'ArrowRight') {
+              // Only convert if cursor is at the start of the input and theres no text
+              if ((this.selectionStart === 0 && this.selectionEnd === 0 && !this.value) ||
+                  (e.key === 'ArrowRight' && this.selectionStart === 0 && this.selectionEnd === 0)) {
+                e.preventDefault();
+                if (this.placeholder && this.placeholder !== 'Station...') {
+                  this.value = this.placeholder;
+                  this.selectionStart = this.selectionEnd = this.value.length; // Move cursor to end
+                }
+              }
+            }
+          });
+        }
       });
     </script>
     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -15,7 +32,7 @@
     </div>
     <div class="input-group">
         <span class="input-group-text" id="searchtext_prompt">Keyword or GPS:</span>
-        <input type="text" class="form-control" name="searchtext" id="searchtext" placeholder="<%= searchtext %>" />
+        <input type="text" class="form-control" name="searchtext" id="searchtext" value="" placeholder="<%= defined?(placeholder) ? placeholder : 'Station...' %>" />
         <span class="input-group-text" id="searchtext_prompt">Units:</span>
         <select class="form-select" style="flex: 0.3 0.3 auto;" name="units" id="searchunits">
             <option value="imperial" <%= selected='selected' if units == 'imperial'%>>ft/mi</option>
@@ -32,7 +49,7 @@
 
 <% if defined? tide_results and defined? current_results %>
 
-<p><em>Search '<%= searchtokens.join(" OR ") %>' yields <%= tide_results.count + current_results.count %> results</em></p>
+<p><em>Search '<%= searchtokens.join(" OR ") %><% if params['within'] %> radius <%= params['within'] %><%= params['units'] == 'metric' ? 'km' : 'mi' %><% end %>' yields <%= tide_results.count + current_results.count %> results</em></p>
 
 <% if tide_results.count > 0 %>
 <table class="table table-striped table-hover caption-top">
