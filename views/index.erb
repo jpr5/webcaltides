@@ -1,5 +1,5 @@
 
-<form action="/" accept-charset="UTF-8" method="POST" class="w-100">
+<form action="/" accept-charset="UTF-8" method="POST" class="w-full mb-8">
     <script>
       document.addEventListener('DOMContentLoaded', function() {
         var search = document.getElementById('searchtext');
@@ -9,7 +9,7 @@
           // Retain prior search value if ^E or RightArrow
           search.addEventListener('keydown', function(e) {
             if ((e.ctrlKey && e.key === 'e') || e.key === 'ArrowRight') {
-              // Only convert if cursor is at the start of the input and theres no text
+              // Only convert if cursor is at the start of the input and there is no text
               if ((this.selectionStart === 0 && this.selectionEnd === 0 && !this.value) ||
                   (e.key === 'ArrowRight' && this.selectionStart === 0 && this.selectionEnd === 0)) {
                 e.preventDefault();
@@ -23,22 +23,46 @@
         }
       });
     </script>
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <h3 class="mb-0">Station Search</h3>
-        <em class="text-end" style="max-width: 60%; font-size: 0.97em;">
-            <b>Use double quotes for multi-word</b>: e.g. "puget sound", "san diego", "san francisco"<br>
-            <b>GPS format</b>: decimal 1.23, or degrees 1°2.3, -1'2.3, 1°2.3N or 1'2.3E
-        </em>
+
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
+        <h3 class="text-xl font-semibold">Station Search</h3>
+        <div class="text-sm text-gray-600 md:text-right">
+            <p class="whitespace"><span class="font-medium">Use double quotes for multi-word</span>: e.g. "puget sound", "san diego", "san francisco"</p>
+            <p><span class="font-medium">GPS format</span>: decimal 1.23, or degrees 1°2.3, -1'2.3, 1°2.3N or 1'2.3E</p>
+        </div>
     </div>
-    <div class="input-group">
-        <span class="input-group-text" id="searchtext_prompt">Keyword or GPS:</span>
-        <input type="text" class="form-control" name="searchtext" id="searchtext" value="" placeholder="<%= defined?(placeholder) ? placeholder : 'Station...' %>" />
-        <span class="input-group-text" id="searchtext_prompt">Units:</span>
-        <select class="form-select" style="flex: 0.3 0.3 auto;" name="units" id="searchunits">
-            <option value="imperial" <%= selected='selected' if units == 'imperial'%>>ft/mi</option>
-            <option value="metric" <%= selected='selected' if units == 'metric'%>>m/km</option>
-        </select>
-        <button class="btn btn-primary" type="submit">Search</button>
+
+    <div class="flex flex-col sm:flex-row gap-2 w-full">
+        <div class="relative flex-grow flex items-center bg-gray-100 border border-gray-300 rounded-l-md">
+            <span class="px-3 text-sm text-gray-700 whitespace-nowrap">Keyword or GPS:</span>
+            <input
+                type="text"
+                class="flex-grow px-4 py-2 border-0 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                name="searchtext"
+                id="searchtext"
+                value=""
+                placeholder="<%= defined?(placeholder) ? placeholder : 'Station...' %>"
+            />
+        </div>
+
+        <div class="flex items-center bg-gray-100 border border-gray-300 rounded-r-md">
+            <span class="px-3 text-sm text-gray-700 whitespace-nowrap">Units:</span>
+            <select
+                class="bg-white border-0 py-2 pl-2 pr-8 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-r-md"
+                name="units"
+                id="searchunits"
+            >
+                <option value="imperial" <%= 'selected' if units == 'imperial' %>>ft/mi</option>
+                <option value="metric" <%= 'selected' if units == 'metric' %>>m/km</option>
+            </select>
+        </div>
+
+        <button
+            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            type="submit"
+        >
+            Search
+        </button>
     </div>
 </form>
 
@@ -49,24 +73,42 @@
 
 <% if defined? tide_results and defined? current_results %>
 
-<p><em>Search '<%= searchtokens.join(" OR ") %><% if params['within'] %> radius <%= params['within'] %><%= params['units'] == 'metric' ? 'km' : 'mi' %><% end %>' yields <%= tide_results.count + current_results.count %> results</em></p>
+<div class="mb-6 p-4 bg-blue-50 rounded-lg search-result-container">
+    <div class="text-sm text-blue-800 search-result-text">
+        Search '<span class="font-medium"><%= searchtokens.join(" OR ") %><% if params['within'] %> radius <%= params['within'] %><%= params['units'] == 'metric' ? 'km' : 'mi' %><% end %></span>' yields <span class="font-semibold"><%= tide_results.count + current_results.count %></span> results
+    </div>
+</div>
 
 <% if tide_results.count > 0 %>
-<table class="table table-striped table-hover caption-top">
-    <caption>Tide Stations</caption>
-    <thead class="table-light"><tr>
-        <th scope="col">ID</th>
-        <th scope="col">Name</th>
-        <th scope="col">Region</th>
-        <th scope="col">.ICS</th>
-        <th scope="col" class="text-right">Refine</th>
-    </tr></thead>
-<tbody>
-<% tide_results.each do |r| %>
-    <tr>
-    <th scope="row"><a href="<%= r.url %>"><%= r.public_id %></a></th>
-    <td><%= r.name %></td>
-    <td><%= r.region%></td>
+<div class="mb-8">
+    <h3 class="text-lg font-medium text-gray-900 mb-2">Tide Stations</h3>
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+    <div class="overflow-x-auto max-h-[70vh] relative" id="tide-table-container">
+        <div class="absolute right-0 top-12 bottom-0 flex items-center pointer-events-none hidden" id="tide-scroll-indicator">
+            <div class="bg-gray-800 bg-opacity-70 text-white text-sm px-2 py-1 rounded-l-md shadow">
+                ➡️
+            </div>
+        </div>
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">.ICS</th>
+                    <th scope="col" class="relative px-6 py-3">
+                        <span class="sr-only">Refine</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+<% tide_results.each_with_index do |r, index| %>
+    <tr class="<%= index.odd? ? 'bg-gray-50' : 'bg-white' %> hover:bg-gray-100">
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+            <a href="<%= r.url %>" class="hover:underline"><%= r.public_id %></a>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.name %></td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= r.region %></td>
 
     <%
        uri.path = "/tides/#{r.id}.ics"
@@ -77,91 +119,176 @@
        https_url  = uri.to_s
        url_id     = "url_#{r.id}"
     %>
-    <td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
+            <div>
+                <button
+                    type="button"
+                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    @click="open = !open"
+                >
+                    webcal
+                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
 
-        <div class="btn-group dropdown">
-            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                webcal
-            </a>
-            <div class="dropdown-menu" style="min-width: 100px;" aria-labelledby="dropdownMenuButton">
-                <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
-                <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'><img alt="Google Calendar link (copies to clipboard)" title="Google Calendar link (copies to clipboard)" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" decoding="async" width="29" height="29"></a>
-                <a id="https_link_<%= r.id %>" href="<%= https_url %>" target="_blank"><img alt="Google Calendar link (downloads)" title="Google Calendar link (downloads)" src="/images/gcal.png" decoding="async" width="25" height="30" ></a>
-                <a id="webcal_link_<%= r.id %>" href="<%= webcal_url %>" target="_blank"><img alt="Apple Calendar link (invokes Calendar)" title="Apple Calendar link (invokes Calendar)" src="/images/ical.png" decoding="async" width="29" height="29"></a>
-                <div class="form-check px-3 py-1">
-                    <input class="form-check-input solar-toggle" type="checkbox" id="solar_<%= r.id %>" checked>
-                    <label class="form-check-label" for="solar_<%= r.id %>">Add&nbsp;Solar</label>
-                </div>
-                <script>
-                (function() {
-                    var solarBox = document.getElementById('solar_<%= r.id %>');
-                    var httpsLink = document.getElementById('https_link_<%= r.id %>');
-                    var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
-                    var urlInput = document.getElementById('<%= url_id %>');
-                    var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                    var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                    function updateUrls() {
-                        var addParam = !solarBox.checked;
-                        var newHttps = baseHttps + (addParam ? (baseHttps.includes('?') ? '&' : '?') + 'solar=0' : '');
-                        var newWebcal = baseWebcal + (addParam ? (baseWebcal.includes('?') ? '&' : '?') + 'solar=0' : '');
-                        httpsLink.href = newHttps;
-                        webcalLink.href = newWebcal;
+            <div
+                x-show="open"
+                x-cloak
+                x-transition:enter="transition ease-out duration-100"
+                x-transition:enter-start="transform opacity-0 scale-95"
+                x-transition:enter-end="transform opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-75"
+                x-transition:leave-start="transform opacity-100 scale-100"
+                x-transition:leave-end="transform opacity-0 scale-95"
+                class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
+            >
+                <div class="py-1" role="none">
+                    <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
+                    <div class="flex items-center justify-around px-4 py-2">
+                        <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'
+                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
+                           title="Copy to clipboard">
+                            <img alt="Copy to clipboard" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" width="20" height="20">
+                        </a>
+                        <a id="https_link_<%= r.id %>"
+                           href="<%= https_url %>"
+                           target="_blank"
+                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
+                           title="Download ICS">
+                            <img alt="Download ICS" src="/images/gcal.png" width="20" height="24">
+                        </a>
+                        <a id="webcal_link_<%= r.id %>"
+                           href="<%= webcal_url %>"
+                           target="_blank"
+                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
+                           title="Subscribe in Calendar">
+                            <img alt="Subscribe in Calendar" src="/images/ical.png" width="20" height="20">
+                        </a>
+                    </div>
+                    <div class="border-t border-gray-100"></div>
+                    <div class="px-4 py-2">
+                        <label class="flex items-center">
+                            <input type="checkbox"
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                   id="solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
+                                   checked>
+                            <span class="ml-2 text-sm text-gray-700">Add Solar Events</span>
+                        </label>
+                    </div>
+                    <script>
+                    (function() {
+                        var solarBox = document.getElementById('solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
+                        var httpsLink = document.getElementById('https_link_<%= r.id %>');
+                        var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
+                        var urlInput = document.getElementById('<%= url_id %>');
+                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        function updateUrls() {
+                            var addParam = !solarBox.checked;
+                            var newHttps = baseHttps + (addParam ? (baseHttps.includes('?') ? '&' : '?') + 'solar=0' : '');
+                            var newWebcal = baseWebcal + (addParam ? (baseWebcal.includes('?') ? '&' : '?') + 'solar=0' : '');
+                            httpsLink.href = newHttps;
+                            webcalLink.href = newWebcal;
                             urlInput.value = newWebcal;
-                    }
-                    solarBox.addEventListener('change', updateUrls);
-                })();
-                </script>
+                        }
+                        solarBox.addEventListener('change', updateUrls);
+                    })();
+                    </script>
             </div>
         </div>
 
     </td>
 
-    <td>
+    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
+            <div>
+                <button
+                    type="button"
+                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    @click="open = !open"
+                >
+                    radius
+                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
 
-        <div class="btn-group dropdown">
-            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                radius
-            </a>
-            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-                <form action="/" method="POST" style="margin-block-end: 0; margin: 3px;">
-                    <label for="within" class="form-label">Any stations within</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" name="within" id="within" />
+            <div
+                x-show="open"
+                x-cloak
+                class="origin-top-right absolute right-0 mt-2 w-auto min-w-[12rem] max-w-[16rem] rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-2"
+            >
+                <form action="/" method="POST" class="space-y-2">
+                    <label for="within-tide" class="block text-sm font-medium text-gray-700">Find stations within</label>
+                    <div class="flex rounded-md shadow-sm">
+                        <input
+                            type="text"
+                            name="within"
+                            id="within-tide"
+                            class="border border-gray-300 focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md sm:text-sm"
+                            placeholder="10"
+                        >
                         <input type="hidden" name="searchtext" value="<%= r.id %>" />
                         <input type="hidden" name="units" value="<%= units %>" />
-                        <span class="input-group-text" id="radius_units"><%= units == 'imperial' ? 'mi' : 'km' %></span>
-                        <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+                        <span class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                            <%= units == 'imperial' ? 'mi' : 'km' %>
+                        </span>
                     </div>
+                    <button
+                        type="submit"
+                        class="w-full flex justify-center py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        Search Radius
+                    </button>
                 </form>
             </div>
         </div>
-
     </td>
 
-</tr>
-<% end %>
-</tbody>
-</table>
-<p/>
+                </tr>
+                <% end %>
+            </tbody>
+        </table>
+    </div>
+</div>
 <% end %>
 
+<div class="mt-12 mb-8"></div>
 
 <% if current_results.count > 0 %>
-<table class="table table-striped table-hover caption-top">
-    <caption>Current Stations</caption>
-    <thead class="table-light"><tr>
-        <th scope="col">ID</th>
-        <th scope="col">Depth (ft)</th>
-        <th scope="col">Name</th>
-        <th scope="col">.ICS</th>
-        <th scope="col">Refine</th>
-    </tr></thead>
-<tbody>
-<% current_results.each do |r| %>
-<tr>
-    <th scope="row"><a href="<%= r.url %>"><%= r.id %></a></td>
-    <td><%= r.depth.to_i %></td>
-    <td><%= r.name %></td>
+<div class="mb-8">
+    <h3 class="text-lg font-medium text-gray-900 mb-2">Current Stations</h3>
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+    <div class="overflow-x-auto max-h-[70vh] relative" id="current-table-container">
+        <div class="absolute right-0 top-12 bottom-0 flex items-center pointer-events-none hidden" id="current-scroll-indicator">
+            <div class="bg-gray-800 bg-opacity-70 text-white text-sm px-2 py-1 rounded-l-md shadow">
+                ➡️
+            </div>
+        </div>
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depth (<%= units == 'metric' ? 'm' : 'ft' %>)</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">.ICS</th>
+                    <th scope="col" class="relative px-6 py-3">
+                        <span class="sr-only">Refine</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+<% current_results.each_with_index do |r, index| %>
+<tr class="<%= index.odd? ? 'bg-gray-50' : 'bg-white' %> hover:bg-gray-100">
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+        <a href="<%= r.url %>" class="hover:underline"><%= r.id %></a>
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.depth.to_i %></td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.name %></td>
 
     <%
        uri.path = "/currents/#{r.bid}.ics"
@@ -170,75 +297,216 @@
        webcal_url = uri.to_s
        uri.scheme = scheme
        https_url  = uri.to_s
-       url_id     = "url_#{r.bid}"
+       url_id     = "url_#{r.bid}_#{r.depth}"
     %>
-    <td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
+            <div>
+                <button
+                    type="button"
+                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    @click="open = !open"
+                >
+                    webcal
+                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
 
-        <div class="btn-group dropdown">
-            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                webcal
-            </a>
-            <div class="dropdown-menu" style="min-width: 100px;" aria-labelledby="dropdownMenuButton">
-                <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
-                <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'><img alt="Google Calendar link (copies to clipboard)" title="Google Calendar link (copies to clipboard)" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" decoding="async" width="29" height="29"></a>
-                <a id="https_link_<%= r.id %>" href="<%= https_url %>" target="_blank"><img alt="Google Calendar link (downloads)" title="Google Calendar link (downloads)" src="/images/gcal.png" decoding="async" width="25" height="30" ></a>
-                <a id="webcal_link_<%= r.id %>" href="<%= webcal_url %>" target="_blank"><img alt="Apple Calendar link (invokes Calendar)" title="Apple Calendar link (invokes Calendar)" src="/images/ical.png" decoding="async" width="29" height="29"></a>
-                <div class="form-check px-3 py-1">
-                    <input class="form-check-input solar-toggle" type="checkbox" id="solar_<%= r.id %>" checked>
-                    <label class="form-check-label" for="solar_<%= r.id %>">Add&nbsp;Solar</label>
-                </div>
-                <script>
-                (function() {
-                    var solarBox = document.getElementById('solar_<%= r.id %>');
-                    var httpsLink = document.getElementById('https_link_<%= r.id %>');
-                    var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
-                    var urlInput = document.getElementById('<%= url_id %>');
-                    var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                    var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                    function updateUrls() {
-                        var addParam = !solarBox.checked;
-                        var newHttps = baseHttps + (addParam ? (baseHttps.includes('?') ? '&' : '?') + 'solar=0' : '');
-                        var newWebcal = baseWebcal + (addParam ? (baseWebcal.includes('?') ? '&' : '?') + 'solar=0' : '');
-                        httpsLink.href = newHttps;
-                        webcalLink.href = newWebcal;
-                        urlInput.value = newWebcal;
-                    }
-                    solarBox.addEventListener('change', updateUrls);
-                })();
-                </script>
+            <div
+                x-show="open"
+                x-cloak
+                x-transition:enter="transition ease-out duration-100"
+                x-transition:enter-start="transform opacity-0 scale-95"
+                x-transition:enter-end="transform opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-75"
+                x-transition:leave-start="transform opacity-100 scale-100"
+                x-transition:leave-end="transform opacity-0 scale-95"
+                class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
+            >
+                <div class="py-1" role="none">
+                    <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
+                    <div class="flex items-center justify-around px-4 py-2">
+                        <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'
+                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
+                           title="Copy to clipboard">
+                            <img alt="Copy to clipboard" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" width="20" height="20">
+                        </a>
+                        <a id="https_link_<%= r.id %>"
+                           href="<%= https_url %>"
+                           target="_blank"
+                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
+                           title="Download ICS">
+                            <img alt="Download ICS" src="/images/gcal.png" width="20" height="24">
+                        </a>
+                        <a id="webcal_link_<%= r.id %>"
+                           href="<%= webcal_url %>"
+                           target="_blank"
+                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
+                           title="Subscribe in Calendar">
+                            <img alt="Subscribe in Calendar" src="/images/ical.png" width="20" height="20">
+                        </a>
+                    </div>
+                    <div class="border-t border-gray-100"></div>
+                    <div class="px-4 py-2">
+                        <label class="flex items-center">
+                            <input type="checkbox"
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                   id="solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
+                                   checked>
+                            <span class="ml-2 text-sm text-gray-700">Add Solar Events</span>
+                        </label>
+                    </div>
+                    <script>
+                    (function() {
+                        var solarBox = document.getElementById('solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
+                        var httpsLink = document.getElementById('https_link_<%= r.id %>');
+                        var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
+                        var urlInput = document.getElementById('<%= url_id %>');
+                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        function updateUrls() {
+                            var addParam = !solarBox.checked;
+                            var newHttps = baseHttps + (addParam ? (baseHttps.includes('?') ? '&' : '?') + 'solar=0' : '');
+                            var newWebcal = baseWebcal + (addParam ? (baseWebcal.includes('?') ? '&' : '?') + 'solar=0' : '');
+                            httpsLink.href = newHttps;
+                            webcalLink.href = newWebcal;
+                            urlInput.value = newWebcal;
+                        }
+                        solarBox.addEventListener('change', updateUrls);
+                    })();
+                    </script>
             </div>
         </div>
 
     </td>
 
-    <td>
+    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
+            <div>
+                <button
+                    type="button"
+                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    @click="open = !open"
+                >
+                    radius
+                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
 
-        <div class="btn-group dropdown">
-            <a href="#" class="dropdown-toggle" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                radius
-            </a>
-            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-                <form action="/" method="POST" style="margin-block-end: 0; margin: 3px;">
-                    <label for="within" class="form-label">Any stations within</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" name="within" id="within" />
-                        <input type="hidden" name="searchtext" value="<%= r.bid %>" />
+            <div
+                x-show="open"
+                x-cloak
+                class="origin-top-right absolute right-0 mt-2 w-auto min-w-[12rem] max-w-[16rem] rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-2"
+            >
+                <form action="/" method="POST" class="space-y-2">
+                    <label for="within-tide" class="block text-sm font-medium text-gray-700">Find stations within</label>
+                    <div class="flex rounded-md shadow-sm">
+                        <input
+                            type="text"
+                            name="within"
+                            id="within-tide"
+                            class="border border-gray-300 focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md sm:text-sm"
+                            placeholder="10"
+                        >
+                        <input type="hidden" name="searchtext" value="<%= r.id %>" />
                         <input type="hidden" name="units" value="<%= units %>" />
-                        <span class="input-group-text" id="radius_units"><%= units == 'imperial' ? 'mi' : 'km' %></span>
-                        <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+                        <span class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                            <%= units == 'imperial' ? 'mi' : 'km' %>
+                        </span>
                     </div>
+                    <button
+                        type="submit"
+                        class="w-full flex justify-center py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        Search Radius
+                    </button>
                 </form>
             </div>
         </div>
-
     </td>
 
 </tr>
 <% end %>
 </tbody>
 </table>
-
+    </div>
+</div>
 <% end %>
 
-<p/>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Direct approach to handle radius button clicks
+        document.addEventListener('click', function(event) {
+            // Check if a button with 'radius' text was clicked
+            if (event.target.tagName === 'BUTTON' || event.target.closest('button')) {
+                const button = event.target.tagName === 'BUTTON' ? event.target : event.target.closest('button');
+
+                if (button.textContent.trim().toLowerCase().includes('radius')) {
+                    // Give Alpine.js time to open the dropdown
+                    setTimeout(() => {
+                        // Find the nearest visible dropdown
+                        const parent = button.closest('td');
+                        if (parent) {
+                            const dropdown = parent.querySelector('div[x-show="open"]');
+                            if (dropdown && window.getComputedStyle(dropdown).display !== 'none') {
+                                const input = dropdown.querySelector('input[type="text"]');
+                                if (input) input.focus();
+                            }
+                        }
+                    }, 100); // Slightly longer timeout to ensure dropdown is visible
+                }
+            }
+        });
+
+
+        // Function to check if table is scrollable and show/hide indicator
+        function handleScrollIndicator(tableContainer, indicator) {
+            if (tableContainer && indicator) {
+                // Check if table is wider than its container
+                if (tableContainer.scrollWidth > tableContainer.clientWidth) {
+                    // Show/hide the indicator based on scroll position
+                    function updateIndicator() {
+                        // Only show when table is scrollable horizontally AND not scrolled to the end
+                        if (tableContainer.scrollWidth > tableContainer.clientWidth &&
+                            tableContainer.scrollLeft + tableContainer.clientWidth < tableContainer.scrollWidth - 20) {
+                            indicator.style.display = 'block';
+                        } else {
+                            indicator.style.display = 'none';
+                        }
+                    }
+
+                    // Initial indicator state
+                    updateIndicator();
+
+                    // Update on scroll
+                    tableContainer.addEventListener('scroll', function() {
+                        updateIndicator();
+                    });
+                }
+            }
+        }
+
+        // Handle tide table
+        const tideTableContainer = document.getElementById('tide-table-container');
+        const tideScrollIndicator = document.getElementById('tide-scroll-indicator');
+        handleScrollIndicator(tideTableContainer, tideScrollIndicator);
+
+        // Handle current table
+        const currentTableContainer = document.getElementById('current-table-container');
+        const currentScrollIndicator = document.getElementById('current-scroll-indicator');
+        handleScrollIndicator(currentTableContainer, currentScrollIndicator);
+
+        // Update on window resize
+        window.addEventListener('resize', function() {
+            handleScrollIndicator(tideTableContainer, tideScrollIndicator);
+            handleScrollIndicator(currentTableContainer, currentScrollIndicator);
+        });
+    });
+</script>
+
 <% end %>
