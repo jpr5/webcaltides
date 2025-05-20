@@ -156,7 +156,7 @@
                            target="_blank"
                            class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
                            title="Download ICS">
-                            <img alt="Download ICS" src="/images/gcal.png" width="20" height="24">
+                            <img alt="Download ICS" src="/images/calendar-download.svg" width="20" height="24">
                         </a>
                         <a id="webcal_link_<%= r.id %>"
                            href="<%= webcal_url %>"
@@ -176,28 +176,56 @@
                             <span class="ml-2 text-sm text-gray-700">Add Solar Events</span>
                         </label>
                     </div>
+                    <div class="px-4 py-2">
+                        <label class="flex items-center">
+                            <input type="checkbox"
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                               id="lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
+                               >
+                            <span class="ml-2 text-sm text-gray-700">Add Lunar Phases</span>
+                        </label>
+                    </div>
                     <script>
                     (function() {
                         var solarBox = document.getElementById('solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
+                        var lunarBox = document.getElementById('lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
                         var httpsLink = document.getElementById('https_link_<%= r.id %>');
                         var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
                         var urlInput = document.getElementById('<%= url_id %>');
-                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
+
                         function updateUrls() {
-                            var addParam = !solarBox.checked;
-                            var newHttps = baseHttps + (addParam ? (baseHttps.includes('?') ? '&' : '?') + 'solar=0' : '');
-                            var newWebcal = baseWebcal + (addParam ? (baseWebcal.includes('?') ? '&' : '?') + 'solar=0' : '');
+                            var newHttps = baseHttps;
+                            var newWebcal = baseWebcal;
+
+                            // Add solar parameter if needed
+                            if (!solarBox.checked) {
+                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'solar=0';
+                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'solar=0';
+                            }
+
+                            // Add lunar parameter if needed
+                            if (lunarBox.checked) {
+                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'lunar=1';
+                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'lunar=1';
+                            }
+
                             httpsLink.href = newHttps;
                             webcalLink.href = newWebcal;
                             urlInput.value = newWebcal;
                         }
+
                         solarBox.addEventListener('change', updateUrls);
+                        lunarBox.addEventListener('change', updateUrls);
+
+                        // Initial URL update
+                        updateUrls();
                     })();
                     </script>
+                </div>
             </div>
         </div>
-
     </td>
 
     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -334,7 +362,7 @@
                            target="_blank"
                            class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
                            title="Download ICS">
-                            <img alt="Download ICS" src="/images/gcal.png" width="20" height="24">
+                            <img alt="Download ICS" src="/images/calendar-download.svg" width="20" height="24">
                         </a>
                         <a id="webcal_link_<%= r.id %>"
                            href="<%= webcal_url %>"
@@ -354,28 +382,56 @@
                             <span class="ml-2 text-sm text-gray-700">Add Solar Events</span>
                         </label>
                     </div>
+                    <div class="px-4 py-2">
+                        <label class="flex items-center">
+                            <input type="checkbox"
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                               id="lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
+                               >
+                            <span class="ml-2 text-sm text-gray-700">Add Lunar Phases</span>
+                        </label>
+                    </div>
                     <script>
                     (function() {
                         var solarBox = document.getElementById('solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
+                        var lunarBox = document.getElementById('lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
                         var httpsLink = document.getElementById('https_link_<%= r.id %>');
                         var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
                         var urlInput = document.getElementById('<%= url_id %>');
-                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
+                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
+
                         function updateUrls() {
-                            var addParam = !solarBox.checked;
-                            var newHttps = baseHttps + (addParam ? (baseHttps.includes('?') ? '&' : '?') + 'solar=0' : '');
-                            var newWebcal = baseWebcal + (addParam ? (baseWebcal.includes('?') ? '&' : '?') + 'solar=0' : '');
+                            var newHttps = baseHttps;
+                            var newWebcal = baseWebcal;
+
+                            // Add solar parameter if needed
+                            if (!solarBox.checked) {
+                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'solar=0';
+                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'solar=0';
+                            }
+
+                            // Add lunar parameter if needed
+                            if (lunarBox.checked) {
+                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'lunar=1';
+                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'lunar=1';
+                            }
+
                             httpsLink.href = newHttps;
                             webcalLink.href = newWebcal;
                             urlInput.value = newWebcal;
                         }
+
                         solarBox.addEventListener('change', updateUrls);
+                        lunarBox.addEventListener('change', updateUrls);
+
+                        // Initial URL update
+                        updateUrls();
                     })();
                     </script>
+                </div>
             </div>
         </div>
-
     </td>
 
     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

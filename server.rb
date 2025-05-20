@@ -103,9 +103,10 @@ class Server < ::Sinatra::Base
         date       = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
         units      = params[:units] || 'imperial'
         no_solar   = ["0", "false"].include?(params[:solar])
+        add_lunar  = ["1", "true"].include?(params[:lunar])
         stamp      = date.utc.strftime("%Y%m")
         version    = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
-        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}.ics"
+        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
 
         # NOTE: Changed my mind on retval's.  In the shit-fucked-up case, we end up sending out a
         # full stack trace + 500, so really if we muck something up internally we should let the
@@ -119,7 +120,11 @@ class Server < ::Sinatra::Base
                        else halt 404
                        end
 
+            # Add solar events if requested
             WebCalTides.solar_calendar_for(calendar, around:date) unless no_solar
+
+            # Add lunar phase events if requested
+            WebCalTides.lunar_calendar_for(calendar, around:date) if add_lunar
 
             calendar.publish
 

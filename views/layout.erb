@@ -22,8 +22,74 @@
                 });
             });
         });
+
+        // JavaScript to position popups correctly relative to their trigger buttons
+        document.addEventListener('alpine:initialized', () => {
+          // Function to position a popup relative to its trigger button
+          function positionPopup(triggerEl, popupEl) {
+            if (!triggerEl || !popupEl) return;
+
+            // Get the position of the trigger button
+            const rect = triggerEl.getBoundingClientRect();
+
+            // Position the popup
+            const windowHeight = window.innerHeight;
+            const popupHeight = popupEl.offsetHeight;
+
+            // Check if popup would go off the bottom of the screen
+            if (rect.bottom + popupHeight > windowHeight) {
+              // Position above the button
+              popupEl.style.top = (rect.top - popupHeight) + 'px';
+            } else {
+              // Position below the button
+              popupEl.style.top = rect.bottom + 'px';
+            }
+
+            // Align horizontally with the button
+            popupEl.style.left = rect.left + 'px';
+          }
+
+          // Apply to all Alpine.js dropdown components
+          document.querySelectorAll('[x-data="{ open: false }"]').forEach(dropdown => {
+            const button = dropdown.querySelector('button');
+            const popup = dropdown.querySelector('[x-show="open"]');
+
+            if (button && popup) {
+              // Watch for the popup being shown
+              const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                  if (mutation.attributeName === 'style' &&
+                      !popup.style.display.includes('none')) {
+                    positionPopup(button, popup);
+                  }
+                });
+              });
+
+              observer.observe(popup, { attributes: true });
+
+              // Also position on window resize
+              window.addEventListener('resize', () => {
+                if (!popup.style.display.includes('none')) {
+                  positionPopup(button, popup);
+                }
+              });
+            }
+          });
+        });
     </script>
     <style>
+        [x-show="open"] {
+          position: fixed !important;
+          z-index: 9999 !important;
+        }
+        .origin-top-right {
+          transform-origin: top right;
+        }
+        .dropdown-menu-fix {
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+
         [x-cloak] { display: none !important; }
         .max-h-\[70vh\] thead th {
             position: sticky;
@@ -57,7 +123,7 @@
         <img src="/favicon.png" alt="WebCalTides" class="w-24 h-24">
         <h1 class="text-4xl font-bold">WebCalTides</h1>
     </div>
-    
+
     <p class="text-lg text-gray-700 mb-8">
         WebCalTides is a free service that provides tides, currents and sunrise/sunset calendars for your favorite tide stations. Data is pulled from NOAA (US/etc) and DFO-CHS (Canada). Just search for a station, then click the webcal link to subscribe. Works on Apple iCal, Google Calendar and Outlook, maybe others.
     </p>
@@ -66,8 +132,8 @@
 
     <div class="mt-12">
         <p class="text-gray-600 mb-4">
-            Written by <a href="mailto:jpr5@darkridge.com" class="text-blue-600 hover:underline">Jordan Ritter</a>, with contributions from 
-            <a href="https://github.com/PaulJSchellenberg" class="text-blue-600 hover:underline">Paul Schellenberg</a> to support Canadian stations. 
+            Written by <a href="mailto:jpr5@darkridge.com" class="text-blue-600 hover:underline">Jordan Ritter</a>, with contributions from
+            <a href="https://github.com/PaulJSchellenberg" class="text-blue-600 hover:underline">Paul Schellenberg</a> to support Canadian stations.
             Project source at <a href="https://github.com/jpr5/webcaltides" class="text-blue-600 hover:underline">GitHub</a>.
         </p>
 
@@ -76,7 +142,7 @@
         </p>
 
         <div class="text-right mb-6">
-            <button 
+            <button
                 onclick="document.getElementById('license-acknowledgements').classList.toggle('hidden')"
                 class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >

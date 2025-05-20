@@ -6,6 +6,9 @@ require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
 require_relative 'clients/noaa_currents'
+require_relative 'clients/lunar'
+require 'json'
+require 'date'
 
 module WebCalTides
 
@@ -35,6 +38,10 @@ module WebCalTides
         }
 
         provider ? @current_clients[provider.to_sym] : @current_clients
+    end
+
+    def lunar_client
+        @lunar_client ||= Clients::Lunar.new(logger)
     end
 
     ##
@@ -399,7 +406,6 @@ module WebCalTides
         return cal
     end
 
-
     ##
     ## Solar
     ##
@@ -439,6 +445,105 @@ module WebCalTides
         end
 
         logger.info "solar calendar for #{from}-#{to} generated with #{cal.events.length} events"
+
+        cal.events.each do |e|
+            calendar.add_event(e)
+        end
+
+        return cal
+    end
+
+    ##
+    ## Lunar
+    ##
+
+    def lunar_phase_cache_file(year)
+        "#{settings.cache_dir}/lunar_phases_#{year}.json"
+    end
+
+    def cache_lunar_phases(on:, phases:[])
+        cache_file = lunar_phase_cache_file(on)
+
+        logger.debug "storing #{phases.length} lunar phases for #{on} at #{cache_file}"
+        File.write(cache_file, phases.to_json)
+
+        return phases.length > 0
+    end
+
+    def lunar_phases(from, to)
+        @lunar_phases ||= {}
+        ret = []
+
+        (from.year .. to.year).each do |year|
+            cache_file = lunar_phase_cache_file(year)
+            unless File.exist?(cache_file)
+                unless phases = lunar_client.phases_for_year(year)
+                    logger.error "failed to retrieve lunar phase data for #{year}"
+                    return
+                end
+
+                cache_lunar_phases(on:year, phases:phases)
+                @lunar_phases[year] = nil
+            end
+
+            ret << @lunar_phases[year] ||= begin
+                logger.debug "reading #{cache_file}"
+                json = File.read(cache_file)
+
+                logger.debug "parsing lunar phases for #{year}"
+                data = JSON.parse(json) rescue []
+
+                data.map do |phase|
+                    {
+                        datetime: DateTime.parse(phase["datetime"].to_s),
+                        type:     phase["type"].to_sym,
+                    }
+                end.sort_by { |phase| phase[:datetime] }
+            end
+        end
+
+        return ret.flatten.select { |e| e[:datetime] >= from and e[:datetime] <= to }
+    end
+
+    def lunar_calendar_for(calendar, around:Time.current.utc)
+        cal = Icalendar::Calendar.new
+        cal.x_wr_calname = "Lunar Phases"
+
+        from = beginning_of_window(around).strftime("%Y%m%d")
+        to   = end_of_window(around).strftime("%Y%m%d")
+
+        location = calendar.location
+
+        logger.debug "generating lunar calendar for #{from}-#{to}"
+
+        phase_names = {
+            new_moon:      "New Moon",
+            first_quarter: "First Quarter Moon",
+            full_moon:     "Full Moon",
+            last_quarter:  "Last Quarter Moon"
+        }
+
+        lunar_phases(Date.parse(from), Date.parse(to)).each do |phase|
+            percent_full = case phase[:type]
+                when :new_moon then 0
+                when :first_quarter then 50
+                when :last_quarter then 50
+                when :full_moon then 100
+                else (lunar_client.percent_full(phase[:datetime]) * 100).round # approximate
+            end
+
+            phase_time = phase[:datetime]
+
+            cal.event do |e|
+                e.summary     = phase_names[phase[:type]]
+                e.description = "Moon is #{percent_full}% illuminated"
+                e.dtstart     = Icalendar::Values::DateTime.new(phase_time, tzid: 'GMT')
+                e.dtend       = Icalendar::Values::DateTime.new(phase_time + 1.second, tzid: 'GMT')
+                e.location    = location if location
+            end
+        end
+
+        logger.info "lunar calendar for #{from}-#{to} generated with #{cal.events.length} events"
 
         cal.events.each do |e|
             calendar.add_event(e)
