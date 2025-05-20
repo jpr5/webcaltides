@@ -23,3 +23,7 @@ gem 'rackup', '>= 2.2.0'
 gem 'webrick', '>= 1.8.2'
 gem 'puma', '>= 6.6.0'
 gem 'sinatra', '~> 4.1.0'
+
+group :development do
+    gem 'debug', require: 'debugger'
+end
