@@ -128,7 +128,7 @@ class Server < ::Sinatra::Base
 
             calendar.publish
 
-            $LOG.info "caching to #{cached_ics}"
+            $LOG.debug "caching to #{cached_ics}"
             File.write cached_ics, ical = calendar.to_ical
 
             ical
