@@ -54,18 +54,18 @@ class Server < ::Sinatra::Base
     end
 
     post "/" do
-        # Depending on your font these quotes may look the same -- but they're not
-        radius       = params['within']
+        radius       = params['within'].to_i
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
         searchparam  = (params['searchtext'] || '').strip
         searchtext   = searchparam.dup.downcase.tr('“”', '""')
+        # ^^^ Depending on your font these quotes may look the same -- but they're not
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(searchtext))
             how = "near"
             tokens = [lat, long]
 
-            radius ||= "10" # default;
+            radius ||= 10 # default;
 
             tide_results    = WebCalTides.find_tide_stations_by_gps(lat, long, within:radius, units: radius_units)
             current_results = WebCalTides.find_current_stations_by_gps(lat, long, within:radius, units: radius_units)
@@ -98,12 +98,12 @@ class Server < ::Sinatra::Base
 
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
     get "/:type/:station.ics" do
-        type       = params[:type]
-        id         = params[:station]
+        type       = params[:type].tap { |type| type.in?(%w[tides currents]) or halt 404 }
+        id         = params[:station].tap { |station| station.in?(WebCalTides.station_ids) or halt 404 }
         date       = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
-        units      = params[:units] || 'imperial'
-        no_solar   = ["0", "false"].include?(params[:solar])
-        add_lunar  = ["1", "true"].include?(params[:lunar])
+        units      = params[:units].tap { |units| units.in?(%w[imperial metric]) or halt 422 }
+        no_solar   = params[:solar].in?(%w[0 false]) # on by default
+        add_lunar  = params[:lunar].in?(%w[1 true])  # off by default
         stamp      = date.utc.strftime("%Y%m")
         version    = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
         cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"

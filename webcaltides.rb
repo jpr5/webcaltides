@@ -125,6 +125,10 @@ module WebCalTides
         end
     end
 
+    def station_ids
+        tide_stations.map(&:id) + current_stations.map(&:id)
+    end
+
     ##
     ## Tides
     ##
