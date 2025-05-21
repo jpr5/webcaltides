@@ -152,7 +152,7 @@ module WebCalTides
 
     def tide_stations
         cache_file = tide_station_cache_file
-        File.exist? cache_file or cache_tide_stations(at:cache_file) and @tide_stations = nil
+        File.exist?(cache_file) || cache_tide_stations(at:cache_file) && @tide_stations = nil
 
         return @tide_stations ||= begin
             logger.debug "reading #{cache_file}"
@@ -226,7 +226,7 @@ module WebCalTides
 
         datestamp = around.utc.strftime("%Y%m")
         filename  = "#{settings.cache_dir}/tides_v#{DataModels::TideData.version}_#{station.id}_#{datestamp}.json"
-        return nil unless File.exist? filename or cache_tide_data_for(station, at:filename, around:around)
+        return nil unless File.exist?(filename) || cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -290,7 +290,7 @@ module WebCalTides
 
     def current_stations
         cache_file = current_station_cache_file
-        File.exist? cache_file or cache_current_stations(at:cache_file) and @current_stations = nil
+        File.exist?(cache_file) || cache_current_stations(at:cache_file) && @current_stations = nil
 
         return @current_stations ||= begin
             logger.debug "reading #{cache_file}"
@@ -361,7 +361,7 @@ module WebCalTides
 
         datestamp = around.utc.strftime("%Y%m") # 202312
         filename  = "#{settings.cache_dir}/currents_v#{DataModels::CurrentData.version}_#{station.bid}_#{datestamp}.json"
-        return nil unless File.exist? filename or cache_current_data_for(station, at:filename, around:around)
+        return nil unless File.exist?(filename) || cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
