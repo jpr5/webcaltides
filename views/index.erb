@@ -192,12 +192,22 @@
                         var httpsLink = document.getElementById('https_link_<%= r.id %>');
                         var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
                         var urlInput = document.getElementById('<%= url_id %>');
-                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
+
+                        // Replace them with:
+                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1')
+                            .replace(/([&?])lunar=0(&|$)/, '$1')
+                            .replace(/([&?])units=[^&]*(&|$)/, '$1')
+                            .replace(/([?&])$/, '');
+                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1')
+                            .replace(/([&?])lunar=0(&|$)/, '$1')
+                            .replace(/([&?])units=[^&]*(&|$)/, '$1')
+                            .replace(/([?&])$/, '');
+                        var currentUnits = document.getElementById('searchunits').value;
 
                         function updateUrls() {
-                            var newHttps = baseHttps;
-                            var newWebcal = baseWebcal;
+                            currentUnits = document.getElementById('searchunits').value;
+                            var newHttps = baseHttps + (baseHttps.includes('?') ? '&' : '?') + 'units=' + currentUnits;
+                            var newWebcal = baseWebcal + (baseWebcal.includes('?') ? '&' : '?') + 'units=' + currentUnits;
 
                             // Add solar parameter if needed
                             if (!solarBox.checked) {
@@ -218,6 +228,7 @@
 
                         solarBox.addEventListener('change', updateUrls);
                         lunarBox.addEventListener('change', updateUrls);
+                        document.getElementById('searchunits').addEventListener('change', updateUrls);
 
                         // Initial URL update
                         updateUrls();
@@ -457,24 +468,24 @@
                 <form action="/" method="POST" class="space-y-2">
                     <label for="within-tide" class="block text-sm font-medium text-gray-700">Find stations within</label>
                     <div class="flex rounded-md shadow-sm">
-                        <input
-                            type="text"
-                            name="within"
-                            id="within-tide"
-                            class="border border-gray-300 focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md sm:text-sm"
-                            placeholder="10"
-                        >
-                        <input type="hidden" name="searchtext" value="<%= r.id %>" />
-                        <input type="hidden" name="units" value="<%= units %>" />
-                        <span class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                            <%= units == 'imperial' ? 'mi' : 'km' %>
-                        </span>
-                    </div>
-                    <button
-                        type="submit"
-                        class="w-full flex justify-center py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    <input
+                        type="text"
+                        name="within"
+                        id="within-tide"
+                        class="border border-gray-300 focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md sm:text-sm"
+                        placeholder="10"
                     >
-                        Search Radius
+                    <input type="hidden" name="searchtext" value="<%= r.id %>" />
+                    <input type="hidden" name="units" id="units_<%= r.id %>" value="<%= units %>" />
+                    <span id="units_display_<%= r.id %>" class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                        <%= units == 'imperial' ? 'mi' : 'km' %>
+                    </span>
+                </div>
+                <button
+                    type="submit"
+                    class="w-full flex justify-center py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                    Search Radius
                     </button>
                 </form>
             </div>
@@ -557,6 +568,40 @@
         window.addEventListener('resize', function() {
             handleScrollIndicator(tideTableContainer, tideScrollIndicator);
             handleScrollIndicator(currentTableContainer, currentScrollIndicator);
+        });
+
+        // Handle units change
+        document.getElementById('searchunits').addEventListener('change', function() {
+            const units = this.value;
+            const unitText = units === 'imperial' ? 'mi' : 'km';
+
+            const walker = document.createTreeWalker(
+                document.body,
+                NodeFilter.SHOW_TEXT,
+                {
+                    acceptNode: function(node) {
+                        const text = node.nodeValue.trim();
+                        return (text === 'km' || text === 'mi') ?
+                            NodeFilter.FILTER_ACCEPT :
+                            NodeFilter.FILTER_REJECT;
+                    }
+                },
+                false
+            );
+
+            const nodes = [];
+            let node;
+            while (node = walker.nextNode()) {
+                nodes.push(node);
+            }
+
+            nodes.forEach(node => {
+                node.nodeValue = unitText;
+            });
+
+            document.querySelectorAll('input[type="hidden"][name="units"]').forEach(input => {
+                input.value = units;
+            });
         });
     });
 </script>
