@@ -1,7 +1,7 @@
 # WebCalTides
 
-WebCalTides is a neat little Ruby/Sinatra server for putting tides, currents and
-solar data on your calendar.
+WebCalTides is a neat little Ruby/Sinatra server for putting tides, currents,
+solar and lunar data on your calendar.
 
 Written to replace `sailwx.info`'s "Tide calendars to go"
 (`http://tides.mobilegeographics.com/`), which was awesome for what it was but
@@ -27,8 +27,9 @@ OR, just use this one at [webcaltides.org](https://webcaltides.org)!
 
 ## Invocation
 
-`rackup` or `puma` works great.  Writes to a cache directory, basically
-stores every bit of intermediate work.
+`rackup` (development) or `RACK_ENV=production puma -C puma.rb` (production).
+Writes to a cache directory, basically stores every bit of intermediate work to
+minimize impact on external services.
 
 ## TODO
 
@@ -44,6 +45,6 @@ Free as in beer, IFF you give me visible credit!  Mmm, beer..
 
 ## CREDITS
 
-Originally written by [Jordan Ritter](https://github.com/jpr5), with contributions
-from [Paul Schellenberg](https://github.com/PaulJSchellenberg) to support Canadian
-stations.
+Originally written by [Jordan Ritter](https://www.linkedin.com/in/jordanritter/),
+with contributions from [Paul Schellenberg](https://github.com/PaulJSchellenberg)
+to support Canadian stations.
