@@ -8,5 +8,5 @@ env = ENV["FU_ENV"] || ENV["RAILS_ENV"] || ENV["RACK_ENV"]
 if env == "production"
     root = File.expand_path(".")
     bind "unix://" + root + "/webcaltides.sock"
-    stdout_redirect "/srv/webcaltides/webcaltides.log", "/srv/webcaltides/webcaltides.log", true
+    stdout_redirect "/srv/webcaltides/logs/webcaltides.log", "/srv/webcaltides/logs/webcaltides.log", true
 end
