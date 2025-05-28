@@ -14,7 +14,7 @@ $LOG = Logger.new(STDOUT).tap do |log|
 end
 
 require 'bundler/setup'
-Bundler.require
+Bundler.require(:default, ENV['RACK_ENV'] || 'development')
 
 require_relative 'webcaltides'
 
@@ -43,6 +43,7 @@ class Server < ::Sinatra::Base
 
     configure :development do
         set :logging, $LOG
+        register Sinatra::Reloader
     end
 
     ##

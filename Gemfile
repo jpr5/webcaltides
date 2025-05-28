@@ -25,5 +25,6 @@ gem 'puma', '>= 6.6.0'
 gem 'sinatra', '~> 4.1.0'
 
 group :development do
-    gem 'debug', require: 'debugger'
+    gem 'debug'
+    gem 'sinatra-reloader', require: 'sinatra/reloader'
 end
