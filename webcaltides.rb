@@ -186,7 +186,7 @@ module WebCalTides
 
         logger.debug("finding tide stations by #{by} within '#{within}' #{units}")
         by_stations = tide_stations.select do |s|
-            by.any? do |b|
+            by.all? do |b|
                 s.id.downcase == b ||
                 s.alternate_names.any? { |n| (n.downcase.include?(b) rescue false) } ||
                 (s.region.downcase.include?(b) rescue false) ||
@@ -321,7 +321,7 @@ module WebCalTides
         logger.debug "finding current stations by #{by} within '#{within}' #{units}"
 
         by_stations = current_stations.select do |s|
-            by.any? do |b|
+            by.all? do |b|
                 (s.bid.downcase.start_with?(b) rescue false) ||
                 (s.id.downcase.start_with?(b) rescue false) ||
                 (s.id.downcase.include?(b) rescue false) ||
