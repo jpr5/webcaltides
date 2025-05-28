@@ -1,12 +1,10 @@
 ##
 ## Copyright (C) 2025 Jordan Ritter <jpr5@darkridge.com>
 ##
-## WebCal server for Tides & Sunset information.  Meant to replace
-## sailwx.info/tides.mobilegeographics.com, which as of 2021 appears no longer
-## to work.
+## WebCal server for Tides, Currents, Sunset and Lunar information.  Meant to
+## replace sailwx.info/tides.mobilegeographics.com, which as of 2021 appears no
+## longer to work.
 ##
-
-# FIXME: fix tide event URLs to reference the right day from tz (not GMT)
 
 require 'logger'
 $LOG = Logger.new(STDOUT).tap do |log|
