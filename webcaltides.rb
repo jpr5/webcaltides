@@ -137,7 +137,7 @@ module WebCalTides
     def tide_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/tide_stations_v#{DataModels::Station.version}_#{datestamp}.json"
+        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}.json"
     end
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
@@ -161,7 +161,7 @@ module WebCalTides
             logger.debug "parsing tide station list"
 
             data = JSON.parse(json) rescue []
-            data.map { |js| DataModels::Station.from_hash(js) }
+            data.map { |js| Models::Station.from_hash(js) }
         end
     end
 
@@ -225,7 +225,7 @@ module WebCalTides
         return nil unless station
 
         datestamp = around.utc.strftime("%Y%m")
-        filename  = "#{settings.cache_dir}/tides_v#{DataModels::TideData.version}_#{station.id}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/tides_v#{Models::TideData.version}_#{station.id}_#{datestamp}.json"
         return nil unless File.exist?(filename) || cache_tide_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
@@ -234,7 +234,7 @@ module WebCalTides
         logger.debug "parsing tides for #{station.id}"
         data = JSON.parse(json) rescue []
 
-        return data.map{ |js| DataModels::TideData.from_hash(js) }
+        return data.map{ |js| Models::TideData.from_hash(js) }
     end
 
     def tide_calendar_for(id, around: Time.current.utc, units: 'imperial')
@@ -276,7 +276,7 @@ module WebCalTides
     def current_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/current_stations_v#{DataModels::Station.version}_#{datestamp}.json"
+        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}.json"
     end
 
     def cache_current_stations(at:current_station_cache_file, stations: [])
@@ -299,7 +299,7 @@ module WebCalTides
             logger.debug "parsing current station list"
             data = JSON.parse(json) rescue []
 
-            data.map { |js| DataModels::Station.from_hash(js) }
+            data.map { |js| Models::Station.from_hash(js) }
         end
     end
 
@@ -360,7 +360,7 @@ module WebCalTides
         return nil unless station
 
         datestamp = around.utc.strftime("%Y%m") # 202312
-        filename  = "#{settings.cache_dir}/currents_v#{DataModels::CurrentData.version}_#{station.bid}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/currents_v#{Models::CurrentData.version}_#{station.bid}_#{datestamp}.json"
         return nil unless File.exist?(filename) || cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"
@@ -369,7 +369,7 @@ module WebCalTides
         logger.debug "parsing currents for #{station.bid}"
         data = JSON.parse(json) rescue []
 
-        return data.map { |jc| DataModels::CurrentData.from_hash(jc) }
+        return data.map { |jc| Models::CurrentData.from_hash(jc) }
     end
 
     def current_calendar_for(id, around: Time.current.utc)

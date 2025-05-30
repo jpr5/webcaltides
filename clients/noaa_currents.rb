@@ -1,6 +1,6 @@
 require_relative 'base'
-require_relative '../data_models/station'
-require_relative '../data_models/current_data'
+require_relative '../models/station'
+require_relative '../models/current_data'
 
 module Clients
 
@@ -33,7 +33,7 @@ module Clients
             data.map! { |s| s["bid"] = s["id"] + "_" + s["currbin"].to_s; s }
 
             stations = data.map do |js|
-                DataModels::Station.new(
+                Models::Station.new(
                     bid:      js["bid"],
                     id:       js["id"],
                     name:     js["name"],
@@ -66,7 +66,7 @@ module Clients
             return data.map do |jc|
                 jc["Time"] = DateTime.parse(jc["Time"])
                 jc["Url"]  = station.url + "&d=#{jc["Time"].strftime("%Y-%m-%d")}"
-                DataModels::CurrentData.from_hash(jc)
+                Models::CurrentData.from_hash(jc)
             end
         end
 

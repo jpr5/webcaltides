@@ -106,7 +106,7 @@ class Server < ::Sinatra::Base
         no_solar   = params[:solar].in?(%w[0 false]) # on by default
         add_lunar  = params[:lunar].in?(%w[1 true])  # off by default
         stamp      = date.utc.strftime("%Y%m")
-        version    = type == "currents" ? DataModels::CurrentData.version : DataModels::TideData.version
+        version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
         cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
 
         # NOTE: Changed my mind on retval's.  In the shit-fucked-up case, we end up sending out a

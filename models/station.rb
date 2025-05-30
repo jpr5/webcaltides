@@ -1,4 +1,4 @@
-module DataModels
+module Models
     class Station < Struct.new(:name, :alternate_names, :id, :public_id, :region, :location,
                                :lat, :lon, :url, :provider, :bid, :depth)
 

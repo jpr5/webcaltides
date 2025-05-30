@@ -1,4 +1,4 @@
-module DataModels
+module Models
     class TideData < Struct.new(:type, :units, :prediction, :time, :url)
 
         # When modifying this class, bump this version

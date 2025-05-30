@@ -1,6 +1,6 @@
 require_relative 'base'
-require_relative '../data_models/station'
-require_relative '../data_models/tide_data'
+require_relative '../models/station'
+require_relative '../models/tide_data'
 
 module Clients
     class NoaaTides < Base
@@ -24,7 +24,7 @@ module Clients
             data = JSON.parse(json)["stationList"] rescue []
 
             stations = data.map do |js|
-                DataModels::Station.new(
+                Models::Station.new(
                     name: js['name'],
                     alternate_names: [js['etidesStnName'], js['commonName'], js['stationFullName']],
                     id: js['stationId'],
@@ -55,7 +55,7 @@ module Clients
 
             return data.map do |jt|
                 time = DateTime.parse(jt["t"])
-                DataModels::TideData.new(
+                Models::TideData.new(
                     type: jt["type"] == "H" ? "High" : "Low",
                     units: "ft",
                     prediction: jt["v"].to_f,

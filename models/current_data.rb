@@ -1,4 +1,4 @@
-module DataModels
+module Models
     class CurrentData < Struct.new(:bin, :type, :mean_flood_dir, :mean_ebb_dir, :time, :depth, :velocity_major, :url)
 
         def self.version
@@ -22,4 +22,3 @@ module DataModels
 
     end
 end
-

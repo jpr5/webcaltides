@@ -1,6 +1,6 @@
 require_relative 'base'
-require_relative '../data_models/station'
-require_relative '../data_models/tide_data'
+require_relative '../models/station'
+require_relative '../models/tide_data'
 
 module Clients
     class ChsTides < Base
@@ -24,7 +24,7 @@ module Clients
             data = JSON.parse(json) rescue []
 
             stations = data.map do |js|
-                DataModels::Station.new(
+                Models::Station.new(
                     name: js['officialName'],
                     alternate_names: [],
                     id: js['id'],
@@ -83,7 +83,7 @@ module Clients
 
             return data.map do |jt|
                 time = DateTime.parse(jt["eventDate"])
-                td = DataModels::TideData.new(
+                td = Models::TideData.new(
                     type: jt['value'] >= prev_value ? "High" : "Low",
                     units: "m",
                     prediction: jt["value"],
