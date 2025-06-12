@@ -8,8 +8,9 @@ gem 'pry'
 
 gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/core_ext']
 
-gem 'nokogiri', '>= 1.18.8'
+gem 'date'
 gem 'json'
+gem 'nokogiri', '>= 1.18.8'
 gem 'mechanize', '>= 2.9.0'
 
 gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]

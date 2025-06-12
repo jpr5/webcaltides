@@ -11,11 +11,7 @@ $LOG = Logger.new(STDOUT).tap do |log|
     log.formatter = proc { |s, d, _, m| "#{d.strftime("%Y-%m-%d %H:%M:%S")} #{s} #{m}\n" }
 end
 
-require 'bundler/setup'
-Bundler.require(:default, ENV['RACK_ENV'] || 'development')
-
 require_relative 'webcaltides'
-
 
 class Server < ::Sinatra::Base
 

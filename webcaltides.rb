@@ -2,13 +2,15 @@
 ## Primary library of functions.  Included on Server.
 ##
 
+require 'bundler/setup'
+Bundler.require(:default, ENV['RACK_ENV'] || 'development')
+
 require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
 require_relative 'clients/noaa_currents'
 require_relative 'clients/lunar'
-require 'json'
-require 'date'
+
 
 module WebCalTides
 
