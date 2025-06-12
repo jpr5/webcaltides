@@ -22,7 +22,7 @@ gem 'rack-session', '>= 2.1.1'
 gem 'rackup', '>= 2.2.0'
 gem 'webrick', '>= 1.8.2'
 gem 'puma', '>= 6.6.0'
-gem 'sinatra', '~> 4.1.0'
+gem 'sinatra', '~> 4.1.0', require: 'sinatra/base'
 
 group :development do
     gem 'debug'
