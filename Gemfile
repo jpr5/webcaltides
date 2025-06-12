@@ -16,6 +16,7 @@ gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
 gem 'timezone'
 gem 'geocoder'
+gem 'georuby', require: [ 'geo_ruby/simple_features' ]
 
 gem 'rack', ">= 3.1.12"
 gem 'rack-session', '>= 2.1.1'
