@@ -5,6 +5,7 @@
 require 'bundler/setup'
 Bundler.require(:default, ENV['RACK_ENV'] || 'development')
 
+require_relative 'gps'
 require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
@@ -60,23 +61,30 @@ module WebCalTides
         end
     end
 
-    # Handles decimal (-)X.YYY or deg/min/sec format:
-    # Supported deg/min/sec format:
-    #     "1°2.3" or "1'2.3" with explicit negative
-    #     "1°2.3N" or "1'2.3W" with implicit negative (S+E -> -)
+    # Should handle most (mal)formed inputs using georuby gem.
     def parse_gps(str)
-        if str.match(/\d['°]/)
-            str = str# blindly fix NSEW, no-op if DNE
-                .gsub(/(\d['°])(\s*)/, '\1') # remove any space b/w deg
-                .gsub(/([^\s])\s+([NSEW])/, '\1\2') # remove any space b/w cardinal
-                .gsub(/([^\s]+)[SE]/, '-\1') # if SE exists, remove + convert to -
-                .gsub(/([^\s]+)[NW]/, '\1') # if NW exists, remove + ignore (+)
-                .gsub(/([-]*)(\d+)['°]\s*(\d+)\.(\d+)/) do |m| # Convert to decimal
-                    $1 + ($2.to_f + $3.to_f/60 + $4.to_f/3600).to_s
-                end
+        begin
+            str = GPS.normalize(str)[:decimal]
+        rescue
+            # Fallback to our own original implementation
+            # Handles decimal (-)X.YYY or deg/min/sec format:
+            # Supported deg/min/sec format:
+            #     "1°2.3" or "1'2.3" with explicit negative
+            #     "1°2.3N" or "1'2.3W" with implicit negative (S+E -> -)
+
+            if str.match(/\d[°']/) # leave out " because that's also for search
+                str = str # blindly fix NSEW, no-op if DNE
+                    .gsub(/(\d['°])(\s*)/, '\1') # remove any space b/w deg
+                    .gsub(/([^\s])\s+([NSEW])/, '\1\2') # remove any space b/w cardinal
+                    .gsub(/([^\s]+)[SE]/, '-\1') # if SE exists, remove + convert to -
+                    .gsub(/([^\s]+)[NW]/, '\1') # if NW exists, remove + ignore (+)
+                    .gsub(/([-]*)(\d+)['°]\s*(\d+)\.(\d+)/) do |m| # Convert to decimal
+                        $1 + ($2.to_f + $3.to_f/60 + $4.to_f/3600).to_s
+                    end
+            end
         end
 
-        # In decimal form now
+        # Hopefully in decimal form now... if it passes validation.
         res = str.split(/[, ]+/)
 
         return nil if res.length != 2 or
