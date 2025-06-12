@@ -1,6 +1,10 @@
 ##
 ## Primary library of functions.  Included on Server.
 ##
+#
+# FIXME: Code runs under a threaded server (puma), but is not threadsafe. 🤷‍♂️
+# I like my patterns more than the odds of it happening.  My code is *tight*, yo! 😂
+#
 
 require 'bundler/setup'
 Bundler.require(:default, ENV['RACK_ENV'] || 'development')
