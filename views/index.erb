@@ -74,7 +74,19 @@
 
 <div class="mb-6 p-4 bg-blue-50 rounded-lg search-result-container">
     <div class="text-sm text-blue-800 search-result-text">
-        Search '<span class="font-medium"><%= searchtokens.join(" AND ") %><% if params['within'] %> radius <%= params['within'] %><%= params['units'] == 'metric' ? 'km' : 'mi' %><% end %></span>' yields <span class="font-semibold"><%= tide_results.count + current_results.count %></span> results
+        Search
+        <% case how
+           when 'by' then %>
+           by '<span class="font-medium"><%= tokens.join(" AND ") %></span>'
+        <% when 'near' then %>
+           near '<span class="font-medium"><%= tokens.join(", ") %></span>'
+        <% end %>
+
+        <% if radius && radius > 0 %>
+            within <span class="font-medium"><%= radius %><%= units == 'metric' ? 'km' : 'mi' %></span>
+        <% end %>
+
+        yields <span class="font-semibold"><%= tide_results.count + current_results.count %></span> results
     </div>
 </div>
 
