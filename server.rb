@@ -60,7 +60,7 @@ class Server < ::Sinatra::Base
             how = "near"
             tokens = [lat, long]
 
-            radius ||= 10 # default;
+            radius = 10 # default
 
             tide_results    = WebCalTides.find_tide_stations_by_gps(lat, long, within:radius, units: radius_units)
             current_results = WebCalTides.find_current_stations_by_gps(lat, long, within:radius, units: radius_units)
