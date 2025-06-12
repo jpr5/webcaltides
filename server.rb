@@ -38,6 +38,9 @@ class Server < ::Sinatra::Base
     configure :development do
         set :logging, $LOG
         register Sinatra::Reloader
+        also_reload File.expand_path("./webcaltides.rb")
+        also_reload File.expand_path("./gps.rb")
+        after_reload { $LOG.debug 'reloaded' }
     end
 
     ##
