@@ -19,7 +19,7 @@ gem 'timezone'
 gem 'geocoder'
 gem 'georuby', require: [ 'geo_ruby/simple_features' ]
 
-gem 'rack', ">= 3.1.12"
+gem 'rack', '>= 3.1.16'
 gem 'rack-session', '>= 2.1.1'
 gem 'rackup', '>= 2.2.0'
 gem 'webrick', '>= 1.8.2'
