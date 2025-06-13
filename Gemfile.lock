@@ -28,7 +28,6 @@ GEM
     domain_name (0.6.20240107)
     drb (2.2.1)
     geocoder (1.8.2)
-    georuby (2.5.2)
     http-cookie (1.0.6)
       domain_name (~> 0.5)
     i18n (1.14.4)
@@ -129,7 +128,6 @@ DEPENDENCIES
   date
   debug
   geocoder
-  georuby
   icalendar
   irb
   json

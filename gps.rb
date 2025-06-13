@@ -1,18 +1,31 @@
-require 'geo_ruby/simple_features' if __FILE__ == $0 # to test: ruby gps.rb
 
 module WebCalTides
 module GPS
 
     extend self
 
-    include GeoRuby::SimpleFeatures
-
     def normalize(coord_string)
-        parts = coord_string.split(',').map(&:strip)
+        # Handle the case where coord_string is already a decimal pair like "-33.8688, 151.2093"
+        if coord_string.match(/^\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+\s*$/)
+            parts = coord_string.split(',').map(&:strip)
+            latitude = parts[0].to_f
+            longitude = parts[1].to_f
+
+            # Return normalized formats
+            return {
+                decimal: "#{latitude}, #{longitude}",
+                dms: format_as_dms(latitude, longitude),
+                latitude: latitude,
+                longitude: longitude
+            }
+        end
+
+        parts = split_lat_lon(coord_string)
 
         lat_part = nil
         lon_part = nil
 
+        # First pass: try to identify parts by hemisphere indicators
         parts.each do |part|
             if part.match(/[ns]/i)
                 lat_part = part
@@ -41,97 +54,107 @@ module GPS
             end
 
             # If still no hemisphere indicators, assume first is lat, second is lon
-            if lat_part.nil? && lon_part.nil? && all_coords.length >= 2
-                lat_part = all_coords[0]
-                lon_part = all_coords[1]
+            if (lat_part.nil? || lon_part.nil?) && parts.length >= 2
+                # For decimal format like "-33.8688, 151.2093"
+                lat_part = parts[0] if lat_part.nil?
+                lon_part = parts[1] if lon_part.nil?
             end
         end
 
-        latitude = parse_coordinate(lat_part)
-        longitude = parse_coordinate(lon_part)
+        lat = parse_single_coordinate(lat_part, :lat)
+        lon = parse_single_coordinate(lon_part, :lon)
 
-        # Validate that we got valid coordinates
-        if latitude.nil? || longitude.nil?
-            $LOG.error "could not parse coordinates from: #{coord_string}"
-            raise
-        end
+        raise "could not parse coordinates from: #{coord_string}" if lat.nil? || lon.nil?
 
-        # Create a Point object
-        point = Point.from_x_y(longitude, latitude)
-
-        # Return normalized formats
-        {
-            decimal: "#{latitude}, #{longitude}",
-            dms: format_as_dms(latitude, longitude),
-            point: point,
-            latitude: latitude,
-            longitude: longitude
+        return {
+            decimal: "#{lat}, #{lon}",
+            dms: format_as_dms(lat, lon),
+            latitude: lat,
+            longitude: lon
         }
     end
 
     private
 
-    def parse_coordinate(coord_str)
-        return nil if coord_str.nil? || coord_str.empty?
-
-        # Remove extra whitespace and quotes
-        coord = coord_str.strip.gsub(/["']/, '')
-
-        # Check for hemisphere indicators or explicit negative sign
-        is_negative = coord.match(/[sw]/i) || coord.start_with?('-')
-
-        # Remove hemisphere indicators for parsing but preserve negative sign
-        coord = coord.gsub(/[nsew]/i, '').strip
-
-        # Try to match degrees, minutes, seconds format: 144°27'38.5
-        if coord.match(/(\d+(?:\.\d+)?)°(\d+(?:\.\d+)?)'([\d.]+)/)
-            degrees = $1.to_f
-            minutes = $2.to_f
-            seconds = $3.to_f
-
-            decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
-        elsif coord.match(/(\d+(?:\.\d+)?)°(\d+(?:\.\d+)?)'/)
-            # Degrees and decimal minutes: 144°27'
-            degrees = $1.to_f
-            minutes = $2.to_f
-
-            decimal = degrees + (minutes / 60.0)
-        elsif coord.match(/(\d+(?:\.\d+)?)°/)
-            # Just degrees: 144°
-            degrees = $1.to_f
-            decimal = degrees
-        elsif coord.match(/^(\d+(?:\.\d+)?)$/)
-            # Just a number (assume decimal degrees)
-            decimal = $1.to_f
+    def split_lat_lon(input)
+        if input.include?(',')
+            parts = input.split(',').map(&:strip)
         else
-            # Try to extract any number from the string
-            numbers = coord.scan(/\d+(?:\.\d+)?/).map(&:to_f)
-            return nil if numbers.empty?
-
-            # If multiple numbers, assume DMS format
-            if numbers.length >= 3
-                decimal = numbers[0] + (numbers[1] / 60.0) + (numbers[2] / 3600.0)
-            elsif numbers.length == 2
-                decimal = numbers[0] + (numbers[1] / 60.0)
+            # Try to match two DMS+hemisphere blocks in a row (with or without whitespace between)
+            match = input.match(/(.+?[NS])\s*(.+?[EW])/i)
+            if match
+                parts = [match[1].strip, match[2].strip]
             else
-                decimal = numbers[0]
+                # fallback: scan for DMS+hemisphere blocks
+                blocks = input.scan(/(\d{1,3}[^NSEW\d]*\d*\.?\d*[^NSEW\d]*[NSWE])/i).flatten
+
+                if blocks.size == 2
+                    parts = blocks.map(&:strip)
+                else
+                    mid = input.size / 2
+                    parts = [input[0...mid].strip, input[mid..-1].strip]
+                end
             end
         end
 
-        # Apply hemisphere (negative for South/West)
-        decimal = -decimal if is_negative
+        parts = parts.map { |p| p.nil? ? '' : p.strip }
 
-        decimal
+        raise "could not split lat/lon from: #{input} -> #{parts.inspect}" if parts.nil? || parts.size != 2 || parts.any?(&:empty?)
+
+        return parts
+    end
+
+    # Parse a single coordinate (lat or lon)
+    def parse_single_coordinate(str, which)
+        if str.nil? || str.strip.empty?
+            warn "parse_single_coordinate called with nil or empty string for #{which}"
+            return nil
+        end
+        s = str.strip.upcase
+        hemisphere = nil
+        s.gsub!(/([NSEW])/) do |h|
+            hemisphere = h
+            ''
+        end
+        s.gsub!(/[\"]/, '') # Remove quotes
+        s.gsub!(/[°′'″]/, ' ') # Replace all DMS symbols with space
+        s = s.gsub(/[NSEW]/, '').strip # Remove hemisphere again just in case
+        nums = s.split(/\s+/).map(&:to_f)
+
+        decimal = nil
+        if nums.size == 3
+            decimal = nums[0].abs + nums[1]/60.0 + nums[2]/3600.0
+        elsif nums.size == 2
+            decimal = nums[0].abs + nums[1]/60.0
+        elsif nums.size == 1
+            decimal = nums[0]
+        else
+            warn "parse_single_coordinate could not extract numbers from '#{str}' for #{which}"
+            return nil
+        end
+        # Determine sign
+        if hemisphere
+            if (which == :lat && hemisphere == 'S') || (which == :lon && hemisphere == 'W')
+                decimal = -decimal.abs
+            else
+                decimal = decimal.abs
+            end
+        elsif which == :lon && nums[0] < 0
+            # If longitude and first number is negative, force negative
+            decimal = -decimal.abs
+        else
+            # fallback: for longitude, treat values > 180 as negative (rare, but for 0-360)
+            decimal = -decimal if which == :lon && decimal > 180
+        end
+        return decimal
     end
 
     def format_as_dms(lat, lon)
         lat_dms = decimal_to_dms(lat.abs)
         lon_dms = decimal_to_dms(lon.abs)
-
-        lat_hemisphere = lat >= 0 ? 'N' : 'S'
-        lon_hemisphere = lon >= 0 ? 'E' : 'W'
-
-        "#{lat_dms}#{lat_hemisphere}, #{lon_dms}#{lon_hemisphere}"
+        lat_hem = lat >= 0 ? 'N' : 'S'
+        lon_hem = lon >= 0 ? 'E' : 'W'
+        return "#{lat_dms}#{lat_hem}, #{lon_dms}#{lon_hem}"
     end
 
     def decimal_to_dms(decimal)
@@ -139,30 +162,52 @@ module GPS
         minutes_float = (decimal - degrees) * 60
         minutes = minutes_float.floor
         seconds = (minutes_float - minutes) * 60
-
-        "#{degrees}°#{minutes}'#{seconds.round(1)}\""
+        return "#{degrees}°#{minutes}'#{seconds.round(1)}\""
     end
 end
 end
 
 # Testing
 if __FILE__ == $0
-    [
-        "40.7128° N, 74.0060° W",
-        "51°30'26\"N 0°7'39\"W",
-        "-33.8688, 151.2093",
-        "48°51'29.5\"N 2°17'40.2\"E",
-    ].each do |coords|
+    TEST_COORDS = [
+        # Decimal degrees
+        ["40.7128° N, 74.0060° W", [40.7128, -74.006]],
+        ["-33.8688, 151.2093", [-33.8688, 151.2093]],
+        ["37.7749 N, 122.4194 W", [37.7749, -122.4194]],
+        ["51.0, -0.0", [51.0, -0.0]],
+        # DMS
+        ["51°30'26\"N, 0°7'39\"W", [51.507222, -0.1275]],
+        ["48°51'29.5\"N, 2°17'40.2\"E", [48.858194, 2.2945]],
+        ["33°52'7.7\"S, 151°12'33.5\"E", [-33.868806, 151.209306]],
+        # DM
+        ["51°30.5'N, 0°7.65'W", [51.508333, -0.1275]],
+        # Whitespace and hemisphere
+        ["40 42 46.1 N, 74 0 21.6 W", [40.712806, -74.006]],
+        ["40 42 46.1, -74 0 21.6", [40.712806, -74.006]],
+        ["40°42'46.1\" N 74°0'21.6\" W", [40.712806, -74.006]],
+        # Edge cases
+        ["0°0'0\"N, 0°0'0\"E", [0.0, 0.0]],
+        ["90°0'0\"S, 180°0'0\"W", [-90.0, -180.0]],
+    ]
 
-        puts "\nInput: #{coords}"
-
-        result = WebCalTides::GPS.normalize(coords)
-
-        puts "Normalized Results:"
-        puts "Decimal Degrees: #{result[:decimal]}"
-        puts "DMS Format: #{result[:dms]}"
-        puts "Latitude: #{result[:latitude]}"
-        puts "Longitude: #{result[:longitude]}"
-
+    TEST_COORDS.each do |input, expected|
+        puts "\nInput: #{input}"
+        begin
+            result = WebCalTides::GPS.normalize(input)
+            puts "Decimal Degrees: #{result[:decimal]}"
+            puts "DMS Format: #{result[:dms]}"
+            puts "Latitude: #{result[:latitude]}"
+            puts "Longitude: #{result[:longitude]}"
+            # Check if close to expected
+            lat_ok = (result[:latitude] - expected[0]).abs < 0.0002
+            lon_ok = (result[:longitude] - expected[1]).abs < 0.0002
+            if lat_ok && lon_ok
+                puts "PASS"
+            else
+                puts "FAIL: Expected #{expected.inspect}"
+            end
+        rescue => e
+            puts "ERROR: #{e}"
+        end
     end
 end
