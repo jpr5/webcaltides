@@ -61,11 +61,16 @@ class Server < ::Sinatra::Base
         return erb :index, locals: { searchtext: nil, units: nil } unless searchtext.length > 0
 
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
-        if ((lat, long) = WebCalTides.parse_gps(searchtext))
+        if searchtext.match(/\d[°'.]\s*\d/)
             how = "near"
-            tokens = [lat, long]
 
-            radius = 10 # default
+            unless tokens = WebCalTides.parse_gps(searchtext)
+                $LOG.warn "unable to parse '#{searchtext}' as GPS"
+                return erb :index, locals: { searchtext: nil, units: nil }
+            end
+
+            (lat, long) = *tokens
+            radius      = 10 # default
 
             tide_results    = WebCalTides.find_tide_stations_by_gps(lat, long, within:radius, units: radius_units)
             current_results = WebCalTides.find_current_stations_by_gps(lat, long, within:radius, units: radius_units)
