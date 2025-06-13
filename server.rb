@@ -58,6 +58,8 @@ class Server < ::Sinatra::Base
         searchtext   = searchparam.dup.downcase.tr('“”', '""')
         # ^^^ Depending on your font these quotes may look the same -- but they're not
 
+        return erb :index, locals: { searchtext: nil, units: nil } unless searchtext.length > 0
+
         # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
         if ((lat, long) = WebCalTides.parse_gps(searchtext))
             how = "near"
