@@ -10,8 +10,8 @@ gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/c
 
 gem 'date'
 gem 'json'
-gem 'nokogiri', '>= 1.18.8'
-gem 'mechanize', '>= 2.9.0'
+gem 'nokogiri', '>= 1.18.9'
+gem 'mechanize', '>= 2.9.1'
 
 gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
