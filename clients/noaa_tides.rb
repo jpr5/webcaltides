@@ -21,7 +21,7 @@ module Clients
             return nil unless json = get_url(url)
 
             logger.debug "parsing tide station list from API #{API_URL}"
-            data = JSON.parse(json)["stationList"] rescue []
+            data = JSON.parse(json)["stationList"] || [] rescue []
 
             stations = data.map do |js|
                 Models::Station.new(
@@ -51,7 +51,7 @@ module Clients
             return nil unless json = get_url(url)
 
             logger.debug "parsing tide prediction list for #{station.id} from API #{API_URL}"
-            data = JSON.parse(json)["predictions"] rescue []
+            data = JSON.parse(json)["predictions"] || [] rescue []
 
             return data.map do |jt|
                 time = DateTime.parse(jt["t"])

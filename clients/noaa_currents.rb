@@ -22,7 +22,7 @@ module Clients
             return nil unless json = get_url(url)
 
             logger.debug "parsing current station list from API #{API_URL}"
-            data = JSON.parse(json)["stations"] rescue {}
+            data = JSON.parse(json)["stations"] || {} rescue {}
 
             # Tho we get records, anything "weak and variable" won't have a lookup page,
             # so we exclude them.
@@ -61,7 +61,7 @@ module Clients
             return nil unless json = get_url(url)
 
             logger.debug "parsing current predictions for #{station.bid} from API #{API_URL}"
-            data = JSON.parse(json)["current_predictions"]["cp"] rescue nil
+            data = JSON.parse(json)["current_predictions"]["cp"] || [] rescue []
 
             return data.map do |jc|
                 jc["Time"] = DateTime.parse(jc["Time"])
