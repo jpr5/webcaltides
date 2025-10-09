@@ -15,7 +15,7 @@ GEM
       tzinfo (~> 2.0)
     addressable (2.8.7)
       public_suffix (>= 2.0.2, < 7.0)
-    base64 (0.2.0)
+    base64 (0.3.0)
     bigdecimal (3.1.7)
     byebug (11.1.3)
     coderay (1.1.3)
@@ -40,7 +40,7 @@ GEM
       rdoc
       reline (>= 0.4.2)
     json (2.7.2)
-    logger (1.6.4)
+    logger (1.7.0)
     mechanize (2.14.0)
       addressable (~> 2.8)
       base64
@@ -62,7 +62,7 @@ GEM
     mini_portile2 (2.8.9)
     minitest (5.22.3)
     multi_json (1.15.0)
-    mustermann (3.0.3)
+    mustermann (3.0.4)
       ruby2_keywords (~> 0.0.1)
     mutex_m (0.2.0)
     net-http-digest_auth (1.4.1)
@@ -82,8 +82,8 @@ GEM
     puma (6.6.0)
       nio4r (~> 2.0)
     racc (1.8.1)
-    rack (3.1.16)
-    rack-protection (4.1.1)
+    rack (3.2.2)
+    rack-protection (4.2.0)
       base64 (>= 0.1.0)
       logger (>= 1.6.0)
       rack (>= 3.0.0, < 4)
@@ -99,23 +99,23 @@ GEM
     ruby2_keywords (0.0.5)
     rubyntlm (0.6.5)
       base64
-    sinatra (4.1.1)
+    sinatra (4.2.0)
       logger (>= 1.6.0)
       mustermann (~> 3.0)
       rack (>= 3.0.0, < 4)
-      rack-protection (= 4.1.1)
+      rack-protection (= 4.2.0)
       rack-session (>= 2.0.0, < 3)
       tilt (~> 2.0)
-    sinatra-contrib (4.1.1)
+    sinatra-contrib (4.2.0)
       multi_json (>= 0.0.2)
       mustermann (~> 3.0)
-      rack-protection (= 4.1.1)
-      sinatra (= 4.1.1)
+      rack-protection (= 4.2.0)
+      sinatra (= 4.2.0)
       tilt (~> 2.0)
     sinatra-reloader (1.0)
       sinatra-contrib
     stringio (3.1.0)
-    tilt (2.5.0)
+    tilt (2.6.1)
     timezone (1.3.25)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
@@ -139,10 +139,10 @@ DEPENDENCIES
   nokogiri (>= 1.18.9)
   pry
   puma (>= 6.6.0)
-  rack (>= 3.1.16)
+  rack (>= 3.1.17)
   rack-session (>= 2.1.1)
   rackup (>= 2.2.0)
-  sinatra (~> 4.1.0)
+  sinatra (~> 4.2.0)
   sinatra-reloader
   timezone
   webrick (>= 1.8.2)
@@ -151,4 +151,4 @@ RUBY VERSION
    ruby 3.2.2p53
 
 BUNDLED WITH
-   2.4.22
+   2.4.19
