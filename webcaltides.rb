@@ -140,7 +140,7 @@ module WebCalTides
     end
 
     def station_ids
-        tide_stations.map(&:id) + current_stations.map(&:id)
+        tide_stations.map(&:id) + current_stations.map(&:bid)
     end
 
     ##
