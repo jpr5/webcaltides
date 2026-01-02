@@ -14,6 +14,7 @@ require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
 require_relative 'clients/noaa_currents'
+require_relative 'clients/harmonics'
 require_relative 'clients/lunar'
 
 
@@ -32,8 +33,9 @@ module WebCalTides
 
     def tide_clients(provider = nil)
         @tide_clients ||= {
-            noaa: Clients::NoaaTides.new(logger),
-            chs:  Clients::ChsTides.new(logger)
+            noaa:      Clients::NoaaTides.new(logger),
+            chs:       Clients::ChsTides.new(logger),
+            harmonics: Clients::Harmonics.new(logger)
         }
 
         provider ? @tide_clients[provider.to_sym] : @tide_clients
@@ -123,6 +125,8 @@ module WebCalTides
             begin
                 i += 1
                 tz = Timezone.lookup(lat, long)
+            rescue Timezone::Error::InvalidZone
+                # ...
             rescue Timezone::Error::GeoNames
                 sleep(i)
                 retry unless i >= 3

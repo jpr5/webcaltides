@@ -106,7 +106,7 @@ class Server < ::Sinatra::Base
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
     get "/:type/:station.ics" do
         type       = params[:type].tap { |type| type.in?(%w[tides currents]) or halt 404 }
-        id         = params[:station].tap { |station| station.in?(WebCalTides.station_ids) or halt 404 }
+        id         = params[:station].tap { |station| station.in?(WebCalTides.station_ids) or (puts("hi mom") && halt(404)) }
         date       = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
         units      = params.fetch(:units, 'imperial').tap { |units| units.in?(%w[imperial metric]) or halt 422 }
         no_solar   = params[:solar].in?(%w[0 false]) # on by default
