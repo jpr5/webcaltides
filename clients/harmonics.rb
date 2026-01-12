@@ -13,11 +13,10 @@ module Clients
         def initialize(logger)
             super(logger)
             @engine = ::Harmonics::Engine.new(logger, WebCalTides.settings.cache_dir)
-            @harmonics_path = @engine.harmonics_path
         end
 
         def tide_stations
-            return [] unless File.exist?(@harmonics_path)
+            return [] unless File.exist?(@engine.harmonics_file)
 
             @engine.stations.map { |s| Models::Station.from_hash(s.stringify_keys) }
         end
