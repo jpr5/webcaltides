@@ -103,10 +103,10 @@ class HarmonicsTestRunner
         { name: "Pago Bay, Guam", slug: "Pago-Bay-Guam" },
         { name: "Eniirikku Island, Bikini Atoll", slug: "Eniirikku-Island-Bikini-Atoll-Marshall-Islands" },
         { name: "Jaluit Atoll", slug: "Jaluit-Atoll-SE-Pass-Marshall-Islands" },
-        { name: "Sydney (Fort Denison)", slug: "Sydney-Australia", id: "ticon_-33.8550_151.2270" },
-        { name: "Tokyo", slug: "Tokyo-Japan", id: "ticon_35.6370_139.7540" },
-        { name: "San Francisco", slug: "San-Francisco-California", id: "ticon_37.8060_237.5340" },
-        { name: "Seattle", slug: "Seattle-Puget-Sound-Washington", id: "ticon_47.6020_237.6610" }
+        { name: "Sydney (Fort Denison)", slug: "Sydney-Australia", id: "ticon_-33.85500000_151.22700000" },
+        { name: "Tokyo", slug: "Tokyo-Japan", id: "ticon_35.64861667_139.77000000" },
+        { name: "San Francisco", slug: "San-Francisco-California", id: "ticon_37.80700000_-122.46500000" },
+        { name: "Seattle", slug: "Seattle-Washington", id: "ticon_47.60194400_-122.33916700" }
     ]
 
     def initialize(logger, engine, scraper)
