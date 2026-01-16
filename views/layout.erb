@@ -124,11 +124,11 @@
         <h1 class="text-4xl font-bold">WebCalTides</h1>
     </div>
 
-    <p class="text-lg text-gray-700 mb-8">
-        WebCalTides is a free service that provides tides, currents, solar and lunar calendars for your favorite tide stations. Data is pulled from NOAA (US/etc) and DFO-CHS (Canada). Just search for a station, then click the webcal link to subscribe. Works on Apple iCal, Google Calendar and Outlook, maybe others.
+    <p class="text-lg text-gray-700 mb-4">
+        WebCalTides is a free service that provides tides, currents, solar and lunar calendars for your favorite tide stations. Data is pulled from official sources like NOAA (US) and DFO-CHS (Canada), as well as global harmonic models (XTide & TICON). Just search for a station, then click the webcal link to subscribe. Works on Apple iCal, Google Calendar and Outlook, maybe others.
     </p>
 
-<%= yield %>
+    <%= yield %>
 
     <div class="mt-12">
         <p class="text-gray-600 mb-4">
@@ -138,22 +138,45 @@
         </p>
 
         <p class="text-gray-600 mb-6">
-            <span class="font-medium">Update 5/2025</span>: You can now de/select whether or not to include solar events in the tide calendar, via the download dropdown.<br>
-            <span class="font-medium">Update 5/2025</span>: WebCalTides can now incorporate lunar calendars too, selectable via the download dropdown.
+            <span class="font-medium">Update 1/2026</span>: Predictive harmonics have been implemented to expand the overall set of supported stations.
         </p>
 
-        <div class="text-right mb-6">
+    <div x-data="{ footerTab: '<%= request.path_info == "/" ? "warnings" : "" %>' }" x-init="if (footerTab === 'warnings') setTimeout(() => { if (footerTab === 'warnings') footerTab = null }, 5000)">
+        <div class="text-right mb-6 space-x-2">
             <button
-                onclick="document.getElementById('license-acknowledgements').classList.toggle('hidden')"
+                @click="footerTab = (footerTab === 'licenses' ? null : 'licenses')"
                 class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
-                Show License Acknowledgements
+                Licenses
+            </button>
+            <button
+                @click="footerTab = (footerTab === 'warnings' ? null : 'warnings')"
+                class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+            >
+                Warnings
             </button>
         </div>
 
-        <div id="license-acknowledgements" class="hidden bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-600 mb-8">
+        <div x-show="footerTab === 'licenses'" x-cloak class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-600 mb-8">
             This product has been produced by or for WebCalTides Service and includes data and services provided by the Canadian Hydrographic Service of the Department of Fisheries and Oceans. The incorporation of data sourced from the Canadian Hydrographic Service of the Department of Fisheries and Oceans within this product does NOT constitute an endorsement by the Canadian Hydrographic Service or the Department of Fisheries and Oceans of this product.
         </div>
+
+        <div x-show="footerTab === 'warnings'" x-cloak class="bg-amber-50 border-l-4 border-amber-400 p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-amber-700 font-bold uppercase">Entries Labeled XTide or TICON Not for Navigation</p>
+                    <p class="text-sm text-amber-700 mt-1">
+                        WebCalTides is distributed in the hope that this information will be useful, but <strong>WITHOUT ANY WARRANTY</strong>; without even the implied warranty of <strong>MERCHANTABILITY</strong> or <strong>FITNESS FOR A PARTICULAR PURPOSE</strong>. The author and the publisher each assume no liability for damages arising from use of these predictions. They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level.  <br> <br> Most recent harmonics data set is from <strong>December 2025</strong>.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 </body>
 </html>

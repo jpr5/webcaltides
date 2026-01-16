@@ -114,9 +114,45 @@
 <% tide_results.each_with_index do |r, index| %>
     <tr class="<%= index.odd? ? 'bg-gray-50' : 'bg-white' %> hover:bg-gray-100">
         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-            <a href="<%= r.url %>" class="hover:underline"><%= r.public_id %></a>
+            <% if r.provider.in?(['harmonics', 'ticon']) %>
+                <span class="text-gray-900"><%= r.public_id %></span>
+            <% else %>
+                <a href="<%= r.url %>" class="hover:underline"><%= r.public_id %></a>
+            <% end %>
         </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.name %></td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+            <%= r.name %>
+            <% if r.provider.in?(['harmonics', 'ticon']) %>
+                <div class="ml-2 inline-block relative" x-data="{ show: false }">
+                    <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 cursor-help"
+                        @mouseenter="show = true"
+                        @mouseleave="show = false"
+                    >
+                        <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
+                    </span>
+                    <div
+                        x-show="show"
+                        x-cloak
+                        class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded shadow-xl z-50 pointer-events-none whitespace-normal"
+                    >
+                        <p class="font-bold uppercase mb-1 text-amber-400 text-[10px]">Not for Navigation</p>
+                        <p class="leading-relaxed opacity-90">
+                            Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+                        </p>
+                        <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-8 border-transparent border-t-gray-900"></div>
+                    </div>
+                </div>
+            <% elsif r.provider == 'noaa' %>
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    NOAA
+                </span>
+            <% elsif r.provider == 'chs' %>
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    CHS
+                </span>
+            <% end %>
+        </td>
         <td class="px-6 py-4 whitespace-nowrap text-left text-sm text-gray-500"><%= r.region %></td>
 
     <%
@@ -323,6 +359,7 @@
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depth (<%= units == 'metric' ? 'm' : 'ft' %>)</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Download</th>
                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Refine</th>
                 </tr>
@@ -331,10 +368,47 @@
 <% current_results.each_with_index do |r, index| %>
 <tr class="<%= index.odd? ? 'bg-gray-50' : 'bg-white' %> hover:bg-gray-100">
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-        <a href="<%= r.url %>" class="hover:underline"><%= r.id %></a>
+        <% if r.provider.in?(['harmonics', 'ticon']) %>
+            <span class="text-gray-900"><%= r.bid || r.id %></span>
+        <% else %>
+            <a href="<%= r.url %>" class="hover:underline"><%= r.bid || r.id %></a>
+        <% end %>
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.depth.to_i %></td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.name %></td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+        <%= r.name %>
+        <% if r.provider.in?(['harmonics', 'ticon']) %>
+            <div class="ml-2 inline-block relative" x-data="{ show: false }">
+                <span
+                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 cursor-help"
+                    @mouseenter="show = true"
+                    @mouseleave="show = false"
+                >
+                    <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
+                </span>
+                <div
+                    x-show="show"
+                    x-cloak
+                    class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded shadow-xl z-50 pointer-events-none whitespace-normal"
+                >
+                    <p class="font-bold uppercase mb-1 text-amber-400 text-[10px]">Not for Navigation</p>
+                    <p class="leading-relaxed opacity-90">
+                        Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+                    </p>
+                    <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-8 border-transparent border-t-gray-900"></div>
+                </div>
+            </div>
+        <% elsif r.provider == 'noaa' %>
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                NOAA
+            </span>
+        <% elsif r.provider == 'chs' %>
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                CHS
+            </span>
+        <% end %>
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-left text-sm text-gray-500"><%= r.region %></td>
 
     <%
        uri.path = "/currents/#{r.bid}.ics"
