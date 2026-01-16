@@ -2,6 +2,7 @@ require 'json'
 require 'fileutils'
 require 'date'
 require 'active_support/all'
+require 'digest'
 
 module Harmonics
     class Engine
@@ -54,13 +55,64 @@ module Harmonics
                 xtide_stations = parse_harmonics_file
                 ticon_stations = parse_ticon_file
                 merged = xtide_stations + ticon_stations
-                save_stations_to_cache(merged)
-                merged
+
+                # Deduplicate merged stations by proximity, name, and constituents
+                deduplicated = deduplicate_stations(merged)
+
+                save_stations_to_cache(deduplicated)
+                deduplicated
             end
         end
 
-        def generate_predictions(station_id, start_time, end_time)
+        def find_station(id)
+            # Ensure stations are loaded so @stations_cache is populated
+            stations if @stations_cache.empty?
+
+            # First look in the primary list (metadata)
+            station = stations.find { |s| s['id'] == id || s['bid'] == id }
+            return station if station
+
+            # If not found, look in the cache for aliased IDs
+            if data = @stations_cache[id]
+                # Reconstruct metadata from cache data
+                return {
+                    'id' => id,
+                    'name' => data['name'],
+                    'region' => data['region'],
+                    'timezone' => data['timezone'],
+                    'units' => data['units'],
+                    'type' => data['type'],
+                    'provider' => 'harmonics' # Defaulting to harmonics if it was an alias
+                }
+            end
+            nil
+        end
+
+        def generate_predictions(station_id, start_time, end_time, options = {})
+            # Ensure stations are loaded so @stations_cache is populated
+            stations if @stations_cache.empty?
+
             station_data = @stations_cache[station_id] || {}
+
+            step_seconds = options.fetch(:step_seconds, 60).to_f
+
+            # If this is a subordinate station, we predict for the reference station
+            # and then apply offsets.
+            if station_data['ref_key']
+                ref_key = station_data['ref_key']
+                @logger.debug "Station #{station_id} is subordinate to #{ref_key}. Predicting via ref station."
+
+                # We need to predict a slightly larger window for the ref station to ensure
+                # we don't miss peaks that shift into our requested window after offsets.
+                # Max offset in XTide is usually around 12-24h but realistically 1-2h.
+                # We'll add 2 hours buffer on both sides.
+                ref_start = start_time - 2.hours
+                ref_end = end_time + 2.hours
+
+                ref_predictions = generate_predictions(ref_key, ref_start, ref_end, options)
+                return apply_subordinate_offsets(ref_predictions, station_data, start_time, end_time, step_seconds: step_seconds)
+            end
+
             constituents = station_data['constituents'] || []
 
             if constituents.empty?
@@ -70,7 +122,13 @@ module Harmonics
 
             datum_offset = station_data['datum_offset'] || 0.0
             meridian_offset = parse_meridian(station_data['meridian'])
+            if options.key?(:meridian_override)
+                meridian_offset = options[:meridian_override].to_f
+            elsif options[:meridian_from_timezone]
+                meridian_offset = start_time.utc_offset / 3600.0
+            end
             units = station_data['units'] || 'ft'
+            nodal_hour = options.fetch(:nodal_hour, 12)
 
             # Use UTC for all astronomical calculations
             start_utc = start_time.utc
@@ -89,7 +147,7 @@ module Harmonics
                 day_key = "#{current_utc.year}_#{current_utc.month}_#{current_utc.day}"
                 if day_key != current_day_key
                     current_day_key = day_key
-                    nodal = get_nodal_factors(current_utc.year, current_utc.month, current_utc.day, meridian_offset)
+                    nodal = get_nodal_factors(current_utc.year, current_utc.month, current_utc.day, meridian_offset, nodal_hour)
                     year_start_utc = Time.new(current_utc.year, 1, 1, 0, 0, 0, 0).utc
                 end
 
@@ -114,14 +172,25 @@ module Harmonics
                 end
 
                 predictions << { 'time' => current_utc, 'height' => height, 'units' => units }
-                current_utc += 1.minute
+                current_utc += step_seconds
             end
 
             predictions
         end
 
-        def detect_peaks(predictions)
+        def detect_peaks(predictions, step_seconds: 60)
             peaks = []
+            return peaks if predictions.empty?
+
+            # Special case for subordinate "predictions" which might already be peaks
+            # if they came from apply_subordinate_offsets.
+            # But generate_predictions is supposed to return a time series.
+            # However, XTide subordinate logic is PEAK-BASED.
+            # If predictions contains 'type', it's already a peak list.
+            if predictions.first&.has_key?('type')
+                return predictions
+            end
+
             (1...predictions.length-1).each do |i|
                 prev = predictions[i-1]
                 curr = predictions[i]
@@ -137,7 +206,7 @@ module Harmonics
                     denom = (y1 - 2*y2 + y3)
 
                     if denom != 0
-                        offset_seconds = ((y1 - y3) / (2.0 * denom)) * 60.0
+                        offset_seconds = ((y1 - y3) / (2.0 * denom)) * step_seconds
                         refined_time = curr['time'] + offset_seconds.seconds
                         refined_height = y2 - ((y1 - y3)**2 / (8.0 * denom))
                     else
@@ -158,34 +227,161 @@ module Harmonics
 
         private
 
+        def apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
+            # detect_peaks on ref_predictions to get high/low times/heights
+            ref_peaks = detect_peaks(ref_predictions, step_seconds: step_seconds)
+
+            sub_peaks = ref_peaks.map do |rp|
+                is_high = rp['type'] == 'High'
+
+                time_offset_str = is_high ? sub_data['h_time_offset'] : sub_data['l_time_offset']
+                height_mult = is_high ? sub_data['h_height_mult'] : sub_data['l_height_mult']
+
+                # Apply time offset
+                # Format is [+-]HH:MM:SS
+                offset_seconds = 0
+                if time_offset_str && time_offset_str != '\N'
+                    sign = time_offset_str.start_with?('-') ? -1 : 1
+                    parts = time_offset_str.delete('+-').split(':').map(&:to_i)
+                    offset_seconds = sign * (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0))
+                end
+
+                new_time = rp['time'] + offset_seconds.seconds
+                new_height = rp['height'] * height_mult
+
+                {
+                    'type' => rp['type'],
+                    'time' => new_time,
+                    'height' => new_height.round(3),
+                    'units' => rp['units']
+                }
+            end
+
+            # Filter to requested window
+            sub_peaks.select { |p| p['time'] >= start_time && p['time'] <= end_time }
+        end
+
+        def deduplicate_stations(stations)
+            # Group by normalized name (lowercase, alphanumeric only)
+            groups = stations.group_by { |s| s['name'].downcase.gsub(/[^a-z0-9]/, '') }
+
+            final_stations = []
+
+            groups.each do |name_key, group_stations|
+                # Further group by proximity (approx 5km tolerance)
+                while group_stations.any?
+                    primary = group_stations.shift
+
+                    # Find all others in the group that are within ~5km (0.05 degrees)
+                    near_matches = group_stations.select do |other|
+                        (primary['lat'] - other['lat']).abs < 0.05 &&
+                        (primary['lon'] - other['lon']).abs < 0.05
+                    end
+
+                    # Separate those with identical constituents from those with different ones
+                    identical_matches = near_matches.select do |other|
+                        key1 = primary['bid'] || primary['id']
+                        key2 = other['bid'] || other['id']
+                        constituents_equal?(key1, key2)
+                    end
+                    different_matches = near_matches - identical_matches
+
+                    # Log if we found different predictive models for the same spot
+                    different_matches.each do |other|
+                        id1 = primary['bid'] || primary['id']
+                        id2 = other['bid'] || other['id']
+                        @logger.debug "Station cluster match [#{name_key}] at #{primary['lat']},#{primary['lon']} has different constituents: #{id1} vs #{id2}"
+                    end
+
+                    # For identical ones, we merge them into one entry
+                    # Choose the best station from the identical cluster
+                    cluster = [primary] + identical_matches
+                    best = cluster.sort_by do |s|
+                        # Priority: ticon > harmonics
+                        provider_rank = s['provider'] == 'ticon' ? 0 : 1
+                        [provider_rank, s['name'].length, s['id']]
+                    end.first
+
+                    # Ensure all IDs from the cluster point to the same cache entry
+                    # This preserves backward compatibility for merged stations.
+                    best_key = best['bid'] || best['id']
+                    best_data = @stations_cache[best_key]
+
+                    cluster.each do |s|
+                        key = s['bid'] || s['id']
+                        next if key == best_key
+                        @stations_cache[key] = best_data
+                    end
+
+                    # Remove merged identical matches from the pool
+                    group_stations -= identical_matches
+
+                    final_stations << best
+                end
+            end
+
+            @logger.info "Deduplicated stations: #{stations.length} -> #{final_stations.length}"
+            final_stations
+        end
+
+        def constituents_equal?(id1, id2)
+            s1_data = @stations_cache[id1]
+            s2_data = @stations_cache[id2]
+            return false unless s1_data && s2_data
+
+            c1 = s1_data['constituents'] || []
+            c2 = s2_data['constituents'] || []
+
+            return false if c1.length != c2.length
+            return true if c1.empty? && c2.empty?
+
+            # Sort for comparison
+            s1_sorted = c1.sort_by { |c| c['name'] }
+            s2_sorted = c2.sort_by { |c| c['name'] }
+
+            # Factors for unit normalization (meters vs feet)
+            # TICON is always meters. XTide is usually feet.
+            f1 = (s1_data['units'] =~ /^m/i) ? 1.0 : 0.3048
+            f2 = (s2_data['units'] =~ /^m/i) ? 1.0 : 0.3048
+
+            s1_sorted.each_with_index do |con1, i|
+                con2 = s2_sorted[i]
+                return false if con1['name'] != con2['name']
+
+                # Compare amplitudes in meters
+                amp1 = con1['amp'] * f1
+                amp2 = con2['amp'] * f2
+                return false if (amp1 - amp2).abs > 0.005 # Tolerance for conversion rounding
+
+                # Phases are in degrees
+                return false if (con1['phase'] - con2['phase']).abs > 0.1 # Tolerance for slight variations
+            end
+
+            true
+        end
+
         def load_stations_from_cache
             cache_file = "#{@cache_dir}/harmonics_stations.json"
 
             # Check if cache is newer than BOTH source files
-            sources = [@harmonics_file]
-            sources << @ticon_file if File.exist?(@ticon_file)
+            sources = [@harmonics_file, @ticon_file]
 
-            latest_source_time = sources.map { |f| File.mtime(f) }.max
+            # Get modification times, treating missing files as having very old times
+            latest_source_time = sources.map do |f|
+                File.exist?(f) ? File.mtime(f) : Time.new(1970, 1, 1)
+            end.max
 
             if File.exist?(cache_file) && File.mtime(cache_file) > latest_source_time
                 @logger.debug "Loading merged stations from cache: #{cache_file}"
                 data = JSON.parse(File.read(cache_file))
 
                 stations = []
-                @stations_cache = {}
+                @stations_cache = data['stations_cache'] || {}
                 @speeds = data['speeds'] || {}
+                @constituent_definitions = data['constituent_definitions'] || {}
 
                 data['stations'].each do |h|
-                    metadata = h['metadata']
-                    station_id = metadata['id']
-                    stations << metadata
-                    @stations_cache[station_id] = {
-                        'constituents' => h['constituents'],
-                        'datum_offset' => h['datum_offset'] || 0.0,
-                        'timezone' => h['timezone'] || metadata['timezone'],
-                        'meridian' => h['meridian'] || metadata['meridian'],
-                        'units' => h['units'] || metadata['units']
-                    }
+                    stations << h['metadata']
                 end
                 return stations
             end
@@ -199,15 +395,26 @@ module Harmonics
 
             cache_data = {
                 'speeds' => @speeds,
+                'constituent_definitions' => @constituent_definitions,
+                'stations_cache' => @stations_cache,
                 'stations' => stations.map do |s|
-                    cache_entry = @stations_cache[s['id']]
+                    cache_key = s['bid'] || s['id']
+                    cache_entry = @stations_cache[cache_key]
                     {
                         'metadata' => s,
+                        'name' => cache_entry['name'],
                         'constituents' => cache_entry['constituents'],
                         'datum_offset' => cache_entry['datum_offset'],
                         'timezone' => cache_entry['timezone'],
                         'meridian' => cache_entry['meridian'],
-                        'units' => cache_entry['units']
+                        'units' => cache_entry['units'],
+                        'region' => cache_entry['region'],
+                        'type' => cache_entry['type'],
+                        'ref_key' => cache_entry['ref_key'],
+                        'h_time_offset' => cache_entry['h_time_offset'],
+                        'h_height_mult' => cache_entry['h_height_mult'],
+                        'l_time_offset' => cache_entry['l_time_offset'],
+                        'l_height_mult' => cache_entry['l_height_mult']
                     }
                 end
             }
@@ -216,7 +423,7 @@ module Harmonics
 
         def parse_harmonics_file
             @logger.info "Parsing SQL harmonics file: #{@harmonics_file}"
-            stations_by_index = {}
+            stations_data = []
             constants_by_index = Hash.new { |h, k| h[k] = [] }
             current_table = nil
 
@@ -224,13 +431,13 @@ module Harmonics
             File.foreach(@harmonics_file, encoding: 'ISO-8859-1:UTF-8') do |line|
                 line.strip!
 
-                if line.start_with?('COPY public.constituents')
+                if line.start_with?('COPY public.constituents ')
                     current_table = :constituents
                     next
-                elsif line.start_with?('COPY public.data_sets')
+                elsif line.start_with?('COPY public.data_sets ')
                     current_table = :data_sets
                     next
-                elsif line.start_with?('COPY public.constants')
+                elsif line.start_with?('COPY public.constants ')
                     current_table = :constants
                     next
                 elsif line == '\.'
@@ -282,55 +489,120 @@ module Harmonics
                         }
                     end
                 when :data_sets
-                    # (index, name, station_id_context, station_id, lat, lng, timezone, country, units, ..., meridian, ...)
-                    idx = parts[0]
-                    stations_by_index[idx] = {
+                    # (index, name, station_id_context, station_id, lat, lng, timezone, country, units, ..., meridian, ..., state)
+                    idx = parts[0].to_i
+                    stations_data << {
+                        'idx' => idx,
                         'name' => parts[1],
+                        'station_id' => parts[3],
                         'lat' => parts[4].to_f,
                         'lng' => parts[5].to_f,
-                        'timezone' => parts[6].sub(/^:/, ''), # Remove leading colon
+                        'timezone' => parts[6].sub(/^:/, ''),
+                        'region' => parts[7],
                         'units' => parts[8],
-                        'meridian' => (parts[18] == '\N' || parts[18].blank?) ? '00:00:00' : parts[18],
-                        'datum_offset' => parts[20].to_f # datum column
+                        'meridian' => parts[18],
+                        'datum_offset' => parts[20].to_f,
+                        'ref_index' => parts[23] == '\N' ? nil : parts[23].to_i,
+                        'h_time_offset' => parts[24] == '\N' ? nil : parts[24],
+                        'h_height_mult' => parts[26] == '\N' ? 1.0 : parts[26].to_f,
+                        'l_time_offset' => parts[27] == '\N' ? nil : parts[27],
+                        'l_height_mult' => parts[29] == '\N' ? 1.0 : parts[29].to_f,
+                        'type' => parts[8].downcase == 'knots' ? 'current' : 'tide'
                     }
                 when :constants
                     # (index, name, phase, amp)
-                    idx = parts[0]
-                    constants_by_index[idx] << {
-                        'name' => parts[1],
-                        'phase' => parts[2].to_f,
-                        'amp' => parts[3].to_f
-                    }
+                    data_set_id = parts[0].to_i
+                    name = parts[1]
+                    phase = parts[2].to_f
+                    amp = parts[3].to_f
+                    constants_by_index[data_set_id] << { 'name' => name, 'amp' => amp, 'phase' => phase }
                 end
             end
 
             stations = []
-            stations_by_index.each do |idx, data|
-                station_id = "harm_#{idx}"
+            stations_data.each do |data|
+                idx = data['idx']
+
+                # Generate stable ID based on coordinates to match legacy X-IDs
+                coord_string = sprintf("%.8f_%.8f", data['lat'], data['lng'])
+                base_hash = Digest::SHA256.hexdigest(coord_string)[0...7]
+                base_id = "X#{base_hash}"
+
+                # Handle depth and BID for currents
+                depth = data['datum_offset']
+                station_bid = nil
+                cache_key = base_id
+
+                if data['type'] == 'current'
+                    depth_suffix = nil
+                    if data['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
+                        depth_suffix = $1
+                        depth = $1.to_f
+                    end
+                    station_bid = depth_suffix ? "#{base_id}_#{depth_suffix}" : base_id
+                    cache_key = station_bid
+                else
+                    station_bid = nil
+                    cache_key = base_id
+                end
+
+                # If this is a subordinate station, store its offsets and the reference station's cache key
+                ref_key = nil
+                if data['ref_index']
+                    ref_station = stations_data.find { |s| s['idx'] == data['ref_index'] }
+                    if ref_station
+                        ref_coord_string = sprintf("%.8f_%.8f", ref_station['lat'], ref_station['lng'])
+                        ref_base_hash = Digest::SHA256.hexdigest(ref_coord_string)[0...7]
+                        ref_key = "X#{ref_base_hash}"
+                    end
+                end
+
+                # If this is a subordinate station, copy constituents from the reference station if it has them
+                # OR we might need to handle it purely via ref-station prediction later.
+                # For now, let's keep the constituent copying but also store the ref_key and offsets.
+                constituents = if data['ref_index']
+                                   constants_by_index[data['ref_index']] || []
+                               else
+                                   constants_by_index[idx] || []
+                               end
+
+                if constituents.empty?
+                    @logger.warn "Station #{data['name']} (#{idx}) has no constituents (ref_index: #{data['ref_index']})"
+                end
+
                 station = {
                     'name' => data['name'],
                     'alternate_names' => [],
-                    'id' => station_id,
-                    'public_id' => station_id,
-                    'region' => nil,
+                    'id' => base_id,
+                    'public_id' => base_id,
+                    'region' => data['region'],
                     'location' => data['name'],
                     'lat' => data['lat'],
                     'lon' => data['lng'],
                     'timezone' => data['timezone'],
                     'url' => "#harmonics",
                     'provider' => 'harmonics',
-                    'bid' => nil,
+                    'bid' => station_bid,
                     'units' => data['units'],
-                    'depth' => data['datum_offset'],
+                    'depth' => depth,
                     'meridian' => data['meridian'],
+                    'type' => data['type']
                 }
                 stations << station
-                @stations_cache[station_id] = {
-                    'constituents' => constants_by_index[idx],
+                @stations_cache[cache_key] = {
+                    'name' => data['name'],
+                    'constituents' => constituents,
                     'datum_offset' => data['datum_offset'],
                     'timezone' => data['timezone'],
                     'meridian' => data['meridian'],
-                    'units' => data['units']
+                    'units' => data['units'],
+                    'region' => data['region'],
+                    'type' => data['type'],
+                    'ref_key' => ref_key,
+                    'h_time_offset' => data['h_time_offset'],
+                    'h_height_mult' => data['h_height_mult'],
+                    'l_time_offset' => data['l_time_offset'],
+                    'l_height_mult' => data['l_height_mult']
                 }
             end
 
@@ -346,33 +618,59 @@ module Harmonics
 
                 stations = []
                 data['stations'].each do |d|
-                    id = d['id']
+                    # TICON base ID is coordinate-based
+                    coord_string = sprintf("%.8f_%.8f", d['lat'], d['lon'])
+                    base_hash = Digest::SHA256.hexdigest(coord_string)[0...7]
+                    base_id = "T#{base_hash}"
+
+                    type = d['units'].downcase == 'knots' ? 'current' : 'tide'
+
+                    # Extract depth from name if available
+                    depth = d['datum_offset']
+                    depth_suffix = nil
+                    if d['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
+                        depth = $1.to_f
+                        depth_suffix = $1
+                    end
+
+                    # For currents, the unique key is the BID (base_id + depth suffix)
+                    if type == 'current'
+                        station_bid = depth_suffix ? "#{base_id}_#{depth_suffix}" : base_id
+                        cache_key = station_bid
+                    else
+                        station_bid = nil
+                        cache_key = base_id
+                    end
 
                     station = {
                         'name' => d['name'],
                         'alternate_names' => [],
-                        'id' => id,
-                        'public_id' => id,
-                        'region' => nil,
+                        'id' => base_id,
+                        'public_id' => base_id,
+                        'region' => d['region'],
                         'location' => d['name'],
                         'lat' => d['lat'],
                         'lon' => d['lon'],
                         'timezone' => d['timezone'],
                         'url' => "#ticon",
                         'provider' => 'ticon',
-                        'bid' => nil,
+                        'bid' => station_bid,
                         'units' => d['units'],
-                        'depth' => d['datum_offset'],
-                        'meridian' => '00:00:00' # TICON data is UTC-based
+                        'depth' => depth,
+                        'meridian' => '00:00:00', # TICON data is UTC-based
+                        'type' => type
                     }
 
                     stations << station
-                    @stations_cache[id] = {
+                    @stations_cache[cache_key] = {
+                        'name' => d['name'],
                         'constituents' => d['constituents'],
                         'datum_offset' => d['datum_offset'],
                         'timezone' => d['timezone'],
                         'meridian' => '00:00:00',
-                        'units' => d['units']
+                        'units' => d['units'],
+                        'region' => d['region'],
+                        'type' => type
                     }
                 end
 
@@ -384,43 +682,43 @@ module Harmonics
             end
         end
 
-        def get_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0)
-            key = "#{year}_#{month}_#{day}_#{meridian_offset}"
-            @nodal_factors_cache[key] ||= load_nodal_cache(year, month, day, meridian_offset) || begin
-                factors = calculate_nodal_factors(year, month, day, meridian_offset)
-                save_nodal_cache(year, month, day, meridian_offset, factors)
+        def get_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
+            key = "#{year}_#{month}_#{day}_#{meridian_offset}_#{nodal_hour}"
+            @nodal_factors_cache[key] ||= load_nodal_cache(year, month, day, meridian_offset, nodal_hour) || begin
+                factors = calculate_nodal_factors(year, month, day, meridian_offset, nodal_hour)
+                save_nodal_cache(year, month, day, meridian_offset, nodal_hour, factors)
                 factors
             end
         end
 
-        def nodal_cache_file(year, month, day, meridian_offset)
+        def nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
             # Use safe filename for meridian (e.g. -5.0 -> _m5.0)
             m_str = meridian_offset.to_s.gsub('-', 'm')
-            "#{@cache_dir}/nodal_factors_#{year}_#{month}_#{day}_#{m_str}.json"
+            "#{@cache_dir}/nodal_factors_#{year}_#{month}_#{day}_#{m_str}_h#{nodal_hour}.json"
         end
 
-        def load_nodal_cache(year, month, day, meridian_offset)
-            file = nodal_cache_file(year, month, day, meridian_offset)
+        def load_nodal_cache(year, month, day, meridian_offset, nodal_hour)
+            file = nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
             if File.exist?(file)
-                @logger.debug "Loading nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}) from cache"
+                @logger.debug "Loading nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}, h:#{nodal_hour}) from cache"
                 return JSON.parse(File.read(file))
             end
             nil
         end
 
-        def save_nodal_cache(year, month, day, meridian_offset, factors)
+        def save_nodal_cache(year, month, day, meridian_offset, nodal_hour, factors)
             FileUtils.mkdir_p(@cache_dir)
-            file = nodal_cache_file(year, month, day, meridian_offset)
-            @logger.debug "Caching nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}) to #{file}"
+            file = nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
+            @logger.debug "Caching nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}, h:#{nodal_hour}) to #{file}"
             File.write(file, factors.to_json)
         end
 
-        def calculate_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0)
-            @logger.info "Calculating astronomical nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset})..."
+        def calculate_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
+            @logger.info "Calculating astronomical nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}, h:#{nodal_hour})..."
 
             # Use noon of the specific day as the representative epoch
             # Nodal factors are traditionally calculated for Local Standard Time midnight or noon.
-            t_mid = Time.find_zone('UTC').local(year, month, day, 12, 0, 0) + meridian_offset.hours
+            t_mid = Time.find_zone('UTC').local(year, month, day, nodal_hour, 0, 0) + meridian_offset.hours
             t_start = Time.find_zone('UTC').local(year, 1, 1, 0, 0, 0) + meridian_offset.hours
 
             # Fundamental arguments at start of year (for V0) and mid-day (for u and f)
@@ -443,8 +741,6 @@ module Harmonics
             end
             factors
         end
-
-        private
 
         def parse_meridian(m)
             return 0.0 if m.blank? || m == '\N'
