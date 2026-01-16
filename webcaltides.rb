@@ -32,19 +32,28 @@ module WebCalTides
     ##
 
     def tide_clients(provider = nil)
-        @tide_clients ||= {
-            noaa:      Clients::NoaaTides.new(logger),
-            chs:       Clients::ChsTides.new(logger),
-            harmonics: Clients::Harmonics.new(logger)
-        }
+        @tide_clients ||= begin
+            harmonics = Clients::Harmonics.new(logger)
+            {
+                noaa:      Clients::NoaaTides.new(logger),
+                chs:       Clients::ChsTides.new(logger),
+                harmonics: harmonics,
+                ticon:     harmonics
+            }
+        end
 
         provider ? @tide_clients[provider.to_sym] : @tide_clients
     end
 
     def current_clients(provider = nil)
-        @current_clients ||= {
-            noaa: Clients::NoaaCurrents.new(logger)
-        }
+        @current_clients ||= begin
+            harmonics = tide_clients(:harmonics)
+            {
+                noaa:      Clients::NoaaCurrents.new(logger),
+                harmonics: harmonics,
+                ticon:     harmonics
+            }
+        end
 
         provider ? @current_clients[provider.to_sym] : @current_clients
     end
@@ -103,17 +112,27 @@ module WebCalTides
     def timezone_for(lat, long)
         filename = "#{settings.cache_dir}/tzs.json"
 
-        @tzcache ||= begin
-            if File.exist? filename
+        unless @tzcache
+            logger.debug "initializing #{filename}"
+            if File.exist?(filename)
                 logger.debug "reading #{filename}"
                 json = File.read(filename)
-                logger.debug "parsing tzcache"
-                data = JSON.parse(json) rescue {}
+                logger.debug "parsing #{filename}"
+                @tzcache = JSON.parse(json) rescue {}
             else
-                logger.debug "initializing #{filename}"
-                FileUtils.touch filename
-                data = {}
+                @tzcache = {}
             end
+        end
+
+        lat = lat.to_f
+        long = long.to_f
+
+        # The timezone gem requires longitude in -180..180, but TICON uses 0..360.
+        if long > 180.0 || long < -180.0
+            old_long = long
+            while long > 180.0; long -= 360.0; end
+            while long < -180.0; long += 360.0; end
+            logger.debug "normalized longitude #{old_long} => #{long} for timezone lookup"
         end
 
         key = "#{lat} #{long}"
@@ -121,30 +140,52 @@ module WebCalTides
         return @tzcache[key] ||= begin
             logger.debug "looking up tz for GPS #{key}"
 
+            tz = nil
             i = 0
             begin
                 i += 1
                 tz = Timezone.lookup(lat, long)
             rescue Timezone::Error::InvalidZone
-                # ...
-            rescue Timezone::Error::GeoNames
-                sleep(i)
-                retry unless i >= 3
+                # Use default UTC
+            rescue Timezone::Error::GeoNames => e
+                logger.error "GeoNames lookup failed for #{key}: #{e.message}"
+                if i < 3
+                    sleep(i)
+                    retry
+                end
+            rescue => e
+                logger.error "Timezone lookup failed for #{key}: #{e.message}"
             end
 
-            logger.debug "GPS #{key} => #{tz.name}"
+            if tz.nil?
+                logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC"
+                res = 'UTC'
+            else
+                res = tz.name
+            end
 
-            @tzcache[key] = tz.name
+            logger.debug "GPS #{key} => #{res}"
+
+            @tzcache[key] = res
 
             logger.debug "updating tzcache at #{filename}"
             File.write(filename, @tzcache.to_json)
 
-            tz.name
+            res
         end
     end
 
     def station_ids
-        tide_stations.map(&:id) + current_stations.map(&:bid)
+        ids = tide_stations.map(&:id) + current_stations.map(&:bid)
+
+        # Add all keys from the harmonics engine cache to support aliased/merged IDs
+        harmonics = tide_clients(:harmonics)
+        if harmonics.respond_to?(:engine)
+            harmonics.engine.stations # Ensure stations are loaded
+            ids += harmonics.engine.stations_cache.keys
+        end
+
+        ids.uniq.compact
     end
 
     ##
@@ -160,7 +201,7 @@ module WebCalTides
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
         # stations: is used in the re-cache scenario
-        tide_clients.each_value { |c| stations.concat(c.tide_stations) } if stations.empty?
+        tide_clients.values.uniq.each { |c| stations.concat(c.tide_stations) } if stations.empty?
 
         logger.debug "storing tide station list at #{at}"
         File.write(at, stations.map(&:to_h).to_json )
@@ -194,7 +235,26 @@ module WebCalTides
 
     def tide_station_for(id)
         return nil if id.blank?
-        return tide_stations.find { |s| s.id == id }
+        station = tide_stations.find { |s| s.id == id }
+        return station if station
+
+        # Fallback to looking in the harmonics engine cache for aliased/merged IDs
+        harmonics = tide_clients(:harmonics)
+        if harmonics.respond_to?(:engine)
+            harmonics.engine.stations # Ensure stations are loaded
+            if data = harmonics.engine.stations_cache[id]
+                return Models::Station.from_hash({
+                    'name' => data['name'],
+                    'id' => id,
+                    'public_id' => id,
+                    'region' => data['region'],
+                    'location' => data['name'],
+                    'provider' => 'harmonics', # or ticon? engine knows.
+                    'type' => data['type']
+                })
+            end
+        end
+        nil
     end
 
     # nil == any, units == [ mi, km ]
@@ -260,22 +320,24 @@ module WebCalTides
         station = tide_station_for(id) or return nil
         data    = tide_data_for(station, around: around)
 
-        return nil unless data
-
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
 
-        logger.debug "generating tide calendar for #{station.name}"
+        if station.provider.in?(['harmonics', 'ticon'])
+            cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
+        end
 
-        data.each do |tide|
-            title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+        if data
+            data.each do |tide|
+                title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
 
-            cal.event do |e|
-                e.summary  = title
-                e.dtstart  = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
-                e.dtend    = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
-                e.url      = tide.url
-                e.location = station.location
+                cal.event do |e|
+                    e.summary  = title
+                    e.dtstart  = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                    e.dtend    = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                    e.url      = tide.url
+                    e.location = station.location
+                end
             end
         end
 
@@ -298,7 +360,7 @@ module WebCalTides
     end
 
     def cache_current_stations(at:current_station_cache_file, stations: [])
-        current_clients.each_value { |c| stations.concat(c.current_stations) } if stations.empty?
+        current_clients.values.uniq.each { |c| stations.concat(c.current_stations) } if stations.empty?
 
         logger.debug "storing current station list at #{at}"
         File.write(at, stations.map(&:to_h).to_json)
@@ -328,7 +390,27 @@ module WebCalTides
 
     def current_station_for(id)
         return nil if id.blank?
-        return current_stations.select { |s| s.id == id || s.bid == id }.first
+        station = current_stations.select { |s| s.id == id || s.bid == id }.first
+        return station if station
+
+        # Fallback to harmonics engine
+        harmonics = current_clients(:harmonics)
+        if harmonics.respond_to?(:engine)
+            harmonics.engine.stations # Ensure loaded
+            if data = harmonics.engine.stations_cache[id]
+                return Models::Station.from_hash({
+                    'name' => data['name'],
+                    'id' => id,
+                    'bid' => id,
+                    'public_id' => id,
+                    'region' => data['region'],
+                    'location' => data['name'],
+                    'provider' => 'harmonics',
+                    'type' => data['type']
+                })
+            end
+        end
+        nil
     end
 
     # nil == any, units == [ mi, km ]
@@ -398,6 +480,10 @@ module WebCalTides
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
+
+        if station.provider.in?(['harmonics', 'ticon'])
+            cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
+        end
 
         location = "#{station.name} (#{station.bid})"
 
