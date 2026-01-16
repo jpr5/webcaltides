@@ -7,6 +7,7 @@ require 'ostruct'
 require 'timezone'
 require 'logger'
 require 'fileutils'
+require 'digest'
 require 'openssl'
 
 # Workaround for macOS OpenSSL CRL errors
@@ -18,7 +19,9 @@ GESLA_PATH = File.expand_path('../data/GESLA4_ALL.csv', __dir__)
 OUTPUT_PATH = File.expand_path('../data/ticon.json', __dir__)
 TZ_CACHE_PATH = File.expand_path('../cache/build_tzs.json', __dir__)
 
-$logger = Logger.new(STDOUT)
+$logger = Logger.new(STDOUT).tap do |log|
+    log.formatter = proc { |s, d, _, m| "#{d.strftime("%Y-%m-%d %H:%M:%S")} #{s} #{m}\n" }
+end
 $logger.level = Logger::INFO
 
 # Configure Timezone lookup (Google strictly required for dataset building)
@@ -161,13 +164,15 @@ def parse_ticon_data(gesla_map)
         final_lat = gesla_match ? gesla_match[:lat] : raw_lat
         final_lon = gesla_match ? gesla_match[:lon] : norm_lon
 
-        # Generate stable ID from normalized coordinates
-        id = sprintf("ticon_%.8f_%.8f", final_lat, final_lon)
+        # Generate stable ID from normalized coordinates (SHA256 hash truncated to 7 chars)
+        coord_string = sprintf("%.8f_%.8f", final_lat, final_lon)
+        hash = Digest::SHA256.hexdigest(coord_string)[0...7]
+        id = "T#{hash}"
 
         unless stations[id]
             # Lookup Name
             if gesla_match
-                name = gesla_match[:name].strip.gsub(/\s+/, '_')
+                name = gesla_match[:name].strip.gsub(/_/, ' ')
                 country = gesla_match[:country]
                 name = country ? "#{name}, #{country}" : name
             else
@@ -179,10 +184,15 @@ def parse_ticon_data(gesla_map)
             if tz.nil? || tz == 'UTC'
                 spinner.tick("[API: #{id}]")
                 tz = begin
-                    res = Timezone.lookup(final_lat, final_lon).name
+                    lookup = Timezone.lookup(final_lat, final_lon)
                     new_lookups += 1
-                    res
+                    lookup.name
+                rescue Timezone::Error::InvalidZone
+                    # This often happens for offshore locations where Google doesn't find a zone
+                    # In this case, we default to UTC as it's the safest for ocean data
+                    'UTC'
                 rescue Timezone::Error::Base, StandardError => e
+                    $logger.error "Timezone lookup failed for #{id} (#{final_lat}, #{final_lon}): #{e.message}"
                     'UTC'
                 end
                 tz_cache[id] = tz
@@ -204,6 +214,7 @@ def parse_ticon_data(gesla_map)
                 'lat' => final_lat,
                 'lon' => final_lon,
                 'timezone' => tz,
+                'region' => gesla_match ? gesla_match[:country] : nil,
                 'units' => 'm',
                 'constituents' => [],
                 'datum_offset' => 0.0
@@ -215,11 +226,14 @@ def parse_ticon_data(gesla_map)
         phase_g = row[4].to_f
 
         if SAFE_CONSTITUENTS.include?(const_name)
-            stations[id]['constituents'] << {
-                'name' => const_name,
-                'phase' => phase_g,
-                'amp' => amp_cm / 100.0 # Convert cm to meters
-            }
+            # Prevent duplicate constituents for the same station
+            unless stations[id]['constituents'].any? { |c| c['name'] == const_name }
+                stations[id]['constituents'] << {
+                    'name' => const_name,
+                    'phase' => phase_g,
+                    'amp' => amp_cm / 100.0 # Convert cm to meters
+                }
+            end
         end
     end
 
