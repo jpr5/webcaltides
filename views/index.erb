@@ -222,6 +222,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (heroSection) {
             observer.observe(heroSection);
         }
+
+        // Scroll to results section on page load when results are present
+        var results = document.getElementById('results');
+        if (results) {
+            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 });
 </script>
@@ -264,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- Results Section -->
-<main class="bg-navy-950 py-12 md:py-16">
+<main id="results" class="bg-navy-950 py-12 md:py-16">
     <div class="max-w-6xl mx-auto px-4">
 
         <!-- Search summary -->
