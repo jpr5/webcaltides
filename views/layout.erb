@@ -317,15 +317,21 @@
             transform: translateX(100%);
         }
 
-        /* Sticky search on scroll */
+        /* Sticky search on scroll - hidden until scrolled past hero */
         .search-sticky {
             position: sticky;
             top: 0;
             z-index: 100;
             transition: all 0.3s;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-100%);
         }
 
         .search-sticky.scrolled {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
             background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(12px);
             padding: 1rem 0;
