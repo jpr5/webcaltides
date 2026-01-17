@@ -6,6 +6,8 @@ require 'digest'
 
 module Harmonics
     class Engine
+        class MissingSourceFilesError < StandardError; end
+
         XTIDE_FILE = File.expand_path('../data/latest-xtide.sql', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
 
@@ -51,6 +53,7 @@ module Harmonics
         end
 
         def stations
+            ensure_source_files!
             @parsed_stations ||= load_stations_from_cache || begin
                 xtide_stations = parse_xtide_file
                 ticon_stations = parse_ticon_file
@@ -61,6 +64,18 @@ module Harmonics
 
                 save_stations_to_cache(deduplicated)
                 deduplicated
+            end
+        end
+
+        def ensure_source_files!
+            return @files_checked ||= begin
+                missing = []
+                missing << "XTide (#{@xtide_file})" unless File.exist?(@xtide_file)
+                missing << "TICON (#{@ticon_file})" unless File.exist?(@ticon_file)
+                return if missing.empty?
+
+                raise MissingSourceFilesError, "Harmonics::Engine requires XTide and TICON data files. Missing: #{missing.join(', ')}. Set XTIDE_FILE/TICON_FILE or restore the data files."
+                true
             end
         end
 

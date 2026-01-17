@@ -340,9 +340,14 @@ else
     exit 1
 end
 
-puts "Loading stations from #{engine.xtide_file}..."
-stations = engine.stations
-puts "Loaded #{stations.length} stations."
+begin
+    puts "Loading stations from #{engine.xtide_file}..."
+    stations = engine.stations
+    puts "Loaded #{stations.length} stations."
+rescue Harmonics::Engine::MissingSourceFilesError => e
+    warn e.message
+    exit 1
+end
 
 # Filter constituents if requested
 if options[:filter]
