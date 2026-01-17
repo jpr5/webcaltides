@@ -6,10 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/png" href="/favicon.png">
 
-    <!-- Fonts: Cormorant Garamond for nautical elegance, DM Sans for clean body -->
+    <!-- Fonts: Figtree for friendly, modern typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -42,8 +42,7 @@
                         }
                     },
                     fontFamily: {
-                        display: ['Cormorant Garamond', 'Georgia', 'serif'],
-                        body: ['DM Sans', 'system-ui', 'sans-serif'],
+                        sans: ['Figtree', 'system-ui', 'sans-serif'],
                     }
                 }
             }
@@ -55,11 +54,7 @@
         [x-cloak] { display: none !important; }
 
         body {
-            font-family: 'DM Sans', system-ui, sans-serif;
-        }
-
-        .font-display {
-            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-family: 'Figtree', system-ui, sans-serif;
         }
 
         /* Animated wave pattern for hero */
@@ -256,9 +251,9 @@
         <div class="relative z-10 max-w-5xl mx-auto px-4 pt-12 pb-16 md:pt-20 md:pb-24">
             <!-- Logo and branding -->
             <div class="flex items-center justify-center gap-4 mb-8 md:mb-12">
-                <img src="/favicon.png" alt="" class="w-16 h-16 md:w-20 md:h-20 drop-shadow-lg">
+                <img src="/favicon.png" alt="" class="w-16 h-16 md:w-20 md:h-20 drop-shadow-lg invert brightness-200">
                 <div>
-                    <h1 class="font-display text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-white">
+                    <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white">
                         WebCalTides
                     </h1>
                     <p class="text-ocean-400 font-medium text-sm md:text-base tracking-wide mt-1">
