@@ -45,7 +45,7 @@
           selectResult(result) {
               this.query = result.name;
               this.showResults = false;
-              this.$refs.searchInput.focus();
+              this.$nextTick(() => this.$el.submit());
           },
 
           handleKeydown(e) {
