@@ -406,11 +406,11 @@
                         </div>
                     </div>
 
-                    <div x-data="{ open: false }" class="relative">
-                        <button @click="open = !open" class="text-slate-400 hover:text-ocean-400 transition-colors">
+                    <div x-data="{ open: false }" class="relative" @mouseenter="open = true" @mouseleave="open = false">
+                        <button class="text-slate-400 hover:text-ocean-400 transition-colors">
                             What's New
                         </button>
-                        <div x-show="open" x-cloak @click.away="open = false"
+                        <div x-show="open" x-cloak
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 scale-95"
                              x-transition:enter-end="opacity-100 scale-100"
