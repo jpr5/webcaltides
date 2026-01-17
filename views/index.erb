@@ -132,65 +132,116 @@ document.addEventListener('DOMContentLoaded', function() {
                     uri.scheme = scheme
                     https_url = uri.to_s
                     card_id = "tide_#{r.id}"
+                    # Google Maps Static API URL
+                    map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x0ea5e9&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x0ea5e9|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
                 %>
                 <div class="station-card bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
-                     x-data="{ solar: true, lunar: false }"
+                     x-data="{ solar: true, lunar: false, mapLoaded: false }"
                      style="animation-delay: <%= index * 50 %>ms">
 
-                    <!-- Card Header -->
+                    <!-- Card Header with Mini Map -->
                     <div class="p-4 md:p-5">
-                        <div class="flex items-start justify-between gap-3 mb-3">
-                            <div class="flex-1 min-w-0">
-                                <h3 class="text-lg md:text-xl font-semibold text-white truncate" title="<%= r.name %>">
-                                    <%= r.name %>
-                                </h3>
-                                <p class="text-slate-500 text-sm truncate"><%= r.region %></p>
-                            </div>
-
-                            <!-- Provider badge -->
-                            <% if r.provider.in?(['xtide', 'ticon']) %>
-                            <div x-data="{ showTip: false }" class="relative flex-shrink-0">
-                                <span
-                                    @mouseenter="showTip = true"
-                                    @mouseleave="showTip = false"
-                                    @click="showTip = !showTip"
-                                    class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
-                                >
-                                    <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
-                                </span>
-                                <div
-                                    x-show="showTip"
-                                    x-cloak
-                                    x-transition
-                                    class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
-                                >
-                                    <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
-                                    <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                        <div class="flex gap-4">
+                            <!-- Mini Map Thumbnail -->
+                            <div class="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-navy-700/50 relative"
+                                 x-intersect.once="mapLoaded = true">
+                                <template x-if="mapLoaded">
+                                    <img
+                                        src="<%= map_url %>"
+                                        alt="Map of <%= r.name %>"
+                                        class="w-full h-full object-cover"
+                                        loading="lazy"
+                                    />
+                                </template>
+                                <template x-if="!mapLoaded">
+                                    <div class="w-full h-full flex items-center justify-center">
+                                        <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                                        </svg>
+                                    </div>
+                                </template>
+                                <!-- Map pin overlay -->
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-3 h-3 bg-ocean-500 rounded-full border-2 border-white shadow-lg"></div>
                                 </div>
                             </div>
-                            <% elsif r.provider == 'noaa' %>
-                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                NOAA
-                            </span>
-                            <% elsif r.provider == 'chs' %>
-                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                CHS
-                            </span>
-                            <% end %>
-                        </div>
 
-                        <!-- Station ID (clickable for official sources) -->
-                        <% if r.provider.in?(['xtide', 'ticon']) %>
-                        <p class="text-slate-600 text-xs font-mono"><%= r.public_id %></p>
-                        <% else %>
-                        <a href="<%= r.url %>" target="_blank" class="text-ocean-400/70 hover:text-ocean-400 text-xs font-mono transition-colors">
-                            <%= r.public_id %> ↗
-                        </a>
-                        <% end %>
+                            <!-- Station Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2 mb-1">
+                                    <h3 class="text-lg md:text-xl font-semibold text-white truncate" title="<%= r.name %>">
+                                        <%= r.name %>
+                                    </h3>
+
+                                    <!-- Provider badge -->
+                                    <% if r.provider.in?(['xtide', 'ticon']) %>
+                                    <div x-data="{ showTip: false }" class="relative flex-shrink-0">
+                                        <span
+                                            @mouseenter="showTip = true"
+                                            @mouseleave="showTip = false"
+                                            @click="showTip = !showTip"
+                                            class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
+                                        >
+                                            <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
+                                        </span>
+                                        <div
+                                            x-show="showTip"
+                                            x-cloak
+                                            x-transition
+                                            class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
+                                        >
+                                            <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
+                                            <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                                        </div>
+                                    </div>
+                                    <% elsif r.provider == 'noaa' %>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        NOAA
+                                    </span>
+                                    <% elsif r.provider == 'chs' %>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        CHS
+                                    </span>
+                                    <% end %>
+                                </div>
+
+                                <p class="text-slate-500 text-sm truncate mb-1"><%= r.region %></p>
+
+                                <!-- Station ID (clickable for official sources) -->
+                                <% if r.provider.in?(['xtide', 'ticon']) %>
+                                <p class="text-slate-600 text-xs font-mono"><%= r.public_id %></p>
+                                <% else %>
+                                <a href="<%= r.url %>" target="_blank" class="text-ocean-400/70 hover:text-ocean-400 text-xs font-mono transition-colors">
+                                    <%= r.public_id %> ↗
+                                </a>
+                                <% end %>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Divider -->
-                    <div class="border-t border-navy-700/50"></div>
+                    <!-- Data Preview Strip -->
+                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30">
+                        <div class="flex items-center gap-3 text-sm overflow-x-auto">
+                            <span class="text-slate-500 flex-shrink-0">Next:</span>
+                            <div class="flex items-center gap-3 text-slate-300">
+                                <span class="flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5 text-ocean-400" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+                                    </svg>
+                                    <span class="font-medium">High</span>
+                                    <span class="text-slate-400">@ --:--</span>
+                                </span>
+                                <span class="text-slate-600">·</span>
+                                <span class="flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+                                    </svg>
+                                    <span class="font-medium">Low</span>
+                                    <span class="text-slate-400">@ --:--</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Options & Actions -->
                     <div class="p-4 md:p-5">
@@ -323,72 +374,115 @@ document.addEventListener('DOMContentLoaded', function() {
                     uri.scheme = scheme
                     https_url = uri.to_s
                     card_id = "current_#{r.bid}"
+                    # Google Maps Static API URL
+                    map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x2dd4bf&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x2dd4bf|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
                 %>
                 <div class="station-card bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
-                     x-data="{ solar: true, lunar: false }"
+                     x-data="{ solar: true, lunar: false, mapLoaded: false }"
                      style="animation-delay: <%= index * 50 %>ms">
 
-                    <!-- Card Header -->
+                    <!-- Card Header with Mini Map -->
                     <div class="p-4 md:p-5">
-                        <div class="flex items-start justify-between gap-3 mb-3">
-                            <div class="flex-1 min-w-0">
-                                <h3 class="text-lg md:text-xl font-semibold text-white truncate" title="<%= r.name %>">
-                                    <%= r.name %>
-                                </h3>
-                                <p class="text-slate-500 text-sm truncate"><%= r.region %></p>
-                            </div>
-
-                            <!-- Provider badge -->
-                            <% if r.provider.in?(['xtide', 'ticon']) %>
-                            <div x-data="{ showTip: false }" class="relative flex-shrink-0">
-                                <span
-                                    @mouseenter="showTip = true"
-                                    @mouseleave="showTip = false"
-                                    @click="showTip = !showTip"
-                                    class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
-                                >
-                                    <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
-                                </span>
-                                <div
-                                    x-show="showTip"
-                                    x-cloak
-                                    x-transition
-                                    class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
-                                >
-                                    <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
-                                    <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                        <div class="flex gap-4">
+                            <!-- Mini Map Thumbnail -->
+                            <div class="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-navy-700/50 relative"
+                                 x-intersect.once="mapLoaded = true">
+                                <template x-if="mapLoaded">
+                                    <img
+                                        src="<%= map_url %>"
+                                        alt="Map of <%= r.name %>"
+                                        class="w-full h-full object-cover"
+                                        loading="lazy"
+                                    />
+                                </template>
+                                <template x-if="!mapLoaded">
+                                    <div class="w-full h-full flex items-center justify-center">
+                                        <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                                        </svg>
+                                    </div>
+                                </template>
+                                <!-- Map pin overlay -->
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-3 h-3 bg-seafoam-500 rounded-full border-2 border-white shadow-lg"></div>
                                 </div>
                             </div>
-                            <% elsif r.provider == 'noaa' %>
-                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                NOAA
-                            </span>
-                            <% elsif r.provider == 'chs' %>
-                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                CHS
-                            </span>
-                            <% end %>
-                        </div>
 
-                        <!-- Depth indicator -->
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-navy-700/50 text-xs text-slate-400">
-                                📍 Depth: <%= r.depth.to_i %><%= depth_unit %>
-                            </span>
-                        </div>
+                            <!-- Station Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2 mb-1">
+                                    <h3 class="text-lg md:text-xl font-semibold text-white truncate" title="<%= r.name %>">
+                                        <%= r.name %>
+                                    </h3>
 
-                        <!-- Station ID (clickable for official sources) -->
-                        <% if r.provider.in?(['xtide', 'ticon']) %>
-                        <p class="text-slate-600 text-xs font-mono"><%= r.bid || r.id %></p>
-                        <% else %>
-                        <a href="<%= r.url %>" target="_blank" class="text-ocean-400/70 hover:text-ocean-400 text-xs font-mono transition-colors">
-                            <%= r.bid || r.id %> ↗
-                        </a>
-                        <% end %>
+                                    <!-- Provider badge -->
+                                    <% if r.provider.in?(['xtide', 'ticon']) %>
+                                    <div x-data="{ showTip: false }" class="relative flex-shrink-0">
+                                        <span
+                                            @mouseenter="showTip = true"
+                                            @mouseleave="showTip = false"
+                                            @click="showTip = !showTip"
+                                            class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
+                                        >
+                                            <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
+                                        </span>
+                                        <div
+                                            x-show="showTip"
+                                            x-cloak
+                                            x-transition
+                                            class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
+                                        >
+                                            <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
+                                            <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                                        </div>
+                                    </div>
+                                    <% elsif r.provider == 'noaa' %>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        NOAA
+                                    </span>
+                                    <% elsif r.provider == 'chs' %>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        CHS
+                                    </span>
+                                    <% end %>
+                                </div>
+
+                                <p class="text-slate-500 text-sm truncate mb-1"><%= r.region %></p>
+
+                                <!-- Depth indicator -->
+                                <span class="inline-flex items-center px-2 py-0.5 rounded bg-navy-700/50 text-xs text-slate-400 mb-1">
+                                    📍 Depth: <%= r.depth.to_i %><%= depth_unit %>
+                                </span>
+
+                                <!-- Station ID (clickable for official sources) -->
+                                <% if r.provider.in?(['xtide', 'ticon']) %>
+                                <p class="text-slate-600 text-xs font-mono"><%= r.bid || r.id %></p>
+                                <% else %>
+                                <a href="<%= r.url %>" target="_blank" class="text-ocean-400/70 hover:text-ocean-400 text-xs font-mono transition-colors block">
+                                    <%= r.bid || r.id %> ↗
+                                </a>
+                                <% end %>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Divider -->
-                    <div class="border-t border-navy-700/50"></div>
+                    <!-- Data Preview Strip -->
+                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30">
+                        <div class="flex items-center gap-3 text-sm overflow-x-auto">
+                            <span class="text-slate-500 flex-shrink-0">Next:</span>
+                            <div class="flex items-center gap-3 text-slate-300">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="font-medium text-seafoam-400">Slack</span>
+                                    <span class="text-slate-400">@ --:--</span>
+                                </span>
+                                <span class="text-slate-600">·</span>
+                                <span class="flex items-center gap-1.5">
+                                    <span class="font-medium">Flood</span>
+                                    <span class="text-slate-400">@ --:--</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Options & Actions -->
                     <div class="p-4 md:p-5">

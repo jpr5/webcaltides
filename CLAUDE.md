@@ -46,6 +46,13 @@ RACK_ENV=production puma -C puma.rb
 
 Requires a [Geonames](https://www.geonames.org/login) account for timezone lookups. Set username in `server.rb` configure block or via ENV.
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GEONAMES_USERNAME` | Yes | Username for Geonames timezone lookups |
+| `GOOGLE_MAPS_API_KEY` | Optional | Google Maps Static API key for station map thumbnails |
+
 ## API Endpoints
 
 - `GET /` - Search UI
