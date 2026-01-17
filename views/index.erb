@@ -474,9 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <!-- Station Info -->
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-start justify-between gap-2 mb-1">
-                                    <h3 x-data
-                                        @mouseenter="$store.tooltip.open($el, '<%= r.name.gsub("'", "\\'") %>')"
-                                        @mouseleave="$store.tooltip.close()"
+                                    <h3 onmouseenter="stationTooltip.show(this, '<%= r.name.gsub("'", "\\\\'") %>')"
                                         class="text-lg md:text-xl font-semibold text-white truncate cursor-default">
                                         <%= r.name %>
                                     </h3>
@@ -743,9 +741,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <!-- Station Info -->
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-start justify-between gap-2 mb-1">
-                                    <h3 x-data
-                                        @mouseenter="$store.tooltip.open($el, '<%= r.name.gsub("'", "\\'") %>')"
-                                        @mouseleave="$store.tooltip.close()"
+                                    <h3 onmouseenter="stationTooltip.show(this, '<%= r.name.gsub("'", "\\\\'") %>')"
                                         class="text-lg md:text-xl font-semibold text-white truncate cursor-default">
                                         <%= r.name %>
                                     </h3>

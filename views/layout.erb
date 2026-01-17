@@ -52,39 +52,32 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/intersect@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script>
-        // Global tooltip state
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('tooltip', {
-                show: false,
-                text: '',
-                x: 0,
-                y: 0,
-                timer: null,
-                currentEl: null,
+        // Simple tooltip system
+        window.stationTooltip = {
+            el: null,
+            timer: null,
+            show(sourceEl, text) {
+                clearTimeout(this.timer);
+                this.el = sourceEl;
+                const tooltip = document.getElementById('station-tooltip');
+                const rect = sourceEl.getBoundingClientRect();
+                tooltip.style.left = rect.left + 'px';
+                tooltip.style.top = (rect.bottom + 4) + 'px';
+                tooltip.textContent = text;
+                this.timer = setTimeout(() => {
+                    tooltip.style.display = 'block';
+                }, 1000);
+            },
+            hide() {
+                clearTimeout(this.timer);
+                this.el = null;
+                document.getElementById('station-tooltip').style.display = 'none';
+            }
+        };
 
-                open(el, text) {
-                    clearTimeout(this.timer);
-                    this.currentEl = el;
-                    const rect = el.getBoundingClientRect();
-                    this.x = rect.left;
-                    this.y = rect.bottom + 4;
-                    this.text = text;
-                    this.timer = setTimeout(() => { this.show = true; }, 1000);
-                },
-
-                close() {
-                    clearTimeout(this.timer);
-                    this.show = false;
-                    this.currentEl = null;
-                }
-            });
-        });
-
-        // Close tooltip when mouse moves away from the element
         document.addEventListener('mouseover', (e) => {
-            const store = window.Alpine?.store('tooltip');
-            if (store && store.currentEl && !store.currentEl.contains(e.target)) {
-                store.close();
+            if (window.stationTooltip.el && !window.stationTooltip.el.contains(e.target)) {
+                window.stationTooltip.hide();
             }
         });
     </script>
@@ -379,13 +372,8 @@
 
 <body class="bg-navy-950 text-slate-100 min-h-screen">
     <!-- Global tooltip -->
-    <div x-data x-show="$store.tooltip.show" x-cloak
-         :style="'left: ' + $store.tooltip.x + 'px; top: ' + $store.tooltip.y + 'px;'"
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         class="fixed px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg shadow-xl z-[9999] text-sm text-white whitespace-nowrap pointer-events-none"
-         x-text="$store.tooltip.text">
+    <div id="station-tooltip" style="display: none;"
+         class="fixed px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg shadow-xl z-[9999] text-sm text-white whitespace-nowrap pointer-events-none">
     </div>
 
     <!-- Grain texture overlay -->
