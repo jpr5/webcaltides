@@ -150,6 +150,102 @@
         .animation-delay-200 { animation-delay: 0.2s; }
         .animation-delay-300 { animation-delay: 0.3s; }
 
+        /* Staggered card entrance - cards start invisible */
+        .station-card {
+            opacity: 0;
+            animation: fade-up 0.4s ease-out forwards;
+        }
+
+        /* Swipeable card container */
+        .swipe-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .swipe-content {
+            position: relative;
+            z-index: 2;
+            transition: transform 0.3s ease-out;
+            background: inherit;
+        }
+
+        .swipe-content.swiping {
+            transition: none;
+        }
+
+        .swipe-action {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .swipe-action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Copy success animation */
+        @keyframes copy-success {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .copy-success {
+            animation: copy-success 0.3s ease-out;
+        }
+
+        /* Button press effect */
+        .btn-press:active {
+            transform: scale(0.95);
+        }
+
+        /* Glow effect on subscribe button */
+        .btn-glow {
+            position: relative;
+        }
+
+        .btn-glow::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, #0ea5e9, #2dd4bf, #0ea5e9);
+            border-radius: inherit;
+            opacity: 0;
+            z-index: -1;
+            transition: opacity 0.3s;
+            filter: blur(8px);
+        }
+
+        .btn-glow:hover::before {
+            opacity: 0.5;
+        }
+
+        /* Reduced motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            .station-card,
+            .animate-fade-up,
+            .wave {
+                animation: none;
+                opacity: 1;
+                transform: none;
+            }
+            .station-card:hover {
+                transform: none;
+            }
+        }
+
         /* Toggle switch styling */
         .toggle-switch {
             position: relative;
