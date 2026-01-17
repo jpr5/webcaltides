@@ -33,12 +33,12 @@ module WebCalTides
 
     def tide_clients(provider = nil)
         @tide_clients ||= begin
-            harmonics = Clients::Harmonics.new(logger)
+            @@harmonics ||= Clients::Harmonics.new(logger)
             {
-                noaa:      Clients::NoaaTides.new(logger),
-                chs:       Clients::ChsTides.new(logger),
-                harmonics: harmonics,
-                ticon:     harmonics
+                noaa:  Clients::NoaaTides.new(logger),
+                chs:   Clients::ChsTides.new(logger),
+                xtide: @@harmonics,
+                ticon: @@harmonics
             }
         end
 
@@ -47,11 +47,11 @@ module WebCalTides
 
     def current_clients(provider = nil)
         @current_clients ||= begin
-            harmonics = tide_clients(:harmonics)
+            @@harmonics ||= Clients::Harmonics.new(logger)
             {
-                noaa:      Clients::NoaaCurrents.new(logger),
-                harmonics: harmonics,
-                ticon:     harmonics
+                noaa:  Clients::NoaaCurrents.new(logger),
+                xtide: @@harmonics,
+                ticon: @@harmonics
             }
         end
 
@@ -178,11 +178,11 @@ module WebCalTides
     def station_ids
         ids = tide_stations.map(&:id) + current_stations.map(&:bid)
 
-        # Add all keys from the harmonics engine cache to support aliased/merged IDs
-        harmonics = tide_clients(:harmonics)
-        if harmonics.respond_to?(:engine)
-            harmonics.engine.stations # Ensure stations are loaded
-            ids += harmonics.engine.stations_cache.keys
+        # Add all keys from the XTide engine cache to support aliased/merged IDs
+        xtide = tide_clients(:xtide)
+        if xtide.respond_to?(:engine)
+            xtide.engine.stations # Ensure stations are loaded
+            ids += xtide.engine.stations_cache.keys
         end
 
         ids.uniq.compact
@@ -238,18 +238,18 @@ module WebCalTides
         station = tide_stations.find { |s| s.id == id }
         return station if station
 
-        # Fallback to looking in the harmonics engine cache for aliased/merged IDs
-        harmonics = tide_clients(:harmonics)
-        if harmonics.respond_to?(:engine)
-            harmonics.engine.stations # Ensure stations are loaded
-            if data = harmonics.engine.stations_cache[id]
+        # Fallback to looking in the XTide engine cache for aliased/merged IDs
+        xtide = tide_clients(:xtide)
+        if xtide.respond_to?(:engine)
+            xtide.engine.stations # Ensure stations are loaded
+            if data = xtide.engine.stations_cache[id]
                 return Models::Station.from_hash({
                     'name' => data['name'],
                     'id' => id,
                     'public_id' => id,
                     'region' => data['region'],
                     'location' => data['name'],
-                    'provider' => 'harmonics', # or ticon? engine knows.
+                    'provider' => data['provider'] || 'xtide', # or ticon? engine knows.
                     'type' => data['type']
                 })
             end
@@ -323,7 +323,7 @@ module WebCalTides
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
 
-        if station.provider.in?(['harmonics', 'ticon'])
+        if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
@@ -393,11 +393,11 @@ module WebCalTides
         station = current_stations.select { |s| s.id == id || s.bid == id }.first
         return station if station
 
-        # Fallback to harmonics engine
-        harmonics = current_clients(:harmonics)
-        if harmonics.respond_to?(:engine)
-            harmonics.engine.stations # Ensure loaded
-            if data = harmonics.engine.stations_cache[id]
+        # Fallback to XTide engine
+        xtide = current_clients(:xtide)
+        if xtide.respond_to?(:engine)
+            xtide.engine.stations # Ensure loaded
+            if data = xtide.engine.stations_cache[id]
                 return Models::Station.from_hash({
                     'name' => data['name'],
                     'id' => id,
@@ -405,7 +405,7 @@ module WebCalTides
                     'public_id' => id,
                     'region' => data['region'],
                     'location' => data['name'],
-                    'provider' => 'harmonics',
+                    'provider' => 'xtide',
                     'type' => data['type']
                 })
             end
@@ -481,7 +481,7 @@ module WebCalTides
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
 
-        if station.provider.in?(['harmonics', 'ticon'])
+        if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 

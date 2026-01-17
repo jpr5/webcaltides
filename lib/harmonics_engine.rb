@@ -6,10 +6,10 @@ require 'digest'
 
 module Harmonics
     class Engine
-        HARMONICS_FILE = File.expand_path('../data/latest-harmonics.sql', __dir__)
+        XTIDE_FILE = File.expand_path('../data/latest-xtide.sql', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
 
-        attr_reader :speeds, :stations_cache, :harmonics_file, :ticon_file, :logger
+        attr_reader :speeds, :stations_cache, :xtide_file, :ticon_file, :logger
 
         # Astronomical constants from SP 98 Table 1 (via libcongen)
         # These are fixed for the 1900 epoch to match the harmonic data
@@ -40,7 +40,7 @@ module Harmonics
 
         def initialize(logger, cache_dir = nil)
             @logger = logger
-            @harmonics_file = ENV['HARMONICS_FILE'] || HARMONICS_FILE
+            @xtide_file = ENV['XTIDE_FILE'] || XTIDE_FILE
             @ticon_file = ENV['TICON_FILE'] || TICON_FILE
             @cache_dir = cache_dir || 'cache'
             @stations_cache = {}
@@ -52,7 +52,7 @@ module Harmonics
 
         def stations
             @parsed_stations ||= load_stations_from_cache || begin
-                xtide_stations = parse_harmonics_file
+                xtide_stations = parse_xtide_file
                 ticon_stations = parse_ticon_file
                 merged = xtide_stations + ticon_stations
 
@@ -82,7 +82,7 @@ module Harmonics
                     'timezone' => data['timezone'],
                     'units' => data['units'],
                     'type' => data['type'],
-                    'provider' => 'harmonics' # Defaulting to harmonics if it was an alias
+                    'provider' => 'xtide' # Defaulting to xtide if it was an alias
                 }
             end
             nil
@@ -297,7 +297,7 @@ module Harmonics
                     # Choose the best station from the identical cluster
                     cluster = [primary] + identical_matches
                     best = cluster.sort_by do |s|
-                        # Priority: ticon > harmonics
+                        # Priority: ticon > xtide
                         provider_rank = s['provider'] == 'ticon' ? 0 : 1
                         [provider_rank, s['name'].length, s['id']]
                     end.first
@@ -361,10 +361,10 @@ module Harmonics
         end
 
         def load_stations_from_cache
-            cache_file = "#{@cache_dir}/harmonics_stations.json"
+            cache_file = "#{@cache_dir}/xtide_stations.json"
 
             # Check if cache is newer than BOTH source files
-            sources = [@harmonics_file, @ticon_file]
+            sources = [@xtide_file, @ticon_file]
 
             # Get modification times, treating missing files as having very old times
             latest_source_time = sources.map do |f|
@@ -390,8 +390,8 @@ module Harmonics
 
         def save_stations_to_cache(stations)
             FileUtils.mkdir_p(@cache_dir)
-            cache_file = "#{@cache_dir}/harmonics_stations.json"
-            @logger.debug "Caching harmonics stations to: #{cache_file}"
+            cache_file = "#{@cache_dir}/xtide_stations.json"
+            @logger.debug "Caching xtide stations to: #{cache_file}"
 
             cache_data = {
                 'speeds' => @speeds,
@@ -421,14 +421,14 @@ module Harmonics
             File.write(cache_file, cache_data.to_json)
         end
 
-        def parse_harmonics_file
-            @logger.info "Parsing SQL harmonics file: #{@harmonics_file}"
+        def parse_xtide_file
+            @logger.info "Parsing SQL XTide file: #{@xtide_file}"
             stations_data = []
             constants_by_index = Hash.new { |h, k| h[k] = [] }
             current_table = nil
 
             # Use ISO-8859-1 (Latin-1) encoding as specified in the SQL file
-            File.foreach(@harmonics_file, encoding: 'ISO-8859-1:UTF-8') do |line|
+            File.foreach(@xtide_file, encoding: 'ISO-8859-1:UTF-8') do |line|
                 line.strip!
 
                 if line.start_with?('COPY public.constituents ')
@@ -580,8 +580,8 @@ module Harmonics
                     'lat' => data['lat'],
                     'lon' => data['lng'],
                     'timezone' => data['timezone'],
-                    'url' => "#harmonics",
-                    'provider' => 'harmonics',
+                    'url' => "#xtide",
+                    'provider' => 'xtide',
                     'bid' => station_bid,
                     'units' => data['units'],
                     'depth' => depth,

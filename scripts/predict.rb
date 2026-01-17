@@ -306,7 +306,7 @@ options = {
     nodal_hour: 12
 }
 OptionParser.new do |opts|
-    opts.banner = "Usage: scripts/test_harmonics.rb [options]"
+    opts.banner = "Usage: scripts/predict.rb [options]"
     opts.on("-r", "--random", "Pick a random 5 test locations from the pool") { options[:random] = true }
     opts.on("-n", "--name NAME", "Only test locations matching this name") { |n| options[:name] = n }
     opts.on("-f", "--filter", "Filter to Top 8 constituents only") { options[:filter] = true }
@@ -340,7 +340,7 @@ else
     exit 1
 end
 
-puts "Loading stations from #{engine.harmonics_file}..."
+puts "Loading stations from #{engine.xtide_file}..."
 stations = engine.stations
 puts "Loaded #{stations.length} stations."
 

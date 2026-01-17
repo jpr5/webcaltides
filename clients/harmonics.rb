@@ -9,7 +9,7 @@ module Clients
 
         attr_reader :engine
 
-        # Harmonics usually cover a full year or more, but we'll stick to the window pattern
+        # XTide usually covers a full year or more, but we'll stick to the window pattern
         self.window_size = 13.months
 
         def initialize(logger)
@@ -18,13 +18,13 @@ module Clients
         end
 
         def tide_stations
-            return [] unless File.exist?(@engine.harmonics_file) || File.exist?(@engine.ticon_file)
+            return [] unless File.exist?(@engine.xtide_file) || File.exist?(@engine.ticon_file)
 
             @engine.stations.select { |s| s['type'] == 'tide' }.map { |s| Models::Station.from_hash(s.stringify_keys) }
         end
 
         def current_stations
-            return [] unless File.exist?(@engine.harmonics_file) || File.exist?(@engine.ticon_file)
+            return [] unless File.exist?(@engine.xtide_file) || File.exist?(@engine.ticon_file)
 
             @engine.stations.select { |s| s['type'] == 'current' }.map { |s| Models::Station.from_hash(s.stringify_keys) }
         end
@@ -60,7 +60,7 @@ module Clients
                     units: p['units'],
                     prediction: p['height'],
                     time: p['time'].to_datetime,
-                    url: "#harmonics"
+                    url: "#xtide"
                 )
             end
         end

@@ -138,7 +138,7 @@
         </p>
 
         <p class="text-gray-600 mb-6">
-            <span class="font-medium">Update 1/2026</span>: Predictive harmonics have been implemented to expand the overall set of supported stations.
+            <span class="font-medium">Update 1/2026</span>: Predictive XTide data has been implemented to expand the overall set of supported stations.
         </p>
 
     <div x-data="{ footerTab: '<%= request.path_info == "/" ? "warnings" : "" %>' }" x-init="if (footerTab === 'warnings') setTimeout(() => { if (footerTab === 'warnings') footerTab = null }, 5000)">
@@ -171,7 +171,7 @@
                 <div class="ml-3">
                     <p class="text-sm text-amber-700 font-bold uppercase">Entries Labeled XTide or TICON Not for Navigation</p>
                     <p class="text-sm text-amber-700 mt-1">
-                        WebCalTides is distributed in the hope that this information will be useful, but <strong>WITHOUT ANY WARRANTY</strong>; without even the implied warranty of <strong>MERCHANTABILITY</strong> or <strong>FITNESS FOR A PARTICULAR PURPOSE</strong>. The author and the publisher each assume no liability for damages arising from use of these predictions. They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level.  <br> <br> Most recent harmonics data set is from <strong>December 2025</strong>.
+                        WebCalTides is distributed in the hope that this information will be useful, but <strong>WITHOUT ANY WARRANTY</strong>; without even the implied warranty of <strong>MERCHANTABILITY</strong> or <strong>FITNESS FOR A PARTICULAR PURPOSE</strong>. The author and the publisher each assume no liability for damages arising from use of these predictions. They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level.  <br> <br> Most recent XTide data set is from <strong>December 2025</strong>, and using TICON v3 (+ GESLA v4).
                     </p>
                 </div>
             </div>
