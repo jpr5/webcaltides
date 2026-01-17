@@ -60,9 +60,11 @@
                 x: 0,
                 y: 0,
                 timer: null,
+                currentEl: null,
 
                 open(el, text) {
                     clearTimeout(this.timer);
+                    this.currentEl = el;
                     const rect = el.getBoundingClientRect();
                     this.x = rect.left;
                     this.y = rect.bottom + 4;
@@ -73,8 +75,17 @@
                 close() {
                     clearTimeout(this.timer);
                     this.show = false;
+                    this.currentEl = null;
                 }
             });
+        });
+
+        // Close tooltip when mouse moves away from the element
+        document.addEventListener('mouseover', (e) => {
+            const store = window.Alpine?.store('tooltip');
+            if (store && store.currentEl && !store.currentEl.contains(e.target)) {
+                store.close();
+            }
         });
     </script>
 
