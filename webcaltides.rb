@@ -315,6 +315,41 @@ module WebCalTides
         return data.map{ |js| Models::TideData.from_hash(js) }
     end
 
+    # Returns the next high and low tide events for a station
+    # Returns array of hashes: [{ type: 'High', time: DateTime, height: Float, units: String }, ...]
+    def next_tide_events(id, around: Time.current.utc)
+        station = tide_station_for(id) or return nil
+        data = tide_data_for(station, around: around) or return nil
+
+        now = Time.current.utc
+        future_data = data.select { |d| d.time > now }.sort_by(&:time)
+
+        next_high = future_data.find { |d| d.type == 'High' }
+        next_low = future_data.find { |d| d.type == 'Low' }
+
+        tz = timezone_for(station.lat, station.lon)
+
+        events = []
+        if next_high
+            events << {
+                type: 'High',
+                time: next_high.time.in_time_zone(tz),
+                height: next_high.prediction,
+                units: next_high.units
+            }
+        end
+        if next_low
+            events << {
+                type: 'Low',
+                time: next_low.time.in_time_zone(tz),
+                height: next_low.prediction,
+                units: next_low.units
+            }
+        end
+
+        events
+    end
+
     def tide_calendar_for(id, around: Time.current.utc, units: 'imperial')
         depth_units = units == 'imperial' ? 'ft' : 'm'
         station = tide_station_for(id) or return nil
@@ -470,6 +505,46 @@ module WebCalTides
         data = JSON.parse(json) rescue []
 
         return data.map { |jc| Models::CurrentData.from_hash(jc) }
+    end
+
+    # Returns the next slack, flood, and ebb events for a station
+    # Returns array of hashes: [{ type: 'Slack'|'Flood'|'Ebb', time: DateTime, velocity: Float? }, ...]
+    def next_current_events(id, around: Time.current.utc)
+        station = current_station_for(id) or return nil
+        data = current_data_for(station, around: around) or return nil
+
+        now = Time.current.utc
+        future_data = data.select { |d| d.time > now }.sort_by(&:time)
+
+        next_slack = future_data.find { |d| d.type == 'slack' }
+        next_flood = future_data.find { |d| d.type == 'flood' }
+        next_ebb = future_data.find { |d| d.type == 'ebb' }
+
+        tz = timezone_for(station.lat, station.lon)
+
+        events = []
+        if next_slack
+            events << {
+                type: 'Slack',
+                time: next_slack.time.in_time_zone(tz)
+            }
+        end
+        if next_flood
+            events << {
+                type: 'Flood',
+                time: next_flood.time.in_time_zone(tz),
+                velocity: next_flood.velocity_major
+            }
+        end
+        if next_ebb
+            events << {
+                type: 'Ebb',
+                time: next_ebb.time.in_time_zone(tz),
+                velocity: next_ebb.velocity_major
+            }
+        end
+
+        events
     end
 
     def current_calendar_for(id, around: Time.current.utc)
