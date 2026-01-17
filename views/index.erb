@@ -240,31 +240,136 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Sticky Search Bar (appears when scrolling results) -->
 <div class="search-sticky hidden md:block">
     <div class="max-w-2xl mx-auto px-4">
-        <form action="/" accept-charset="UTF-8" method="POST" class="relative flex items-center">
-            <div class="absolute left-4 pointer-events-none">
-                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
+        <form action="/" accept-charset="UTF-8" method="POST" class="relative"
+              x-data="{
+                  query: '',
+                  results: [],
+                  showResults: false,
+                  selectedIndex: -1,
+                  loading: false,
+                  debounceTimer: null,
+
+                  async search() {
+                      if (this.query.length < 2) {
+                          this.results = [];
+                          this.showResults = false;
+                          return;
+                      }
+                      this.loading = true;
+                      try {
+                          const response = await fetch('/api/stations/autocomplete?q=' + encodeURIComponent(this.query));
+                          const data = await response.json();
+                          this.results = data.results;
+                          this.showResults = this.results.length > 0;
+                          this.selectedIndex = -1;
+                      } catch (e) {
+                          console.error('Autocomplete error:', e);
+                      }
+                      this.loading = false;
+                  },
+
+                  debounceSearch() {
+                      clearTimeout(this.debounceTimer);
+                      this.debounceTimer = setTimeout(() => this.search(), 150);
+                  },
+
+                  selectResult(result) {
+                      this.query = result.name;
+                      this.showResults = false;
+                      this.$nextTick(() => this.$refs.stickySubmitBtn.click());
+                  },
+
+                  handleKeydown(e) {
+                      if (!this.showResults) return;
+                      if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          this.selectedIndex = Math.min(this.selectedIndex + 1, this.results.length - 1);
+                      } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          this.selectedIndex = Math.max(this.selectedIndex - 1, -1);
+                      } else if (e.key === 'Enter' && this.selectedIndex >= 0) {
+                          e.preventDefault();
+                          this.selectResult(this.results[this.selectedIndex]);
+                      } else if (e.key === 'Escape') {
+                          this.showResults = false;
+                      }
+                  }
+              }"
+              @click.away="showResults = false"
+        >
+            <div class="relative flex items-center">
+                <div class="absolute left-4 pointer-events-none">
+                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <input
+                    type="text"
+                    name="searchtext"
+                    x-model="query"
+                    @input="debounceSearch()"
+                    @keydown="handleKeydown($event)"
+                    @focus="if (results.length > 0) showResults = true"
+                    class="w-full pl-12 pr-36 py-3 bg-navy-800/90 border border-navy-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500/50"
+                    placeholder="Search stations..."
+                    autocomplete="off"
+                />
+                <div class="absolute right-24 flex items-center">
+                    <select
+                        name="units"
+                        class="bg-transparent border-none text-sm text-slate-400 focus:outline-none focus:ring-0 cursor-pointer hover:text-slate-300 transition-colors"
+                    >
+                        <option value="imperial" <%= 'selected' if current_units == 'imperial' %> class="bg-navy-800">ft/mi</option>
+                        <option value="metric" <%= 'selected' if current_units == 'metric' %> class="bg-navy-800">m/km</option>
+                    </select>
+                </div>
+                <button type="submit" x-ref="stickySubmitBtn" class="absolute right-2 px-4 py-1.5 bg-ocean-500 hover:bg-ocean-400 text-white font-medium rounded-lg transition-colors text-sm">
+                    Search
+                </button>
             </div>
-            <input
-                type="text"
-                name="searchtext"
-                class="w-full pl-12 pr-36 py-3 bg-navy-800/90 border border-navy-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500/50"
-                placeholder="Search stations..."
-                autocomplete="off"
-            />
-            <div class="absolute right-24 flex items-center">
-                <select
-                    name="units"
-                    class="bg-transparent border-none text-sm text-slate-400 focus:outline-none focus:ring-0 cursor-pointer hover:text-slate-300 transition-colors"
-                >
-                    <option value="imperial" <%= 'selected' if current_units == 'imperial' %> class="bg-navy-800">ft/mi</option>
-                    <option value="metric" <%= 'selected' if current_units == 'metric' %> class="bg-navy-800">m/km</option>
-                </select>
+
+            <!-- Autocomplete dropdown -->
+            <div
+                x-show="showResults"
+                x-cloak
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0 -translate-y-2"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                class="absolute z-50 w-full mt-2 bg-navy-800 border border-navy-700 rounded-xl shadow-2xl overflow-hidden"
+            >
+                <ul class="py-2 max-h-64 overflow-y-auto">
+                    <template x-for="(result, index) in results" :key="index">
+                        <li
+                            @click="selectResult(result)"
+                            @mouseenter="selectedIndex = index"
+                            :class="{ 'bg-navy-700': selectedIndex === index }"
+                            class="px-4 py-2.5 cursor-pointer hover:bg-navy-700 transition-colors flex items-center gap-3"
+                        >
+                            <div :class="result.type === 'tide' ? 'text-ocean-400' : 'text-seafoam-400'" class="flex-shrink-0">
+                                <template x-if="result.type === 'tide'">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 004 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0011.32 0c1.56-1.56 2.34-3.67 2.34-5.67 0-2.15-.86-4.2-2.34-5.64z"/>
+                                    </svg>
+                                </template>
+                                <template x-if="result.type === 'current'">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                                    </svg>
+                                </template>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-white text-sm font-medium truncate" x-text="result.name"></p>
+                                <p class="text-slate-500 text-xs truncate" x-text="result.region"></p>
+                            </div>
+                            <span
+                                :class="result.type === 'tide' ? 'bg-ocean-500/20 text-ocean-400' : 'bg-seafoam-500/20 text-seafoam-400'"
+                                class="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium capitalize"
+                                x-text="result.type"
+                            ></span>
+                        </li>
+                    </template>
+                </ul>
             </div>
-            <button type="submit" class="absolute right-2 px-4 py-1.5 bg-ocean-500 hover:bg-ocean-400 text-white font-medium rounded-lg transition-colors text-sm">
-                Search
-            </button>
         </form>
     </div>
 </div>
