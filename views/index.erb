@@ -45,7 +45,7 @@
           selectResult(result) {
               this.query = result.name;
               this.showResults = false;
-              this.$nextTick(() => this.$el.submit());
+              this.$nextTick(() => this.$refs.submitBtn.click());
           },
 
           handleKeydown(e) {
@@ -117,6 +117,7 @@
             <!-- Search button -->
             <button
                 type="submit"
+                x-ref="submitBtn"
                 class="absolute right-2 px-4 py-2 md:py-2.5 bg-ocean-500 hover:bg-ocean-400 text-white font-medium rounded-xl transition-all duration-200 btn-primary"
             >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
