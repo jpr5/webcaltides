@@ -51,6 +51,32 @@
     <!-- Alpine.js plugins -->
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/intersect@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        // Global tooltip state
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('tooltip', {
+                show: false,
+                text: '',
+                x: 0,
+                y: 0,
+                timer: null,
+
+                open(el, text) {
+                    clearTimeout(this.timer);
+                    const rect = el.getBoundingClientRect();
+                    this.x = rect.left;
+                    this.y = rect.bottom + 4;
+                    this.text = text;
+                    this.timer = setTimeout(() => { this.show = true; }, 1000);
+                },
+
+                close() {
+                    clearTimeout(this.timer);
+                    this.show = false;
+                }
+            });
+        });
+    </script>
 
     <style>
         [x-cloak] { display: none !important; }
@@ -341,6 +367,16 @@
 </head>
 
 <body class="bg-navy-950 text-slate-100 min-h-screen">
+    <!-- Global tooltip -->
+    <div x-data x-show="$store.tooltip.show" x-cloak
+         :style="'left: ' + $store.tooltip.x + 'px; top: ' + $store.tooltip.y + 'px;'"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         class="fixed px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg shadow-xl z-[9999] text-sm text-white whitespace-nowrap pointer-events-none"
+         x-text="$store.tooltip.text">
+    </div>
+
     <!-- Grain texture overlay -->
     <div class="grain-overlay"></div>
 
