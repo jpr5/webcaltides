@@ -229,6 +229,64 @@ document.addEventListener('DOMContentLoaded', function() {
             results.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
+
+    // Lazy load station data when cards become visible
+    var stationCards = document.querySelectorAll('.station-card[data-station-type]');
+    if (stationCards.length > 0) {
+        var dataObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    var card = entry.target;
+                    var type = card.dataset.stationType;
+                    var id = card.dataset.stationId;
+
+                    // Stop observing this card
+                    dataObserver.unobserve(card);
+
+                    // Fetch the next events
+                    fetch('/api/stations/' + type + '/' + encodeURIComponent(id) + '/next')
+                        .then(function(response) { return response.json(); })
+                        .then(function(data) {
+                            if (!data.events || data.events.length === 0) return;
+
+                            var preview = card.querySelector('.data-preview-content');
+                            if (!preview) return;
+
+                            if (type === 'tides') {
+                                // Update tide data
+                                data.events.forEach(function(event) {
+                                    if (event.type === 'High') {
+                                        var highEl = preview.querySelector('.data-high .data-time');
+                                        if (highEl) highEl.textContent = '@ ' + event.time;
+                                    } else if (event.type === 'Low') {
+                                        var lowEl = preview.querySelector('.data-low .data-time');
+                                        if (lowEl) lowEl.textContent = '@ ' + event.time;
+                                    }
+                                });
+                            } else if (type === 'currents') {
+                                // Update current data
+                                data.events.forEach(function(event) {
+                                    if (event.type === 'Slack') {
+                                        var slackEl = preview.querySelector('.data-slack .data-time');
+                                        if (slackEl) slackEl.textContent = '@ ' + event.time;
+                                    } else if (event.type === 'Flood') {
+                                        var floodEl = preview.querySelector('.data-flood .data-time');
+                                        if (floodEl) floodEl.textContent = '@ ' + event.time;
+                                    }
+                                });
+                            }
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to load station data:', err);
+                        });
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '50px' });
+
+        stationCards.forEach(function(card) {
+            dataObserver.observe(card);
+        });
+    }
 });
 </script>
 
@@ -422,6 +480,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x0ea5e9&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x0ea5e9|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
                 %>
                 <div class="station-card swipe-container bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
+                     data-station-type="tides"
+                     data-station-id="<%= r.id %>"
                      x-data="{
                          solar: true, lunar: false, mapLoaded: false, copied: false,
                          swipeX: 0, swiping: false, startX: 0,
@@ -526,24 +586,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
 
                     <!-- Data Preview Strip -->
-                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30">
+                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
                         <div class="flex items-center gap-3 text-sm overflow-x-auto">
                             <span class="text-slate-500 flex-shrink-0">Next:</span>
-                            <div class="flex items-center gap-3 text-slate-300">
-                                <span class="flex items-center gap-1.5">
+                            <div class="flex items-center gap-3 text-slate-300 data-preview-content">
+                                <span class="flex items-center gap-1.5 data-high">
                                     <svg class="w-3.5 h-3.5 text-ocean-400" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
                                     </svg>
                                     <span class="font-medium">High</span>
-                                    <span class="text-slate-400">@ --:--</span>
+                                    <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                                 <span class="text-slate-600">·</span>
-                                <span class="flex items-center gap-1.5">
+                                <span class="flex items-center gap-1.5 data-low">
                                     <svg class="w-3.5 h-3.5 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
                                     </svg>
                                     <span class="font-medium">Low</span>
-                                    <span class="text-slate-400">@ --:--</span>
+                                    <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                             </div>
                         </div>
@@ -689,6 +749,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x2dd4bf&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x2dd4bf|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
                 %>
                 <div class="station-card swipe-container bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
+                     data-station-type="currents"
+                     data-station-id="<%= r.bid %>"
                      x-data="{
                          solar: true, lunar: false, mapLoaded: false, copied: false,
                          swipeX: 0, swiping: false, startX: 0,
@@ -798,18 +860,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
 
                     <!-- Data Preview Strip -->
-                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30">
+                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
                         <div class="flex items-center gap-3 text-sm overflow-x-auto">
                             <span class="text-slate-500 flex-shrink-0">Next:</span>
-                            <div class="flex items-center gap-3 text-slate-300">
-                                <span class="flex items-center gap-1.5">
+                            <div class="flex items-center gap-3 text-slate-300 data-preview-content">
+                                <span class="flex items-center gap-1.5 data-slack">
                                     <span class="font-medium text-seafoam-400">Slack</span>
-                                    <span class="text-slate-400">@ --:--</span>
+                                    <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                                 <span class="text-slate-600">·</span>
-                                <span class="flex items-center gap-1.5">
+                                <span class="flex items-center gap-1.5 data-flood">
                                     <span class="font-medium">Flood</span>
-                                    <span class="text-slate-400">@ --:--</span>
+                                    <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                             </div>
                         </div>

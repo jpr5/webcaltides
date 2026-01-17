@@ -70,6 +70,73 @@ class Server < ::Sinatra::Base
         { results: matches }.to_json
     end
 
+    # API endpoint to get next tide/current event for a station
+    get "/api/stations/:type/:id/next" do
+        type = params[:type]
+        id   = params[:id]
+
+        content_type :json
+
+        case type
+        when 'tides'
+            station = WebCalTides.tide_station_for(id) or return { error: 'Station not found' }.to_json
+            data = WebCalTides.tide_data_for(station, around: Time.current.utc)
+            return { events: [] }.to_json unless data
+
+            now = Time.current.utc
+            tz = WebCalTides.timezone_for(station.lat, station.lon)
+
+            # Find next high and low tides from now
+            future_data = data.select { |d| d.time > now }.sort_by(&:time)
+            next_high = future_data.find { |d| d.type == 'High' }
+            next_low = future_data.find { |d| d.type == 'Low' }
+
+            events = []
+            if next_high
+                local_time = next_high.time.in_time_zone(tz)
+                events << { type: 'High', time: local_time.strftime('%H:%M'), height: next_high.prediction, units: next_high.units }
+            end
+            if next_low
+                local_time = next_low.time.in_time_zone(tz)
+                events << { type: 'Low', time: local_time.strftime('%H:%M'), height: next_low.prediction, units: next_low.units }
+            end
+
+            { events: events }.to_json
+
+        when 'currents'
+            station = WebCalTides.current_station_for(id) or return { error: 'Station not found' }.to_json
+            data = WebCalTides.current_data_for(station, around: Time.current.utc)
+            return { events: [] }.to_json unless data
+
+            now = Time.current.utc
+            tz = WebCalTides.timezone_for(station.lat, station.lon)
+
+            # Find next slack, ebb, and flood from now
+            future_data = data.select { |d| DateTime.parse(d.time.to_s) > now rescue d.time > now }.sort_by { |d| d.time }
+            next_slack = future_data.find { |d| d.type == 'slack' }
+            next_flood = future_data.find { |d| d.type == 'flood' }
+            next_ebb = future_data.find { |d| d.type == 'ebb' }
+
+            events = []
+            if next_slack
+                local_time = next_slack.time.in_time_zone(tz)
+                events << { type: 'Slack', time: local_time.strftime('%H:%M') }
+            end
+            if next_flood
+                local_time = next_flood.time.in_time_zone(tz)
+                events << { type: 'Flood', time: local_time.strftime('%H:%M'), velocity: next_flood.velocity_major }
+            end
+            if next_ebb
+                local_time = next_ebb.time.in_time_zone(tz)
+                events << { type: 'Ebb', time: local_time.strftime('%H:%M'), velocity: next_ebb.velocity_major }
+            end
+
+            { events: events }.to_json
+        else
+            { error: 'Invalid type' }.to_json
+        end
+    end
+
     post "/" do
         radius       = params['within'].to_i
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
