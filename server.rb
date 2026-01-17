@@ -51,6 +51,25 @@ class Server < ::Sinatra::Base
         erb :index, locals: { searchtext: nil, units: nil }
     end
 
+    # Autocomplete endpoint for station search
+    get "/api/stations/autocomplete" do
+        query = (params['q'] || '').strip.downcase
+        return { results: [] }.to_json if query.length < 2
+
+        # Search both tide and current stations
+        all_stations = WebCalTides.tide_stations + WebCalTides.current_stations
+
+        # Filter and dedupe by name
+        matches = all_stations
+            .select { |s| s.name.downcase.include?(query) || s.region&.downcase&.include?(query) }
+            .uniq { |s| [s.name, s.region] }
+            .first(10)
+            .map { |s| { name: s.name, region: s.region, type: s.depth ? 'current' : 'tide' } }
+
+        content_type :json
+        { results: matches }.to_json
+    end
+
     post "/" do
         radius       = params['within'].to_i
         radius_units = params['units'] == 'metric' ? 'km' : 'mi'
