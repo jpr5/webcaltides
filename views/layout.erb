@@ -1,182 +1,326 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>WebCalTides Service</title>
-    <meta name="description" content="Generate webcal tide + sunrise/sunset calendars for ical and google calendar.">
+    <title>WebCalTides — Tides & Currents for Your Calendar</title>
+    <meta name="description" content="Subscribe to tide, current, sunrise and lunar calendars for your favorite stations. Works with Apple Calendar, Google Calendar, and Outlook.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="/favicon.png">
+
+    <!-- Fonts: Cormorant Garamond for nautical elegance, DM Sans for clean body -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.directive('focus-on-show', (el, { expression }, { effect, evaluateLater }) => {
-                const evaluate = evaluateLater(expression);
-                effect(() => {
-                    evaluate(value => {
-                        if (value) {
-                            setTimeout(() => {
-                                const input = el.querySelector('input[type="text"]');
-                                if (input) input.focus();
-                            }, 50);
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            950: '#0a0f1a',
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                            600: '#475569',
+                        },
+                        ocean: {
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        },
+                        sand: {
+                            200: '#f5e6d3',
+                            300: '#e8d4bc',
+                            400: '#d4a574',
+                            500: '#c4956a',
+                        },
+                        seafoam: {
+                            400: '#5eead4',
+                            500: '#2dd4bf',
                         }
-                    });
-                });
-            });
-        });
-
-        // JavaScript to position popups correctly relative to their trigger buttons
-        document.addEventListener('alpine:initialized', () => {
-          // Function to position a popup relative to its trigger button
-          function positionPopup(triggerEl, popupEl) {
-            if (!triggerEl || !popupEl) return;
-
-            // Get the position of the trigger button
-            const rect = triggerEl.getBoundingClientRect();
-
-            // Position the popup
-            const windowHeight = window.innerHeight;
-            const popupHeight = popupEl.offsetHeight;
-
-            // Check if popup would go off the bottom of the screen
-            if (rect.bottom + popupHeight > windowHeight) {
-              // Position above the button
-              popupEl.style.top = (rect.top - popupHeight) + 'px';
-            } else {
-              // Position below the button
-              popupEl.style.top = rect.bottom + 'px';
-            }
-
-            // Align horizontally with the button
-            popupEl.style.left = rect.left + 'px';
-          }
-
-          // Apply to all Alpine.js dropdown components
-          document.querySelectorAll('[x-data="{ open: false }"]').forEach(dropdown => {
-            const button = dropdown.querySelector('button');
-            const popup = dropdown.querySelector('[x-show="open"]');
-
-            if (button && popup) {
-              // Watch for the popup being shown
-              const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                  if (mutation.attributeName === 'style' &&
-                      !popup.style.display.includes('none')) {
-                    positionPopup(button, popup);
-                  }
-                });
-              });
-
-              observer.observe(popup, { attributes: true });
-
-              // Also position on window resize
-              window.addEventListener('resize', () => {
-                if (!popup.style.display.includes('none')) {
-                  positionPopup(button, popup);
+                    },
+                    fontFamily: {
+                        display: ['Cormorant Garamond', 'Georgia', 'serif'],
+                        body: ['DM Sans', 'system-ui', 'sans-serif'],
+                    }
                 }
-              });
             }
-          });
-        });
+        }
     </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
     <style>
-        [x-show="open"] {
-          position: fixed !important;
-          z-index: 9999 !important;
-        }
-        .origin-top-right {
-          transform-origin: top right;
-        }
-        .dropdown-menu-fix {
-          max-height: 80vh;
-          overflow-y: auto;
+        [x-cloak] { display: none !important; }
+
+        body {
+            font-family: 'DM Sans', system-ui, sans-serif;
         }
 
-        [x-cloak] { display: none !important; }
-        .max-h-\[70vh\] thead th {
+        .font-display {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+        }
+
+        /* Animated wave pattern for hero */
+        .wave-bg {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .wave {
+            position: absolute;
+            bottom: -5%;
+            left: -10%;
+            width: 120%;
+            height: 60%;
+            background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.08) 100%);
+            border-radius: 45% 48% 43% 47%;
+            animation: wave-float 12s ease-in-out infinite;
+        }
+
+        .wave:nth-child(2) {
+            bottom: -8%;
+            height: 55%;
+            background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.05) 100%);
+            border-radius: 47% 44% 48% 43%;
+            animation-delay: -3s;
+            animation-duration: 14s;
+        }
+
+        .wave:nth-child(3) {
+            bottom: -12%;
+            height: 50%;
+            background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.03) 100%);
+            border-radius: 43% 47% 45% 48%;
+            animation-delay: -6s;
+            animation-duration: 16s;
+        }
+
+        @keyframes wave-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(1deg); }
+        }
+
+        /* Subtle grain texture overlay */
+        .grain-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.03;
+            z-index: 9999;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        }
+
+        /* Search input styling */
+        .search-input {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .search-input:focus {
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2), 0 8px 32px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Card hover effects */
+        .station-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .station-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.15);
+        }
+
+        /* Smooth fade-in animation for results */
+        @keyframes fade-up {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-up {
+            animation: fade-up 0.5s ease-out forwards;
+        }
+
+        .animation-delay-100 { animation-delay: 0.1s; }
+        .animation-delay-200 { animation-delay: 0.2s; }
+        .animation-delay-300 { animation-delay: 0.3s; }
+
+        /* Toggle switch styling */
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background: #cbd5e1;
+            border-radius: 10px;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .toggle-switch.active {
+            background: #0ea5e9;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(16px);
+        }
+
+        /* Provider badge pulse for warnings */
+        .badge-warning {
+            animation: subtle-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes subtle-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Compass icon spin on hover */
+        .compass-icon {
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .search-wrapper:focus-within .compass-icon {
+            transform: rotate(45deg);
+        }
+
+        /* Button ripple effect */
+        .btn-primary {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+
+        .btn-primary:hover::after {
+            transform: translateX(100%);
+        }
+
+        /* Sticky search on scroll */
+        .search-sticky {
             position: sticky;
             top: 0;
-            z-index: 10;
-            background-color: #f9fafb;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 100;
+            transition: all 0.3s;
         }
-        @media (max-width: 640px) {
-            .search-result-container {
-                max-width: 100% !important;
-            }
-            .search-result-text {
-                width: 100% !important;
-                white-space: normal !important;
-                word-break: break-word !important;
-                overflow-wrap: break-word !important;
-            }
-        }
-        @media (min-width: 641px) {
-            .search-result-text {
-                white-space: nowrap !important;
-            }
+
+        .search-sticky.scrolled {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            padding: 1rem 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
     </style>
-    <link rel="icon" type="image/png" href="/favicon.png">
 </head>
 
-<body class="max-w-6xl mx-auto px-4 py-8">
-    <div class="flex items-center gap-4 mb-8">
-        <img src="/favicon.png" alt="WebCalTides" class="w-24 h-24">
-        <h1 class="text-4xl font-bold">WebCalTides</h1>
-    </div>
+<body class="bg-navy-950 text-slate-100 min-h-screen">
+    <!-- Grain texture overlay -->
+    <div class="grain-overlay"></div>
 
-    <p class="text-lg text-gray-700 mb-4">
-        WebCalTides is a free service that provides tides, currents, solar and lunar calendars for your favorite tide stations. Data is pulled from official sources like NOAA (US) and DFO-CHS (Canada), as well as global harmonic models (XTide & TICON). Just search for a station, then click the webcal link to subscribe. Works on Apple iCal, Google Calendar and Outlook, maybe others.
-    </p>
-
-    <%= yield %>
-
-    <div class="mt-12">
-        <p class="text-gray-600 mb-4">
-            Written by <a href="https://www.linkedin.com/in/jordanritter/" class="text-blue-600 hover:underline">Jordan Ritter</a>, with contributions from
-            <a href="https://github.com/PaulJSchellenberg" class="text-blue-600 hover:underline">Paul Schellenberg</a> to support Canadian stations.
-            Project source at <a href="https://github.com/jpr5/webcaltides" class="text-blue-600 hover:underline">GitHub</a>.
-        </p>
-
-        <p class="text-gray-600 mb-6">
-            <span class="font-medium">Update 1/2026</span>: Predictive XTide data has been implemented to expand the overall set of supported stations.
-        </p>
-
-    <div x-data="{ footerTab: '<%= request.path_info == "/" ? "warnings" : "" %>' }" x-init="if (footerTab === 'warnings') setTimeout(() => { if (footerTab === 'warnings') footerTab = null }, 5000)">
-        <div class="text-right mb-6 space-x-2">
-            <button
-                @click="footerTab = (footerTab === 'licenses' ? null : 'licenses')"
-                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-                Licenses
-            </button>
-            <button
-                @click="footerTab = (footerTab === 'warnings' ? null : 'warnings')"
-                class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
-            >
-                Warnings
-            </button>
+    <!-- Hero Section -->
+    <header class="relative bg-gradient-to-b from-navy-900 via-navy-900 to-navy-950 overflow-hidden">
+        <!-- Animated waves background -->
+        <div class="wave-bg">
+            <div class="wave"></div>
+            <div class="wave"></div>
+            <div class="wave"></div>
         </div>
 
-        <div x-show="footerTab === 'licenses'" x-cloak class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-600 mb-8">
-            This product has been produced by or for WebCalTides Service and includes data and services provided by the Canadian Hydrographic Service of the Department of Fisheries and Oceans. The incorporation of data sourced from the Canadian Hydrographic Service of the Department of Fisheries and Oceans within this product does NOT constitute an endorsement by the Canadian Hydrographic Service or the Department of Fisheries and Oceans of this product.
-        </div>
-
-        <div x-show="footerTab === 'warnings'" x-cloak class="bg-amber-50 border-l-4 border-amber-400 p-4 mb-8">
-            <div class="flex">
-                <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <p class="text-sm text-amber-700 font-bold uppercase">Entries Labeled XTide or TICON Not for Navigation</p>
-                    <p class="text-sm text-amber-700 mt-1">
-                        WebCalTides is distributed in the hope that this information will be useful, but <strong>WITHOUT ANY WARRANTY</strong>; without even the implied warranty of <strong>MERCHANTABILITY</strong> or <strong>FITNESS FOR A PARTICULAR PURPOSE</strong>. The author and the publisher each assume no liability for damages arising from use of these predictions. They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level.  <br> <br> Most recent XTide data set is from <strong>December 2025</strong>, and using TICON v3 (+ GESLA v4).
+        <div class="relative z-10 max-w-5xl mx-auto px-4 pt-12 pb-16 md:pt-20 md:pb-24">
+            <!-- Logo and branding -->
+            <div class="flex items-center justify-center gap-4 mb-8 md:mb-12">
+                <img src="/favicon.png" alt="" class="w-16 h-16 md:w-20 md:h-20 drop-shadow-lg">
+                <div>
+                    <h1 class="font-display text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-white">
+                        WebCalTides
+                    </h1>
+                    <p class="text-ocean-400 font-medium text-sm md:text-base tracking-wide mt-1">
+                        Tides & Currents for Your Calendar
                     </p>
                 </div>
             </div>
+
+            <!-- One-liner description -->
+            <p class="text-center text-slate-400 max-w-2xl mx-auto mb-10 md:mb-14 text-base md:text-lg leading-relaxed">
+                Subscribe to tide predictions, currents, sunrise/sunset, and lunar phases.
+                <span class="text-slate-500">Works with Apple Calendar, Google Calendar, and Outlook.</span>
+            </p>
+
+            <%= yield %>
         </div>
-    </div>
-    </div>
+    </header>
+
+    <!-- Footer -->
+    <footer class="bg-navy-950 border-t border-navy-800/50 py-8 mt-auto">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+                <p>
+                    Built by
+                    <a href="https://www.linkedin.com/in/jordanritter/" class="text-slate-400 hover:text-ocean-400 transition-colors">Jordan Ritter</a>
+                    ·
+                    <a href="https://github.com/PaulJSchellenberg" class="text-slate-400 hover:text-ocean-400 transition-colors">Paul Schellenberg</a>
+                </p>
+
+                <div class="flex items-center gap-4">
+                    <a href="https://github.com/jpr5/webcaltides" class="text-slate-400 hover:text-ocean-400 transition-colors">
+                        GitHub
+                    </a>
+
+                    <div x-data="{ open: false }" class="relative">
+                        <button @click="open = !open" class="text-slate-400 hover:text-ocean-400 transition-colors">
+                            Licenses
+                        </button>
+                        <div x-show="open" x-cloak @click.away="open = false"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute bottom-full right-0 mb-2 w-80 p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-xs text-slate-400 leading-relaxed">
+                            This product includes data from the Canadian Hydrographic Service of the Department of Fisheries and Oceans. Inclusion does not constitute endorsement by CHS or DFO.
+                        </div>
+                    </div>
+
+                    <div x-data="{ open: false }" class="relative">
+                        <button @click="open = !open" class="text-slate-400 hover:text-ocean-400 transition-colors">
+                            What's New
+                        </button>
+                        <div x-show="open" x-cloak @click.away="open = false"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute bottom-full right-0 mb-2 w-64 p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-xs text-slate-400">
+                            <span class="text-ocean-400 font-medium">Jan 2026:</span> XTide & TICON harmonic predictions now available for global coverage.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
 </body>
 </html>

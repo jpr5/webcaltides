@@ -1,694 +1,519 @@
+<%
+    # Extract common values
+    uri = URI.parse(request.url)
+    scheme = uri.scheme
+    current_units = defined?(units) && units ? units : 'imperial'
+    depth_unit = current_units == 'metric' ? 'm' : 'ft'
+    distance_unit = current_units == 'metric' ? 'km' : 'mi'
+%>
 
-<form action="/" accept-charset="UTF-8" method="POST" class="w-full mb-8">
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        var search = document.getElementById('searchtext');
-        if (search) {
-          search.focus();
+<!-- Search Form -->
+<form action="/" accept-charset="UTF-8" method="POST" class="w-full max-w-2xl mx-auto">
+    <div class="search-wrapper relative">
+        <!-- Main search input -->
+        <div class="relative flex items-center">
+            <!-- Compass icon -->
+            <div class="absolute left-4 pointer-events-none">
+                <svg class="compass-icon w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M14.5 9.5l-5 2 2 5 5-2-2-5z"/>
+                </svg>
+            </div>
 
-          // Retain prior search value if ^E or RightArrow
-          search.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey && e.key === 'e') || e.key === 'ArrowRight') {
-              // Only convert if cursor is at the start of the input and there is no text
-              if ((this.selectionStart === 0 && this.selectionEnd === 0 && !this.value) ||
-                  (e.key === 'ArrowRight' && this.selectionStart === 0 && this.selectionEnd === 0)) {
-                e.preventDefault();
-                if (this.placeholder && this.placeholder !== 'Station...') {
-                  this.value = this.placeholder;
-                  this.selectionStart = this.selectionEnd = this.value.length; // Move cursor to end
-                }
-              }
-            }
-          });
-        }
-      });
-    </script>
-
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
-        <h3 class="text-xl font-semibold">Station Search</h3>
-        <div class="text-sm text-gray-600 md:text-right">
-            <p><span class="font-medium">GPS format</span>: decimal 1.23, or degrees 1&deg;2&prime;3, -1&deg;2&prime;3, 1&deg;2&prime;3N or 1&deg;2&prime;3E</p>
-        </div>
-    </div>
-
-    <div class="flex flex-col sm:flex-row gap-2 w-full">
-        <div class="relative flex-grow flex items-center bg-gray-100 border border-gray-300 rounded-l-md">
-            <span class="px-3 text-sm text-gray-700 whitespace-nowrap">Keywords or GPS:</span>
             <input
                 type="text"
-                class="flex-grow px-4 py-2 border-0 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 name="searchtext"
                 id="searchtext"
+                class="search-input w-full pl-12 pr-28 py-4 md:py-5 bg-navy-800/80 border border-navy-700/50 rounded-2xl text-white placeholder-slate-500 text-lg focus:outline-none focus:border-ocean-500/50"
+                placeholder="<%= defined?(placeholder) && placeholder != 'Station...' ? placeholder : 'Try \"Alcatraz Island\" or \"37.8, -122.4\"' %>"
                 value=""
-                placeholder="<%= defined?(placeholder) ? placeholder : 'Station...' %>"
+                autocomplete="off"
             />
-        </div>
 
-        <div class="flex items-center bg-gray-100 border border-gray-300 rounded-r-md">
-            <span class="px-3 text-sm text-gray-700 whitespace-nowrap">Units:</span>
-            <select
-                class="bg-white border-0 py-2 pl-2 pr-8 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-r-md"
-                name="units"
-                id="searchunits"
+            <!-- Units toggle -->
+            <div class="absolute right-20 flex items-center">
+                <select
+                    name="units"
+                    id="searchunits"
+                    class="bg-transparent border-none text-sm text-slate-400 focus:outline-none focus:ring-0 cursor-pointer hover:text-slate-300 transition-colors"
+                >
+                    <option value="imperial" <%= 'selected' if current_units == 'imperial' %> class="bg-navy-800">ft/mi</option>
+                    <option value="metric" <%= 'selected' if current_units == 'metric' %> class="bg-navy-800">m/km</option>
+                </select>
+            </div>
+
+            <!-- Search button -->
+            <button
+                type="submit"
+                class="absolute right-2 px-4 py-2 md:py-2.5 bg-ocean-500 hover:bg-ocean-400 text-white font-medium rounded-xl transition-all duration-200 btn-primary"
             >
-                <option value="imperial" <%= 'selected' if units == 'imperial' %>>ft/mi</option>
-                <option value="metric" <%= 'selected' if units == 'metric' %>>m/km</option>
-            </select>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </button>
         </div>
 
-        <button
-            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-            type="submit"
-        >
-            Search
-        </button>
+        <!-- GPS format hint -->
+        <p class="text-center text-slate-600 text-xs mt-3">
+            GPS: decimal <code class="text-slate-500">37.8, -122.4</code> or degrees <code class="text-slate-500">37°48'N 122°24'W</code>
+        </p>
     </div>
 </form>
 
-<%
-    uri = URI.parse(request.url)
-    scheme = uri.scheme
- %>
-
-<% if defined? tide_results and defined? current_results %>
-
-<div class="mb-6 p-4 bg-blue-50 rounded-lg search-result-container">
-    <div class="text-sm text-blue-800 search-result-text">
-        Search
-        <% case how
-           when 'by' then %>
-           by '<span class="font-medium"><%= tokens.join(" AND ") %></span>'
-        <% when 'near' then %>
-           near '<span class="font-medium"><%= tokens.join(", ") %></span>'
-        <% end %>
-
-        <% if radius && radius > 0 %>
-            within <span class="font-medium"><%= radius %><%= units == 'metric' ? 'km' : 'mi' %></span>
-        <% end %>
-
-        yields <span class="font-semibold"><%= tide_results.count + current_results.count %></span> results
-    </div>
-</div>
-
-<% if tide_results.count > 0 %>
-<div class="mb-8">
-    <h3 class="text-lg font-medium text-gray-900 mb-2">Tide Stations</h3>
-    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-    <div class="overflow-x-auto max-h-[70vh] relative" id="tide-table-container">
-        <div class="absolute right-0 top-12 bottom-0 flex items-center pointer-events-none hidden" id="tide-scroll-indicator">
-            <div class="bg-gray-800 bg-opacity-70 text-white text-sm px-2 py-1 rounded-l-md shadow">
-                ➡️
-            </div>
-        </div>
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Download</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Refine</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-<% tide_results.each_with_index do |r, index| %>
-    <tr class="<%= index.odd? ? 'bg-gray-50' : 'bg-white' %> hover:bg-gray-100">
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-            <% if r.provider.in?(['xtide', 'ticon']) %>
-                <span class="text-gray-900"><%= r.public_id %></span>
-            <% else %>
-                <a href="<%= r.url %>" class="hover:underline"><%= r.public_id %></a>
-            <% end %>
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-            <%= r.name %>
-            <% if r.provider.in?(['xtide', 'ticon']) %>
-                <div class="ml-2 inline-block relative" x-data="{ show: false }">
-                    <span
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 cursor-help"
-                        @mouseenter="show = true"
-                        @mouseleave="show = false"
-                    >
-                        <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
-                    </span>
-                    <div
-                        x-show="show"
-                        x-cloak
-                        class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded shadow-xl z-50 pointer-events-none whitespace-normal"
-                    >
-                        <p class="font-bold uppercase mb-1 text-amber-400 text-[10px]">Not for Navigation</p>
-                        <p class="leading-relaxed opacity-90">
-                            Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-                        </p>
-                        <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-8 border-transparent border-t-gray-900"></div>
-                    </div>
-                </div>
-            <% elsif r.provider == 'noaa' %>
-                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                    NOAA
-                </span>
-            <% elsif r.provider == 'chs' %>
-                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                    CHS
-                </span>
-            <% end %>
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-left text-sm text-gray-500"><%= r.region %></td>
-
-    <%
-       uri.path = "/tides/#{r.id}.ics"
-       uri.query = "units=#{units}"
-       uri.scheme = "webcal"
-       webcal_url = uri.to_s
-       uri.scheme = scheme
-       https_url  = uri.to_s
-       url_id     = "url_#{r.id}"
-    %>
-    <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
-            <div>
-                <button
-                    type="button"
-                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    @click="open = !open"
-                >
-                    calendar
-                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-
-            <div
-                x-show="open"
-                x-cloak
-                x-transition:enter="transition ease-out duration-100"
-                x-transition:enter-start="transform opacity-0 scale-95"
-                x-transition:enter-end="transform opacity-100 scale-100"
-                x-transition:leave="transition ease-in duration-75"
-                x-transition:leave-start="transform opacity-100 scale-100"
-                x-transition:leave-end="transform opacity-0 scale-95"
-                class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
-            >
-                <div class="py-1" role="none">
-                    <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
-                    <div class="flex items-center justify-around px-4 py-2">
-                        <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'
-                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
-                           title="Copy to clipboard">
-                            <img alt="Copy to clipboard" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" width="20" height="20">
-                        </a>
-                        <a id="https_link_<%= r.id %>"
-                           href="<%= https_url %>"
-                           target="_blank"
-                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
-                           title="Download ICS">
-                            <img alt="Download ICS" src="/images/calendar-download.svg" width="20" height="24">
-                        </a>
-                        <a id="webcal_link_<%= r.id %>"
-                           href="<%= webcal_url %>"
-                           target="_blank"
-                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
-                           title="Subscribe in Calendar">
-                            <img alt="Subscribe in Calendar" src="/images/ical.png" width="20" height="20">
-                        </a>
-                    </div>
-                    <div class="border-t border-gray-100"></div>
-                    <div class="px-4 py-2">
-                        <label class="flex items-center">
-                            <input type="checkbox"
-                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                   id="solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
-                                   checked>
-                            <span class="ml-2 text-sm text-gray-700">Add Solar Events</span>
-                        </label>
-                    </div>
-                    <div class="px-4 py-2">
-                        <label class="flex items-center">
-                            <input type="checkbox"
-                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                               id="lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
-                               >
-                            <span class="ml-2 text-sm text-gray-700">Add Lunar Phases</span>
-                        </label>
-                    </div>
-                    <script>
-                    (function() {
-                        var solarBox = document.getElementById('solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
-                        var lunarBox = document.getElementById('lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
-                        var httpsLink = document.getElementById('https_link_<%= r.id %>');
-                        var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
-                        var urlInput = document.getElementById('<%= url_id %>');
-
-                        // Replace them with:
-                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1')
-                            .replace(/([&?])lunar=0(&|$)/, '$1')
-                            .replace(/([&?])units=[^&]*(&|$)/, '$1')
-                            .replace(/([?&])$/, '');
-                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1')
-                            .replace(/([&?])lunar=0(&|$)/, '$1')
-                            .replace(/([&?])units=[^&]*(&|$)/, '$1')
-                            .replace(/([?&])$/, '');
-                        var currentUnits = document.getElementById('searchunits').value;
-
-                        function updateUrls() {
-                            currentUnits = document.getElementById('searchunits').value;
-                            var newHttps = baseHttps + (baseHttps.includes('?') ? '&' : '?') + 'units=' + currentUnits;
-                            var newWebcal = baseWebcal + (baseWebcal.includes('?') ? '&' : '?') + 'units=' + currentUnits;
-
-                            // Add solar parameter if needed
-                            if (!solarBox.checked) {
-                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'solar=0';
-                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'solar=0';
-                            }
-
-                            // Add lunar parameter if needed
-                            if (lunarBox.checked) {
-                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'lunar=1';
-                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'lunar=1';
-                            }
-
-                            httpsLink.href = newHttps;
-                            webcalLink.href = newWebcal;
-                            urlInput.value = newWebcal;
-                        }
-
-                        solarBox.addEventListener('change', updateUrls);
-                        lunarBox.addEventListener('change', updateUrls);
-                        document.getElementById('searchunits').addEventListener('change', updateUrls);
-
-                        // Initial URL update
-                        updateUrls();
-                    })();
-                    </script>
-                </div>
-            </div>
-        </div>
-    </td>
-
-    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
-            <div>
-                <button
-                    type="button"
-                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    @click="open = !open"
-                >
-                    nearby
-                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-
-            <div
-                x-show="open"
-                x-cloak
-                class="origin-top-right absolute right-0 mt-2 w-auto min-w-[12rem] max-w-[16rem] rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-2"
-            >
-                <form action="/" method="POST" class="space-y-2">
-                    <label for="within-tide" class="block text-sm font-medium text-gray-700">Find stations within</label>
-                    <div class="flex rounded-md shadow-sm">
-                        <input
-                            type="text"
-                            name="within"
-                            id="within-tide"
-                            class="border border-gray-300 focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md sm:text-sm"
-                            placeholder="10"
-                        >
-                        <input type="hidden" name="searchtext" value="<%= r.id %>" />
-                        <input type="hidden" name="units" value="<%= units %>" />
-                        <span class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                            <%= units == 'imperial' ? 'mi' : 'km' %>
-                        </span>
-                    </div>
-                    <button
-                        type="submit"
-                        class="w-full flex justify-center py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                        Search Radius
-                    </button>
-                </form>
-            </div>
-        </div>
-    </td>
-
-                </tr>
-                <% end %>
-            </tbody>
-        </table>
-    </div>
-</div>
-<% end %>
-
-<div class="mt-12 mb-8"></div>
-
-<% if current_results.count > 0 %>
-<div class="mb-8">
-    <h3 class="text-lg font-medium text-gray-900 mb-2">Current Stations</h3>
-    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-    <div class="overflow-x-auto max-h-[70vh] relative" id="current-table-container">
-        <div class="absolute right-0 top-12 bottom-0 flex items-center pointer-events-none hidden" id="current-scroll-indicator">
-            <div class="bg-gray-800 bg-opacity-70 text-white text-sm px-2 py-1 rounded-l-md shadow">
-                ➡️
-            </div>
-        </div>
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depth (<%= units == 'metric' ? 'm' : 'ft' %>)</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Download</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Refine</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-<% current_results.each_with_index do |r, index| %>
-<tr class="<%= index.odd? ? 'bg-gray-50' : 'bg-white' %> hover:bg-gray-100">
-    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-        <% if r.provider.in?(['xtide', 'ticon']) %>
-            <span class="text-gray-900"><%= r.bid || r.id %></span>
-        <% else %>
-            <a href="<%= r.url %>" class="hover:underline"><%= r.bid || r.id %></a>
-        <% end %>
-    </td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= r.depth.to_i %></td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-        <%= r.name %>
-        <% if r.provider.in?(['xtide', 'ticon']) %>
-            <div class="ml-2 inline-block relative" x-data="{ show: false }">
-                <span
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 cursor-help"
-                    @mouseenter="show = true"
-                    @mouseleave="show = false"
-                >
-                    <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
-                </span>
-                <div
-                    x-show="show"
-                    x-cloak
-                    class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded shadow-xl z-50 pointer-events-none whitespace-normal"
-                >
-                    <p class="font-bold uppercase mb-1 text-amber-400 text-[10px]">Not for Navigation</p>
-                    <p class="leading-relaxed opacity-90">
-                        Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-                    </p>
-                    <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-8 border-transparent border-t-gray-900"></div>
-                </div>
-            </div>
-        <% elsif r.provider == 'noaa' %>
-            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                NOAA
-            </span>
-        <% elsif r.provider == 'chs' %>
-            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                CHS
-            </span>
-        <% end %>
-    </td>
-    <td class="px-6 py-4 whitespace-nowrap text-left text-sm text-gray-500"><%= r.region %></td>
-
-    <%
-       uri.path = "/currents/#{r.bid}.ics"
-       uri.query = "units=#{units}"
-       uri.scheme = "webcal"
-       webcal_url = uri.to_s
-       uri.scheme = scheme
-       https_url  = uri.to_s
-       url_id     = "url_#{r.bid}_#{r.depth}"
-    %>
-    <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
-            <div>
-                <button
-                    type="button"
-                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    @click="open = !open"
-                >
-                    calendar
-                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-
-            <div
-                x-show="open"
-                x-cloak
-                x-transition:enter="transition ease-out duration-100"
-                x-transition:enter-start="transform opacity-0 scale-95"
-                x-transition:enter-end="transform opacity-100 scale-100"
-                x-transition:leave="transition ease-in duration-75"
-                x-transition:leave-start="transform opacity-100 scale-100"
-                x-transition:leave-end="transform opacity-0 scale-95"
-                class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
-            >
-                <div class="py-1" role="none">
-                    <input id="<%= url_id %>" name="<%= url_id %>" type="hidden" value="<%= webcal_url %>">
-                    <div class="flex items-center justify-around px-4 py-2">
-                        <a href='javascript:navigator.clipboard.writeText(document.getElementById("<%= url_id %>").value);'
-                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
-                           title="Copy to clipboard">
-                            <img alt="Copy to clipboard" src="https://upload.wikimedia.org/wikipedia/commons/1/18/Clipboard_Pictogram.svg" width="20" height="20">
-                        </a>
-                        <a id="https_link_<%= r.id %>"
-                           href="<%= https_url %>"
-                           target="_blank"
-                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
-                           title="Download ICS">
-                            <img alt="Download ICS" src="/images/calendar-download.svg" width="20" height="24">
-                        </a>
-                        <a id="webcal_link_<%= r.id %>"
-                           href="<%= webcal_url %>"
-                           target="_blank"
-                           class="text-gray-700 hover:bg-gray-100 p-2 rounded-full"
-                           title="Subscribe in Calendar">
-                            <img alt="Subscribe in Calendar" src="/images/ical.png" width="20" height="20">
-                        </a>
-                    </div>
-                    <div class="border-t border-gray-100"></div>
-                    <div class="px-4 py-2">
-                        <label class="flex items-center">
-                            <input type="checkbox"
-                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                   id="solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
-                                   checked>
-                            <span class="ml-2 text-sm text-gray-700">Add Solar Events</span>
-                        </label>
-                    </div>
-                    <div class="px-4 py-2">
-                        <label class="flex items-center">
-                            <input type="checkbox"
-                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                               id="lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>"
-                               >
-                            <span class="ml-2 text-sm text-gray-700">Add Lunar Phases</span>
-                        </label>
-                    </div>
-                    <script>
-                    (function() {
-                        var solarBox = document.getElementById('solar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
-                        var lunarBox = document.getElementById('lunar_<%= r.id %>_<%= r.depth if defined?(r.depth) %>');
-                        var httpsLink = document.getElementById('https_link_<%= r.id %>');
-                        var webcalLink = document.getElementById('webcal_link_<%= r.id %>');
-                        var urlInput = document.getElementById('<%= url_id %>');
-                        var baseHttps = '<%= https_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
-                        var baseWebcal = '<%= webcal_url %>'.replace(/([&?])solar=0(&|$)/, '$1').replace(/([&?])lunar=0(&|$)/, '$1').replace(/([?&])$/, '');
-
-                        function updateUrls() {
-                            var newHttps = baseHttps;
-                            var newWebcal = baseWebcal;
-
-                            // Add solar parameter if needed
-                            if (!solarBox.checked) {
-                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'solar=0';
-                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'solar=0';
-                            }
-
-                            // Add lunar parameter if needed
-                            if (lunarBox.checked) {
-                                newHttps += (newHttps.includes('?') ? '&' : '?') + 'lunar=1';
-                                newWebcal += (newWebcal.includes('?') ? '&' : '?') + 'lunar=1';
-                            }
-
-                            httpsLink.href = newHttps;
-                            webcalLink.href = newWebcal;
-                            urlInput.value = newWebcal;
-                        }
-
-                        solarBox.addEventListener('change', updateUrls);
-                        lunarBox.addEventListener('change', updateUrls);
-
-                        // Initial URL update
-                        updateUrls();
-                    })();
-                    </script>
-                </div>
-            </div>
-        </div>
-    </td>
-
-    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
-            <div>
-                <button
-                    type="button"
-                    class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    @click="open = !open"
-                >
-                    nearby
-                    <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-
-            <div
-                x-show="open"
-                x-cloak
-                class="origin-top-right absolute right-0 mt-2 w-auto min-w-[12rem] max-w-[16rem] rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-2"
-            >
-                <form action="/" method="POST" class="space-y-2">
-                    <label for="within-tide" class="block text-sm font-medium text-gray-700">Find stations within</label>
-                    <div class="flex rounded-md shadow-sm">
-                    <input
-                        type="text"
-                        name="within"
-                        id="within-tide"
-                        class="border border-gray-300 focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md sm:text-sm"
-                        placeholder="10"
-                    >
-                    <input type="hidden" name="searchtext" value="<%= r.id %>" />
-                    <input type="hidden" name="units" id="units_<%= r.id %>" value="<%= units %>" />
-                    <span id="units_display_<%= r.id %>" class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                        <%= units == 'imperial' ? 'mi' : 'km' %>
-                    </span>
-                </div>
-                <button
-                    type="submit"
-                    class="w-full flex justify-center py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                    Search Radius
-                    </button>
-                </form>
-            </div>
-        </div>
-    </td>
-
-</tr>
-<% end %>
-</tbody>
-</table>
-    </div>
-</div>
-<% end %>
-
-
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Direct approach to handle radius button clicks
-        document.addEventListener('click', function(event) {
-            // Check if a button with 'radius' text was clicked
-            if (event.target.tagName === 'BUTTON' || event.target.closest('button')) {
-                const button = event.target.tagName === 'BUTTON' ? event.target : event.target.closest('button');
+document.addEventListener('DOMContentLoaded', function() {
+    var search = document.getElementById('searchtext');
+    if (search) {
+        search.focus();
 
-                if (button.textContent.trim().toLowerCase().includes('radius')) {
-                    // Give Alpine.js time to open the dropdown
-                    setTimeout(() => {
-                        // Find the nearest visible dropdown
-                        const parent = button.closest('td');
-                        if (parent) {
-                            const dropdown = parent.querySelector('div[x-show="open"]');
-                            if (dropdown && window.getComputedStyle(dropdown).display !== 'none') {
-                                const input = dropdown.querySelector('input[type="text"]');
-                                if (input) input.focus();
-                            }
-                        }
-                    }, 100); // Slightly longer timeout to ensure dropdown is visible
+        // Retain prior search value with Ctrl+E or Right Arrow
+        search.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey && e.key === 'e') || e.key === 'ArrowRight') {
+                if ((this.selectionStart === 0 && this.selectionEnd === 0 && !this.value) ||
+                    (e.key === 'ArrowRight' && this.selectionStart === 0 && this.selectionEnd === 0)) {
+                    e.preventDefault();
+                    if (this.placeholder && !this.placeholder.startsWith('Try')) {
+                        this.value = this.placeholder;
+                        this.selectionStart = this.selectionEnd = this.value.length;
+                    }
                 }
             }
         });
-
-
-        // Function to check if table is scrollable and show/hide indicator
-        function handleScrollIndicator(tableContainer, indicator) {
-            if (tableContainer && indicator) {
-                // Check if table is wider than its container
-                if (tableContainer.scrollWidth > tableContainer.clientWidth) {
-                    // Show/hide the indicator based on scroll position
-                    function updateIndicator() {
-                        // Only show when table is scrollable horizontally AND not scrolled to the end
-                        if (tableContainer.scrollWidth > tableContainer.clientWidth &&
-                            tableContainer.scrollLeft + tableContainer.clientWidth < tableContainer.scrollWidth - 20) {
-                            indicator.style.display = 'block';
-                        } else {
-                            indicator.style.display = 'none';
-                        }
-                    }
-
-                    // Initial indicator state
-                    updateIndicator();
-
-                    // Update on scroll
-                    tableContainer.addEventListener('scroll', function() {
-                        updateIndicator();
-                    });
-                }
-            }
-        }
-
-        // Handle tide table
-        const tideTableContainer = document.getElementById('tide-table-container');
-        const tideScrollIndicator = document.getElementById('tide-scroll-indicator');
-        handleScrollIndicator(tideTableContainer, tideScrollIndicator);
-
-        // Handle current table
-        const currentTableContainer = document.getElementById('current-table-container');
-        const currentScrollIndicator = document.getElementById('current-scroll-indicator');
-        handleScrollIndicator(currentTableContainer, currentScrollIndicator);
-
-        // Update on window resize
-        window.addEventListener('resize', function() {
-            handleScrollIndicator(tideTableContainer, tideScrollIndicator);
-            handleScrollIndicator(currentTableContainer, currentScrollIndicator);
-        });
-
-        // Handle units change
-        document.getElementById('searchunits').addEventListener('change', function() {
-            const units = this.value;
-            const unitText = units === 'imperial' ? 'mi' : 'km';
-
-            const walker = document.createTreeWalker(
-                document.body,
-                NodeFilter.SHOW_TEXT,
-                {
-                    acceptNode: function(node) {
-                        const text = node.nodeValue.trim();
-                        return (text === 'km' || text === 'mi') ?
-                            NodeFilter.FILTER_ACCEPT :
-                            NodeFilter.FILTER_REJECT;
-                    }
-                },
-                false
-            );
-
-            const nodes = [];
-            let node;
-            while (node = walker.nextNode()) {
-                nodes.push(node);
-            }
-
-            nodes.forEach(node => {
-                node.nodeValue = unitText;
-            });
-
-            document.querySelectorAll('input[type="hidden"][name="units"]').forEach(input => {
-                input.value = units;
-            });
-        });
-    });
+    }
+});
 </script>
 
+<% if defined?(tide_results) && defined?(current_results) %>
+</div></header>
+
+<!-- Results Section -->
+<main class="bg-navy-950 py-12 md:py-16">
+    <div class="max-w-6xl mx-auto px-4">
+
+        <!-- Search summary -->
+        <div class="text-center mb-10 animate-fade-up">
+            <p class="text-slate-400">
+                <% case how
+                   when 'by' %>
+                    Showing results for "<span class="text-white font-medium"><%= tokens.join(" ") %></span>"
+                <% when 'near' %>
+                    Stations near <span class="text-white font-medium"><%= tokens.join(", ") %></span>
+                <% end %>
+                <% if radius && radius > 0 %>
+                    within <span class="text-ocean-400"><%= radius %><%= distance_unit %></span>
+                <% end %>
+                <span class="text-slate-600">·</span>
+                <span class="text-slate-500"><%= tide_results.count + current_results.count %> found</span>
+            </p>
+        </div>
+
+        <% if tide_results.count > 0 %>
+        <!-- Tide Stations Section -->
+        <section class="mb-16 animate-fade-up animation-delay-100">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-ocean-500/10 border border-ocean-500/20">
+                    <svg class="w-5 h-5 text-ocean-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 004 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0011.32 0c1.56-1.56 2.34-3.67 2.34-5.67 0-2.15-.86-4.2-2.34-5.64zM6 14c.01-2 .62-3.27 1.76-4.4L12 5.27l4.24 4.38C17.38 10.77 17.99 12 18 14H6z"/>
+                    </svg>
+                </div>
+                <h2 class="font-display text-2xl md:text-3xl font-semibold text-white">Tide Stations</h2>
+                <span class="text-slate-500 text-sm">(<%= tide_results.count %>)</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <% tide_results.each_with_index do |r, index| %>
+                <%
+                    uri.path = "/tides/#{r.id}.ics"
+                    uri.query = "units=#{current_units}"
+                    uri.scheme = "webcal"
+                    webcal_url = uri.to_s
+                    uri.scheme = scheme
+                    https_url = uri.to_s
+                    card_id = "tide_#{r.id}"
+                %>
+                <div class="station-card bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
+                     x-data="{ solar: true, lunar: false }"
+                     style="animation-delay: <%= index * 50 %>ms">
+
+                    <!-- Card Header -->
+                    <div class="p-4 md:p-5">
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-display text-lg md:text-xl font-semibold text-white truncate" title="<%= r.name %>">
+                                    <%= r.name %>
+                                </h3>
+                                <p class="text-slate-500 text-sm truncate"><%= r.region %></p>
+                            </div>
+
+                            <!-- Provider badge -->
+                            <% if r.provider.in?(['xtide', 'ticon']) %>
+                            <div x-data="{ showTip: false }" class="relative flex-shrink-0">
+                                <span
+                                    @mouseenter="showTip = true"
+                                    @mouseleave="showTip = false"
+                                    @click="showTip = !showTip"
+                                    class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
+                                >
+                                    <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
+                                </span>
+                                <div
+                                    x-show="showTip"
+                                    x-cloak
+                                    x-transition
+                                    class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
+                                >
+                                    <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
+                                    <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                                </div>
+                            </div>
+                            <% elsif r.provider == 'noaa' %>
+                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                NOAA
+                            </span>
+                            <% elsif r.provider == 'chs' %>
+                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                CHS
+                            </span>
+                            <% end %>
+                        </div>
+
+                        <!-- Station ID (clickable for official sources) -->
+                        <% if r.provider.in?(['xtide', 'ticon']) %>
+                        <p class="text-slate-600 text-xs font-mono"><%= r.public_id %></p>
+                        <% else %>
+                        <a href="<%= r.url %>" target="_blank" class="text-ocean-400/70 hover:text-ocean-400 text-xs font-mono transition-colors">
+                            <%= r.public_id %> ↗
+                        </a>
+                        <% end %>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="border-t border-navy-700/50"></div>
+
+                    <!-- Options & Actions -->
+                    <div class="p-4 md:p-5">
+                        <!-- Toggle options -->
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer group">
+                                    <div
+                                        class="toggle-switch"
+                                        :class="{ 'active': solar }"
+                                        @click="solar = !solar"
+                                    ></div>
+                                    <span class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+                                        <span class="hidden sm:inline">☀︎</span> Solar
+                                    </span>
+                                </label>
+
+                                <label class="flex items-center gap-2 cursor-pointer group">
+                                    <div
+                                        class="toggle-switch"
+                                        :class="{ 'active': lunar }"
+                                        @click="lunar = !lunar"
+                                    ></div>
+                                    <span class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+                                        <span class="hidden sm:inline">☾</span> Lunar
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="flex items-center gap-2">
+                            <button
+                                @click="navigator.clipboard.writeText('<%= webcal_url %>' + (!solar ? '&solar=0' : '') + (lunar ? '&lunar=1' : ''))"
+                                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-navy-700/50 hover:bg-navy-700 border border-navy-600/50 rounded-xl text-sm text-slate-300 transition-all duration-200"
+                                title="Copy webcal URL"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                <span class="hidden sm:inline">Copy</span>
+                            </button>
+
+                            <a
+                                :href="'<%= https_url %>' + (!solar ? '&solar=0' : '') + (lunar ? '&lunar=1' : '')"
+                                target="_blank"
+                                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-navy-700/50 hover:bg-navy-700 border border-navy-600/50 rounded-xl text-sm text-slate-300 transition-all duration-200"
+                                title="Download .ics file"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span class="hidden sm:inline">Download</span>
+                            </a>
+
+                            <a
+                                :href="'<%= webcal_url %>' + (!solar ? '&solar=0' : '') + (lunar ? '&lunar=1' : '')"
+                                class="flex-[1.5] flex items-center justify-center gap-2 px-4 py-2.5 bg-ocean-500 hover:bg-ocean-400 rounded-xl text-sm text-white font-medium transition-all duration-200 btn-primary"
+                                title="Subscribe in your calendar app"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                Subscribe
+                            </a>
+                        </div>
+
+                        <!-- Find nearby link -->
+                        <div x-data="{ showNearby: false }" class="mt-3 relative">
+                            <button
+                                @click="showNearby = !showNearby"
+                                class="text-xs text-slate-500 hover:text-ocean-400 transition-colors"
+                            >
+                                Find nearby stations →
+                            </button>
+
+                            <div
+                                x-show="showNearby"
+                                x-cloak
+                                @click.away="showNearby = false"
+                                x-transition
+                                class="absolute left-0 bottom-full mb-2 p-3 bg-navy-900 border border-navy-700 rounded-xl shadow-xl z-50"
+                            >
+                                <form action="/" method="POST" class="flex items-center gap-2">
+                                    <input type="hidden" name="searchtext" value="<%= r.id %>" />
+                                    <input type="hidden" name="units" value="<%= current_units %>" />
+                                    <input
+                                        type="number"
+                                        name="within"
+                                        placeholder="10"
+                                        class="w-16 px-2 py-1.5 bg-navy-800 border border-navy-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
+                                    />
+                                    <span class="text-slate-500 text-sm"><%= distance_unit %></span>
+                                    <button
+                                        type="submit"
+                                        class="px-3 py-1.5 bg-ocean-500 hover:bg-ocean-400 rounded-lg text-sm text-white transition-colors"
+                                    >
+                                        Search
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <% end %>
+            </div>
+        </section>
+        <% end %>
+
+        <% if current_results.count > 0 %>
+        <!-- Current Stations Section -->
+        <section class="animate-fade-up animation-delay-200">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-seafoam-500/10 border border-seafoam-500/20">
+                    <svg class="w-5 h-5 text-seafoam-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                    </svg>
+                </div>
+                <h2 class="font-display text-2xl md:text-3xl font-semibold text-white">Current Stations</h2>
+                <span class="text-slate-500 text-sm">(<%= current_results.count %>)</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <% current_results.each_with_index do |r, index| %>
+                <%
+                    uri.path = "/currents/#{r.bid}.ics"
+                    uri.query = "units=#{current_units}"
+                    uri.scheme = "webcal"
+                    webcal_url = uri.to_s
+                    uri.scheme = scheme
+                    https_url = uri.to_s
+                    card_id = "current_#{r.bid}"
+                %>
+                <div class="station-card bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
+                     x-data="{ solar: true, lunar: false }"
+                     style="animation-delay: <%= index * 50 %>ms">
+
+                    <!-- Card Header -->
+                    <div class="p-4 md:p-5">
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-display text-lg md:text-xl font-semibold text-white truncate" title="<%= r.name %>">
+                                    <%= r.name %>
+                                </h3>
+                                <p class="text-slate-500 text-sm truncate"><%= r.region %></p>
+                            </div>
+
+                            <!-- Provider badge -->
+                            <% if r.provider.in?(['xtide', 'ticon']) %>
+                            <div x-data="{ showTip: false }" class="relative flex-shrink-0">
+                                <span
+                                    @mouseenter="showTip = true"
+                                    @mouseleave="showTip = false"
+                                    @click="showTip = !showTip"
+                                    class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
+                                >
+                                    <%= r.provider == 'ticon' ? 'TICON' : 'XTide' %>
+                                </span>
+                                <div
+                                    x-show="showTip"
+                                    x-cloak
+                                    x-transition
+                                    class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
+                                >
+                                    <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
+                                    <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                                </div>
+                            </div>
+                            <% elsif r.provider == 'noaa' %>
+                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                NOAA
+                            </span>
+                            <% elsif r.provider == 'chs' %>
+                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                CHS
+                            </span>
+                            <% end %>
+                        </div>
+
+                        <!-- Depth indicator -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-navy-700/50 text-xs text-slate-400">
+                                📍 Depth: <%= r.depth.to_i %><%= depth_unit %>
+                            </span>
+                        </div>
+
+                        <!-- Station ID (clickable for official sources) -->
+                        <% if r.provider.in?(['xtide', 'ticon']) %>
+                        <p class="text-slate-600 text-xs font-mono"><%= r.bid || r.id %></p>
+                        <% else %>
+                        <a href="<%= r.url %>" target="_blank" class="text-ocean-400/70 hover:text-ocean-400 text-xs font-mono transition-colors">
+                            <%= r.bid || r.id %> ↗
+                        </a>
+                        <% end %>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="border-t border-navy-700/50"></div>
+
+                    <!-- Options & Actions -->
+                    <div class="p-4 md:p-5">
+                        <!-- Toggle options -->
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer group">
+                                    <div
+                                        class="toggle-switch"
+                                        :class="{ 'active': solar }"
+                                        @click="solar = !solar"
+                                    ></div>
+                                    <span class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+                                        <span class="hidden sm:inline">☀︎</span> Solar
+                                    </span>
+                                </label>
+
+                                <label class="flex items-center gap-2 cursor-pointer group">
+                                    <div
+                                        class="toggle-switch"
+                                        :class="{ 'active': lunar }"
+                                        @click="lunar = !lunar"
+                                    ></div>
+                                    <span class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+                                        <span class="hidden sm:inline">☾</span> Lunar
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="flex items-center gap-2">
+                            <button
+                                @click="navigator.clipboard.writeText('<%= webcal_url %>' + (!solar ? '&solar=0' : '') + (lunar ? '&lunar=1' : ''))"
+                                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-navy-700/50 hover:bg-navy-700 border border-navy-600/50 rounded-xl text-sm text-slate-300 transition-all duration-200"
+                                title="Copy webcal URL"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                <span class="hidden sm:inline">Copy</span>
+                            </button>
+
+                            <a
+                                :href="'<%= https_url %>' + (!solar ? '&solar=0' : '') + (lunar ? '&lunar=1' : '')"
+                                target="_blank"
+                                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-navy-700/50 hover:bg-navy-700 border border-navy-600/50 rounded-xl text-sm text-slate-300 transition-all duration-200"
+                                title="Download .ics file"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span class="hidden sm:inline">Download</span>
+                            </a>
+
+                            <a
+                                :href="'<%= webcal_url %>' + (!solar ? '&solar=0' : '') + (lunar ? '&lunar=1' : '')"
+                                class="flex-[1.5] flex items-center justify-center gap-2 px-4 py-2.5 bg-seafoam-500 hover:bg-seafoam-400 rounded-xl text-sm text-navy-900 font-medium transition-all duration-200 btn-primary"
+                                title="Subscribe in your calendar app"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                Subscribe
+                            </a>
+                        </div>
+
+                        <!-- Find nearby link -->
+                        <div x-data="{ showNearby: false }" class="mt-3 relative">
+                            <button
+                                @click="showNearby = !showNearby"
+                                class="text-xs text-slate-500 hover:text-seafoam-400 transition-colors"
+                            >
+                                Find nearby stations →
+                            </button>
+
+                            <div
+                                x-show="showNearby"
+                                x-cloak
+                                @click.away="showNearby = false"
+                                x-transition
+                                class="absolute left-0 bottom-full mb-2 p-3 bg-navy-900 border border-navy-700 rounded-xl shadow-xl z-50"
+                            >
+                                <form action="/" method="POST" class="flex items-center gap-2">
+                                    <input type="hidden" name="searchtext" value="<%= r.id %>" />
+                                    <input type="hidden" name="units" value="<%= current_units %>" />
+                                    <input
+                                        type="number"
+                                        name="within"
+                                        placeholder="10"
+                                        class="w-16 px-2 py-1.5 bg-navy-800 border border-navy-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-seafoam-500"
+                                    />
+                                    <span class="text-slate-500 text-sm"><%= distance_unit %></span>
+                                    <button
+                                        type="submit"
+                                        class="px-3 py-1.5 bg-seafoam-500 hover:bg-seafoam-400 rounded-lg text-sm text-navy-900 transition-colors"
+                                    >
+                                        Search
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <% end %>
+            </div>
+        </section>
+        <% end %>
+
+        <% if tide_results.count == 0 && current_results.count == 0 %>
+        <!-- No results -->
+        <div class="text-center py-16 animate-fade-up">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-navy-800/50 mb-4">
+                <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-slate-400 mb-2">No stations found</h3>
+            <p class="text-slate-500">Try a different search term or GPS coordinates</p>
+        </div>
+        <% end %>
+
+    </div>
+</main>
+
+<!-- Dummy elements to close the header tags opened in layout -->
+<header class="hidden"><div class="hidden">
 <% end %>
