@@ -233,40 +233,6 @@
             opacity: 0.5;
         }
 
-        /* Custom tooltip with shorter delay */
-        .tooltip-fast {
-            position: relative;
-        }
-
-        .tooltip-fast::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            padding: 8px 12px;
-            background: rgb(15, 23, 42);
-            border: 1px solid rgb(51, 65, 85);
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            white-space: nowrap;
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            z-index: 100;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            transition-delay: 0s;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .tooltip-fast:hover::after {
-            opacity: 1;
-            transition-delay: 2s;
-        }
-
         /* Reduced motion preference */
         @media (prefers-reduced-motion: reduce) {
             .station-card,

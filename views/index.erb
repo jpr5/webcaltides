@@ -474,9 +474,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             <!-- Station Info -->
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-start justify-between gap-2 mb-1">
-                                    <h3 class="text-lg md:text-xl font-semibold text-white truncate tooltip-fast" data-tooltip="<%= r.name %>">
-                                        <%= r.name %>
-                                    </h3>
+                                    <div x-data="{ showTip: false, timer: null }"
+                                         @mouseenter="timer = setTimeout(() => showTip = true, 2000)"
+                                         @mouseleave="clearTimeout(timer); showTip = false"
+                                         class="relative min-w-0">
+                                        <h3 class="text-lg md:text-xl font-semibold text-white truncate">
+                                            <%= r.name %>
+                                        </h3>
+                                        <div x-show="showTip" x-cloak
+                                             x-transition:enter="transition ease-out duration-150"
+                                             x-transition:enter-start="opacity-0"
+                                             x-transition:enter-end="opacity-100"
+                                             class="absolute left-0 top-full mt-1 px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg shadow-xl z-[200] text-sm text-white whitespace-nowrap">
+                                            <%= r.name %>
+                                        </div>
+                                    </div>
 
                                     <!-- Provider badge -->
                                     <% if r.provider.in?(['xtide', 'ticon']) %>
@@ -740,9 +752,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             <!-- Station Info -->
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-start justify-between gap-2 mb-1">
-                                    <h3 class="text-lg md:text-xl font-semibold text-white truncate tooltip-fast" data-tooltip="<%= r.name %>">
-                                        <%= r.name %>
-                                    </h3>
+                                    <div x-data="{ showTip: false, timer: null }"
+                                         @mouseenter="timer = setTimeout(() => showTip = true, 2000)"
+                                         @mouseleave="clearTimeout(timer); showTip = false"
+                                         class="relative min-w-0">
+                                        <h3 class="text-lg md:text-xl font-semibold text-white truncate">
+                                            <%= r.name %>
+                                        </h3>
+                                        <div x-show="showTip" x-cloak
+                                             x-transition:enter="transition ease-out duration-150"
+                                             x-transition:enter-start="opacity-0"
+                                             x-transition:enter-end="opacity-100"
+                                             class="absolute left-0 top-full mt-1 px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg shadow-xl z-[200] text-sm text-white whitespace-nowrap">
+                                            <%= r.name %>
+                                        </div>
+                                    </div>
 
                                     <!-- Provider badge -->
                                     <% if r.provider.in?(['xtide', 'ticon']) %>
