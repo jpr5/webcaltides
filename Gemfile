@@ -25,6 +25,8 @@ gem 'webrick', '>= 1.8.2'
 gem 'puma', '>= 6.6.0'
 gem 'sinatra', '~> 4.2.1', require: 'sinatra/base'
 
+gem 'dotenv'
+
 group :development do
     gem 'debug'
     gem 'sinatra-reloader', require: 'sinatra/reloader'

@@ -3,3 +3,4 @@ cache/*
 *.log
 vendor/*
 .worktrees/
+.env
