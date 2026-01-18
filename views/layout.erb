@@ -149,6 +149,37 @@
             };
         }
 
+        // Units utilities
+        window.unitUtils = {
+            isMetric: function() {
+                return localStorage.getItem('webcaltides_units') === 'metric';
+            },
+            setMetric: function(useMetric) {
+                localStorage.setItem('webcaltides_units', useMetric ? 'metric' : 'imperial');
+                window.dispatchEvent(new CustomEvent('units-changed', { detail: { metric: useMetric } }));
+            },
+            getUnits: function() {
+                return this.isMetric() ? 'metric' : 'imperial';
+            },
+            getDistanceUnit: function() {
+                return this.isMetric() ? 'km' : 'mi';
+            },
+            getDepthUnit: function() {
+                return this.isMetric() ? 'm' : 'ft';
+            }
+        };
+
+        // Alpine.js units toggle component
+        function unitsToggle() {
+            return {
+                metric: window.unitUtils.isMetric(),
+                toggle: function() {
+                    this.metric = !this.metric;
+                    window.unitUtils.setMetric(this.metric);
+                }
+            };
+        }
+
         // Alpine.js search form component factory
         function searchForm(config) {
             return {
@@ -219,11 +250,23 @@
                 swiping: false,
                 startX: 0,
                 selectedSource: config.selectedSource,
+                selectedDepth: config.sources[0]?.depth || null,
                 sources: config.sources,
                 webcalBase: config.webcalBase,
                 httpsBase: config.httpsBase,
-                units: config.units,
+                units: window.unitUtils.getUnits(),
                 stationType: config.stationType,
+
+                init() {
+                    window.addEventListener('units-changed', () => {
+                        this.units = window.unitUtils.getUnits();
+                    });
+                    // Initialize selectedDepth from the initial source
+                    const initialSource = this.sources.find(s => s.id === this.selectedSource);
+                    if (initialSource) {
+                        this.selectedDepth = initialSource.depth;
+                    }
+                },
 
                 get currentSource() {
                     return this.sources.find(s => s.id === this.selectedSource) || this.sources[0];

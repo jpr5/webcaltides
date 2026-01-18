@@ -11,8 +11,6 @@
     - map_url: Google Maps static image URL
     - webcal_base: Base URL for webcal links
     - https_base: Base URL for https links
-    - current_units: 'imperial' or 'metric'
-    - distance_unit: 'mi' or 'km'
     - has_alternatives: boolean
     - alternatives: Array of alternative station objects (optional)
     - sources_json: JSON string of sources array
@@ -28,11 +26,11 @@
          sources: <%= ERB::Util.html_escape(sources_json) %>,
          webcalBase: '<%= webcal_base %>',
          httpsBase: '<%= https_base %>',
-         units: '<%= current_units %>',
          stationType: '<%= station_type %>'
      })"
      @click.away="resetSwipe()"
-     @source-selected="selectedSource = $event.detail; loadNextEvents()"
+     @source-selected="selectedSource = $event.detail; selectedDepth = (sources.find(s => s.id === $event.detail) || {}).depth; loadNextEvents()"
+     @depth-selected="selectedSource = $event.detail.id; selectedDepth = $event.detail.depth; loadNextEvents()"
      style="animation-delay: <%= index * 50 %>ms">
 
     <!-- Swipe action (subscribe) - visible when swiped -->
@@ -47,11 +45,17 @@
     <div class="swipe-content" :class="{ 'swiping': swiping }" :style="'transform: translateX(-' + swipeX + 'px)'"
          @touchstart="handleTouchStart($event)" @touchmove="handleTouchMove($event)" @touchend="handleTouchEnd()">
 
-        <!-- Card Header with Mini Map -->
+        <!-- Card Header -->
         <div class="p-3 md:p-4">
-            <div class="flex gap-4">
+            <!-- Station Name (full width on its own row) -->
+            <h3 class="text-lg md:text-xl font-semibold text-white leading-tight mb-3">
+                <%= station.name %>
+            </h3>
+
+            <!-- Map, Details, and Source selectors row -->
+            <div class="flex gap-3">
                 <!-- Mini Map Thumbnail -->
-                <div class="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-navy-700/50 relative"
+                <div class="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden bg-navy-700/50 relative"
                      x-intersect.once="mapLoaded = true">
                     <template x-if="mapLoaded">
                         <img
@@ -63,46 +67,89 @@
                     </template>
                     <template x-if="!mapLoaded">
                         <div class="w-full h-full flex items-center justify-center">
-                            <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
                             </svg>
                         </div>
                     </template>
                     <!-- Map pin overlay -->
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="w-3 h-3 bg-<%= theme[:accent] %>-500 rounded-full border-2 border-white shadow-lg"></div>
+                        <div class="w-2.5 h-2.5 bg-<%= theme[:accent] %>-500 rounded-full border-2 border-white shadow-lg"></div>
                     </div>
                 </div>
 
-                <!-- Station Info -->
+                <!-- Station Details -->
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-start justify-between gap-2 mb-1">
-                        <h3 onmouseenter="stationTooltip.show(this, '<%= station.name.gsub("'", "\\\\'") %>')"
-                            class="text-lg md:text-xl font-semibold text-white truncate cursor-default">
-                            <%= station.name %>
-                        </h3>
-
-                        <!-- Provider badge -->
-                        <%= erb :'partials/_provider_badge', locals: {
-                            type: type,
-                            theme: theme,
-                            station: station,
-                            has_alternatives: has_alternatives,
-                            alternatives: defined?(alternatives) ? alternatives : [],
-                            sources_json: sources_json
-                        } %>
-                    </div>
-
                     <p class="text-slate-500 text-sm truncate mb-1"><%= station.region %></p>
 
+                    <% if type == :current && station.respond_to?(:depth) && station.depth %>
+                    <% has_depth_selector = defined?(has_multiple_depths) && has_multiple_depths %>
+                    <!-- Depth indicator (stored in feet, converted for display) -->
+                    <!-- Only show when there's NO depth selector (single depth); otherwise depth is shown in selector -->
+                    <% unless has_depth_selector %>
+                    <div x-data="{
+                             _defaultDepth: <%= station.depth.to_f %>,
+                             metric: window.unitUtils.isMetric(),
+                             get depthFt() {
+                                 const cardEl = this.$el.closest('.station-card');
+                                 const parent = cardEl ? Alpine.$data(cardEl) : null;
+                                 return parent?.selectedDepth ?? this._defaultDepth;
+                             },
+                             get depthDisplay() {
+                                 return this.metric
+                                     ? Math.round(this.depthFt * 0.3048)
+                                     : Math.round(this.depthFt);
+                             },
+                             get depthUnit() {
+                                 return this.metric ? 'm' : 'ft';
+                             }
+                         }"
+                         @units-changed.window="metric = window.unitUtils.isMetric()"
+                         class="mb-1">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded bg-navy-700/50 text-xs text-slate-400">
+                            📍 Depth: <span x-text="depthDisplay"></span><span x-text="depthUnit"></span>
+                        </span>
+                    </div>
+                    <% end %>
+                    <% end %>
+
                     <!-- Station ID (clickable for official sources) -->
-                    <% if station.provider.in?(['xtide', 'ticon']) %>
+                    <!-- For currents with multiple sources, make ID reactive to selected source -->
+                    <% if type == :current %>
+                    <template x-if="currentSource?.url">
+                        <a :href="currentSource.url" target="_blank" class="text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
+                            <span x-text="currentSource.publicId || selectedSource"></span> ↗
+                        </a>
+                    </template>
+                    <template x-if="!currentSource?.url">
+                        <p class="text-slate-600 text-xs font-mono" x-text="currentSource?.publicId || selectedSource"></p>
+                    </template>
+                    <% elsif station.provider.in?(['xtide', 'ticon']) %>
                     <p class="text-slate-600 text-xs font-mono"><%= public_id %></p>
                     <% else %>
                     <a href="<%= station.url %>" target="_blank" class="text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
                         <%= public_id %> ↗
                     </a>
                     <% end %>
+                </div>
+
+                <!-- Source selectors (provider badge and depth selector) -->
+                <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                    <%= erb :'partials/_provider_badge', locals: {
+                        type: type,
+                        theme: theme,
+                        station: station,
+                        has_alternatives: has_alternatives,
+                        alternatives: defined?(alternatives) ? alternatives : [],
+                        sources_json: sources_json
+                    } %>
+                    <%= erb :'partials/_depth_selector', locals: {
+                        type: type,
+                        theme: theme,
+                        station: station,
+                        has_multiple_depths: defined?(has_multiple_depths) ? has_multiple_depths : false,
+                        sources_json: sources_json
+                    } %>
                 </div>
             </div>
         </div>
@@ -126,8 +173,6 @@
             <!-- Find nearby -->
             <%= erb :'partials/_find_nearby', locals: {
                 station_id: station_id,
-                current_units: current_units,
-                distance_unit: distance_unit,
                 theme: theme
             } %>
         </div>

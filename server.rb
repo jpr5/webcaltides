@@ -129,17 +129,18 @@ class Server < ::Sinatra::Base
                         # Skip velocity comparison for Slack events (no velocity)
                         if p_event[:type] != 'Slack' && p_event[:velocity] && a_event[:velocity]
                             velocity_diff = (a_event[:velocity].to_f - p_event[:velocity].to_f).round(2)
-                            units = p_event[:velocity_units] || 'kn'
                             event_deltas << {
                                 type: p_event[:type],
                                 time: WebCalTides.format_time_delta(time_diff),
-                                value: WebCalTides.format_height_delta(velocity_diff, units)
+                                raw_value: velocity_diff,
+                                units: 'kn'
                             }
                         else
                             event_deltas << {
                                 type: p_event[:type],
                                 time: WebCalTides.format_time_delta(time_diff),
-                                value: nil
+                                raw_value: nil,
+                                units: nil
                             }
                         end
                     else
@@ -148,7 +149,8 @@ class Server < ::Sinatra::Base
                         event_deltas << {
                             type: p_event[:type],
                             time: WebCalTides.format_time_delta(time_diff),
-                            value: WebCalTides.format_height_delta(height_diff, units)
+                            raw_value: height_diff,
+                            units: units
                         }
                     end
                 end
@@ -157,12 +159,12 @@ class Server < ::Sinatra::Base
             alt[:event_deltas] = event_deltas
 
             # Also compute a summary delta from first comparable events (for dropdown display)
-            first_delta = event_deltas.find { |d| d[:value] } || event_deltas.first
+            first_delta = event_deltas.find { |d| d[:raw_value] } || event_deltas.first
             if first_delta
                 alt[:delta] = {
                     time: first_delta[:time],
-                    height: station_type == 'tides' ? first_delta[:value] : nil,
-                    velocity: station_type == 'currents' ? first_delta[:value] : nil
+                    raw_value: first_delta[:raw_value],
+                    units: first_delta[:units]
                 }
             end
         end
@@ -238,9 +240,9 @@ class Server < ::Sinatra::Base
         current_results ||= []
 
         # Group stations by proximity to deduplicate results from different providers
-        # Current stations also require matching depth to be grouped together
+        # Current stations are grouped by location only; depth selection happens in UI
         tide_groups = WebCalTides.group_search_results(tide_results, compute_deltas: false)
-        current_groups = WebCalTides.group_search_results(current_results, compute_deltas: false, match_depth: true)
+        current_groups = WebCalTides.group_search_results(current_results, compute_deltas: false, match_depth: false)
 
         for_what  = "#{tokens}"
         for_what += " within #{radius}#{radius_units}" if radius

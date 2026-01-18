@@ -1,0 +1,41 @@
+<%#
+  Settings Bar Partial
+
+  Unified bar containing both units and timezone toggles.
+  Both use client-side localStorage persistence.
+%>
+<div class="flex items-center gap-3">
+    <!-- Units Toggle -->
+    <div x-data="unitsToggle()" class="flex items-center gap-2 px-3 py-1.5 bg-navy-800/80 border border-navy-700/50 rounded-full">
+        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+        </svg>
+        <button
+            @click="toggle()"
+            class="flex items-center gap-1 px-2 py-0.5 rounded text-sm font-medium transition-colors"
+            :class="metric ? 'bg-ocean-600/30 text-ocean-400' : 'bg-navy-600 text-slate-200'"
+        >
+            <span x-text="metric ? 'm/km' : 'ft/mi'"></span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Timezone Toggle -->
+    <div x-data="timezoneToggle()" class="flex items-center gap-2 px-3 py-1.5 bg-navy-800/80 border border-navy-700/50 rounded-full">
+        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <button
+            @click="toggle()"
+            class="flex items-center gap-1 px-2 py-0.5 rounded text-sm font-medium transition-colors"
+            :class="useUTC ? 'bg-navy-600 text-slate-200' : 'bg-ocean-600/30 text-ocean-400'"
+        >
+            <span x-text="useUTC ? 'UTC' : tzAbbrev"></span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+            </svg>
+        </button>
+    </div>
+</div>

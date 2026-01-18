@@ -25,17 +25,120 @@
     provider: '<%= station.provider.upcase %>',
     sources: <%= ERB::Util.html_escape(sources_json) %>,
     localSelected: '<%= station_id %>',
+    stationType: '<%= api_type %>',
+    metric: window.unitUtils.isMetric(),
+
+    // Get parent card data
+    getParentData() {
+        const cardEl = this.$el.closest('.station-card');
+        return cardEl ? Alpine.$data(cardEl) : null;
+    },
+
+    // Get current depth from parent card (for filtering)
+    getSelectedDepth() {
+        return this.getParentData()?.selectedDepth;
+    },
+
+    // Get currently selected source from parent card (for comparison popup)
+    get currentSelected() {
+        return this.getParentData()?.selectedSource ?? this.localSelected;
+    },
+
+    // Get sources filtered by current depth (for currents only)
+    get filteredSources() {
+        if (this.stationType !== 'currents') return this.sources;
+        const depth = this.getSelectedDepth();
+        if (depth == null) return this.sources;
+        return this.sources.filter(s => s.depth === depth);
+    },
+
+    // Get unique providers at current depth
+    get availableProviders() {
+        return [...new Set(this.filteredSources.map(s => s.provider))];
+    },
+
+    // Check if we should show the provider dropdown (multiple providers at this depth)
+    get showProviderDropdown() {
+        return this.availableProviders.length > 1;
+    },
+
     selectSource(id) {
         this.localSelected = id;
         const src = this.sources.find(s => s.id === id);
-        if (src) this.provider = src.provider;
+        if (src) {
+            const oldProvider = this.provider;
+            this.provider = src.provider;
+            // For currents, dispatch provider-changed so depth selector can update
+            if (this.stationType === 'currents' && oldProvider !== this.provider) {
+                window.dispatchEvent(new CustomEvent('provider-changed', { detail: this.provider }));
+            }
+        }
         this.$dispatch('source-selected', id);
         this.showDropdown = false;
     },
+
+    // Convert height/velocity value to user's preferred units
+    // Source units can be: 'ft', 'feet', 'm', 'meters', 'kn', 'knots'
+    convertValue(value, sourceUnits) {
+        if (value == null) return null;
+        const srcUnit = (sourceUnits || '').toLowerCase();
+        const isMetricSource = srcUnit.startsWith('m');
+        const isKnots = srcUnit.startsWith('kn');
+
+        // Velocities (knots) don't need conversion
+        if (isKnots) return value;
+
+        // Heights: convert between feet and meters
+        if (this.metric && !isMetricSource) {
+            // Source is feet, user wants meters
+            return value * 0.3048;
+        } else if (!this.metric && isMetricSource) {
+            // Source is meters, user wants feet
+            return value / 0.3048;
+        }
+        return value;
+    },
+
+    // Get display unit for heights based on user preference
+    getHeightUnit() {
+        return this.metric ? 'm' : 'ft';
+    },
+
+    // Get display unit for velocities (always knots)
+    getVelocityUnit() {
+        return 'kn';
+    },
+
+    // Format a height/velocity value with proper units
+    formatValue(event) {
+        if (event.height != null) {
+            const converted = this.convertValue(event.height, event.units);
+            return converted.toFixed(1) + this.getHeightUnit();
+        } else if (event.velocity != null) {
+            return event.velocity.toFixed(1) + this.getVelocityUnit();
+        }
+        return '';
+    },
+
+    // Format a delta value (difference between sources)
+    formatDelta(delta) {
+        if (!delta || delta.raw_value == null) return '';
+        const converted = this.convertValue(delta.raw_value, delta.units);
+        const sign = converted >= 0 ? '+' : '';
+        const isVelocity = (delta.units || '').toLowerCase().startsWith('kn');
+        const unit = isVelocity ? this.getVelocityUnit() : this.getHeightUnit();
+        return sign + converted.toFixed(1) + unit;
+    },
+
     async loadComparison() {
-        if (this.compareData) return;
+        // For currents, only compare sources at the same depth
+        const sourcesToCompare = this.stationType === 'currents' ? this.filteredSources : this.sources;
+        const ids = sourcesToCompare.map(s => s.id);
+        if (ids.length < 2) {
+            this.compareData = { stations: [] };
+            return;
+        }
         this.loading = true;
-        const ids = ['<%= station_id %>', <%= alternatives.map { |a| "'#{a.send(alt_id_method)}'" }.join(', ') %>];
         try {
             const response = await fetch('/api/stations/compare?type=<%= api_type %>&ids[]=' + ids.join('&ids[]='));
             this.compareData = await response.json();
@@ -45,6 +148,7 @@
         this.loading = false;
     }
 }"
+@units-changed.window="metric = window.unitUtils.isMetric()"
 class="relative flex-shrink-0">
     <!-- Badge button - shows currently selected source -->
     <div class="flex items-center gap-1" x-data="{ showWarning: false }">
@@ -91,51 +195,39 @@ class="relative flex-shrink-0">
         x-transition
         class="absolute top-full right-0 mt-2 w-64 bg-navy-900 border border-navy-700 rounded-xl shadow-2xl z-50 overflow-hidden"
     >
-        <!-- All sources - click to select -->
+        <!-- Sources filtered by depth (for currents) - dynamically rendered -->
         <div class="py-1">
-            <!-- Primary source -->
-            <button
-                @click="selectSource('<%= station_id %>')"
-                class="w-full px-3 py-2 flex items-center justify-between hover:bg-navy-800 transition-colors text-left"
-                :class="localSelected === '<%= station_id %>' ? 'bg-navy-800/50' : ''"
-            >
-                <div class="flex items-center gap-2">
-                    <svg x-show="localSelected === '<%= station_id %>'" class="w-4 h-4 text-<%= theme[:accent] %>-400" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                    </svg>
-                    <span x-show="localSelected !== '<%= station_id %>'" class="w-4"></span>
-                    <span class="text-white text-sm font-medium"><%= station.provider == 'ticon' ? 'TICON' : station.provider.upcase %></span>
-                    <span class="text-slate-500 text-xs">(primary)</span>
-                </div>
-            </button>
-
-            <!-- Alternative sources -->
-            <% alternatives.each do |alt| %>
-            <% alt_station_id = alt.send(alt_id_method) %>
-            <button
-                @click="selectSource('<%= alt_station_id %>')"
-                class="w-full px-3 py-2 flex items-center justify-between hover:bg-navy-800 transition-colors text-left"
-                :class="localSelected === '<%= alt_station_id %>' ? 'bg-navy-800/50' : ''"
-            >
-                <div class="flex items-center gap-2">
-                    <svg x-show="localSelected === '<%= alt_station_id %>'" class="w-4 h-4 text-<%= theme[:accent] %>-400" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                    </svg>
-                    <span x-show="localSelected !== '<%= alt_station_id %>'" class="w-4"></span>
-                    <span class="text-slate-300 text-sm"><%= alt.provider == 'ticon' ? 'TICON' : alt.provider.upcase %></span>
-                </div>
-                <div class="text-xs text-slate-500" x-show="compareData && compareData.stations">
-                    <template x-if="compareData && compareData.stations">
-                        <span x-text="(compareData.stations.find(s => s.id === '<%= alt_station_id %>') || {}).delta ? (compareData.stations.find(s => s.id === '<%= alt_station_id %>').delta.time + ', ' + (compareData.stations.find(s => s.id === '<%= alt_station_id %>').delta.<%= delta_value_key %> || '')) : ''"></span>
-                    </template>
-                </div>
-                <div x-show="loading" class="text-slate-600 text-xs">...</div>
-            </button>
-            <% end %>
+            <template x-for="(source, idx) in filteredSources" :key="source.id">
+                <button
+                    @click="selectSource(source.id)"
+                    class="w-full px-3 py-2 flex items-center justify-between hover:bg-navy-800 transition-colors text-left"
+                    :class="currentSelected === source.id ? 'bg-navy-800/50' : ''"
+                >
+                    <div class="flex items-center gap-2">
+                        <svg x-show="currentSelected === source.id" class="w-4 h-4 text-<%= theme[:accent] %>-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                        </svg>
+                        <span x-show="currentSelected !== source.id" class="w-4"></span>
+                        <span class="text-sm" :class="idx === 0 ? 'text-white font-medium' : 'text-slate-300'" x-text="source.provider === 'TICON' ? 'TICON' : source.provider"></span>
+                        <span x-show="idx === 0" class="text-slate-500 text-xs">(primary)</span>
+                    </div>
+                    <div class="text-xs text-slate-500" x-show="compareData && compareData.stations && idx > 0">
+                        <template x-if="compareData && compareData.stations">
+                            <span x-text="(() => {
+                                const s = compareData.stations.find(st => st.id === source.id);
+                                if (!s?.delta) return '';
+                                const deltaStr = s.delta.raw_value != null ? ', ' + formatDelta(s.delta) : '';
+                                return s.delta.time + deltaStr;
+                            })()"></span>
+                        </template>
+                    </div>
+                    <div x-show="loading && idx > 0" class="text-slate-600 text-xs">...</div>
+                </button>
+            </template>
         </div>
 
-        <!-- Compare link -->
-        <div class="px-3 py-2 bg-navy-800/30 border-t border-navy-700">
+        <!-- Compare link (only show when multiple sources available at this depth) -->
+        <div x-show="filteredSources.length >= 2" class="px-3 py-2 bg-navy-800/30 border-t border-navy-700">
             <button
                 @click="showCompare = true"
                 class="text-<%= theme[:accent] %>-400 text-xs hover:text-<%= theme[:accent] %>-300 transition-colors"
@@ -180,7 +272,7 @@ class="relative flex-shrink-0">
                     <template x-if="!loading && compareData && compareData.stations">
                         <div class="space-y-3">
                             <template x-for="(station, idx) in compareData.stations" :key="station.id">
-                                <div class="p-3 rounded-xl" :class="idx === 0 ? 'bg-navy-800 border border-<%= theme[:accent] %>-500/30' : (localSelected === station.id ? 'bg-<%= theme[:accent] %>-900/30 border border-<%= theme[:accent] %>-500/50' : 'bg-navy-800/50 border border-navy-700')">
+                                <div class="p-3 rounded-xl" :class="idx === 0 ? 'bg-navy-800 border border-<%= theme[:accent] %>-500/30' : (currentSelected === station.id ? 'bg-<%= theme[:accent] %>-900/30 border border-<%= theme[:accent] %>-500/50' : 'bg-navy-800/50 border border-navy-700')">
                                     <div class="flex items-center justify-between mb-2">
                                         <div class="flex items-center gap-2">
                                             <span
@@ -188,12 +280,12 @@ class="relative flex-shrink-0">
                                                 :class="station.provider.match(/noaa|chs/i) ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
                                                 x-text="station.provider.toUpperCase()"
                                             ></span>
-                                            <span x-show="idx === 0 && localSelected === station.id" class="text-xs text-slate-500">(primary)</span>
-                                            <span x-show="localSelected === station.id && idx > 0" class="text-xs text-<%= theme[:accent] %>-400">✓ selected</span>
+                                            <span x-show="idx === 0 && currentSelected === station.id" class="text-xs text-slate-500">(primary)</span>
+                                            <span x-show="currentSelected === station.id && idx > 0" class="text-xs text-<%= theme[:accent] %>-400">✓ selected</span>
                                         </div>
                                         <!-- Use button for alternatives -->
                                         <button
-                                            x-show="localSelected !== station.id"
+                                            x-show="currentSelected !== station.id"
                                             @click="selectSource(station.id); showCompare = false"
                                             class="text-xs px-2 py-1 rounded bg-<%= theme[:accent] %>-500/20 text-<%= theme[:accent] %>-400 hover:bg-<%= theme[:accent] %>-500/30 transition-colors"
                                         >
@@ -207,11 +299,11 @@ class="relative flex-shrink-0">
                                             <div class="flex items-center justify-between text-sm">
                                                 <span class="text-slate-400" x-text="event.type === 'H' ? 'High' : (event.type === 'L' ? 'Low' : event.type)"></span>
                                                 <div class="flex items-center gap-2">
-                                                    <span class="text-white" x-text="event.height ? (event.height.toFixed(1) + (event.units || 'ft')) : (event.velocity ? (event.velocity.toFixed(1) + (event.units || 'kn')) : '')"></span>
+                                                    <span class="text-white" x-text="formatValue(event)"></span>
                                                     <span class="text-slate-500" x-text="'@ ' + window.tzUtils.formatTime(event.time)"></span>
                                                     <!-- Per-event delta for alternatives -->
                                                     <template x-if="idx > 0 && station.event_deltas && station.event_deltas[eidx]">
-                                                        <span class="text-<%= theme[:accent] %>-400 text-xs" x-text="'(' + station.event_deltas[eidx].time + (station.event_deltas[eidx].value ? ', ' + station.event_deltas[eidx].value : '') + ')'"></span>
+                                                        <span class="text-<%= theme[:accent] %>-400 text-xs" x-text="'(' + station.event_deltas[eidx].time + (station.event_deltas[eidx].raw_value != null ? ', ' + formatDelta(station.event_deltas[eidx]) : '') + ')'"></span>
                                                     </template>
                                                 </div>
                                             </div>
@@ -225,6 +317,13 @@ class="relative flex-shrink-0">
                     <template x-if="!loading && compareData && compareData.error">
                         <div class="text-center py-8 text-slate-500">
                             <p x-text="compareData.error"></p>
+                        </div>
+                    </template>
+
+                    <template x-if="!loading && compareData && compareData.stations && compareData.stations.length < 2">
+                        <div class="text-center py-8 text-slate-500">
+                            <p>Only one source available at this depth.</p>
+                            <p class="text-xs mt-2">Select a different depth to compare other sources.</p>
                         </div>
                     </template>
                 </div>

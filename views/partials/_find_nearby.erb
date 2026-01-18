@@ -3,11 +3,11 @@
 
   Locals:
     - station_id: ID to search near (used as searchtext)
-    - current_units: 'imperial' or 'metric'
-    - distance_unit: 'mi' or 'km'
     - theme: Hash with :accent (color name), :text (text color class)
 %>
-<div x-data="{ showNearby: false }" class="mt-3 relative">
+<div x-data="{ showNearby: false, distanceUnit: window.unitUtils.getDistanceUnit() }"
+     @units-changed.window="distanceUnit = window.unitUtils.getDistanceUnit()"
+     class="mt-3 relative">
     <button
         @click="showNearby = !showNearby"
         class="text-xs text-slate-500 hover:text-<%= theme[:accent] %>-400 transition-colors"
@@ -24,14 +24,13 @@
     >
         <form action="/" method="POST" class="flex items-center gap-2">
             <input type="hidden" name="searchtext" value="<%= station_id %>" />
-            <input type="hidden" name="units" value="<%= current_units %>" />
             <input
                 type="number"
                 name="within"
                 placeholder="10"
                 class="w-16 px-2 py-1.5 bg-navy-800 border border-navy-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-<%= theme[:accent] %>-500"
             />
-            <span class="text-slate-500 text-sm"><%= distance_unit %></span>
+            <span class="text-slate-500 text-sm" x-text="distanceUnit"></span>
             <button
                 type="submit"
                 class="px-3 py-1.5 bg-<%= theme[:accent] %>-500 hover:bg-<%= theme[:accent] %>-400 rounded-lg text-sm <%= theme[:text] %> transition-colors"

@@ -2,26 +2,20 @@
     # Extract common values
     uri = URI.parse(request.url)
     scheme = uri.scheme
-    current_units = defined?(units) && units ? units : 'imperial'
-    depth_unit = current_units == 'metric' ? 'm' : 'ft'
-    distance_unit = current_units == 'metric' ? 'km' : 'mi'
 %>
 
 <!-- Search Form with Autocomplete -->
 <%= erb :"partials/_search_form", locals: {
     variant: :main,
-    current_units: current_units,
     placeholder: defined?(placeholder) ? placeholder : nil
 } %>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var search = document.getElementById('searchtext');
-    if (search) {
-        search.focus();
-
-        // Retain prior search value with Ctrl+E or Right Arrow
-        search.addEventListener('keydown', function(e) {
+    // Retain prior search value with Ctrl+E or Right Arrow
+    function addPlaceholderToValueBehavior(input) {
+        if (!input) return;
+        input.addEventListener('keydown', function(e) {
             if ((e.ctrlKey && e.key === 'e') || e.key === 'ArrowRight') {
                 if ((this.selectionStart === 0 && this.selectionEnd === 0 && !this.value) ||
                     (e.key === 'ArrowRight' && this.selectionStart === 0 && this.selectionEnd === 0)) {
@@ -29,21 +23,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (this.placeholder && !this.placeholder.startsWith('Try')) {
                         this.value = this.placeholder;
                         this.selectionStart = this.selectionEnd = this.value.length;
+                        // Trigger Alpine's x-model update
+                        this.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 }
             }
         });
     }
 
+    // Apply to main search
+    var mainSearch = document.getElementById('searchtext');
+    if (mainSearch) {
+        mainSearch.focus();
+        addPlaceholderToValueBehavior(mainSearch);
+    }
+
+    // Apply to sticky search
+    var stickySearchInput = document.querySelector('.search-sticky input[name="searchtext"]');
+    addPlaceholderToValueBehavior(stickySearchInput);
+
     // Sticky search on scroll (only when results are visible)
-    var stickySearch = document.querySelector('.search-sticky');
-    if (stickySearch) {
+    var stickySearchBar = document.querySelector('.search-sticky');
+    if (stickySearchBar) {
         var observer = new IntersectionObserver(function(entries) {
             entries.forEach(function(entry) {
                 if (!entry.isIntersecting) {
-                    stickySearch.classList.add('scrolled');
+                    stickySearchBar.classList.add('scrolled');
                 } else {
-                    stickySearch.classList.remove('scrolled');
+                    stickySearchBar.classList.remove('scrolled');
                 }
             });
         }, { threshold: 0, rootMargin: '-80px 0px 0px 0px' });
@@ -74,9 +81,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Load station data for all cards
-    var stationCards = document.querySelectorAll('.station-card[data-station-type]');
-    stationCards.forEach(function(card) {
+    // Lazy load station data with IntersectionObserver
+    // Prefetch cards 1 viewport height ahead of current scroll position
+    function loadCardData(card) {
+        if (card.dataset.loaded) return; // Already loaded
+        card.dataset.loaded = 'true';
+
         var type = card.dataset.stationType;
         var id = card.dataset.stationId;
 
@@ -87,7 +97,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!preview) return;
 
                 if (data.error || !data.events || data.events.length === 0) {
-                    // Show N/A when no data available
                     preview.querySelectorAll('.data-time').forEach(function(el) {
                         el.textContent = 'N/A';
                     });
@@ -95,7 +104,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 if (type === 'tides') {
-                    // Events are sorted by time from API
                     data.events.forEach(function(event, index) {
                         var slotClass = index === 0 ? '.data-tide-1' : '.data-tide-2';
                         var slot = preview.querySelector(slotClass);
@@ -109,7 +117,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (labelEl) labelEl.textContent = event.type;
                         setTimeElement(timeEl, event.time);
 
-                        // Show correct icon
                         if (event.type === 'High') {
                             if (highIcon) highIcon.classList.remove('hidden');
                             if (lowIcon) lowIcon.classList.add('hidden');
@@ -119,7 +126,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     });
 
-                    // Show N/A for missing slots
                     if (data.events.length < 1) {
                         var slot1 = preview.querySelector('.data-tide-1 .data-time');
                         if (slot1) slot1.textContent = 'N/A';
@@ -138,14 +144,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             var slackEl = preview.querySelector('.data-slack .data-time');
                             setTimeElement(slackEl, event.time);
                         } else if (event.type === 'Flood' || event.type === 'Ebb') {
-                            // Keep the first max current event (events are sorted by time from API)
                             if (!nextMaxCurrent) {
                                 nextMaxCurrent = event;
                             }
                         }
                     });
 
-                    // Update max current display
                     if (nextMaxCurrent) {
                         var maxEl = preview.querySelector('.data-max-current');
                         if (maxEl) {
@@ -159,7 +163,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (maxTimeEl) maxTimeEl.textContent = 'N/A';
                     }
 
-                    // Show N/A for missing slack
                     if (!hasSlack) {
                         var slackEl = preview.querySelector('.data-slack .data-time');
                         if (slackEl) slackEl.textContent = 'N/A';
@@ -168,7 +171,6 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(function(err) {
                 console.error('Failed to load station data:', err);
-                // Show N/A on error
                 var preview = card.querySelector('.data-preview-content');
                 if (preview) {
                     preview.querySelectorAll('.data-time').forEach(function(el) {
@@ -176,6 +178,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
             });
+    }
+
+    // Set up IntersectionObserver with 100% bottom margin (prefetch 1 viewport ahead)
+    var cardObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                loadCardData(entry.target);
+                cardObserver.unobserve(entry.target); // Stop observing once loaded
+            }
+        });
+    }, {
+        rootMargin: '0px 0px 100% 0px' // Trigger when card is within 1 viewport height of visible area
+    });
+
+    // Observe all station cards
+    document.querySelectorAll('.station-card[data-station-type]').forEach(function(card) {
+        cardObserver.observe(card);
     });
 });
 </script>
@@ -190,7 +209,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="max-w-2xl mx-auto px-4">
         <%= erb :"partials/_search_form", locals: {
             variant: :sticky,
-            current_units: current_units
+            placeholder: defined?(placeholder) ? placeholder : nil
         } %>
     </div>
 </div>
@@ -199,9 +218,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <main id="results" class="bg-navy-950 pt-6 md:pt-8 pb-12 md:pb-16 scroll-mt-20">
     <div class="max-w-6xl mx-auto px-4">
 
-        <!-- Search summary + Timezone toggle -->
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mb-10 animate-fade-up">
-            <p class="text-slate-400">
+        <!-- Search summary -->
+        <div class="text-center mb-10 animate-fade-up">
+            <p class="text-slate-400"
+               x-data="{ distanceUnit: window.unitUtils.getDistanceUnit() }"
+               @units-changed.window="distanceUnit = window.unitUtils.getDistanceUnit()">
                 <% case how
                    when 'by' %>
                     Showing results for "<span class="text-white font-medium"><%= tokens.join(" ") %></span>"
@@ -209,29 +230,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Stations near <span class="text-white font-medium"><%= tokens.join(", ") %></span>
                 <% end %>
                 <% if radius && radius > 0 %>
-                    within <span class="text-ocean-400"><%= radius %><%= distance_unit %></span>
+                    within <span class="text-ocean-400"><%= radius %><span x-text="distanceUnit"></span></span>
                 <% end %>
                 <span class="text-slate-600">·</span>
                 <span class="text-slate-500"><%= tide_results.count + current_results.count %> found</span>
             </p>
-
-            <!-- Timezone Toggle -->
-            <div x-data="timezoneToggle()" class="flex items-center gap-2 px-3 py-1.5 bg-navy-800/80 border border-navy-700/50 rounded-full">
-                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <span class="text-slate-400 text-sm">Times in</span>
-                <button
-                    @click="toggle()"
-                    class="flex items-center gap-1 px-2 py-0.5 rounded text-sm font-medium transition-colors"
-                    :class="useUTC ? 'bg-navy-600 text-slate-200' : 'bg-ocean-600/30 text-ocean-400'"
-                >
-                    <span x-text="useUTC ? 'UTC' : tzAbbrev"></span>
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
-                    </svg>
-                </button>
-            </div>
         </div>
 
         <% if tide_results.count > 0 %>
@@ -263,7 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     card_id = "tide_#{r.id}"
                     # Build sources array for all cards (needed for dynamic URLs)
                     sources_json = ([r] + alternatives).map { |s|
-                        { id: s.id, provider: s.provider.upcase }
+                        { id: s.id, provider: s.provider.upcase, publicId: s.public_id, url: s.url }
                     }.to_json
                     # Google Maps Static API URL
                     map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x0ea5e9&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x0ea5e9|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
@@ -276,8 +279,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     map_url: map_url,
                     webcal_base: webcal_base,
                     https_base: https_base,
-                    current_units: current_units,
-                    distance_unit: distance_unit,
                     has_alternatives: has_alternatives,
                     alternatives: alternatives,
                     sources_json: sources_json
@@ -315,9 +316,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     https_base = uri.to_s
                     card_id = "current_#{r.bid}"
                     # Build sources array for all cards (needed for dynamic URLs)
+                    # Include depth, publicId, and url for current stations to support depth selector
                     sources_json = ([r] + alternatives).map { |s|
-                        { id: s.bid, provider: s.provider.upcase }
+                        { id: s.bid, provider: s.provider.upcase, depth: s.depth&.to_i, publicId: s.bid, url: s.url }
                     }.to_json
+                    # Compute unique depths and check if we need a depth selector
+                    all_sources = [r] + alternatives
+                    unique_depths = all_sources.map { |s| s.depth&.to_i }.compact.uniq.sort
+                    has_multiple_depths = unique_depths.length > 1
                     # Google Maps Static API URL
                     map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x2dd4bf&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x2dd4bf|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
                 %>
@@ -329,11 +335,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     map_url: map_url,
                     webcal_base: webcal_base,
                     https_base: https_base,
-                    current_units: current_units,
-                    distance_unit: distance_unit,
                     has_alternatives: has_alternatives,
                     alternatives: alternatives,
-                    sources_json: sources_json
+                    sources_json: sources_json,
+                    has_multiple_depths: has_multiple_depths
                 } %>
                 <% end %>
             </div>
