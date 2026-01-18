@@ -23,103 +23,14 @@
 <div class="station-card swipe-container bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
      data-station-type="<%= station_type %>"
      data-station-id="<%= station_id %>"
-     x-data="{
-         solar: true, lunar: false, mapLoaded: false, copied: false,
-         swipeX: 0, swiping: false, startX: 0,
+     x-data="stationCard({
          selectedSource: '<%= station_id %>',
          sources: <%= ERB::Util.html_escape(sources_json) %>,
          webcalBase: '<%= webcal_base %>',
          httpsBase: '<%= https_base %>',
          units: '<%= current_units %>',
-         stationType: '<%= station_type %>',
-         get currentSource() {
-             return this.sources.find(s => s.id === this.selectedSource) || this.sources[0];
-         },
-         getWebcalUrl() {
-             return this.webcalBase + this.selectedSource + '.ics?units=' + this.units + (!this.solar ? '&solar=0' : '') + (this.lunar ? '&lunar=1' : '');
-         },
-         getHttpsUrl() {
-             return this.httpsBase + this.selectedSource + '.ics?units=' + this.units + (!this.solar ? '&solar=0' : '') + (this.lunar ? '&lunar=1' : '');
-         },
-         loadNextEvents() {
-             const preview = this.$el.querySelector('.data-preview-content');
-             if (!preview) return;
-             fetch('/api/stations/' + this.stationType + '/' + encodeURIComponent(this.selectedSource) + '/next')
-                 .then(res => res.json())
-                 .then(data => {
-                     if (data.error || !data.events || data.events.length === 0) {
-                         preview.querySelectorAll('.data-time').forEach(el => { el.textContent = 'N/A'; });
-                         return;
-                     }
-                     <% if type == :tide %>
-                     data.events.forEach((event, index) => {
-                         const slotClass = index === 0 ? '.data-tide-1' : '.data-tide-2';
-                         const slot = preview.querySelector(slotClass);
-                         if (!slot) return;
-                         const labelEl = slot.querySelector('.data-label');
-                         const timeEl = slot.querySelector('.data-time');
-                         const highIcon = slot.querySelector('.data-icon-high');
-                         const lowIcon = slot.querySelector('.data-icon-low');
-                         if (labelEl) labelEl.textContent = event.type;
-                         if (timeEl) {
-                             timeEl.dataset.isoTime = event.time;
-                             timeEl.textContent = '@ ' + window.tzUtils.formatTime(event.time);
-                         }
-                         if (event.type === 'High') {
-                             if (highIcon) highIcon.classList.remove('hidden');
-                             if (lowIcon) lowIcon.classList.add('hidden');
-                         } else {
-                             if (highIcon) highIcon.classList.add('hidden');
-                             if (lowIcon) lowIcon.classList.remove('hidden');
-                         }
-                     });
-                     <% else %>
-                     let hasSlack = false;
-                     let nextMaxCurrent = null;
-                     data.events.forEach(event => {
-                         if (event.type === 'Slack') {
-                             hasSlack = true;
-                             const slackEl = preview.querySelector('.data-slack .data-time');
-                             if (slackEl) {
-                                 slackEl.dataset.isoTime = event.time;
-                                 slackEl.textContent = '@ ' + window.tzUtils.formatTime(event.time);
-                             }
-                         } else if ((event.type === 'Flood' || event.type === 'Ebb') && !nextMaxCurrent) {
-                             nextMaxCurrent = event;
-                         }
-                     });
-                     if (nextMaxCurrent) {
-                         const maxEl = preview.querySelector('.data-max-current');
-                         if (maxEl) {
-                             const labelEl = maxEl.querySelector('.data-label');
-                             const timeEl = maxEl.querySelector('.data-time');
-                             if (labelEl) labelEl.textContent = nextMaxCurrent.type;
-                             if (timeEl) {
-                                 timeEl.dataset.isoTime = nextMaxCurrent.time;
-                                 timeEl.textContent = '@ ' + window.tzUtils.formatTime(nextMaxCurrent.time);
-                             }
-                         }
-                     } else {
-                         const maxTimeEl = preview.querySelector('.data-max-current .data-time');
-                         if (maxTimeEl) maxTimeEl.textContent = 'N/A';
-                     }
-                     if (!hasSlack) {
-                         const slackEl = preview.querySelector('.data-slack .data-time');
-                         if (slackEl) slackEl.textContent = 'N/A';
-                     }
-                     <% end %>
-                 })
-                 .catch(err => {
-                     console.error('Failed to load station data:', err);
-                     preview.querySelectorAll('.data-time').forEach(el => { el.textContent = 'N/A'; });
-                 });
-         },
-         handleTouchStart(e) { this.startX = e.touches[0].clientX; this.swiping = true; },
-         handleTouchMove(e) { if (!this.swiping) return; const diff = this.startX - e.touches[0].clientX; this.swipeX = Math.max(0, Math.min(120, diff)); },
-         handleTouchEnd() { this.swiping = false; this.swipeX = this.swipeX > 60 ? 120 : 0; },
-         resetSwipe() { this.swipeX = 0; },
-         copyUrl(url) { navigator.clipboard.writeText(url); this.copied = true; setTimeout(() => this.copied = false, 1500); }
-     }"
+         stationType: '<%= station_type %>'
+     })"
      @click.away="resetSwipe()"
      @source-selected="selectedSource = $event.detail; loadNextEvents()"
      style="animation-delay: <%= index * 50 %>ms">

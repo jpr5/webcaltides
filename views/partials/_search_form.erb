@@ -13,62 +13,7 @@
 <% input_ref = is_main ? 'searchInput' : nil %>
 <form action="/" accept-charset="UTF-8" method="POST"
       class="<%= is_main ? 'w-full max-w-2xl mx-auto' : 'relative w-full max-w-lg' %>"
-      x-data="{
-          query: '',
-          results: [],
-          showResults: false,
-          selectedIndex: -1,
-          loading: false,
-          debounceTimer: null,
-
-          async search() {
-              if (this.query.length < 2) {
-                  this.results = [];
-                  this.showResults = false;
-                  return;
-              }
-
-              this.loading = true;
-              try {
-                  const response = await fetch('/api/stations/autocomplete?q=' + encodeURIComponent(this.query));
-                  const data = await response.json();
-                  this.results = data.results;
-                  this.showResults = this.results.length > 0;
-                  this.selectedIndex = -1;
-              } catch (e) {
-                  console.error('Autocomplete error:', e);
-              }
-              this.loading = false;
-          },
-
-          debounceSearch() {
-              clearTimeout(this.debounceTimer);
-              this.debounceTimer = setTimeout(() => this.search(), 150);
-          },
-
-          selectResult(result) {
-              this.query = result.name;
-              this.showResults = false;
-              this.$nextTick(() => this.$refs.<%= submit_ref %>.click());
-          },
-
-          handleKeydown(e) {
-              if (!this.showResults) return;
-
-              if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  this.selectedIndex = Math.min(this.selectedIndex + 1, this.results.length - 1);
-              } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  this.selectedIndex = Math.max(this.selectedIndex - 1, -1);
-              } else if (e.key === 'Enter' && this.selectedIndex >= 0) {
-                  e.preventDefault();
-                  this.selectResult(this.results[this.selectedIndex]);
-              } else if (e.key === 'Escape') {
-                  this.showResults = false;
-              }
-          }
-      }"
+      x-data="searchForm({ submitRef: '<%= submit_ref %>' })"
       @click.away="showResults = false"
 >
     <% if is_main %>
