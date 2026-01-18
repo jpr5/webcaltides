@@ -233,55 +233,56 @@ document.addEventListener('DOMContentLoaded', function() {
     // Lazy load station data when cards become visible
     var stationCards = document.querySelectorAll('.station-card[data-station-type]');
     if (stationCards.length > 0) {
+        function loadStationData(card) {
+            if (card.dataset.loaded) return; // Already loaded
+            card.dataset.loaded = 'true';
+
+            var type = card.dataset.stationType;
+            var id = card.dataset.stationId;
+
+            fetch('/api/stations/' + type + '/' + encodeURIComponent(id) + '/next')
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (!data.events || data.events.length === 0) return;
+
+                    var preview = card.querySelector('.data-preview-content');
+                    if (!preview) return;
+
+                    if (type === 'tides') {
+                        data.events.forEach(function(event) {
+                            if (event.type === 'High') {
+                                var highEl = preview.querySelector('.data-high .data-time');
+                                if (highEl) highEl.textContent = '@ ' + event.time;
+                            } else if (event.type === 'Low') {
+                                var lowEl = preview.querySelector('.data-low .data-time');
+                                if (lowEl) lowEl.textContent = '@ ' + event.time;
+                            }
+                        });
+                    } else if (type === 'currents') {
+                        data.events.forEach(function(event) {
+                            if (event.type === 'Slack') {
+                                var slackEl = preview.querySelector('.data-slack .data-time');
+                                if (slackEl) slackEl.textContent = '@ ' + event.time;
+                            } else if (event.type === 'Flood') {
+                                var floodEl = preview.querySelector('.data-flood .data-time');
+                                if (floodEl) floodEl.textContent = '@ ' + event.time;
+                            }
+                        });
+                    }
+                })
+                .catch(function(err) {
+                    console.error('Failed to load station data:', err);
+                });
+        }
+
         var dataObserver = new IntersectionObserver(function(entries) {
             entries.forEach(function(entry) {
                 if (entry.isIntersecting) {
-                    var card = entry.target;
-                    var type = card.dataset.stationType;
-                    var id = card.dataset.stationId;
-
-                    // Stop observing this card
-                    dataObserver.unobserve(card);
-
-                    // Fetch the next events
-                    fetch('/api/stations/' + type + '/' + encodeURIComponent(id) + '/next')
-                        .then(function(response) { return response.json(); })
-                        .then(function(data) {
-                            if (!data.events || data.events.length === 0) return;
-
-                            var preview = card.querySelector('.data-preview-content');
-                            if (!preview) return;
-
-                            if (type === 'tides') {
-                                // Update tide data
-                                data.events.forEach(function(event) {
-                                    if (event.type === 'High') {
-                                        var highEl = preview.querySelector('.data-high .data-time');
-                                        if (highEl) highEl.textContent = '@ ' + event.time;
-                                    } else if (event.type === 'Low') {
-                                        var lowEl = preview.querySelector('.data-low .data-time');
-                                        if (lowEl) lowEl.textContent = '@ ' + event.time;
-                                    }
-                                });
-                            } else if (type === 'currents') {
-                                // Update current data
-                                data.events.forEach(function(event) {
-                                    if (event.type === 'Slack') {
-                                        var slackEl = preview.querySelector('.data-slack .data-time');
-                                        if (slackEl) slackEl.textContent = '@ ' + event.time;
-                                    } else if (event.type === 'Flood') {
-                                        var floodEl = preview.querySelector('.data-flood .data-time');
-                                        if (floodEl) floodEl.textContent = '@ ' + event.time;
-                                    }
-                                });
-                            }
-                        })
-                        .catch(function(err) {
-                            console.error('Failed to load station data:', err);
-                        });
+                    dataObserver.unobserve(entry.target);
+                    loadStationData(entry.target);
                 }
             });
-        }, { threshold: 0.1, rootMargin: '50px' });
+        }, { threshold: 0 });
 
         stationCards.forEach(function(card) {
             dataObserver.observe(card);
