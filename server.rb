@@ -70,6 +70,106 @@ class Server < ::Sinatra::Base
         { results: matches }.to_json
     end
 
+    # API endpoint to compare predictions between multiple stations
+    # GET /api/stations/compare?type=tides&ids[]=noaa:123&ids[]=xtide:456
+    # GET /api/stations/compare?type=currents&ids[]=noaa:123&ids[]=xtide:456
+    get "/api/stations/compare" do
+        content_type :json
+
+        station_type = params['type'] || 'tides'
+        return { error: 'Invalid type' }.to_json unless station_type.in?(%w[tides currents])
+
+        station_ids = Array(params['ids'])
+        return { error: 'No station IDs provided' }.to_json if station_ids.empty?
+        return { error: 'Maximum 5 stations allowed' }.to_json if station_ids.length > 5
+
+        results = station_ids.map do |id|
+            station = case station_type
+                      when 'tides'    then WebCalTides.tide_station_for(id)
+                      when 'currents' then WebCalTides.current_station_for(id)
+                      end
+            next nil unless station
+
+            events = case station_type
+                     when 'tides'    then WebCalTides.next_tide_events(id)
+                     when 'currents' then WebCalTides.next_current_events(id)
+                     end
+
+            result = {
+                id: id,
+                name: station.name,
+                provider: station.provider,
+                events: (events || []).map { |e| e.merge(time: e[:time].iso8601) }
+            }
+            result[:depth] = station.depth if station.respond_to?(:depth) && station.depth
+            result
+        end.compact
+
+        return { error: 'No valid stations found' }.to_json if results.empty?
+
+        # Compute per-event deltas relative to first station (primary)
+        # Match events by type (High/Low for tides, Flood/Ebb/Slack for currents)
+        primary = results.first
+        primary_events = primary[:events]
+
+        results[1..].each do |alt|
+            alt_events = alt[:events]
+            event_deltas = []
+
+            # For each primary event, find matching type in alternative and compute delta
+            primary_events.each_with_index do |p_event, idx|
+                # Find matching event type in alternative (same index or same type)
+                a_event = alt_events[idx] if alt_events[idx] && alt_events[idx][:type] == p_event[:type]
+                a_event ||= alt_events.find { |e| e[:type] == p_event[:type] }
+
+                if a_event
+                    time_diff = (Time.parse(a_event[:time]) - Time.parse(p_event[:time])).to_i
+
+                    if station_type == 'currents'
+                        # Skip velocity comparison for Slack events (no velocity)
+                        if p_event[:type] != 'Slack' && p_event[:velocity] && a_event[:velocity]
+                            velocity_diff = (a_event[:velocity].to_f - p_event[:velocity].to_f).round(2)
+                            units = p_event[:velocity_units] || 'kn'
+                            event_deltas << {
+                                type: p_event[:type],
+                                time: WebCalTides.format_time_delta(time_diff),
+                                value: WebCalTides.format_height_delta(velocity_diff, units)
+                            }
+                        else
+                            event_deltas << {
+                                type: p_event[:type],
+                                time: WebCalTides.format_time_delta(time_diff),
+                                value: nil
+                            }
+                        end
+                    else
+                        height_diff = (a_event[:height].to_f - p_event[:height].to_f).round(2)
+                        units = p_event[:units] || 'ft'
+                        event_deltas << {
+                            type: p_event[:type],
+                            time: WebCalTides.format_time_delta(time_diff),
+                            value: WebCalTides.format_height_delta(height_diff, units)
+                        }
+                    end
+                end
+            end
+
+            alt[:event_deltas] = event_deltas
+
+            # Also compute a summary delta from first comparable events (for dropdown display)
+            first_delta = event_deltas.find { |d| d[:value] } || event_deltas.first
+            if first_delta
+                alt[:delta] = {
+                    time: first_delta[:time],
+                    height: station_type == 'tides' ? first_delta[:value] : nil,
+                    velocity: station_type == 'currents' ? first_delta[:value] : nil
+                }
+            end
+        end
+
+        { stations: results }.to_json
+    end
+
     # API endpoint to get next tide/current event for a station
     get "/api/stations/:type/:id/next" do
         content_type :json
@@ -137,12 +237,17 @@ class Server < ::Sinatra::Base
         tide_results    ||= []
         current_results ||= []
 
+        # Group stations by proximity to deduplicate results from different providers
+        # Current stations also require matching depth to be grouped together
+        tide_groups = WebCalTides.group_search_results(tide_results, compute_deltas: false)
+        current_groups = WebCalTides.group_search_results(current_results, compute_deltas: false, match_depth: true)
+
         for_what  = "#{tokens}"
         for_what += " within #{radius}#{radius_units}" if radius
 
-        $LOG.info "search #{how} #{for_what} yields #{tide_results.count + current_results.count} results"
+        $LOG.info "search #{how} #{for_what} yields #{tide_groups.count + current_groups.count} grouped results (from #{tide_results.count + current_results.count} raw)"
 
-        erb :index, locals: { tide_results: tide_results, current_results: current_results,
+        erb :index, locals: { tide_results: tide_groups, current_results: current_groups,
                               tokens: tokens, how:how, radius: radius, units: ERB::Util.html_escape_once(params['units'] || 'imperial'),
                               placeholder: ERB::Util.html_escape_once(searchparam.empty? ? 'Station...' : searchparam)
                             }

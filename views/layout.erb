@@ -66,7 +66,7 @@
                 tooltip.textContent = text;
                 this.timer = setTimeout(() => {
                     tooltip.style.display = 'block';
-                }, 1000);
+                }, 500);
             },
             hide() {
                 clearTimeout(this.timer);
@@ -147,12 +147,12 @@
         .wave {
             position: absolute;
             bottom: -5%;
-            left: -10%;
-            width: 120%;
+            left: -20%;
+            width: 140%;
             height: 60%;
             background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.08) 100%);
             border-radius: 45% 48% 43% 47%;
-            animation: wave-float 12s ease-in-out infinite;
+            animation: wave-travel 20s ease-in-out infinite;
         }
 
         .wave:nth-child(2) {
@@ -160,8 +160,8 @@
             height: 55%;
             background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.05) 100%);
             border-radius: 47% 44% 48% 43%;
-            animation-delay: -3s;
-            animation-duration: 14s;
+            animation: wave-travel-reverse 24s ease-in-out infinite;
+            animation-delay: -4s;
         }
 
         .wave:nth-child(3) {
@@ -169,13 +169,24 @@
             height: 50%;
             background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.03) 100%);
             border-radius: 43% 47% 45% 48%;
-            animation-delay: -6s;
-            animation-duration: 16s;
+            animation: wave-travel 28s ease-in-out infinite;
+            animation-delay: -8s;
         }
 
-        @keyframes wave-float {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-15px) rotate(1deg); }
+        @keyframes wave-travel {
+            0% { transform: translateX(-5%) translateY(0) rotate(0deg); }
+            25% { transform: translateX(3%) translateY(-10px) rotate(0.5deg); }
+            50% { transform: translateX(8%) translateY(-5px) rotate(0deg); }
+            75% { transform: translateX(3%) translateY(-12px) rotate(-0.5deg); }
+            100% { transform: translateX(-5%) translateY(0) rotate(0deg); }
+        }
+
+        @keyframes wave-travel-reverse {
+            0% { transform: translateX(5%) translateY(0) rotate(0deg); }
+            25% { transform: translateX(-2%) translateY(-8px) rotate(-0.5deg); }
+            50% { transform: translateX(-8%) translateY(-5px) rotate(0deg); }
+            75% { transform: translateX(-2%) translateY(-10px) rotate(0.5deg); }
+            100% { transform: translateX(5%) translateY(0) rotate(0deg); }
         }
 
         /* Subtle grain texture overlay */
@@ -475,11 +486,11 @@
                         GitHub
                     </a>
 
-                    <div x-data="{ open: false }" class="relative">
-                        <button @click="open = !open" class="text-slate-400 hover:text-ocean-400 transition-colors">
+                    <div x-data="{ open: false }" class="relative" @mouseenter="open = true" @mouseleave="open = false">
+                        <button class="text-slate-400 hover:text-ocean-400 transition-colors">
                             Licenses
                         </button>
-                        <div x-show="open" x-cloak @click.away="open = false"
+                        <div x-show="open" x-cloak
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 scale-95"
                              x-transition:enter-end="opacity-100 scale-100"

@@ -24,6 +24,10 @@ module WebCalTides
 
     include Clients::TimeWindow
 
+    # Configuration constants
+    STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
+    PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze  # Priority order for selecting primary source
+
     def settings; return Server.settings; end
     def logger; $LOG; end
 
@@ -186,6 +190,149 @@ module WebCalTides
         end
 
         ids.uniq.compact
+    end
+
+    ##
+    ## Station Grouping & Deduplication
+    ##
+
+    # Represents a group of nearby stations from different providers
+    StationGroup = Struct.new(:primary, :alternatives, :deltas, keyword_init: true) do
+        def has_alternatives?
+            alternatives && alternatives.any?
+        end
+
+        def to_h
+            {
+                primary: primary,
+                alternatives: alternatives || [],
+                deltas: deltas || {}
+            }
+        end
+    end
+
+    # Groups stations by proximity (within STATION_GROUPING_DISTANCE_M meters)
+    # Returns array of StationGroup objects with primary and alternatives
+    def group_stations_by_proximity(stations, threshold_m: STATION_GROUPING_DISTANCE_M, match_depth: false)
+        return [] if stations.nil? || stations.empty?
+
+        groups = []
+        threshold_km = threshold_m / 1000.0
+
+        stations.each do |station|
+            # Find existing group within threshold distance
+            existing_group = groups.find do |group|
+                ref_station = group.first
+                next false unless ref_station.lat && ref_station.lon && station.lat && station.lon
+
+                # For current stations, also require matching depth
+                if match_depth
+                    # Normalize depth comparison (both nil, or both same value)
+                    ref_depth = ref_station.respond_to?(:depth) ? ref_station.depth : nil
+                    sta_depth = station.respond_to?(:depth) ? station.depth : nil
+                    next false unless ref_depth == sta_depth
+                end
+
+                distance_km = Geocoder::Calculations.distance_between(
+                    [ref_station.lat, ref_station.lon],
+                    [station.lat, station.lon],
+                    units: :km
+                )
+                distance_km <= threshold_km
+            end
+
+            if existing_group
+                existing_group << station
+            else
+                groups << [station]
+            end
+        end
+
+        # Convert raw groups to StationGroup objects with primary selection
+        groups.map { |g| select_primary_and_alternatives(g) }
+    end
+
+    # Given a group of stations, selects primary based on provider hierarchy
+    # and returns a StationGroup with primary, alternatives, and (empty) deltas
+    def select_primary_and_alternatives(group)
+        sorted = group.sort_by do |station|
+            provider = (station.provider || 'unknown').downcase
+            PROVIDER_HIERARCHY.index(provider) || 999
+        end
+
+        StationGroup.new(
+            primary: sorted.first,
+            alternatives: sorted[1..] || [],
+            deltas: {}  # Populated lazily via compute_variance
+        )
+    end
+
+    # Computes time and height deltas between primary and each alternative
+    # Returns hash: { "alt_station_id" => { time: "+4min", height: "-0.2ft" }, ... }
+    def compute_variance(primary, alternatives, around: Time.current.utc)
+        return {} if alternatives.nil? || alternatives.empty?
+
+        primary_events = next_tide_events(primary.id, around: around)
+        return {} unless primary_events && primary_events.any?
+
+        primary_next = primary_events.first
+
+        alternatives.each_with_object({}) do |alt, deltas|
+            alt_events = next_tide_events(alt.id, around: around)
+            next unless alt_events && alt_events.any?
+
+            alt_next = alt_events.first
+
+            # Calculate deltas
+            time_diff_seconds = (alt_next[:time].to_time - primary_next[:time].to_time).to_i
+            height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
+            height_units = primary_next[:units] || 'ft'
+
+            deltas[alt.id] = {
+                time: format_time_delta(time_diff_seconds),
+                height: format_height_delta(height_diff, height_units)
+            }
+        end
+    end
+
+    # Formats time delta in seconds to human-readable string
+    def format_time_delta(seconds)
+        return "0min" if seconds.abs < 30  # Less than 30 seconds = essentially same time
+
+        sign = seconds >= 0 ? "+" : ""
+        minutes = (seconds / 60.0).round
+
+        if minutes.abs >= 60
+            hours = minutes / 60
+            mins = minutes.abs % 60
+            mins_str = mins > 0 ? "#{mins}min" : ""
+            "#{sign}#{hours}hr#{mins_str}"
+        else
+            "#{sign}#{minutes}min"
+        end
+    end
+
+    # Formats height delta with sign and units
+    def format_height_delta(diff, units = 'ft')
+        return "0#{units}" if diff.abs < 0.05
+
+        sign = diff >= 0 ? "+" : ""
+        "#{sign}#{diff}#{units}"
+    end
+
+    # Groups search results and optionally computes variance
+    # Set compute_deltas: false for faster initial search results
+    def group_search_results(stations, compute_deltas: false, match_depth: false, around: Time.current.utc)
+        groups = group_stations_by_proximity(stations, match_depth: match_depth)
+
+        if compute_deltas
+            groups.each do |group|
+                next unless group.has_alternatives?
+                group.deltas = compute_variance(group.primary, group.alternatives, around: around)
+            end
+        end
+
+        groups
     end
 
     ##
