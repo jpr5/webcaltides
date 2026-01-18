@@ -26,7 +26,13 @@ module WebCalTides
 
     # Configuration constants
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
-    PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze  # Priority order for selecting primary source
+
+    # Priority order for selecting primary source when multiple providers cover the same location.
+    # Official sources (NOAA, CHS) are preferred over harmonic-based predictions.
+    # XTide vs TICON: Accuracy comparison (Jan 2026, scripts/compare_harmonic_sources.rb) tested
+    # both against 8 NOAA reference stations. Results: identical timing RMS (~4min), but XTide
+    # height RMS was 1.56ft vs TICON's 3.49ft—XTide is ~2.2x more accurate for heights.
+    PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze
 
     def settings; return Server.settings; end
     def logger; $LOG; end
