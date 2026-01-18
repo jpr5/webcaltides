@@ -88,9 +88,9 @@ class Server < ::Sinatra::Base
             $LOG.debug "No future events for #{params[:type]}/#{params[:id]}"
         end
 
-        # Format times for JSON response
+        # Return ISO 8601 timestamps - client will format based on user's timezone preference
         formatted = events.map do |e|
-            e.merge(time: e[:time].strftime('%H:%M'))
+            e.merge(time: e[:time].iso8601)
         end
 
         { events: formatted }.to_json

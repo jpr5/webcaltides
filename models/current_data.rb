@@ -1,8 +1,9 @@
 module Models
     class CurrentData < Struct.new(:bin, :type, :mean_flood_dir, :mean_ebb_dir, :time, :depth, :velocity_major, :url)
 
+        # v2: Added slack water detection for XTide/TICON current stations
         def self.version
-            1
+            2
         end
 
         def self.from_hash(h)

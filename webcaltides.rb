@@ -347,7 +347,8 @@ module WebCalTides
             }
         end
 
-        events
+        # Sort by time so first tide is the soonest
+        events.sort_by { |e| e[:time] }
     end
 
     def tide_calendar_for(id, around: Time.current.utc, units: 'imperial')
@@ -544,7 +545,8 @@ module WebCalTides
             }
         end
 
-        events
+        # Sort by time so first max current is the soonest
+        events.sort_by { |e| e[:time] }
     end
 
     def current_calendar_for(id, around: Time.current.utc)

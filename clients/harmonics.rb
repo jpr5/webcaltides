@@ -30,19 +30,82 @@ module Clients
         end
 
         def current_data_for(station, around)
-            # For now, XTide/TICON current data is predicted the same way as tide data
-            # but represents velocity. generate_predictions returns height/velocity.
-            tide_data_for(station, around).map do |d|
-                Models::CurrentData.new(
-                    type: d.type.downcase == 'high' ? 'flood' : 'ebb', # Mapping peak types to flood/ebb for now
-                    time: d.time,
-                    prediction: d.prediction,
-                    velocity_major: d.prediction,
-                    units: d.units,
+            # For currents, we need peaks (flood/ebb) AND zero crossings (slack)
+            start_time = beginning_of_window(around)
+            end_time = end_of_window(around)
+
+            # Use bid if available (e.g. for currents with different depths), fallback to id
+            lookup_id = station.bid || station.id
+            predictions = @engine.generate_predictions(lookup_id, start_time, end_time)
+
+            return [] if predictions.empty?
+
+            # Detect peaks (flood = high velocity, ebb = low velocity)
+            peaks = @engine.detect_peaks(predictions)
+
+            # Detect zero crossings for slack water
+            slacks = detect_zero_crossings(predictions)
+
+            # Combine peaks and slacks, convert to CurrentData
+            events = []
+
+            peaks.each do |p|
+                # High peak = max positive velocity = flood
+                # Low peak = max negative velocity = ebb
+                type = p['height'] > 0 ? 'flood' : 'ebb'
+                events << Models::CurrentData.new(
+                    type: type,
+                    time: p['time'].to_datetime,
+                    velocity_major: p['height'],
                     depth: station.depth,
-                    url: d.url
+                    url: "#xtide"
                 )
             end
+
+            slacks.each do |s|
+                events << Models::CurrentData.new(
+                    type: 'slack',
+                    time: s['time'].to_datetime,
+                    velocity_major: 0.0,
+                    depth: station.depth,
+                    url: "#xtide"
+                )
+            end
+
+            # Sort by time
+            events.sort_by(&:time)
+        end
+
+        # Detect zero crossings in predictions (slack water for currents)
+        def detect_zero_crossings(predictions)
+            crossings = []
+            return crossings if predictions.length < 2
+
+            (1...predictions.length).each do |i|
+                prev = predictions[i-1]
+                curr = predictions[i]
+
+                # Check for sign change (zero crossing)
+                if (prev['height'] > 0 && curr['height'] <= 0) ||
+                   (prev['height'] < 0 && curr['height'] >= 0)
+
+                    # Linear interpolation to find approximate crossing time
+                    if prev['height'] != curr['height']
+                        ratio = prev['height'].abs / (prev['height'].abs + curr['height'].abs)
+                        crossing_time = prev['time'] + (ratio * 60).seconds # 60s step
+                    else
+                        crossing_time = curr['time']
+                    end
+
+                    crossings << {
+                        'time' => crossing_time,
+                        'height' => 0.0,
+                        'units' => curr['units']
+                    }
+                end
+            end
+
+            crossings
         end
 
         def tide_data_for(station, around)

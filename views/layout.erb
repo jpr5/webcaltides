@@ -80,6 +80,53 @@
                 window.stationTooltip.hide();
             }
         });
+
+        // Timezone utilities
+        window.tzUtils = {
+            // Get user's timezone abbreviation (e.g., "PST", "EST")
+            getLocalTzAbbrev: function() {
+                try {
+                    return new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+                } catch (e) {
+                    return 'Local';
+                }
+            },
+
+            // Check if UTC mode is enabled
+            isUTC: function() {
+                return localStorage.getItem('webcaltides_tz') === 'utc';
+            },
+
+            // Set timezone preference
+            setUTC: function(useUTC) {
+                localStorage.setItem('webcaltides_tz', useUTC ? 'utc' : 'local');
+                // Dispatch event for components to react
+                window.dispatchEvent(new CustomEvent('tz-changed', { detail: { useUTC: useUTC } }));
+            },
+
+            // Format ISO timestamp to HH:MM TZ in preferred timezone
+            formatTime: function(isoString) {
+                var date = new Date(isoString);
+                var options = { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' };
+                if (this.isUTC()) {
+                    options.timeZone = 'UTC';
+                }
+                // Returns "21:15 PST" or "05:48 UTC"
+                return date.toLocaleTimeString('en-US', options);
+            }
+        };
+
+        // Alpine.js timezone toggle component
+        function timezoneToggle() {
+            return {
+                useUTC: window.tzUtils.isUTC(),
+                tzAbbrev: window.tzUtils.getLocalTzAbbrev(),
+                toggle: function() {
+                    this.useUTC = !this.useUTC;
+                    window.tzUtils.setUTC(this.useUTC);
+                }
+            };
+        }
     </script>
 
     <style>

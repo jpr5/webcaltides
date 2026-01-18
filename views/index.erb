@@ -230,6 +230,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Helper to format and display time, storing raw ISO for re-formatting
+    function setTimeElement(el, isoTime) {
+        if (!el) return;
+        el.dataset.isoTime = isoTime;
+        el.textContent = '@ ' + window.tzUtils.formatTime(isoTime);
+    }
+
+    // Re-render all times when timezone preference changes
+    window.addEventListener('tz-changed', function() {
+        document.querySelectorAll('.data-time[data-iso-time]').forEach(function(el) {
+            el.textContent = '@ ' + window.tzUtils.formatTime(el.dataset.isoTime);
+        });
+    });
+
     // Load station data for all cards
     var stationCards = document.querySelectorAll('.station-card[data-station-type]');
     stationCards.forEach(function(card) {
@@ -251,48 +265,74 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 if (type === 'tides') {
-                    var hasHigh = false, hasLow = false;
-                    data.events.forEach(function(event) {
+                    // Events are sorted by time from API
+                    data.events.forEach(function(event, index) {
+                        var slotClass = index === 0 ? '.data-tide-1' : '.data-tide-2';
+                        var slot = preview.querySelector(slotClass);
+                        if (!slot) return;
+
+                        var labelEl = slot.querySelector('.data-label');
+                        var timeEl = slot.querySelector('.data-time');
+                        var highIcon = slot.querySelector('.data-icon-high');
+                        var lowIcon = slot.querySelector('.data-icon-low');
+
+                        if (labelEl) labelEl.textContent = event.type;
+                        setTimeElement(timeEl, event.time);
+
+                        // Show correct icon
                         if (event.type === 'High') {
-                            hasHigh = true;
-                            var highEl = preview.querySelector('.data-high .data-time');
-                            if (highEl) highEl.textContent = '@ ' + event.time;
-                        } else if (event.type === 'Low') {
-                            hasLow = true;
-                            var lowEl = preview.querySelector('.data-low .data-time');
-                            if (lowEl) lowEl.textContent = '@ ' + event.time;
+                            if (highIcon) highIcon.classList.remove('hidden');
+                            if (lowIcon) lowIcon.classList.add('hidden');
+                        } else {
+                            if (highIcon) highIcon.classList.add('hidden');
+                            if (lowIcon) lowIcon.classList.remove('hidden');
                         }
                     });
-                    // Show N/A for missing events
-                    if (!hasHigh) {
-                        var highEl = preview.querySelector('.data-high .data-time');
-                        if (highEl) highEl.textContent = 'N/A';
+
+                    // Show N/A for missing slots
+                    if (data.events.length < 1) {
+                        var slot1 = preview.querySelector('.data-tide-1 .data-time');
+                        if (slot1) slot1.textContent = 'N/A';
                     }
-                    if (!hasLow) {
-                        var lowEl = preview.querySelector('.data-low .data-time');
-                        if (lowEl) lowEl.textContent = 'N/A';
+                    if (data.events.length < 2) {
+                        var slot2 = preview.querySelector('.data-tide-2 .data-time');
+                        if (slot2) slot2.textContent = 'N/A';
                     }
                 } else if (type === 'currents') {
-                    var hasSlack = false, hasFlood = false;
+                    var hasSlack = false;
+                    var nextMaxCurrent = null;
+
                     data.events.forEach(function(event) {
                         if (event.type === 'Slack') {
                             hasSlack = true;
                             var slackEl = preview.querySelector('.data-slack .data-time');
-                            if (slackEl) slackEl.textContent = '@ ' + event.time;
-                        } else if (event.type === 'Flood') {
-                            hasFlood = true;
-                            var floodEl = preview.querySelector('.data-flood .data-time');
-                            if (floodEl) floodEl.textContent = '@ ' + event.time;
+                            setTimeElement(slackEl, event.time);
+                        } else if (event.type === 'Flood' || event.type === 'Ebb') {
+                            // Keep the first max current event (events are sorted by time from API)
+                            if (!nextMaxCurrent) {
+                                nextMaxCurrent = event;
+                            }
                         }
                     });
-                    // Show N/A for missing events
+
+                    // Update max current display
+                    if (nextMaxCurrent) {
+                        var maxEl = preview.querySelector('.data-max-current');
+                        if (maxEl) {
+                            var labelEl = maxEl.querySelector('.data-label');
+                            var timeEl = maxEl.querySelector('.data-time');
+                            if (labelEl) labelEl.textContent = nextMaxCurrent.type;
+                            setTimeElement(timeEl, nextMaxCurrent.time);
+                        }
+                    } else {
+                        var maxTimeEl = preview.querySelector('.data-max-current .data-time');
+                        if (maxTimeEl) maxTimeEl.textContent = 'N/A';
+                    }
+
+                    // Show N/A for missing slack
                     if (!hasSlack) {
                         var slackEl = preview.querySelector('.data-slack .data-time');
                         if (slackEl) slackEl.textContent = 'N/A';
-                    }
-                    if (!hasFlood) {
-                        var floodEl = preview.querySelector('.data-flood .data-time');
-                        if (floodEl) floodEl.textContent = 'N/A';
                     }
                 }
             })
@@ -456,8 +496,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <main id="results" class="bg-navy-950 py-12 md:py-16">
     <div class="max-w-6xl mx-auto px-4">
 
-        <!-- Search summary -->
-        <div class="text-center mb-10 animate-fade-up">
+        <!-- Search summary + Timezone toggle -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mb-10 animate-fade-up">
             <p class="text-slate-400">
                 <% case how
                    when 'by' %>
@@ -471,6 +511,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 <span class="text-slate-600">·</span>
                 <span class="text-slate-500"><%= tide_results.count + current_results.count %> found</span>
             </p>
+
+            <!-- Timezone Toggle -->
+            <div x-data="timezoneToggle()" class="flex items-center gap-2 px-3 py-1.5 bg-navy-800/80 border border-navy-700/50 rounded-full">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-slate-400 text-sm">Times in</span>
+                <button
+                    @click="toggle()"
+                    class="flex items-center gap-1 px-2 py-0.5 rounded text-sm font-medium transition-colors"
+                    :class="useUTC ? 'bg-navy-600 text-slate-200' : 'bg-ocean-600/30 text-ocean-400'"
+                >
+                    <span x-text="useUTC ? 'UTC' : tzAbbrev"></span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <% if tide_results.count > 0 %>
@@ -525,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
                          @touchstart="handleTouchStart($event)" @touchmove="handleTouchMove($event)" @touchend="handleTouchEnd()">
 
                     <!-- Card Header with Mini Map -->
-                    <div class="p-4 md:p-5">
+                    <div class="p-3 md:p-4">
                         <div class="flex gap-4">
                             <!-- Mini Map Thumbnail -->
                             <div class="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-navy-700/50 relative"
@@ -606,23 +664,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
 
                     <!-- Data Preview Strip -->
-                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
-                        <div class="flex items-center gap-3 text-sm overflow-x-auto">
+                    <div class="px-3 md:px-4 py-2.5 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
+                        <div class="flex items-center gap-2 text-sm overflow-x-auto">
                             <span class="text-slate-500 flex-shrink-0">Next:</span>
-                            <div class="flex items-center gap-3 text-slate-300 data-preview-content">
-                                <span class="flex items-center gap-1.5 data-high">
-                                    <svg class="w-3.5 h-3.5 text-ocean-400" fill="currentColor" viewBox="0 0 24 24">
+                            <div class="flex items-center gap-2 text-slate-300 data-preview-content">
+                                <span class="flex items-center gap-1 data-tide-1">
+                                    <svg class="w-3.5 h-3.5 text-ocean-400 data-icon-high" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
                                     </svg>
-                                    <span class="font-medium">High</span>
+                                    <svg class="w-3.5 h-3.5 text-slate-500 data-icon-low hidden" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+                                    </svg>
+                                    <span class="font-medium data-label">High</span>
                                     <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                                 <span class="text-slate-600">·</span>
-                                <span class="flex items-center gap-1.5 data-low">
-                                    <svg class="w-3.5 h-3.5 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+                                <span class="flex items-center gap-1 data-tide-2">
+                                    <svg class="w-3.5 h-3.5 text-ocean-400 data-icon-high hidden" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+                                    </svg>
+                                    <svg class="w-3.5 h-3.5 text-slate-500 data-icon-low" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
                                     </svg>
-                                    <span class="font-medium">Low</span>
+                                    <span class="font-medium data-label">Low</span>
                                     <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                             </div>
@@ -630,7 +694,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
 
                     <!-- Options & Actions -->
-                    <div class="p-4 md:p-5">
+                    <div class="p-3 md:p-4">
                         <!-- Toggle options -->
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-4">
@@ -794,7 +858,7 @@ document.addEventListener('DOMContentLoaded', function() {
                          @touchstart="handleTouchStart($event)" @touchmove="handleTouchMove($event)" @touchend="handleTouchEnd()">
 
                     <!-- Card Header with Mini Map -->
-                    <div class="p-4 md:p-5">
+                    <div class="p-3 md:p-4">
                         <div class="flex gap-4">
                             <!-- Mini Map Thumbnail -->
                             <div class="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-navy-700/50 relative"
@@ -880,17 +944,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
 
                     <!-- Data Preview Strip -->
-                    <div class="px-4 md:px-5 py-3 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
-                        <div class="flex items-center gap-3 text-sm overflow-x-auto">
+                    <div class="px-3 md:px-4 py-2.5 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
+                        <div class="flex items-center gap-2 text-sm overflow-x-auto">
                             <span class="text-slate-500 flex-shrink-0">Next:</span>
-                            <div class="flex items-center gap-3 text-slate-300 data-preview-content">
-                                <span class="flex items-center gap-1.5 data-slack">
+                            <div class="flex items-center gap-2 text-slate-300 data-preview-content">
+                                <span class="flex items-center gap-1 data-slack">
                                     <span class="font-medium text-seafoam-400">Slack</span>
                                     <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                                 <span class="text-slate-600">·</span>
-                                <span class="flex items-center gap-1.5 data-flood">
-                                    <span class="font-medium">Flood</span>
+                                <span class="flex items-center gap-1 data-max-current">
+                                    <span class="font-medium data-label">Max</span>
                                     <span class="text-slate-400 data-time">@ --:--</span>
                                 </span>
                             </div>
@@ -898,7 +962,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
 
                     <!-- Options & Actions -->
-                    <div class="p-4 md:p-5">
+                    <div class="p-3 md:p-4">
                         <!-- Toggle options -->
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-4">
