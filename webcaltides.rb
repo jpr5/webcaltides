@@ -29,9 +29,10 @@ module WebCalTides
 
     # Priority order for selecting primary source when multiple providers cover the same location.
     # Official sources (NOAA, CHS) are preferred over harmonic-based predictions.
-    # XTide vs TICON: Accuracy comparison (Jan 2026, scripts/compare_harmonic_sources.rb) tested
-    # both against 8 NOAA reference stations. Results: identical timing RMS (~4min), but XTide
-    # height RMS was 1.56ft vs TICON's 3.49ft—XTide is ~2.2x more accurate for heights.
+    #
+    # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
+    # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
+    # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze
 
     def settings; return Server.settings; end
