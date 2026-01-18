@@ -1,0 +1,18 @@
+<%#
+  Toggle Switch Partial
+
+  Locals:
+    - name: Alpine.js variable name (e.g., 'solar', 'lunar')
+    - label: Display text (e.g., 'Solar', 'Lunar')
+    - icon: Optional icon character (e.g., '☀︎', '☾')
+%>
+<label class="flex items-center gap-2 cursor-pointer group">
+    <div
+        class="toggle-switch"
+        :class="{ 'active': <%= name %> }"
+        @click="<%= name %> = !<%= name %>"
+    ></div>
+    <span class="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+        <% if local_assigns[:icon] %><span class="hidden sm:inline"><%= icon %></span> <% end %><%= label %>
+    </span>
+</label>

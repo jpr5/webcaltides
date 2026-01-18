@@ -1,0 +1,47 @@
+<%#
+  Action Buttons Partial (Copy, Download, Subscribe)
+
+  Locals:
+    - theme: Hash with :accent (color name), :text (text color class)
+            e.g., { accent: 'ocean', text: 'text-white' }
+                  { accent: 'seafoam', text: 'text-navy-900' }
+%>
+<div class="flex items-center gap-2">
+    <button
+        @click="copyUrl(getWebcalUrl())"
+        class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-navy-700/50 hover:bg-navy-700 border border-navy-600/50 rounded-xl text-sm text-slate-300 transition-all duration-200 btn-press"
+        :class="{ 'copy-success border-emerald-500/50 text-emerald-400': copied }"
+        title="Copy webcal URL"
+    >
+        <svg x-show="!copied" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>
+        <svg x-show="copied" x-cloak class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span class="hidden sm:inline" x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+    </button>
+
+    <a
+        :href="getHttpsUrl()"
+        target="_blank"
+        class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-navy-700/50 hover:bg-navy-700 border border-navy-600/50 rounded-xl text-sm text-slate-300 transition-all duration-200 btn-press"
+        title="Download .ics file"
+    >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        <span class="hidden sm:inline">Download</span>
+    </a>
+
+    <a
+        :href="getWebcalUrl()"
+        class="flex-[1.5] flex items-center justify-center gap-2 px-4 py-2.5 bg-<%= theme[:accent] %>-500 hover:bg-<%= theme[:accent] %>-400 rounded-xl text-sm <%= theme[:text] %> font-medium transition-all duration-200 btn-primary btn-glow btn-press"
+        title="Subscribe in your calendar app"
+    >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Subscribe
+    </a>
+</div>

@@ -1,0 +1,263 @@
+<%#
+  Provider Badge Partial
+
+  Shows provider badge with optional dropdown for alternative sources and comparison modal.
+
+  Locals:
+    - type: :tide or :current
+    - theme: Hash with :accent (color name)
+    - station: Station object (has .provider, .id/.bid, .name)
+    - has_alternatives: boolean
+    - alternatives: Array of alternative station objects (optional)
+    - sources_json: JSON string of sources array (optional)
+%>
+<% station_id = type == :tide ? station.id : station.bid %>
+<% alt_id_method = type == :tide ? :id : :bid %>
+<% api_type = type == :tide ? 'tides' : 'currents' %>
+<% delta_value_key = type == :tide ? 'height' : 'velocity' %>
+
+<% if has_alternatives %>
+<div x-data="{
+    showDropdown: false,
+    showCompare: false,
+    compareData: null,
+    loading: false,
+    provider: '<%= station.provider.upcase %>',
+    sources: <%= ERB::Util.html_escape(sources_json) %>,
+    localSelected: '<%= station_id %>',
+    selectSource(id) {
+        this.localSelected = id;
+        const src = this.sources.find(s => s.id === id);
+        if (src) this.provider = src.provider;
+        this.$dispatch('source-selected', id);
+        this.showDropdown = false;
+    },
+    async loadComparison() {
+        if (this.compareData) return;
+        this.loading = true;
+        const ids = ['<%= station_id %>', <%= alternatives.map { |a| "'#{a.send(alt_id_method)}'" }.join(', ') %>];
+        try {
+            const response = await fetch('/api/stations/compare?type=<%= api_type %>&ids[]=' + ids.join('&ids[]='));
+            this.compareData = await response.json();
+        } catch (e) {
+            console.error('Compare error:', e);
+        }
+        this.loading = false;
+    }
+}"
+class="relative flex-shrink-0">
+    <!-- Badge button - shows currently selected source -->
+    <div class="flex items-center gap-1" x-data="{ showWarning: false }">
+        <button
+            @click="showDropdown = !showDropdown; if(showDropdown) loadComparison()"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors border"
+            :class="/noaa|chs/i.test(provider) ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30'"
+        >
+            <span x-text="provider"></span>
+            <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showDropdown }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <!-- Warning icon for harmonic sources -->
+        <template x-if="!/noaa|chs/i.test(provider)">
+            <div class="relative">
+                <svg
+                    @mouseenter="showWarning = true"
+                    @mouseleave="showWarning = false"
+                    @click="showWarning = !showWarning"
+                    class="w-4 h-4 text-amber-400 cursor-help"
+                    fill="currentColor" viewBox="0 0 24 24"
+                >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                </svg>
+                <div
+                    x-show="showWarning"
+                    x-cloak
+                    x-transition
+                    class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
+                >
+                    <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
+                    <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Dropdown menu -->
+    <div
+        x-show="showDropdown"
+        x-cloak
+        @click.away="showDropdown = false"
+        x-transition
+        class="absolute top-full right-0 mt-2 w-64 bg-navy-900 border border-navy-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+    >
+        <!-- All sources - click to select -->
+        <div class="py-1">
+            <!-- Primary source -->
+            <button
+                @click="selectSource('<%= station_id %>')"
+                class="w-full px-3 py-2 flex items-center justify-between hover:bg-navy-800 transition-colors text-left"
+                :class="localSelected === '<%= station_id %>' ? 'bg-navy-800/50' : ''"
+            >
+                <div class="flex items-center gap-2">
+                    <svg x-show="localSelected === '<%= station_id %>'" class="w-4 h-4 text-<%= theme[:accent] %>-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    </svg>
+                    <span x-show="localSelected !== '<%= station_id %>'" class="w-4"></span>
+                    <span class="text-white text-sm font-medium"><%= station.provider == 'ticon' ? 'TICON' : station.provider.upcase %></span>
+                    <span class="text-slate-500 text-xs">(primary)</span>
+                </div>
+            </button>
+
+            <!-- Alternative sources -->
+            <% alternatives.each do |alt| %>
+            <% alt_station_id = alt.send(alt_id_method) %>
+            <button
+                @click="selectSource('<%= alt_station_id %>')"
+                class="w-full px-3 py-2 flex items-center justify-between hover:bg-navy-800 transition-colors text-left"
+                :class="localSelected === '<%= alt_station_id %>' ? 'bg-navy-800/50' : ''"
+            >
+                <div class="flex items-center gap-2">
+                    <svg x-show="localSelected === '<%= alt_station_id %>'" class="w-4 h-4 text-<%= theme[:accent] %>-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    </svg>
+                    <span x-show="localSelected !== '<%= alt_station_id %>'" class="w-4"></span>
+                    <span class="text-slate-300 text-sm"><%= alt.provider == 'ticon' ? 'TICON' : alt.provider.upcase %></span>
+                </div>
+                <div class="text-xs text-slate-500" x-show="compareData && compareData.stations">
+                    <template x-if="compareData && compareData.stations">
+                        <span x-text="(compareData.stations.find(s => s.id === '<%= alt_station_id %>') || {}).delta ? (compareData.stations.find(s => s.id === '<%= alt_station_id %>').delta.time + ', ' + (compareData.stations.find(s => s.id === '<%= alt_station_id %>').delta.<%= delta_value_key %> || '')) : ''"></span>
+                    </template>
+                </div>
+                <div x-show="loading" class="text-slate-600 text-xs">...</div>
+            </button>
+            <% end %>
+        </div>
+
+        <!-- Compare link -->
+        <div class="px-3 py-2 bg-navy-800/30 border-t border-navy-700">
+            <button
+                @click="showCompare = true"
+                class="text-<%= theme[:accent] %>-400 text-xs hover:text-<%= theme[:accent] %>-300 transition-colors"
+            >
+                Compare predictions →
+            </button>
+        </div>
+    </div>
+
+    <!-- Comparison Popover (teleported to body to escape card overflow) -->
+    <template x-teleport="body">
+        <div
+            x-show="showCompare"
+            x-cloak
+            x-transition
+            class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+            @click.self="showCompare = false"
+        >
+            <div class="bg-navy-900 border border-navy-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden" @click.stop>
+                <!-- Popover header -->
+                <div class="flex items-center justify-between px-4 py-3 border-b border-navy-700">
+                    <h4 class="text-lg font-semibold text-white">Compare Sources</h4>
+                    <button @click="showCompare = false" class="text-slate-400 hover:text-white transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Comparison table -->
+                <div class="p-4 overflow-y-auto max-h-[60vh]">
+                    <template x-if="loading">
+                        <div class="text-center py-8">
+                            <svg class="w-8 h-8 text-<%= theme[:accent] %>-400 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <p class="text-slate-500 mt-2">Loading predictions...</p>
+                        </div>
+                    </template>
+
+                    <template x-if="!loading && compareData && compareData.stations">
+                        <div class="space-y-3">
+                            <template x-for="(station, idx) in compareData.stations" :key="station.id">
+                                <div class="p-3 rounded-xl" :class="idx === 0 ? 'bg-navy-800 border border-<%= theme[:accent] %>-500/30' : (localSelected === station.id ? 'bg-<%= theme[:accent] %>-900/30 border border-<%= theme[:accent] %>-500/50' : 'bg-navy-800/50 border border-navy-700')">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span
+                                                class="px-2 py-0.5 rounded text-xs font-medium"
+                                                :class="station.provider.match(/noaa|chs/i) ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
+                                                x-text="station.provider.toUpperCase()"
+                                            ></span>
+                                            <span x-show="idx === 0 && localSelected === station.id" class="text-xs text-slate-500">(primary)</span>
+                                            <span x-show="localSelected === station.id && idx > 0" class="text-xs text-<%= theme[:accent] %>-400">✓ selected</span>
+                                        </div>
+                                        <!-- Use button for alternatives -->
+                                        <button
+                                            x-show="localSelected !== station.id"
+                                            @click="selectSource(station.id); showCompare = false"
+                                            class="text-xs px-2 py-1 rounded bg-<%= theme[:accent] %>-500/20 text-<%= theme[:accent] %>-400 hover:bg-<%= theme[:accent] %>-500/30 transition-colors"
+                                        >
+                                            Use this source
+                                        </button>
+                                    </div>
+
+                                    <!-- Events with per-event deltas -->
+                                    <div class="space-y-1">
+                                        <template x-for="(event, eidx) in station.events.slice(0, 2)" :key="eidx">
+                                            <div class="flex items-center justify-between text-sm">
+                                                <span class="text-slate-400" x-text="event.type === 'H' ? 'High' : (event.type === 'L' ? 'Low' : event.type)"></span>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-white" x-text="event.height ? (event.height.toFixed(1) + (event.units || 'ft')) : (event.velocity ? (event.velocity.toFixed(1) + (event.units || 'kn')) : '')"></span>
+                                                    <span class="text-slate-500" x-text="'@ ' + window.tzUtils.formatTime(event.time)"></span>
+                                                    <!-- Per-event delta for alternatives -->
+                                                    <template x-if="idx > 0 && station.event_deltas && station.event_deltas[eidx]">
+                                                        <span class="text-<%= theme[:accent] %>-400 text-xs" x-text="'(' + station.event_deltas[eidx].time + (station.event_deltas[eidx].value ? ', ' + station.event_deltas[eidx].value : '') + ')'"></span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <template x-if="!loading && compareData && compareData.error">
+                        <div class="text-center py-8 text-slate-500">
+                            <p x-text="compareData.error"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+<% elsif station.provider.in?(['xtide', 'ticon']) %>
+<div x-data="{ showTip: false }" class="relative flex-shrink-0">
+    <span
+        @mouseenter="showTip = true"
+        @mouseleave="showTip = false"
+        @click="showTip = !showTip"
+        class="badge-warning inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-help"
+    >
+        <%= station.provider == 'ticon' ? 'TICON' : 'XTide' %>
+    </span>
+    <div
+        x-show="showTip"
+        x-cloak
+        x-transition
+        class="absolute top-full right-0 mt-2 w-64 p-3 bg-navy-900 border border-amber-500/30 rounded-lg shadow-xl z-50 text-xs"
+    >
+        <p class="font-bold text-amber-400 mb-1">NOT FOR NAVIGATION</p>
+        <p class="text-slate-400 leading-relaxed">Based on harmonic constants, not official measurements. Distributed WITHOUT ANY WARRANTY.</p>
+    </div>
+</div>
+<% elsif station.provider == 'noaa' %>
+<span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+    NOAA
+</span>
+<% elsif station.provider == 'chs' %>
+<span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+    CHS
+</span>
+<% end %>

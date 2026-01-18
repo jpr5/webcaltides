@@ -1,0 +1,225 @@
+<%#
+  Station Card Partial
+
+  Unified partial for both tide and current station cards.
+
+  Locals:
+    - type: :tide or :current
+    - station: Station object (r)
+    - index: Card index for animation delay
+    - theme: Hash with :accent (color name), :text (text color class)
+    - map_url: Google Maps static image URL
+    - webcal_base: Base URL for webcal links
+    - https_base: Base URL for https links
+    - current_units: 'imperial' or 'metric'
+    - distance_unit: 'mi' or 'km'
+    - has_alternatives: boolean
+    - alternatives: Array of alternative station objects (optional)
+    - sources_json: JSON string of sources array
+%>
+<% station_id = type == :tide ? station.id : station.bid %>
+<% station_type = type == :tide ? 'tides' : 'currents' %>
+<% public_id = type == :tide ? station.public_id : (station.bid || station.id) %>
+<div class="station-card swipe-container bg-navy-800/50 border border-navy-700/50 rounded-2xl overflow-hidden backdrop-blur-sm"
+     data-station-type="<%= station_type %>"
+     data-station-id="<%= station_id %>"
+     x-data="{
+         solar: true, lunar: false, mapLoaded: false, copied: false,
+         swipeX: 0, swiping: false, startX: 0,
+         selectedSource: '<%= station_id %>',
+         sources: <%= ERB::Util.html_escape(sources_json) %>,
+         webcalBase: '<%= webcal_base %>',
+         httpsBase: '<%= https_base %>',
+         units: '<%= current_units %>',
+         stationType: '<%= station_type %>',
+         get currentSource() {
+             return this.sources.find(s => s.id === this.selectedSource) || this.sources[0];
+         },
+         getWebcalUrl() {
+             return this.webcalBase + this.selectedSource + '.ics?units=' + this.units + (!this.solar ? '&solar=0' : '') + (this.lunar ? '&lunar=1' : '');
+         },
+         getHttpsUrl() {
+             return this.httpsBase + this.selectedSource + '.ics?units=' + this.units + (!this.solar ? '&solar=0' : '') + (this.lunar ? '&lunar=1' : '');
+         },
+         loadNextEvents() {
+             const preview = this.$el.querySelector('.data-preview-content');
+             if (!preview) return;
+             fetch('/api/stations/' + this.stationType + '/' + encodeURIComponent(this.selectedSource) + '/next')
+                 .then(res => res.json())
+                 .then(data => {
+                     if (data.error || !data.events || data.events.length === 0) {
+                         preview.querySelectorAll('.data-time').forEach(el => { el.textContent = 'N/A'; });
+                         return;
+                     }
+                     <% if type == :tide %>
+                     data.events.forEach((event, index) => {
+                         const slotClass = index === 0 ? '.data-tide-1' : '.data-tide-2';
+                         const slot = preview.querySelector(slotClass);
+                         if (!slot) return;
+                         const labelEl = slot.querySelector('.data-label');
+                         const timeEl = slot.querySelector('.data-time');
+                         const highIcon = slot.querySelector('.data-icon-high');
+                         const lowIcon = slot.querySelector('.data-icon-low');
+                         if (labelEl) labelEl.textContent = event.type;
+                         if (timeEl) {
+                             timeEl.dataset.isoTime = event.time;
+                             timeEl.textContent = '@ ' + window.tzUtils.formatTime(event.time);
+                         }
+                         if (event.type === 'High') {
+                             if (highIcon) highIcon.classList.remove('hidden');
+                             if (lowIcon) lowIcon.classList.add('hidden');
+                         } else {
+                             if (highIcon) highIcon.classList.add('hidden');
+                             if (lowIcon) lowIcon.classList.remove('hidden');
+                         }
+                     });
+                     <% else %>
+                     let hasSlack = false;
+                     let nextMaxCurrent = null;
+                     data.events.forEach(event => {
+                         if (event.type === 'Slack') {
+                             hasSlack = true;
+                             const slackEl = preview.querySelector('.data-slack .data-time');
+                             if (slackEl) {
+                                 slackEl.dataset.isoTime = event.time;
+                                 slackEl.textContent = '@ ' + window.tzUtils.formatTime(event.time);
+                             }
+                         } else if ((event.type === 'Flood' || event.type === 'Ebb') && !nextMaxCurrent) {
+                             nextMaxCurrent = event;
+                         }
+                     });
+                     if (nextMaxCurrent) {
+                         const maxEl = preview.querySelector('.data-max-current');
+                         if (maxEl) {
+                             const labelEl = maxEl.querySelector('.data-label');
+                             const timeEl = maxEl.querySelector('.data-time');
+                             if (labelEl) labelEl.textContent = nextMaxCurrent.type;
+                             if (timeEl) {
+                                 timeEl.dataset.isoTime = nextMaxCurrent.time;
+                                 timeEl.textContent = '@ ' + window.tzUtils.formatTime(nextMaxCurrent.time);
+                             }
+                         }
+                     } else {
+                         const maxTimeEl = preview.querySelector('.data-max-current .data-time');
+                         if (maxTimeEl) maxTimeEl.textContent = 'N/A';
+                     }
+                     if (!hasSlack) {
+                         const slackEl = preview.querySelector('.data-slack .data-time');
+                         if (slackEl) slackEl.textContent = 'N/A';
+                     }
+                     <% end %>
+                 })
+                 .catch(err => {
+                     console.error('Failed to load station data:', err);
+                     preview.querySelectorAll('.data-time').forEach(el => { el.textContent = 'N/A'; });
+                 });
+         },
+         handleTouchStart(e) { this.startX = e.touches[0].clientX; this.swiping = true; },
+         handleTouchMove(e) { if (!this.swiping) return; const diff = this.startX - e.touches[0].clientX; this.swipeX = Math.max(0, Math.min(120, diff)); },
+         handleTouchEnd() { this.swiping = false; this.swipeX = this.swipeX > 60 ? 120 : 0; },
+         resetSwipe() { this.swipeX = 0; },
+         copyUrl(url) { navigator.clipboard.writeText(url); this.copied = true; setTimeout(() => this.copied = false, 1500); }
+     }"
+     @click.away="resetSwipe()"
+     @source-selected="selectedSource = $event.detail; loadNextEvents()"
+     style="animation-delay: <%= index * 50 %>ms">
+
+    <!-- Swipe action (subscribe) - visible when swiped -->
+    <div class="swipe-action bg-<%= theme[:accent] %>-500 rounded-r-2xl md:hidden">
+        <a :href="getWebcalUrl()" class="swipe-action-btn <%= theme[:text] %>">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Subscribe
+        </a>
+    </div>
+
+    <!-- Swipeable content wrapper -->
+    <div class="swipe-content" :class="{ 'swiping': swiping }" :style="'transform: translateX(-' + swipeX + 'px)'"
+         @touchstart="handleTouchStart($event)" @touchmove="handleTouchMove($event)" @touchend="handleTouchEnd()">
+
+        <!-- Card Header with Mini Map -->
+        <div class="p-3 md:p-4">
+            <div class="flex gap-4">
+                <!-- Mini Map Thumbnail -->
+                <div class="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-navy-700/50 relative"
+                     x-intersect.once="mapLoaded = true">
+                    <template x-if="mapLoaded">
+                        <img
+                            src="<%= map_url %>"
+                            alt="Map of <%= station.name %>"
+                            class="w-full h-full object-cover"
+                            loading="lazy"
+                        />
+                    </template>
+                    <template x-if="!mapLoaded">
+                        <div class="w-full h-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                            </svg>
+                        </div>
+                    </template>
+                    <!-- Map pin overlay -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-3 h-3 bg-<%= theme[:accent] %>-500 rounded-full border-2 border-white shadow-lg"></div>
+                    </div>
+                </div>
+
+                <!-- Station Info -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-start justify-between gap-2 mb-1">
+                        <h3 onmouseenter="stationTooltip.show(this, '<%= station.name.gsub("'", "\\\\'") %>')"
+                            class="text-lg md:text-xl font-semibold text-white truncate cursor-default">
+                            <%= station.name %>
+                        </h3>
+
+                        <!-- Provider badge -->
+                        <%= erb :'partials/_provider_badge', locals: {
+                            type: type,
+                            theme: theme,
+                            station: station,
+                            has_alternatives: has_alternatives,
+                            alternatives: local_assigns[:alternatives] || [],
+                            sources_json: sources_json
+                        } %>
+                    </div>
+
+                    <p class="text-slate-500 text-sm truncate mb-1"><%= station.region %></p>
+
+                    <!-- Station ID (clickable for official sources) -->
+                    <% if station.provider.in?(['xtide', 'ticon']) %>
+                    <p class="text-slate-600 text-xs font-mono"><%= public_id %></p>
+                    <% else %>
+                    <a href="<%= station.url %>" target="_blank" class="text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
+                        <%= public_id %> ↗
+                    </a>
+                    <% end %>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Preview Strip -->
+        <%= erb :'partials/_data_preview', locals: { type: type, theme: theme } %>
+
+        <!-- Options & Actions -->
+        <div class="p-3 md:p-4">
+            <!-- Toggle options -->
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-4">
+                    <%= erb :'partials/_toggle_switch', locals: { name: 'solar', label: 'Solar', icon: '☀︎' } %>
+                    <%= erb :'partials/_toggle_switch', locals: { name: 'lunar', label: 'Lunar', icon: '☾' } %>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <%= erb :'partials/_action_buttons', locals: { theme: theme } %>
+
+            <!-- Find nearby -->
+            <%= erb :'partials/_find_nearby', locals: {
+                station_id: station_id,
+                current_units: current_units,
+                distance_unit: distance_unit,
+                theme: theme
+            } %>
+        </div>
+
+    </div><!-- /swipe-content -->
+</div>

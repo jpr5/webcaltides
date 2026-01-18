@@ -1,0 +1,47 @@
+<%#
+  Data Preview Strip Partial
+
+  Locals:
+    - type: :tide or :current
+    - theme: Hash with :accent (color name)
+%>
+<div class="px-2 md:px-3 py-2.5 bg-navy-900/30 border-t border-b border-navy-700/30 data-preview">
+    <div class="flex items-center gap-1.5 text-sm overflow-x-auto">
+        <span class="text-slate-500 flex-shrink-0">Next:</span>
+        <div class="flex items-center gap-1.5 text-slate-300 data-preview-content">
+            <% if type == :tide %>
+            <span class="flex items-center gap-1 data-tide-1">
+                <svg class="w-3.5 h-3.5 text-<%= theme[:accent] %>-400 data-icon-high" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+                </svg>
+                <svg class="w-3.5 h-3.5 text-slate-500 data-icon-low hidden" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+                </svg>
+                <span class="font-medium data-label">High</span>
+                <span class="text-slate-400 data-time">@ --:--</span>
+            </span>
+            <span class="text-slate-600">·</span>
+            <span class="flex items-center gap-1 data-tide-2">
+                <svg class="w-3.5 h-3.5 text-<%= theme[:accent] %>-400 data-icon-high hidden" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+                </svg>
+                <svg class="w-3.5 h-3.5 text-slate-500 data-icon-low" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+                </svg>
+                <span class="font-medium data-label">Low</span>
+                <span class="text-slate-400 data-time">@ --:--</span>
+            </span>
+            <% else %>
+            <span class="flex items-center gap-1 data-slack">
+                <span class="font-medium text-<%= theme[:accent] %>-400">Slack</span>
+                <span class="text-slate-400 data-time">@ --:--</span>
+            </span>
+            <span class="text-slate-600">·</span>
+            <span class="flex items-center gap-1 data-max-current">
+                <span class="font-medium data-label">Max</span>
+                <span class="text-slate-400 data-time">@ --:--</span>
+            </span>
+            <% end %>
+        </div>
+    </div>
+</div>
