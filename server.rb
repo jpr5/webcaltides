@@ -79,7 +79,14 @@ class Server < ::Sinatra::Base
                  when 'currents' then WebCalTides.next_current_events(params[:id])
                  end
 
-        return { error: 'Station not found' }.to_json unless events
+        if events.nil?
+            $LOG.warn "No station data for #{params[:type]}/#{params[:id]}"
+            return { error: 'Station not found' }.to_json
+        end
+
+        if events.empty?
+            $LOG.debug "No future events for #{params[:type]}/#{params[:id]}"
+        end
 
         # Format times for JSON response
         formatted = events.map do |e|

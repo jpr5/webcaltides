@@ -239,35 +239,72 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/stations/' + type + '/' + encodeURIComponent(id) + '/next')
             .then(function(response) { return response.json(); })
             .then(function(data) {
-                if (!data.events || data.events.length === 0) return;
-
                 var preview = card.querySelector('.data-preview-content');
                 if (!preview) return;
 
+                if (data.error || !data.events || data.events.length === 0) {
+                    // Show N/A when no data available
+                    preview.querySelectorAll('.data-time').forEach(function(el) {
+                        el.textContent = 'N/A';
+                    });
+                    return;
+                }
+
                 if (type === 'tides') {
+                    var hasHigh = false, hasLow = false;
                     data.events.forEach(function(event) {
                         if (event.type === 'High') {
+                            hasHigh = true;
                             var highEl = preview.querySelector('.data-high .data-time');
                             if (highEl) highEl.textContent = '@ ' + event.time;
                         } else if (event.type === 'Low') {
+                            hasLow = true;
                             var lowEl = preview.querySelector('.data-low .data-time');
                             if (lowEl) lowEl.textContent = '@ ' + event.time;
                         }
                     });
+                    // Show N/A for missing events
+                    if (!hasHigh) {
+                        var highEl = preview.querySelector('.data-high .data-time');
+                        if (highEl) highEl.textContent = 'N/A';
+                    }
+                    if (!hasLow) {
+                        var lowEl = preview.querySelector('.data-low .data-time');
+                        if (lowEl) lowEl.textContent = 'N/A';
+                    }
                 } else if (type === 'currents') {
+                    var hasSlack = false, hasFlood = false;
                     data.events.forEach(function(event) {
                         if (event.type === 'Slack') {
+                            hasSlack = true;
                             var slackEl = preview.querySelector('.data-slack .data-time');
                             if (slackEl) slackEl.textContent = '@ ' + event.time;
                         } else if (event.type === 'Flood') {
+                            hasFlood = true;
                             var floodEl = preview.querySelector('.data-flood .data-time');
                             if (floodEl) floodEl.textContent = '@ ' + event.time;
                         }
                     });
+                    // Show N/A for missing events
+                    if (!hasSlack) {
+                        var slackEl = preview.querySelector('.data-slack .data-time');
+                        if (slackEl) slackEl.textContent = 'N/A';
+                    }
+                    if (!hasFlood) {
+                        var floodEl = preview.querySelector('.data-flood .data-time');
+                        if (floodEl) floodEl.textContent = 'N/A';
+                    }
                 }
             })
             .catch(function(err) {
                 console.error('Failed to load station data:', err);
+                // Show N/A on error
+                var preview = card.querySelector('.data-preview-content');
+                if (preview) {
+                    preview.querySelectorAll('.data-time').forEach(function(el) {
+                        el.textContent = 'N/A';
+                    });
+                }
             });
     });
 });
