@@ -287,6 +287,17 @@ document.addEventListener('DOMContentLoaded', function() {
         stationCards.forEach(function(card) {
             dataObserver.observe(card);
         });
+
+        // Also immediately load data for cards already in viewport
+        // (IntersectionObserver callback fires async, this ensures no delay)
+        requestAnimationFrame(function() {
+            stationCards.forEach(function(card) {
+                var rect = card.getBoundingClientRect();
+                if (rect.top < window.innerHeight && rect.bottom > 0) {
+                    loadStationData(card);
+                }
+            });
+        });
     }
 });
 </script>
