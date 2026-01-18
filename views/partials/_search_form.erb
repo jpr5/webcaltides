@@ -95,7 +95,7 @@
                 @keydown="handleKeydown($event)"
                 @focus="if (results.length > 0) showResults = true"
                 class="search-input w-full pl-12 pr-28 py-4 md:py-5 bg-navy-800/80 border border-navy-700/50 rounded-2xl text-white placeholder-slate-500 text-lg focus:outline-none focus:border-ocean-500/50"
-                placeholder="<%= local_assigns[:placeholder] && placeholder != 'Station...' ? placeholder : 'Try \"Alcatraz Island\" or \"San Francisco\"' %>"
+                placeholder="<%= defined?(placeholder) && placeholder && placeholder != 'Station...' ? placeholder : 'Try \"Alcatraz Island\" or \"San Francisco\"' %>"
                 autocomplete="off"
             />
 

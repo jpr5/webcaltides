@@ -177,7 +177,7 @@
                             theme: theme,
                             station: station,
                             has_alternatives: has_alternatives,
-                            alternatives: local_assigns[:alternatives] || [],
+                            alternatives: defined?(alternatives) ? alternatives : [],
                             sources_json: sources_json
                         } %>
                     </div>
