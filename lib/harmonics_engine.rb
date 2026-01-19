@@ -740,7 +740,14 @@ module Harmonics
                     if ref_station
                         ref_coord_string = sprintf("%.8f_%.8f", ref_station['lat'], ref_station['lng'])
                         ref_base_hash = Digest::SHA256.hexdigest(ref_coord_string)[0...7]
-                        ref_key = "X#{ref_base_hash}"
+                        ref_base_id = "X#{ref_base_hash}"
+
+                        # For current stations, include depth suffix in ref_key to match cache_key
+                        if ref_station['type'] == 'current' && ref_station['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
+                            ref_key = "#{ref_base_id}_#{$1}"
+                        else
+                            ref_key = ref_base_id
+                        end
                     end
                 end
 
