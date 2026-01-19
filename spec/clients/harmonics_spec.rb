@@ -146,4 +146,42 @@ RSpec.describe Clients::Harmonics do
             expect(described_class.ancestors).to include(Clients::TimeWindow)
         end
     end
+
+    describe '#detect_zero_crossings' do
+        it 'interpolates crossing time using actual time delta between points' do
+            # Simulate peaks that are 6 hours apart (like subordinate station output)
+            # Flood at 06:00 (+2.0 kn), Ebb at 12:00 (-1.0 kn)
+            # Zero crossing should be at ~10:00 (2/3 of the way, based on height ratio)
+            predictions = [
+                { 'time' => Time.utc(2025, 6, 15, 6, 0), 'height' => 2.0, 'units' => 'knots' },
+                { 'time' => Time.utc(2025, 6, 15, 12, 0), 'height' => -1.0, 'units' => 'knots' }
+            ]
+
+            crossings = client.detect_zero_crossings(predictions)
+
+            expect(crossings.length).to eq(1)
+
+            crossing_time = crossings.first['time']
+            # With heights 2.0 and -1.0, ratio = 2.0/(2.0+1.0) = 0.667
+            # Expected crossing: 06:00 + 0.667 * 6 hours = 06:00 + 4 hours = 10:00
+            expect(crossing_time).to be_within(1.minute).of(Time.utc(2025, 6, 15, 10, 0))
+        end
+
+        it 'places slack time hours between peaks, not seconds after' do
+            # This catches the specific bug where 60-second step was hardcoded
+            predictions = [
+                { 'time' => Time.utc(2025, 6, 15, 1, 0), 'height' => -1.5, 'units' => 'knots' },
+                { 'time' => Time.utc(2025, 6, 15, 7, 0), 'height' => 2.0, 'units' => 'knots' }
+            ]
+
+            crossings = client.detect_zero_crossings(predictions)
+            crossing_time = crossings.first['time']
+
+            # Slack must be more than 1 hour after the first peak
+            # (the bug would put it ~26 seconds after)
+            expect(crossing_time - predictions.first['time']).to be > 1.hour
+            # And before the second peak
+            expect(predictions.last['time'] - crossing_time).to be > 1.hour
+        end
+    end
 end

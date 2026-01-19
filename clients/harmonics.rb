@@ -92,7 +92,8 @@ module Clients
                     # Linear interpolation to find approximate crossing time
                     if prev['height'] != curr['height']
                         ratio = prev['height'].abs / (prev['height'].abs + curr['height'].abs)
-                        crossing_time = prev['time'] + (ratio * 60).seconds # 60s step
+                        time_delta = curr['time'] - prev['time']
+                        crossing_time = prev['time'] + (ratio * time_delta)
                     else
                         crossing_time = curr['time']
                     end
