@@ -39,7 +39,8 @@ class Server < ::Sinatra::Base
         set :logging, $LOG
         register Sinatra::Reloader
         also_reload File.expand_path("./webcaltides.rb")
-        also_reload File.expand_path("./gps.rb")
+        also_reload File.expand_path("./lib/gps.rb")
+        also_reload File.expand_path("./lib/harmonics_engine.rb")
         after_reload { $LOG.debug 'reloaded' }
     end
 
