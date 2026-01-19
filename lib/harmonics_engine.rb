@@ -55,16 +55,23 @@ module Harmonics
 
         def stations
             ensure_source_files!
-            @parsed_stations ||= load_stations_from_cache || begin
-                xtide_stations = parse_xtide_file
-                ticon_stations = parse_ticon_file
-                merged = xtide_stations + ticon_stations
+            # Double-checked locking for thread safety
+            return @parsed_stations if @parsed_stations
 
-                # Deduplicate merged stations by proximity, name, and constituents
-                deduplicated = deduplicate_stations(merged)
+            (@stations_mutex ||= Mutex.new).synchronize do
+                return @parsed_stations if @parsed_stations
 
-                save_stations_to_cache(deduplicated)
-                deduplicated
+                @parsed_stations = load_stations_from_cache || begin
+                    xtide_stations = parse_xtide_file
+                    ticon_stations = parse_ticon_file
+                    merged = xtide_stations + ticon_stations
+
+                    # Deduplicate merged stations by proximity, name, and constituents
+                    deduplicated = deduplicate_stations(merged)
+
+                    save_stations_to_cache(deduplicated)
+                    deduplicated
+                end
             end
         end
 
