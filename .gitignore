@@ -6,3 +6,5 @@ vendor/*
 .env
 spec/.rspec_status
 coverage/
+.windsurf
+.claude
