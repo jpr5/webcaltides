@@ -89,7 +89,6 @@ All data is cached to `cache/` directory:
 
 ## Known Issues
 
-- Code is not thread-safe (acknowledged in comments, runs under Puma threads)
 - CHS station metadata is unreliable for determining data availability
 
 ## Testing
