@@ -37,6 +37,76 @@ module WebCalTides
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze
 
+    # Timezone fallback mappings for offshore stations where GeoNames returns nil
+    US_STATE_TIMEZONES = {
+        # Pacific
+        'WA' => 'America/Los_Angeles', 'OR' => 'America/Los_Angeles',
+        'CA' => 'America/Los_Angeles', 'NV' => 'America/Los_Angeles',
+        # Mountain
+        'AZ' => 'America/Phoenix', 'MT' => 'America/Denver',
+        'ID' => 'America/Boise', 'WY' => 'America/Denver',
+        'CO' => 'America/Denver', 'NM' => 'America/Denver', 'UT' => 'America/Denver',
+        # Central
+        'TX' => 'America/Chicago', 'OK' => 'America/Chicago',
+        'KS' => 'America/Chicago', 'NE' => 'America/Chicago',
+        'SD' => 'America/Chicago', 'ND' => 'America/Chicago',
+        'MN' => 'America/Chicago', 'IA' => 'America/Chicago',
+        'MO' => 'America/Chicago', 'AR' => 'America/Chicago',
+        'LA' => 'America/Chicago', 'WI' => 'America/Chicago',
+        'IL' => 'America/Chicago', 'MS' => 'America/Chicago', 'AL' => 'America/Chicago',
+        # Eastern
+        'FL' => 'America/New_York', 'GA' => 'America/New_York',
+        'SC' => 'America/New_York', 'NC' => 'America/New_York',
+        'VA' => 'America/New_York', 'MD' => 'America/New_York',
+        'DE' => 'America/New_York', 'NJ' => 'America/New_York',
+        'PA' => 'America/New_York', 'NY' => 'America/New_York',
+        'CT' => 'America/New_York', 'RI' => 'America/New_York',
+        'MA' => 'America/New_York', 'NH' => 'America/New_York',
+        'VT' => 'America/New_York', 'ME' => 'America/New_York',
+        'OH' => 'America/New_York', 'MI' => 'America/Detroit',
+        'IN' => 'America/Indiana/Indianapolis', 'KY' => 'America/Kentucky/Louisville',
+        'TN' => 'America/Chicago', 'WV' => 'America/New_York',
+        # Other
+        'AK' => 'America/Anchorage', 'HI' => 'Pacific/Honolulu',
+        'PR' => 'America/Puerto_Rico', 'VI' => 'America/Virgin',
+        'GU' => 'Pacific/Guam', 'AS' => 'Pacific/Pago_Pago'
+    }.freeze
+
+    CANADA_REGION_TIMEZONES = {
+        'Pacific Canada' => 'America/Vancouver',
+        'Atlantic Canada' => 'America/Halifax',
+        'Northern Canada' => 'America/Yellowknife',
+        "Hudson's Bay, Canada" => 'America/Winnipeg',
+        'Canada' => 'America/Toronto'
+    }.freeze
+
+    REGION_KEYWORDS = {
+        /hawaii/i => 'Pacific/Honolulu',
+        /alaska/i => 'America/Anchorage',
+        /pacific.*canada/i => 'America/Vancouver',
+        /atlantic.*canada/i => 'America/Halifax',
+        /australia.*sydney/i => 'Australia/Sydney',
+        /australia.*perth/i => 'Australia/Perth',
+        /uk|england|wales|scotland/i => 'Europe/London',
+        /japan/i => 'Asia/Tokyo'
+    }.freeze
+
+    LONGITUDE_TIMEZONES = {
+        -10 => 'Pacific/Honolulu',
+        -9  => 'America/Anchorage',
+        -8  => 'America/Los_Angeles',
+        -7  => 'America/Denver',
+        -6  => 'America/Chicago',
+        -5  => 'America/New_York',
+        -4  => 'America/Halifax',
+        -3  => 'America/Sao_Paulo',
+        0   => 'Europe/London',
+        1   => 'Europe/Paris',
+        8   => 'Asia/Shanghai',
+        9   => 'Asia/Tokyo',
+        10  => 'Australia/Sydney'
+    }.freeze
+
     def settings
         return Server.settings if defined?(Server)
         Struct.new(:cache_dir).new('cache')
@@ -139,7 +209,7 @@ module WebCalTides
         return res
     end
 
-    def timezone_for(lat, long)
+    def timezone_for(lat, long, station = nil)
         lat = lat.to_f
         long = long.to_f
 
@@ -174,8 +244,17 @@ module WebCalTides
             logger.error "Timezone lookup failed for #{key}: #{e.message}"
         end
 
-        res = tz&.name || 'UTC'
-        logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC" if tz.nil?
+        # Fallback chain when GeoNames returns nil (offshore locations)
+        if tz.nil?
+            res = timezone_fallback(lat, long, station)
+            if res != 'UTC'
+                logger.info "Timezone fallback for #{key}: #{res} (via region/longitude)"
+            else
+                logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC"
+            end
+        else
+            res = tz.name
+        end
 
         # Update cache thread-safely
         update_tzcache(key, res)
@@ -210,6 +289,51 @@ module WebCalTides
     rescue => e
         logger.error "Failed to write tzcache: #{e.message}"
         File.unlink(temp_file) if File.exist?(temp_file)
+    end
+
+    # Fallback chain for timezone lookup when GeoNames returns nil (offshore locations)
+    def timezone_fallback(lat, long, station)
+        return 'UTC' unless station
+
+        # Layer 1: Try region/location string mapping
+        if tz = timezone_from_region(station)
+            return tz
+        end
+
+        # Layer 2: Longitude-based approximation
+        timezone_from_longitude(long)
+    end
+
+    # Extract timezone from station region/location strings
+    def timezone_from_region(station)
+        # Check location for US state abbreviation (e.g., "Shell Point, Tampa Bay, FL")
+        if station.location =~ /,\s*([A-Z]{2})$/
+            state = $1
+            return US_STATE_TIMEZONES[state] if US_STATE_TIMEZONES[state]
+        end
+
+        # Check region for Canadian regions
+        if tz = CANADA_REGION_TIMEZONES[station.region]
+            return tz
+        end
+
+        # Check region and location for keyword matches
+        region_str = "#{station.region} #{station.location}"
+        REGION_KEYWORDS.each do |pattern, tz|
+            return tz if region_str =~ pattern
+        end
+
+        nil
+    end
+
+    # Approximate timezone from longitude
+    def timezone_from_longitude(lon)
+        # Normalize to -180..180
+        while lon > 180; lon -= 360; end
+        while lon < -180; lon += 360; end
+
+        offset = (lon / 15.0).round
+        LONGITUDE_TIMEZONES[offset] || "Etc/GMT#{offset >= 0 ? '-' : '+'}#{offset.abs}"
     end
 
     public
@@ -514,7 +638,7 @@ module WebCalTides
         next_high = future_data.find { |d| d.type == 'High' }
         next_low = future_data.find { |d| d.type == 'Low' }
 
-        tz = timezone_for(station.lat, station.lon)
+        tz = timezone_for(station.lat, station.lon, station)
 
         events = []
         if next_high
@@ -775,7 +899,7 @@ module WebCalTides
         next_flood = future_data.find { |d| d.type == 'flood' }
         next_ebb = future_data.find { |d| d.type == 'ebb' }
 
-        tz = timezone_for(station.lat, station.lon)
+        tz = timezone_for(station.lat, station.lon, station)
 
         events = []
         if next_slack
@@ -862,7 +986,7 @@ module WebCalTides
         logger.debug "generating solar calendar for #{from}-#{to}"
 
         (Date.parse(from)..Date.parse(to)).each do |date|
-            tz      = timezone_for(station.lat, station.lon)
+            tz      = timezone_for(station.lat, station.lon, station)
             calc    = SolarEventCalculator.new(date, station.lat, station.lon)
             sunrise = calc.compute_official_sunrise(tz)
             sunset  = calc.compute_official_sunset(tz)

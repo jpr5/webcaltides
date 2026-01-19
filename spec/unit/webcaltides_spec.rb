@@ -94,4 +94,204 @@ RSpec.describe WebCalTides do
             expect(result).to eq("Asia/Tokyo")
         end
     end
+
+    describe '#timezone_from_region' do
+        def make_station(location: nil, region: nil)
+            Models::Station.new(
+                name: 'Test Station',
+                alternate_names: [],
+                id: 'TEST1',
+                public_id: 'TEST1',
+                region: region,
+                location: location,
+                lat: 37.75,
+                lon: -122.7,
+                url: nil,
+                provider: 'noaa',
+                bid: 'TEST1',
+                depth: nil
+            )
+        end
+
+        it 'extracts timezone from US state abbreviation in location' do
+            station = make_station(location: 'Shell Point, Tampa Bay, FL')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('America/New_York')
+        end
+
+        it 'extracts timezone from California state abbreviation' do
+            station = make_station(location: 'San Francisco Bay, CA')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('America/Los_Angeles')
+        end
+
+        it 'extracts timezone from Alaska state abbreviation' do
+            station = make_station(location: 'Anchorage, AK')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('America/Anchorage')
+        end
+
+        it 'extracts timezone from Hawaii state abbreviation' do
+            station = make_station(location: 'Honolulu, HI')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('Pacific/Honolulu')
+        end
+
+        it 'extracts timezone from Canadian region' do
+            station = make_station(region: 'Pacific Canada')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('America/Vancouver')
+        end
+
+        it 'extracts timezone from Atlantic Canada region' do
+            station = make_station(region: 'Atlantic Canada')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('America/Halifax')
+        end
+
+        it 'matches Hawaii keyword in region' do
+            station = make_station(region: 'Hawaii, USA')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('Pacific/Honolulu')
+        end
+
+        it 'matches Alaska keyword in region' do
+            station = make_station(region: 'Alaska, USA')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to eq('America/Anchorage')
+        end
+
+        it 'returns nil when no match found' do
+            station = make_station(location: 'Unknown Place', region: 'Unknown Region')
+            result = WebCalTides.send(:timezone_from_region, station)
+            expect(result).to be_nil
+        end
+    end
+
+    describe '#timezone_from_longitude' do
+        it 'returns Pacific/Honolulu for longitude near -155' do
+            result = WebCalTides.send(:timezone_from_longitude, -155.0)
+            expect(result).to eq('Pacific/Honolulu')
+        end
+
+        it 'returns America/Los_Angeles for longitude near -120' do
+            result = WebCalTides.send(:timezone_from_longitude, -120.0)
+            expect(result).to eq('America/Los_Angeles')
+        end
+
+        it 'returns America/New_York for longitude near -75' do
+            result = WebCalTides.send(:timezone_from_longitude, -75.0)
+            expect(result).to eq('America/New_York')
+        end
+
+        it 'returns Europe/London for longitude near 0' do
+            result = WebCalTides.send(:timezone_from_longitude, 0.0)
+            expect(result).to eq('Europe/London')
+        end
+
+        it 'returns Asia/Tokyo for longitude near 135' do
+            result = WebCalTides.send(:timezone_from_longitude, 135.0)
+            expect(result).to eq('Asia/Tokyo')
+        end
+
+        it 'returns Etc/GMT format for unmapped offsets' do
+            result = WebCalTides.send(:timezone_from_longitude, 45.0)  # offset +3
+            expect(result).to eq('Etc/GMT-3')
+        end
+
+        it 'normalizes longitude > 180' do
+            result = WebCalTides.send(:timezone_from_longitude, 240.0)  # 240 - 360 = -120
+            expect(result).to eq('America/Los_Angeles')
+        end
+    end
+
+    describe '#timezone_fallback' do
+        def make_station(location: nil, region: nil)
+            Models::Station.new(
+                name: 'Test Station',
+                alternate_names: [],
+                id: 'TEST1',
+                public_id: 'TEST1',
+                region: region,
+                location: location,
+                lat: 37.75,
+                lon: -122.7,
+                url: nil,
+                provider: 'noaa',
+                bid: 'TEST1',
+                depth: nil
+            )
+        end
+
+        it 'returns UTC when station is nil' do
+            result = WebCalTides.send(:timezone_fallback, 37.75, -122.7, nil)
+            expect(result).to eq('UTC')
+        end
+
+        it 'uses region mapping when available' do
+            station = make_station(location: 'Golden Gate, CA')
+            result = WebCalTides.send(:timezone_fallback, 37.75, -122.7, station)
+            expect(result).to eq('America/Los_Angeles')
+        end
+
+        it 'falls back to longitude when region mapping fails' do
+            station = make_station(location: 'Unknown Offshore', region: 'Unknown')
+            result = WebCalTides.send(:timezone_fallback, 37.75, -122.7, station)
+            expect(result).to eq('America/Los_Angeles')  # -122.7 / 15 = -8.18, rounds to -8
+        end
+    end
+
+    describe '#timezone_for with fallback' do
+        around do |example|
+            WebCalTides.class_variable_set(:@@tzcache, nil) if WebCalTides.class_variable_defined?(:@@tzcache)
+            WebCalTides.class_variable_set(:@@tzcache_mutex, nil) if WebCalTides.class_variable_defined?(:@@tzcache_mutex)
+
+            with_test_cache_dir do |dir|
+                example.run
+            end
+        end
+
+        def make_station(location: nil, region: nil, lat: 37.75, lon: -122.7)
+            Models::Station.new(
+                name: 'Test Station',
+                alternate_names: [],
+                id: 'TEST1',
+                public_id: 'TEST1',
+                region: region,
+                location: location,
+                lat: lat,
+                lon: lon,
+                url: nil,
+                provider: 'noaa',
+                bid: 'TEST1',
+                depth: nil
+            )
+        end
+
+        it 'uses fallback when Timezone.lookup returns nil' do
+            station = make_station(location: 'Offshore Point, CA')
+
+            allow(Timezone).to receive(:lookup).and_return(nil)
+
+            result = WebCalTides.timezone_for(37.75, -122.7, station)
+            expect(result).to eq('America/Los_Angeles')
+        end
+
+        it 'uses Timezone.lookup result when available' do
+            station = make_station(location: 'Test Point, CA')
+
+            tz_mock = double('Timezone', name: 'America/Los_Angeles')
+            allow(Timezone).to receive(:lookup).and_return(tz_mock)
+
+            result = WebCalTides.timezone_for(37.75, -122.7, station)
+            expect(result).to eq('America/Los_Angeles')
+        end
+
+        it 'uses longitude fallback when no station provided and lookup returns nil' do
+            allow(Timezone).to receive(:lookup).and_return(nil)
+
+            result = WebCalTides.timezone_for(37.75, -122.7)
+            expect(result).to eq('UTC')  # No station, so UTC fallback
+        end
+    end
 end
