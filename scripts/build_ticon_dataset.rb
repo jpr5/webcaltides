@@ -10,6 +10,8 @@ require 'fileutils'
 require 'digest'
 require 'openssl'
 
+require 'dotenv/load'
+
 # Workaround for macOS OpenSSL CRL errors
 OpenSSL::SSL::SSLContext::DEFAULT_PARAMS[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if RUBY_PLATFORM =~ /darwin/
 

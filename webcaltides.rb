@@ -6,6 +6,8 @@
 # I like my patterns more than the odds of it happening.  My code is *tight*, yo! 😂
 #
 
+require 'dotenv/load'
+
 require 'bundler/setup'
 Bundler.require(:default, ENV['RACK_ENV'] || 'development')
 
