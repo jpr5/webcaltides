@@ -1,4 +1,4 @@
-# WebCalTides
+## WebCalTides [![Tests](https://github.com/jpr5/webcaltides/actions/workflows/test.yml/badge.svg)](https://github.com/jpr5/webcaltides/actions/workflows/test.yml)
 
 WebCalTides is a neat little Ruby/Sinatra server for putting tides, currents,
 solar and lunar data on your calendar.
