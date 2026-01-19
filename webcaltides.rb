@@ -78,6 +78,12 @@ module WebCalTides
         @lunar_client ||= Clients::Lunar.new(logger)
     end
 
+    # Get the harmonics source files checksum for cache versioning.
+    # This ensures quarterly station caches are invalidated when XTide/TICON data changes.
+    def harmonics_checksum
+        tide_clients(:xtide).engine.source_files_checksum
+    end
+
     ##
     ## Util
     ##
@@ -360,11 +366,11 @@ module WebCalTides
     ## Tides
     ##
 
-    # Cache quarterly / every three months
+    # Cache quarterly / every three months, versioned by harmonics checksum
     def tide_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}.json"
+        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}.json"
     end
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
@@ -378,17 +384,22 @@ module WebCalTides
     end
 
     def tide_stations
-        cache_file = tide_station_cache_file
-        File.exist?(cache_file) || cache_tide_stations(at:cache_file) && @tide_stations = nil
+        # Double-checked locking for thread safety
+        return @tide_stations if @tide_stations
 
-        return @tide_stations ||= begin
+        (@@tide_stations_mutex ||= Mutex.new).synchronize do
+            return @tide_stations if @tide_stations
+
+            cache_file = tide_station_cache_file
+            cache_tide_stations(at: cache_file) unless File.exist?(cache_file)
+
             logger.debug "reading #{cache_file}"
             json = File.read(cache_file)
 
             logger.debug "parsing tide station list"
 
             data = JSON.parse(json) rescue []
-            data.map { |js| Models::Station.from_hash(js) }
+            @tide_stations = data.map { |js| Models::Station.from_hash(js) }
         end
     end
 
@@ -557,10 +568,11 @@ module WebCalTides
     ## Currents
     ##
 
+    # Cache quarterly / every three months, versioned by harmonics checksum
     def current_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}.json"
+        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}.json"
     end
 
     def cache_current_stations(at:current_station_cache_file, stations: [])
@@ -591,17 +603,22 @@ module WebCalTides
     end
 
     def current_stations
-        cache_file = current_station_cache_file
-        File.exist?(cache_file) || cache_current_stations(at:cache_file) && @current_stations = nil
+        # Double-checked locking for thread safety
+        return @current_stations if @current_stations
 
-        return @current_stations ||= begin
+        (@@current_stations_mutex ||= Mutex.new).synchronize do
+            return @current_stations if @current_stations
+
+            cache_file = current_station_cache_file
+            cache_current_stations(at: cache_file) unless File.exist?(cache_file)
+
             logger.debug "reading #{cache_file}"
             json = File.read(cache_file)
 
             logger.debug "parsing current station list"
             data = JSON.parse(json) rescue []
 
-            data.map { |js| Models::Station.from_hash(js) }
+            @current_stations = data.map { |js| Models::Station.from_hash(js) }
         end
     end
 
