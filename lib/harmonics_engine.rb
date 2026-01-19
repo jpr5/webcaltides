@@ -72,9 +72,11 @@ module Harmonics
                 missing = []
                 missing << "XTide (#{@xtide_file})" unless File.exist?(@xtide_file)
                 missing << "TICON (#{@ticon_file})" unless File.exist?(@ticon_file)
-                return if missing.empty?
 
-                raise MissingSourceFilesError, "Harmonics::Engine requires XTide and TICON data files. Missing: #{missing.join(', ')}. Set XTIDE_FILE/TICON_FILE or restore the data files."
+                unless missing.empty?
+                    raise MissingSourceFilesError, "Harmonics::Engine requires XTide and TICON data files. Missing: #{missing.join(', ')}. Set XTIDE_FILE/TICON_FILE or restore the data files."
+                end
+
                 true
             end
         end
