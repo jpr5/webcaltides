@@ -89,6 +89,33 @@ module Harmonics
             end
         end
 
+        # Generate checksums for source files to version the cache.
+        # Returns "xtidehash_ticonhash" (8 hex chars each).
+        def source_files_checksum
+            [@xtide_file, @ticon_file].map do |f|
+                if File.exist?(f)
+                    # Follow symlinks and hash the actual content
+                    Digest::MD5.file(f).hexdigest[0, 8]
+                else
+                    "00000000"
+                end
+            end.join("_")
+        end
+
+        def stations_cache_file
+            "#{@cache_dir}/xtide_stations_#{source_files_checksum}.json"
+        end
+
+        # Remove old station cache files that don't match current checksums.
+        def cleanup_old_station_caches
+            current = stations_cache_file
+            Dir.glob("#{@cache_dir}/xtide_stations_*.json").each do |f|
+                next if f == current
+                @logger.info "Removing old station cache: #{f}"
+                File.unlink(f)
+            end
+        end
+
         def find_station(id)
             # Ensure stations are loaded so @stations_cache is populated
             stations if @stations_cache.empty?
@@ -386,36 +413,26 @@ module Harmonics
         end
 
         def load_stations_from_cache
-            cache_file = "#{@cache_dir}/xtide_stations.json"
+            cache_file = stations_cache_file
+            return nil unless File.exist?(cache_file)
 
-            # Check if cache is newer than BOTH source files
-            sources = [@xtide_file, @ticon_file]
+            @logger.debug "Loading merged stations from cache: #{cache_file}"
+            data = JSON.parse(File.read(cache_file))
 
-            # Get modification times, treating missing files as having very old times
-            latest_source_time = sources.map do |f|
-                File.exist?(f) ? File.mtime(f) : Time.new(1970, 1, 1)
-            end.max
+            stations = []
+            @stations_cache = data['stations_cache'] || {}
+            @speeds = data['speeds'] || {}
+            @constituent_definitions = data['constituent_definitions'] || {}
 
-            if File.exist?(cache_file) && File.mtime(cache_file) > latest_source_time
-                @logger.debug "Loading merged stations from cache: #{cache_file}"
-                data = JSON.parse(File.read(cache_file))
-
-                stations = []
-                @stations_cache = data['stations_cache'] || {}
-                @speeds = data['speeds'] || {}
-                @constituent_definitions = data['constituent_definitions'] || {}
-
-                data['stations'].each do |h|
-                    stations << h['metadata']
-                end
-                return stations
+            data['stations'].each do |h|
+                stations << h['metadata']
             end
-            nil
+            stations
         end
 
         def save_stations_to_cache(stations)
             FileUtils.mkdir_p(@cache_dir)
-            cache_file = "#{@cache_dir}/xtide_stations.json"
+            cache_file = stations_cache_file
             @logger.debug "Caching xtide stations to: #{cache_file}"
 
             cache_data = {
