@@ -1,5 +1,5 @@
 ##
-## Copyright (C) 2025 Jordan Ritter <jpr5@darkridge.com>
+## Copyright (C) 2026 Jordan Ritter <jpr5@darkridge.com>
 ##
 ## WebCal server for Tides, Currents, Sunset and Lunar information.  Meant to
 ## replace sailwx.info/tides.mobilegeographics.com, which as of 2021 appears no
