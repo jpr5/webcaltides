@@ -696,12 +696,26 @@
     <footer class="bg-navy-950 border-t border-navy-800/50 py-8 mt-auto">
         <div class="max-w-5xl mx-auto px-4">
             <div class="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
-                <p>
-                    Built by
+                <div class="flex items-center gap-1">
+                    <span>Built by</span>
                     <a href="https://www.linkedin.com/in/jordanritter/" target="_blank" class="text-slate-400 hover:text-ocean-400 transition-colors">Jordan Ritter</a>
-                    ·
-                    <a href="https://github.com/PaulJSchellenberg" target="_blank" class="text-slate-400 hover:text-ocean-400 transition-colors">Paul Schellenberg</a>
-                </p>
+                    <span>with</span>
+                    <div x-data="{ open: false, timeout: null }" class="relative"
+                         @mouseenter="clearTimeout(timeout); open = true"
+                         @mouseleave="timeout = setTimeout(() => open = false, 150)">
+                        <button class="text-slate-400 hover:text-ocean-400 transition-colors">
+                            Contributions
+                        </button>
+                        <div x-show="open" x-cloak
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute bottom-full left-0 mb-2 whitespace-nowrap p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-sm text-slate-400 leading-relaxed">
+                            <a href="https://github.com/PaulJSchellenberg" target="_blank" class="text-ocean-400 hover:text-ocean-300 transition-colors">Paul Schellenberg</a>
+                            — added support for Canadian stations
+                        </div>
+                    </div>
+                </div>
 
                 <div class="flex items-center gap-4">
                     <a href="https://github.com/jpr5/webcaltides" target="_blank" class="text-slate-400 hover:text-ocean-400 transition-colors">
@@ -729,8 +743,9 @@
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 scale-95"
                              x-transition:enter-end="opacity-100 scale-100"
-                             class="absolute bottom-full right-0 mb-2 w-72 p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-sm text-slate-400 leading-relaxed">
-                            <span class="text-ocean-400 font-medium">Jan 2026:</span> XTide & TICON harmonic predictions now available for global coverage.
+                             class="absolute bottom-full right-0 mb-2 whitespace-nowrap p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-sm text-slate-400 leading-relaxed space-y-1">
+                            <div><span class="text-ocean-400 font-medium">Jan 2026:</span> Completely revamped the UI design.</div>
+                            <div><span class="text-ocean-400 font-medium">Jan 2026:</span> XTide & TICON harmonic predictions now available for global coverage.</div>
                         </div>
                     </div>
                 </div>
