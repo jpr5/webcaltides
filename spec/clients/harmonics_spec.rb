@@ -4,6 +4,10 @@ RSpec.describe Clients::Harmonics do
   let(:logger) { Logger.new('/dev/null') }
   let(:client) { described_class.new(logger) }
 
+  # Paths to test fixture files
+  let(:fixture_xtide) { File.expand_path('../../fixtures/harmonics/test-xtide.sql', __FILE__) }
+  let(:fixture_ticon) { File.expand_path('../../fixtures/harmonics/test-ticon.json', __FILE__) }
+
   describe '#initialize' do
     it 'creates a Harmonics::Engine instance' do
       expect(client.engine).to be_a(Harmonics::Engine)
@@ -11,10 +15,25 @@ RSpec.describe Clients::Harmonics do
   end
 
   describe '#tide_stations' do
-    context 'when harmonics data files exist', skip: 'requires data files' do
+    context 'when harmonics data files exist' do
+      around do |example|
+        original_xtide = ENV['XTIDE_FILE']
+        original_ticon = ENV['TICON_FILE']
+        ENV['XTIDE_FILE'] = fixture_xtide
+        ENV['TICON_FILE'] = fixture_ticon
+
+        with_test_cache_dir do
+          example.run
+        end
+      ensure
+        ENV['XTIDE_FILE'] = original_xtide
+        ENV['TICON_FILE'] = original_ticon
+      end
+
       it 'returns an array of stations' do
         stations = client.tide_stations
         expect(stations).to be_an(Array)
+        expect(stations).not_to be_empty
       end
 
       it 'returns stations with xtide or ticon provider' do
@@ -24,7 +43,8 @@ RSpec.describe Clients::Harmonics do
 
       it 'returns only tide stations' do
         stations = client.tide_stations
-        # Filter to just tide stations (those without 'knots' as units indicator)
+        # Tide stations have type='tide' (filtered by client)
+        # All returned stations should have numeric depth (or nil for tide stations)
         expect(stations).to all(satisfy { |s| s.depth.nil? || s.depth.is_a?(Numeric) })
       end
     end
@@ -43,10 +63,25 @@ RSpec.describe Clients::Harmonics do
   end
 
   describe '#current_stations' do
-    context 'when harmonics data files exist', skip: 'requires data files' do
+    context 'when harmonics data files exist' do
+      around do |example|
+        original_xtide = ENV['XTIDE_FILE']
+        original_ticon = ENV['TICON_FILE']
+        ENV['XTIDE_FILE'] = fixture_xtide
+        ENV['TICON_FILE'] = fixture_ticon
+
+        with_test_cache_dir do
+          example.run
+        end
+      ensure
+        ENV['XTIDE_FILE'] = original_xtide
+        ENV['TICON_FILE'] = original_ticon
+      end
+
       it 'returns an array of current stations' do
         stations = client.current_stations
         expect(stations).to be_an(Array)
+        expect(stations).not_to be_empty
       end
 
       it 'returns stations with depth information' do

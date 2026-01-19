@@ -1,0 +1,154 @@
+{
+  "stations": [
+    {
+      "name": "Victoria, British Columbia",
+      "lat": 48.4244,
+      "lon": -123.3690,
+      "timezone": "America/Vancouver",
+      "region": "British Columbia, Canada",
+      "units": "m",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 0.85, "phase": 285.4 },
+        { "name": "S2", "amp": 0.22, "phase": 318.7 },
+        { "name": "K1", "amp": 0.95, "phase": 152.6 },
+        { "name": "O1", "amp": 0.58, "phase": 149.3 }
+      ]
+    },
+    {
+      "name": "Vancouver, British Columbia",
+      "lat": 49.2900,
+      "lon": -123.1114,
+      "timezone": "America/Vancouver",
+      "region": "British Columbia, Canada",
+      "units": "m",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 1.05, "phase": 288.2 },
+        { "name": "S2", "amp": 0.28, "phase": 321.5 },
+        { "name": "K1", "amp": 1.02, "phase": 155.4 },
+        { "name": "O1", "amp": 0.62, "phase": 152.1 }
+      ]
+    },
+    {
+      "name": "Sydney, Australia",
+      "lat": -33.8678,
+      "lon": 151.2073,
+      "timezone": "Australia/Sydney",
+      "region": "New South Wales, Australia",
+      "units": "m",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 0.52, "phase": 225.8 },
+        { "name": "S2", "amp": 0.12, "phase": 258.5 },
+        { "name": "K1", "amp": 0.18, "phase": 45.2 },
+        { "name": "O1", "amp": 0.15, "phase": 42.8 }
+      ]
+    },
+    {
+      "name": "Tokyo Bay, Japan",
+      "lat": 35.6528,
+      "lon": 139.8394,
+      "timezone": "Asia/Tokyo",
+      "region": "Tokyo, Japan",
+      "units": "m",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 0.45, "phase": 185.3 },
+        { "name": "S2", "amp": 0.15, "phase": 218.6 },
+        { "name": "K1", "amp": 0.25, "phase": 95.4 },
+        { "name": "O1", "amp": 0.22, "phase": 92.1 }
+      ]
+    },
+    {
+      "name": "Liverpool, United Kingdom",
+      "lat": 53.4084,
+      "lon": -2.9916,
+      "timezone": "Europe/London",
+      "region": "England, UK",
+      "units": "m",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 3.15, "phase": 325.4 },
+        { "name": "S2", "amp": 1.08, "phase": 358.7 },
+        { "name": "K1", "amp": 0.12, "phase": 175.6 },
+        { "name": "O1", "amp": 0.10, "phase": 172.3 }
+      ]
+    },
+    {
+      "name": "Active Pass (depth 10 ft), British Columbia Current",
+      "lat": 48.8733,
+      "lon": -123.2917,
+      "timezone": "America/Vancouver",
+      "region": "British Columbia, Canada",
+      "units": "knots",
+      "datum_offset": 10.0,
+      "constituents": [
+        { "name": "M2", "amp": 3.25, "phase": 145.2 },
+        { "name": "S2", "amp": 0.85, "phase": 178.5 },
+        { "name": "K1", "amp": 1.45, "phase": 252.8 },
+        { "name": "O1", "amp": 0.98, "phase": 249.5 }
+      ]
+    },
+    {
+      "name": "Dodd Narrows (depth 20 ft), British Columbia Current",
+      "lat": 49.1333,
+      "lon": -123.8167,
+      "timezone": "America/Vancouver",
+      "region": "British Columbia, Canada",
+      "units": "knots",
+      "datum_offset": 20.0,
+      "constituents": [
+        { "name": "M2", "amp": 4.15, "phase": 148.5 },
+        { "name": "S2", "amp": 1.12, "phase": 181.8 },
+        { "name": "K1", "amp": 1.85, "phase": 255.6 },
+        { "name": "O1", "amp": 1.25, "phase": 252.3 }
+      ]
+    },
+    {
+      "name": "Sydney Harbour Current",
+      "lat": -33.8550,
+      "lon": 151.2350,
+      "timezone": "Australia/Sydney",
+      "region": "New South Wales, Australia",
+      "units": "knots",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 0.85, "phase": 228.4 },
+        { "name": "S2", "amp": 0.22, "phase": 261.7 },
+        { "name": "K1", "amp": 0.32, "phase": 48.5 },
+        { "name": "O1", "amp": 0.25, "phase": 45.2 }
+      ]
+    },
+    {
+      "name": "Tokyo Bay Entrance Current",
+      "lat": 35.3167,
+      "lon": 139.7500,
+      "timezone": "Asia/Tokyo",
+      "region": "Tokyo, Japan",
+      "units": "knots",
+      "datum_offset": 0.0,
+      "constituents": [
+        { "name": "M2", "amp": 1.25, "phase": 188.6 },
+        { "name": "S2", "amp": 0.35, "phase": 221.9 },
+        { "name": "K1", "amp": 0.55, "phase": 98.7 },
+        { "name": "O1", "amp": 0.42, "phase": 95.4 }
+      ]
+    },
+    {
+      "name": "Mersey River (depth 5 m), United Kingdom Current",
+      "lat": 53.3917,
+      "lon": -3.0167,
+      "timezone": "Europe/London",
+      "region": "England, UK",
+      "units": "knots",
+      "datum_offset": 5.0,
+      "constituents": [
+        { "name": "M2", "amp": 2.85, "phase": 328.7 },
+        { "name": "S2", "amp": 0.92, "phase": 1.9 },
+        { "name": "K1", "amp": 0.25, "phase": 178.9 },
+        { "name": "O1", "amp": 0.18, "phase": 175.6 }
+      ]
+    }
+  ]
+}
