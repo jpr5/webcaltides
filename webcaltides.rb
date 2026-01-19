@@ -575,24 +575,66 @@ module WebCalTides
         "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}.json"
     end
 
+    # Quarterly-versioned region mapping file
+    def noaa_current_regions_file
+        now = Time.current.utc
+        datestamp = now.strftime("%YQ#{now.quarter}")
+        "#{settings.cache_dir}/noaa_current_regions_#{datestamp}.json"
+    end
+
+    # Build region mapping by finding nearest NOAA tide station for each current station
+    def build_noaa_current_regions(noaa_current_stations)
+        noaa_tide_stations = tide_stations.select { |s| s.provider == 'noaa' }
+        logger.info "building NOAA current region mapping (#{noaa_current_stations.size} currents, #{noaa_tide_stations.size} tides)"
+
+        region_map = {}
+        noaa_current_stations.each_with_index do |cs, idx|
+            next unless cs.lat && cs.lon
+
+            closest = noaa_tide_stations.min_by do |ts|
+                next Float::INFINITY unless ts.lat && ts.lon
+                Geocoder::Calculations.distance_between([cs.lat, cs.lon], [ts.lat, ts.lon])
+            end
+
+            region_map[cs.id] = closest.region if closest&.region && closest.region != 'United States'
+
+            # Progress logging every 1000 stations
+            if (idx + 1) % 1000 == 0
+                logger.info "  processed #{idx + 1}/#{noaa_current_stations.size} stations"
+            end
+        end
+
+        # Save for future use within this quarter
+        regions_file = noaa_current_regions_file
+        logger.info "saving region mapping to #{regions_file} (#{region_map.size} mappings)"
+        File.write(regions_file, JSON.generate({
+            'generated_at' => Time.now.utc.iso8601,
+            'regions' => region_map
+        }))
+
+        region_map
+    end
+
     def cache_current_stations(at:current_station_cache_file, stations: [])
         current_clients.values.uniq.each { |c| stations.concat(c.current_stations) } if stations.empty?
 
-        # Enrich NOAA current stations with region data from nearest NOAA tide station
+        # Enrich NOAA current stations with region data
         # (NOAA currents API doesn't provide state/region info, but tide stations do)
         noaa_current_stations = stations.select { |s| s.provider == 'noaa' && s.region == 'United States' }
         if noaa_current_stations.any?
-            noaa_tide_stations = tide_stations.select { |s| s.provider == 'noaa' }
-            logger.info "enriching #{noaa_current_stations.size} NOAA current stations with region data"
+            regions_file = noaa_current_regions_file
+
+            # Load existing mapping or build new one (quarterly refresh)
+            if File.exist?(regions_file)
+                region_data = JSON.parse(File.read(regions_file)) rescue {}
+                region_map = region_data['regions'] || {}
+                logger.info "enriching #{noaa_current_stations.size} NOAA current stations from cached regions (#{region_map.size} mappings)"
+            else
+                region_map = build_noaa_current_regions(noaa_current_stations)
+            end
 
             noaa_current_stations.each do |cs|
-                next unless cs.lat && cs.lon
-                # Find closest tide station
-                closest = noaa_tide_stations.min_by do |ts|
-                    next Float::INFINITY unless ts.lat && ts.lon
-                    Geocoder::Calculations.distance_between([cs.lat, cs.lon], [ts.lat, ts.lon])
-                end
-                cs.region = closest.region if closest&.region
+                cs.region = region_map[cs.id] if region_map[cs.id]
             end
         end
 
