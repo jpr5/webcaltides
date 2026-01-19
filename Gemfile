@@ -31,3 +31,12 @@ group :development do
     gem 'debug'
     gem 'sinatra-reloader', require: 'sinatra/reloader'
 end
+
+group :test do
+    gem 'rspec', '~> 3.13'
+    gem 'rack-test', '~> 2.1'
+    gem 'webmock', '~> 3.23'
+    gem 'vcr', '~> 6.2'
+    gem 'timecop', '~> 0.9'
+    gem 'simplecov', '~> 0.22', require: false
+end
