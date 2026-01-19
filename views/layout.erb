@@ -286,6 +286,9 @@
                     const preview = this.$el.querySelector('.data-preview-content');
                     if (!preview) return;
 
+                    // Reset to loading state before fetch
+                    preview.querySelectorAll('.data-time').forEach(el => { el.textContent = 'Loading...'; });
+
                     fetch('/api/stations/' + this.stationType + '/' + encodeURIComponent(this.selectedSource) + '/next')
                         .then(res => res.json())
                         .then(data => {
