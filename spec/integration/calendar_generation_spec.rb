@@ -195,6 +195,11 @@ RSpec.describe WebCalTides do
             cal
         end
 
+        before do
+            # Stub timezone lookup to avoid GeoNames API calls
+            allow(described_class).to receive(:timezone_for).and_return('America/New_York')
+        end
+
         it 'adds sunrise and sunset events' do
             freeze_time(Time.utc(2025, 6, 15))
 
