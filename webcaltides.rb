@@ -123,70 +123,79 @@ module WebCalTides
     end
 
     def timezone_for(lat, long)
-        filename = "#{settings.cache_dir}/tzs.json"
-
-        unless @tzcache
-            logger.debug "initializing #{filename}"
-            if File.exist?(filename)
-                logger.debug "reading #{filename}"
-                json = File.read(filename)
-                logger.debug "parsing #{filename}"
-                @tzcache = JSON.parse(json) rescue {}
-            else
-                @tzcache = {}
-            end
-        end
-
         lat = lat.to_f
         long = long.to_f
 
         # The timezone gem requires longitude in -180..180, but TICON uses 0..360.
-        if long > 180.0 || long < -180.0
-            old_long = long
-            while long > 180.0; long -= 360.0; end
-            while long < -180.0; long += 360.0; end
-            logger.debug "normalized longitude #{old_long} => #{long} for timezone lookup"
-        end
+        while long > 180.0; long -= 360.0; end
+        while long < -180.0; long += 360.0; end
 
         key = "#{lat} #{long}"
 
-        return @tzcache[key] ||= begin
-            logger.debug "looking up tz for GPS #{key}"
+        # Thread-safe cache read
+        @tzcache_mutex ||= Mutex.new
+        cached = @tzcache_mutex.synchronize { @tzcache&.[](key) }
+        return cached if cached
 
-            tz = nil
-            i = 0
-            begin
-                i += 1
-                tz = Timezone.lookup(lat, long)
-            rescue Timezone::Error::InvalidZone
-                # Use default UTC
-            rescue Timezone::Error::GeoNames => e
-                logger.error "GeoNames lookup failed for #{key}: #{e.message}"
-                if i < 3
-                    sleep(i)
-                    retry
-                end
-            rescue => e
-                logger.error "Timezone lookup failed for #{key}: #{e.message}"
+        # External lookup (outside mutex to avoid blocking other threads)
+        logger.debug "looking up tz for GPS #{key}"
+        tz = nil
+        i = 0
+        begin
+            i += 1
+            tz = Timezone.lookup(lat, long)
+        rescue Timezone::Error::InvalidZone
+            # Use default UTC
+        rescue Timezone::Error::GeoNames => e
+            logger.error "GeoNames lookup failed for #{key}: #{e.message}"
+            if i < 3
+                sleep(i)
+                retry
             end
+        rescue => e
+            logger.error "Timezone lookup failed for #{key}: #{e.message}"
+        end
 
-            if tz.nil?
-                logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC"
-                res = 'UTC'
-            else
-                res = tz.name
-            end
+        res = tz&.name || 'UTC'
+        logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC" if tz.nil?
 
-            logger.debug "GPS #{key} => #{res}"
+        # Update cache thread-safely
+        update_tzcache(key, res)
+    end
 
-            @tzcache[key] = res
+    # Thread-safe timezone cache update. Memoizes mutex internally for self-containment.
+    def update_tzcache(key, value)
+        @tzcache_mutex ||= Mutex.new
+        @tzcache_mutex.synchronize do
+            @tzcache ||= load_tzcache
+            @tzcache[key] = value
+            write_tzcache_to_disk
+        end
+        value
+    end
 
-            logger.debug "updating tzcache at #{filename}"
-            File.write(filename, @tzcache.to_json)
+    private
 
-            res
+    def load_tzcache
+        filename = "#{settings.cache_dir}/tzs.json"
+        if File.exist?(filename)
+            JSON.parse(File.read(filename)) rescue {}
+        else
+            {}
         end
     end
+
+    def write_tzcache_to_disk
+        filename = "#{settings.cache_dir}/tzs.json"
+        temp_file = "#{filename}.tmp.#{$$}"
+        File.write(temp_file, @tzcache.to_json)
+        File.rename(temp_file, filename)
+    rescue => e
+        logger.error "Failed to write tzcache: #{e.message}"
+        File.unlink(temp_file) if File.exist?(temp_file)
+    end
+
+    public
 
     def station_ids
         ids = tide_stations.map(&:id) + current_stations.map(&:bid)
