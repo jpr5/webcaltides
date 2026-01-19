@@ -1,4 +1,4 @@
-## WebCalTides [![Tests](https://github.com/jpr5/webcaltides/actions/workflows/test.yml/badge.svg)](https://github.com/jpr5/webcaltides/actions/workflows/test.yml)
+# WebCalTides [![Tests](https://github.com/jpr5/webcaltides/actions/workflows/test.yml/badge.svg)](https://github.com/jpr5/webcaltides/actions/workflows/test.yml)
 
 WebCalTides is a neat little Ruby/Sinatra server for putting tides, currents,
 solar and lunar data on your calendar.
@@ -12,7 +12,9 @@ This service can be found at [webcaltides.org](https://webcaltides.org).
 
 ## Setup
 
-First, `bundle install`.
+First, install the dependencies with `bundle install`.
+
+### Timezone Lookups
 
 Then you'll need a Geonames account for lat/long => timezone conversion --
 they're free, [go get one](https://www.geonames.org/login).  After you register,
@@ -20,7 +22,7 @@ the API won't work immediately - there's some delay.  At some point after,
 you'll need to log back in and one-time manually [enable web services
 access](https://www.geonames.org/manageaccount).
 
-Set the `GEONAMES_USERNAME` environment variable with your username.
+Set the `GEONAMES_USERNAME` environment variable with your Geonames username.
 
 ### Map Thumbnails (Optional)
 
