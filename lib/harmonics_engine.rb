@@ -49,6 +49,7 @@ module Harmonics
             @speeds = {}
             @constituent_definitions = {}
             @nodal_factors_cache = {}
+            @logged_nodal_months = {}
             @parsed_stations = nil
         end
 
@@ -784,7 +785,7 @@ module Harmonics
         def load_nodal_cache(year, month, day, meridian_offset, nodal_hour)
             file = nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
             if File.exist?(file)
-                @logger.debug "Loading nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}, h:#{nodal_hour}) from cache"
+                # Suppress per-day logging - too verbose
                 return JSON.parse(File.read(file))
             end
             nil
@@ -793,12 +794,17 @@ module Harmonics
         def save_nodal_cache(year, month, day, meridian_offset, nodal_hour, factors)
             FileUtils.mkdir_p(@cache_dir)
             file = nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
-            @logger.debug "Caching nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}, h:#{nodal_hour}) to #{file}"
+            # Suppress per-day logging - too verbose
             File.write(file, factors.to_json)
         end
 
         def calculate_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
-            @logger.info "Calculating astronomical nodal factors for #{year}-#{month}-#{day} (m:#{meridian_offset}, h:#{nodal_hour})..."
+            # Only log once per month to reduce verbosity
+            month_key = "#{year}-#{month}_#{meridian_offset}_#{nodal_hour}"
+            unless @logged_nodal_months[month_key]
+                @logger.info "Calculating nodal factors for #{year}-#{month} (m:#{meridian_offset}, h:#{nodal_hour})"
+                @logged_nodal_months[month_key] = true
+            end
 
             # Use noon of the specific day as the representative epoch
             # Nodal factors are traditionally calculated for Local Standard Time midnight or noon.
