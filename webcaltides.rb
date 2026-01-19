@@ -37,7 +37,10 @@ module WebCalTides
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze
 
-    def settings; return Server.settings rescue Struct.new(:cache_dir).new('cache') end
+    def settings
+        return Server.settings if defined?(Server)
+        Struct.new(:cache_dir).new('cache')
+    end
     def logger; $LOG; end
 
     ##

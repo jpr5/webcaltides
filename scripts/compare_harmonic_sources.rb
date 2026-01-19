@@ -14,16 +14,6 @@ $LOG = Logger.new(STDOUT).tap do |log|
   log.level = Logger::INFO
 end
 
-# Minimal server settings stub
-module Server
-  def self.settings
-    OpenStruct.new(
-      cache_dir: File.expand_path('../../cache', __FILE__),
-      root: File.expand_path('../..', __FILE__)
-    )
-  end
-end
-
 require_relative '../webcaltides'
 
 # Reference NOAA tide stations (diverse geographic regions)

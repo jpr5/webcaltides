@@ -8,13 +8,6 @@ require 'optparse'
 require_relative '../lib/harmonics_engine'
 require_relative '../clients/noaa_tides'
 
-# Mock settings for WebCalTides
-module WebCalTides
-    def self.settings
-        Struct.new(:cache_dir).new('cache')
-    end
-end
-
 class NoaaTideFetcher
     def initialize(logger)
         @logger = logger
