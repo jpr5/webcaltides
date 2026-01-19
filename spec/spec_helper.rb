@@ -3,13 +3,13 @@
 # Coverage must be started before loading any application code
 require 'simplecov'
 SimpleCov.start do
-  add_filter '/spec/'
-  add_filter '/vendor/'
+    add_filter '/spec/'
+    add_filter '/vendor/'
 
-  add_group 'Models', 'models'
-  add_group 'Clients', 'clients'
-  add_group 'Lib', 'lib'
-  add_group 'Core', %w[webcaltides.rb gps.rb server.rb]
+    add_group 'Models', 'models'
+    add_group 'Clients', 'clients'
+    add_group 'Lib', 'lib'
+    add_group 'Core', %w[webcaltides.rb gps.rb server.rb]
 end
 
 ENV['RACK_ENV'] = 'test'
@@ -37,50 +37,50 @@ require 'json'
 Dir[File.join(__dir__, 'support/**/*.rb')].each { |f| require f }
 
 RSpec.configure do |config|
-  # Enable flags like --only-failures and --next-failure
-  config.example_status_persistence_file_path = 'spec/.rspec_status'
+    # Enable flags like --only-failures and --next-failure
+    config.example_status_persistence_file_path = 'spec/.rspec_status'
 
-  # Disable RSpec exposing methods globally on `Module` and `main`
-  config.disable_monkey_patching!
+    # Disable RSpec exposing methods globally on `Module` and `main`
+    config.disable_monkey_patching!
 
-  # Run specs in random order
-  config.order = :random
+    # Run specs in random order
+    config.order = :random
 
-  # Seed global randomization
-  Kernel.srand config.seed
+    # Seed global randomization
+    Kernel.srand config.seed
 
-  # Include Rack::Test methods in API specs
-  config.include Rack::Test::Methods, type: :api
+    # Include Rack::Test methods in API specs
+    config.include Rack::Test::Methods, type: :api
 
-  # Configure expectations
-  config.expect_with :rspec do |expectations|
-    expectations.include_chain_clauses_in_custom_matcher_descriptions = true
-    expectations.syntax = :expect
-  end
+    # Configure expectations
+    config.expect_with :rspec do |expectations|
+        expectations.include_chain_clauses_in_custom_matcher_descriptions = true
+        expectations.syntax = :expect
+    end
 
-  # Configure mocks
-  config.mock_with :rspec do |mocks|
-    mocks.verify_partial_doubles = true
-  end
+    # Configure mocks
+    config.mock_with :rspec do |mocks|
+        mocks.verify_partial_doubles = true
+    end
 
-  # Shared context behaviors
-  config.shared_context_metadata_behavior = :apply_to_host_groups
+    # Shared context behaviors
+    config.shared_context_metadata_behavior = :apply_to_host_groups
 
-  # Filter run options
-  config.filter_run_when_matching :focus
+    # Filter run options
+    config.filter_run_when_matching :focus
 
-  # Timecop cleanup
-  config.after(:each) do
-    Timecop.return
-  end
+    # Timecop cleanup
+    config.after(:each) do
+        Timecop.return
+    end
 
-  # Reset WebMock after each test
-  config.after(:each) do
-    WebMock.reset!
-  end
+    # Reset WebMock after each test
+    config.after(:each) do
+        WebMock.reset!
+    end
 end
 
 # Sinatra app helper for API tests
 def app
-  Server
+    Server
 end
