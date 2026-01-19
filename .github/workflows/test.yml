@@ -5,6 +5,7 @@ on:
     branches: [master, 'jpr5/*']
   pull_request:
     branches: [master]
+  workflow_dispatch:
 
 jobs:
   test:
