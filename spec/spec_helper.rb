@@ -74,6 +74,11 @@ RSpec.configure do |config|
         Timecop.return
     end
 
+    # Stub sleep to speed up retry tests
+    config.before(:each) do
+        allow_any_instance_of(Object).to receive(:sleep)
+    end
+
     # Reset WebMock after each test
     config.after(:each) do
         WebMock.reset!

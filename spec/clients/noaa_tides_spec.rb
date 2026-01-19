@@ -34,17 +34,33 @@ RSpec.describe Clients::NoaaTides do
         end
 
         context 'with API error' do
-            it 'retries on 502 error' do
+            it 'retries on 502 error with backoff delay' do
                 stub_request(:get, /api.tidesandcurrents.noaa.gov/)
                     .to_return(status: 502).then
                     .to_return(status: 200, body: { 'stationList' => [] }.to_json)
 
+                # Verify sleep is called with a value in the backoff range (0.5 to 2.0 for first retry)
+                expect(client).to receive(:sleep).with(a_value_between(0.5, 2.0)).once
+
                 expect { client.tide_stations }.not_to raise_error
             end
 
-            it 'raises after max retries' do
+            it 'retries on 504 error with backoff delay' do
+                stub_request(:get, /api.tidesandcurrents.noaa.gov/)
+                    .to_return(status: 504).then
+                    .to_return(status: 200, body: { 'stationList' => [] }.to_json)
+
+                expect(client).to receive(:sleep).with(a_value_between(0.5, 2.0)).once
+
+                expect { client.tide_stations }.not_to raise_error
+            end
+
+            it 'raises after max retries with multiple backoff delays' do
                 stub_request(:get, /api.tidesandcurrents.noaa.gov/)
                     .to_return(status: 502)
+
+                # Should sleep 5 times (MAX_RETRIES) before giving up
+                expect(client).to receive(:sleep).exactly(5).times
 
                 expect { client.tide_stations }.to raise_error(Mechanize::ResponseCodeError)
             end
