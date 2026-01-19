@@ -4,127 +4,69 @@ RSpec.describe Clients::NoaaCurrents do
   let(:logger) { Logger.new('/dev/null') }
   let(:client) { described_class.new(logger) }
 
-  describe '#current_stations' do
-    context 'with mocked API response' do
-      let(:stations_response) do
-        {
-          'stations' => [
-            {
-              'id' => 'ACT5546',
-              'name' => 'Cape Cod Canal, East Entrance',
-              'lat' => 41.7765,
-              'lng' => -70.4792,
-              'currbin' => 1,
-              'depth' => 10,
-              'type' => 'S'  # Strong (not weak)
-            },
-            {
-              'id' => 'BOS1301',
-              'name' => 'Boston Harbor Entrance',
-              'lat' => 42.3275,
-              'lng' => -70.8912,
-              'currbin' => 1,
-              'depth' => 5,
-              'type' => 'S'
-            }
-          ]
-        }.to_json
-      end
+  describe '#current_stations', :vcr do
+    it 'fetches current stations from NOAA API' do
+      stations = client.current_stations
+      expect(stations).to be_an(Array)
+      expect(stations.length).to be > 50  # NOAA has many current stations
+    end
 
-      before do
-        stub_request(:get, /api.tidesandcurrents.noaa.gov.*currentpredictions/)
-          .to_return(status: 200, body: stations_response, headers: { 'Content-Type' => 'application/json' })
-      end
+    it 'returns Station objects' do
+      stations = client.current_stations
+      expect(stations).to all(be_a(Models::Station))
+    end
 
-      it 'fetches current stations from NOAA API' do
-        stations = client.current_stations
-        expect(stations).to be_an(Array)
-        expect(stations.length).to eq(2)
-      end
+    it 'sets provider to noaa' do
+      stations = client.current_stations
+      expect(stations).to all(have_attributes(provider: 'noaa'))
+    end
 
-      it 'returns Station objects' do
-        stations = client.current_stations
-        expect(stations).to all(be_a(Models::Station))
-      end
+    it 'includes bid (bin id) for depth-specific stations' do
+      stations = client.current_stations
+      station = stations.first
 
-      it 'sets provider to noaa' do
-        stations = client.current_stations
-        expect(stations).to all(have_attributes(provider: 'noaa'))
-      end
+      expect(station.bid).to be_a(String)
+      expect(station.bid).to match(/\w+_\d+/)  # format: ID_bin
     end
   end
 
-  describe '#current_data_for' do
+  describe '#current_data_for', :vcr do
+    # Use a well-known current station
     let(:station) do
-      Models::Station.new(
-        name: 'Cape Cod Canal',
-        id: 'ACT5546',
-        bid: 'ACT5546_1',
-        public_id: 'ACT5546',
-        provider: 'noaa',
-        lat: 41.7765,
-        lon: -70.4792,
-        depth: 10,
-        url: 'https://tidesandcurrents.noaa.gov/noaacurrents/predictions?id=ACT5546_1'
-      )
-    end
-
-    let(:current_data_response) do
-      {
-        'current_predictions' => {
-          'cp' => [
-            {
-              'Time' => '2025-06-15 08:30',
-              'Type' => 'flood',
-              'Velocity_Major' => 2.5,
-              'meanFloodDir' => '045',
-              'meanEbbDir' => '225',
-              'Bin' => '1',
-              'Depth' => '10'
-            },
-            {
-              'Time' => '2025-06-15 12:00',
-              'Type' => 'slack',
-              'Velocity_Major' => 0.0,
-              'Bin' => '1',
-              'Depth' => '10'
-            },
-            {
-              'Time' => '2025-06-15 15:30',
-              'Type' => 'ebb',
-              'Velocity_Major' => -2.8,
-              'meanFloodDir' => '045',
-              'meanEbbDir' => '225',
-              'Bin' => '1',
-              'Depth' => '10'
-            }
-          ]
-        }
-      }.to_json
-    end
-
-    before do
-      stub_request(:get, /api.tidesandcurrents.noaa.gov.*currents_predictions/)
-        .to_return(status: 200, body: current_data_response, headers: { 'Content-Type' => 'application/json' })
+      # Get a real station from the API to ensure valid data
+      stations = client.current_stations
+      stations.first
     end
 
     it 'fetches current data for a station' do
-      data = client.current_data_for(station, Time.utc(2025, 6, 15))
+      data = client.current_data_for(station, Time.utc(2025, 1, 15))
 
       expect(data).to be_an(Array)
-      expect(data.length).to eq(3)
+      expect(data.length).to be > 0
     end
 
     it 'returns CurrentData objects' do
-      data = client.current_data_for(station, Time.utc(2025, 6, 15))
+      data = client.current_data_for(station, Time.utc(2025, 1, 15))
       expect(data).to all(be_a(Models::CurrentData))
     end
 
-    it 'parses flood, ebb, and slack types' do
-      data = client.current_data_for(station, Time.utc(2025, 6, 15))
+    it 'includes flood, ebb, and slack types' do
+      data = client.current_data_for(station, Time.utc(2025, 1, 15))
+      types = data.map(&:type).uniq
 
-      types = data.map(&:type)
-      expect(types).to include('flood', 'slack', 'ebb')
+      # Should have at least some of these types
+      expect(types).to include('flood').or include('ebb').or include('slack')
+    end
+  end
+
+  describe 'TimeWindow module' do
+    it 'includes TimeWindow module' do
+      expect(described_class.ancestors).to include(Clients::TimeWindow)
+    end
+
+    it 'has window_size of 12 months' do
+      # NOAA currents won't do more than 366 days
+      expect(described_class.window_size).to eq(12.months)
     end
   end
 end

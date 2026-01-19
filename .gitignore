@@ -4,3 +4,5 @@ cache/*
 vendor/*
 .worktrees/
 .env
+spec/.rspec_status
+coverage/
