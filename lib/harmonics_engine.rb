@@ -51,6 +51,7 @@ module Harmonics
             @nodal_factors_cache = {}
             @logged_nodal_months = {}
             @parsed_stations = nil
+            @reference_peaks_cache = {}
         end
 
         def stations
@@ -277,7 +278,134 @@ module Harmonics
             peaks
         end
 
+        # Simple peak detection without parabolic refinement - for coarse pass
+        def detect_approximate_peaks(predictions)
+            return [] if predictions.length < 3
+
+            peaks = []
+            (1...predictions.length - 1).each do |i|
+                prev_h = predictions[i-1]['height']
+                curr_h = predictions[i]['height']
+                next_h = predictions[i+1]['height']
+
+                if curr_h > prev_h && curr_h > next_h
+                    peaks << { 'time' => predictions[i]['time'], 'type' => 'High', 'height' => curr_h, 'units' => predictions[i]['units'] }
+                elsif curr_h < prev_h && curr_h < next_h
+                    peaks << { 'time' => predictions[i]['time'], 'type' => 'Low', 'height' => curr_h, 'units' => predictions[i]['units'] }
+                end
+            end
+            peaks
+        end
+
+        # Optimized peak generation using coarse-to-fine approach
+        # Instead of minute-by-minute for 13 months (571,200 points), we:
+        # 1. Coarse pass at 15-min resolution (~37,440 points) to find approximate peaks
+        # 2. Fine pass at 1-min resolution only around each peak (+/- 30 min = 60 points each)
+        # Result: ~40,000 points instead of 571,200 = 93% reduction
+        def generate_peaks_optimized(station_id, start_time, end_time, options = {})
+            # Ensure stations are loaded so @stations_cache is populated
+            stations if @stations_cache.empty?
+
+            station_data = @stations_cache[station_id] || {}
+
+            # Handle subordinate stations - use cached reference peaks
+            if station_data['ref_key']
+                return generate_subordinate_peaks_optimized(station_id, station_data, start_time, end_time, options)
+            end
+
+            constituents = station_data['constituents'] || []
+            if constituents.empty?
+                @logger.warn "No constituents found for station #{station_id}"
+                return []
+            end
+
+            # Phase 1: Coarse detection at 15-minute intervals
+            coarse_predictions = generate_predictions(station_id, start_time, end_time,
+                                                      options.merge(step_seconds: 900))
+            approximate_peaks = detect_approximate_peaks(coarse_predictions)
+
+            return [] if approximate_peaks.empty?
+
+            # Phase 2: Refine each peak with 1-minute resolution in a +/- 30 minute window
+            approximate_peaks.map do |approx|
+                window_start = approx['time'] - 30.minutes
+                window_end = approx['time'] + 30.minutes
+
+                fine_predictions = generate_predictions(station_id, window_start, window_end,
+                                                        options.merge(step_seconds: 60))
+                refined_peaks = detect_peaks(fine_predictions, step_seconds: 60)
+
+                # Find the peak closest to our approximate time (should be exactly one)
+                refined_peaks.min_by { |p| (p['time'] - approx['time']).abs }
+            end.compact
+        end
+
         private
+
+        # Optimized subordinate peak generation with reference station caching
+        def generate_subordinate_peaks_optimized(station_id, station_data, start_time, end_time, options)
+            ref_key = station_data['ref_key']
+            @logger.debug "Station #{station_id} is subordinate to #{ref_key}. Predicting via cached ref peaks."
+
+            # Normalize window to month boundaries for consistent cache keys
+            # Add 1 month buffer on each side to handle subordinate time offsets
+            ref_start = start_time.beginning_of_month - 1.month
+            ref_end = end_time.end_of_month + 1.month
+
+            # Cache key uses normalized month boundaries (YYYYMM format)
+            cache_key = "#{ref_key}:#{ref_start.strftime('%Y%m')}:#{ref_end.strftime('%Y%m')}"
+
+            # Prune stale cache entries (older than current window)
+            prune_reference_peaks_cache(ref_start)
+
+            ref_peaks = @reference_peaks_cache[cache_key] ||= begin
+                @logger.debug "Generating reference peaks for #{ref_key} (caching for subordinates)"
+                generate_peaks_optimized(ref_key, ref_start, ref_end, options)
+            end
+
+            # Apply subordinate offsets to the cached reference peaks
+            apply_peak_offsets(ref_peaks, station_data, start_time, end_time)
+        end
+
+        # Remove cache entries for windows that end before the cutoff date
+        def prune_reference_peaks_cache(cutoff)
+            @reference_peaks_cache.delete_if do |key, _|
+                # Key format: "ref_key:YYYYMM:YYYYMM"
+                end_month = key.split(':').last
+                end_month < cutoff.strftime('%Y%m')
+            end
+        end
+
+        # Apply time and height offsets to reference peaks for subordinate stations
+        def apply_peak_offsets(ref_peaks, sub_data, start_time, end_time)
+            ref_peaks.filter_map do |rp|
+                is_high = rp['type'] == 'High'
+
+                time_offset_str = is_high ? sub_data['h_time_offset'] : sub_data['l_time_offset']
+                height_mult = is_high ? sub_data['h_height_mult'] : sub_data['l_height_mult']
+
+                # Apply time offset (format is [+-]HH:MM:SS)
+                offset_seconds = 0
+                if time_offset_str && time_offset_str != '\N'
+                    sign = time_offset_str.start_with?('-') ? -1 : 1
+                    parts = time_offset_str.delete('+-').split(':').map(&:to_i)
+                    offset_seconds = sign * (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0))
+                end
+
+                new_time = rp['time'] + offset_seconds.seconds
+                new_height = rp['height'] * height_mult
+
+                # Filter to requested window
+                next unless new_time >= start_time && new_time <= end_time
+
+                {
+                    'type' => rp['type'],
+                    'time' => new_time,
+                    'height' => new_height.round(3),
+                    'units' => rp['units']
+                }
+            end
+        end
 
         def apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
             # detect_peaks on ref_predictions to get high/low times/heights

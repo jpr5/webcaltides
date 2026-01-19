@@ -114,8 +114,9 @@ module Clients
 
             # Use bid if available (e.g. for currents with different depths), fallback to id
             lookup_id = station.bid || station.id
-            predictions = @engine.generate_predictions(lookup_id, start_time, end_time)
-            peaks = @engine.detect_peaks(predictions)
+
+            # Use optimized coarse-to-fine peak generation (93% fewer prediction points)
+            peaks = @engine.generate_peaks_optimized(lookup_id, start_time, end_time)
 
             peaks.map do |p|
                 Models::TideData.new(

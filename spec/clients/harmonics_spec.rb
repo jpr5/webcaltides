@@ -106,14 +106,6 @@ RSpec.describe Clients::Harmonics do
         end
 
         context 'with mocked engine' do
-            let(:mock_predictions) do
-                [
-                    { 'time' => Time.utc(2025, 6, 15, 6, 30), 'height' => 10.5, 'units' => 'ft' },
-                    { 'time' => Time.utc(2025, 6, 15, 12, 45), 'height' => 0.5, 'units' => 'ft' },
-                    { 'time' => Time.utc(2025, 6, 15, 19, 0), 'height' => 11.0, 'units' => 'ft' }
-                ]
-            end
-
             let(:mock_peaks) do
                 [
                     { 'type' => 'High', 'time' => Time.utc(2025, 6, 15, 6, 30), 'height' => 10.5, 'units' => 'ft' },
@@ -124,17 +116,11 @@ RSpec.describe Clients::Harmonics do
 
             before do
                 allow(client.engine).to receive(:find_station).and_return({ 'id' => 'X1234567' })
-                allow(client.engine).to receive(:generate_predictions).and_return(mock_predictions)
-                allow(client.engine).to receive(:detect_peaks).and_return(mock_peaks)
+                allow(client.engine).to receive(:generate_peaks_optimized).and_return(mock_peaks)
             end
 
-            it 'generates predictions using the harmonics engine' do
-                expect(client.engine).to receive(:generate_predictions)
-                client.tide_data_for(station, Time.utc(2025, 6, 15))
-            end
-
-            it 'detects peaks from predictions' do
-                expect(client.engine).to receive(:detect_peaks)
+            it 'generates peaks using the optimized harmonics method' do
+                expect(client.engine).to receive(:generate_peaks_optimized)
                 client.tide_data_for(station, Time.utc(2025, 6, 15))
             end
 
