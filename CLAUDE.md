@@ -51,7 +51,8 @@ Requires a [Geonames](https://www.geonames.org/login) account for timezone looku
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GEONAMES_USERNAME` | Yes | Username for Geonames timezone lookups |
-| `GOOGLE_MAPS_API_KEY` | Optional | Google Maps Static API key for station map thumbnails |
+| `GOOGLE_MAPS_API_KEY` | No | Google Maps Static API key for map thumbnails (preferred) |
+| `GEOAPIFY_API_KEY` | No | Geoapify API key for map thumbnails (free fallback) |
 
 ## API Endpoints
 

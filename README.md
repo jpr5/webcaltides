@@ -20,8 +20,24 @@ the API won't work immediately - there's some delay.  At some point after,
 you'll need to log back in and one-time manually [enable web services
 access](https://www.geonames.org/manageaccount).
 
-Then update `server.rb:Server#configure` with your username and you're off to
-the races.
+Set the `GEONAMES_USERNAME` environment variable with your username.
+
+### Map Thumbnails (Optional)
+
+Station cards can display location map thumbnails. Two services are supported:
+
+**Google Maps Static API** (preferred):
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project and enable the "Maps Static API"
+3. Create an API key and restrict it to the Static Maps API
+4. Set `GOOGLE_MAPS_API_KEY` environment variable
+
+**Geoapify** (free fallback):
+1. Register at [Geoapify](https://www.geoapify.com/) (free, no credit card required)
+2. Create a project and copy your API key (free tier: 3,000 requests/day)
+3. Set `GEOAPIFY_API_KEY` environment variable
+
+If neither key is configured, a placeholder icon will be shown instead of maps.
 
 OR, just use this one at [webcaltides.org](https://webcaltides.org)!
 

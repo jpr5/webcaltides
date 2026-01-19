@@ -180,22 +180,55 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    // Set up IntersectionObserver with 100% bottom margin (prefetch 1 viewport ahead)
-    var cardObserver = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-                loadCardData(entry.target);
-                cardObserver.unobserve(entry.target); // Stop observing once loaded
-            }
-        });
-    }, {
-        rootMargin: '0px 0px 100% 0px' // Trigger when card is within 1 viewport height of visible area
-    });
+    // Debounced lazy loading - only load cards after scrolling stops
+    // This prevents loading cards that are just scrolled past quickly
+    function setupDebouncedLoader() {
+        var scrollTimeout = null;
+        var SCROLL_DEBOUNCE_MS = 150; // Wait 150ms after scrolling stops
 
-    // Observe all station cards
-    document.querySelectorAll('.station-card[data-station-type]').forEach(function(card) {
-        cardObserver.observe(card);
-    });
+        // Check which cards are currently visible and load them
+        function loadVisibleCards() {
+            var viewportTop = window.scrollY;
+            var viewportBottom = viewportTop + window.innerHeight;
+            var margin = 100; // Small margin to catch cards just entering view
+
+            document.querySelectorAll('.station-card[data-station-type]').forEach(function(card) {
+                if (card.dataset.loaded) return; // Already loaded
+
+                var rect = card.getBoundingClientRect();
+                var cardTop = rect.top + window.scrollY;
+                var cardBottom = cardTop + rect.height;
+
+                // Check if card is within viewport (with small margin)
+                var isVisible = cardBottom >= (viewportTop - margin) &&
+                                cardTop <= (viewportBottom + margin);
+
+                if (isVisible) {
+                    loadCardData(card);
+                }
+            });
+        }
+
+        // Debounced scroll handler
+        function onScroll() {
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(loadVisibleCards, SCROLL_DEBOUNCE_MS);
+        }
+
+        // Listen for scroll events
+        window.addEventListener('scroll', onScroll, { passive: true });
+
+        // Also load on resize (debounced)
+        window.addEventListener('resize', onScroll, { passive: true });
+
+        // Initial load for cards already in view
+        loadVisibleCards();
+    }
+
+    // Delay setup to avoid triggering during initial scroll animation
+    setTimeout(setupDebouncedLoader, 500);
 });
 </script>
 
@@ -268,8 +301,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     sources_json = ([r] + alternatives).map { |s|
                         { id: s.id, provider: s.provider.upcase, publicId: s.public_id, url: s.url }
                     }.to_json
-                    # Google Maps Static API URL
-                    map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x0ea5e9&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x0ea5e9|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
+                    # Static map URL (Google Maps, Geoapify, or nil for placeholder)
+                    map_url = static_map_url(lat: r.lat, lon: r.lon, accent_color: '0x0ea5e9')
                 %>
                 <%= erb :"partials/_station_card", locals: {
                     type: :tide,
@@ -324,8 +357,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     all_sources = [r] + alternatives
                     unique_depths = all_sources.map { |s| s.depth&.to_i }.compact.uniq.sort
                     has_multiple_depths = unique_depths.length > 1
-                    # Google Maps Static API URL
-                    map_url = "https://maps.googleapis.com/maps/api/staticmap?center=#{r.lat},#{r.lon}&zoom=11&size=200x200&scale=2&maptype=terrain&style=feature:water|color:0x2dd4bf&style=feature:landscape|color:0x1e293b&style=feature:road|visibility:off&style=feature:poi|visibility:off&style=feature:transit|visibility:off&style=element:labels|visibility:off&markers=color:0x2dd4bf|#{r.lat},#{r.lon}&key=#{ENV['GOOGLE_MAPS_API_KEY'] || 'YOUR_API_KEY'}"
+                    # Static map URL (Google Maps, Geoapify, or nil for placeholder)
+                    map_url = static_map_url(lat: r.lat, lon: r.lon, accent_color: '0x2dd4bf')
                 %>
                 <%= erb :"partials/_station_card", locals: {
                     type: :current,

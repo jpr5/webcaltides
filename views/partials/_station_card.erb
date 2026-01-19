@@ -55,17 +55,20 @@
             <!-- Map, Details, and Source selectors row -->
             <div class="flex gap-3">
                 <!-- Mini Map Thumbnail -->
+                <% if map_url %>
                 <div class="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden bg-navy-700/50 relative"
+                     x-data="{ mapError: false }"
                      x-intersect.once="mapLoaded = true">
-                    <template x-if="mapLoaded">
+                    <template x-if="mapLoaded && !mapError">
                         <img
                             src="<%= map_url %>"
+                            @error="mapError = true"
                             alt="Map of <%= station.name %>"
                             class="w-full h-full object-cover"
                             loading="lazy"
                         />
                     </template>
-                    <template x-if="!mapLoaded">
+                    <template x-if="!mapLoaded || mapError">
                         <div class="w-full h-full flex items-center justify-center">
                             <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
@@ -77,6 +80,20 @@
                         <div class="w-2.5 h-2.5 bg-<%= theme[:accent] %>-500 rounded-full border-2 border-white shadow-lg"></div>
                     </div>
                 </div>
+                <% else %>
+                <!-- No map service configured - show placeholder -->
+                <div class="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden bg-navy-700/50 relative">
+                    <div class="w-full h-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                        </svg>
+                    </div>
+                    <!-- Map pin overlay -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-2.5 h-2.5 bg-<%= theme[:accent] %>-500 rounded-full border-2 border-white shadow-lg"></div>
+                    </div>
+                </div>
+                <% end %>
 
                 <!-- Station Details -->
                 <div class="flex-1 min-w-0">

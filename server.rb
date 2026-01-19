@@ -43,6 +43,33 @@ class Server < ::Sinatra::Base
         after_reload { $LOG.debug 'reloaded' }
     end
 
+    helpers do
+        # Generate static map URL with fallback chain:
+        # 1. Google Maps Static API (if GOOGLE_MAPS_API_KEY is set)
+        # 2. Geoapify Static Maps (if GEOAPIFY_API_KEY is set)
+        # 3. nil (placeholder icon shown)
+        def static_map_url(lat:, lon:, accent_color:)
+            if ENV['GOOGLE_MAPS_API_KEY'].to_s.strip.length > 0
+                # Google Maps Static API (preferred)
+                styles = [
+                    "feature:water|color:#{accent_color}",
+                    "feature:landscape|color:0x1e293b",
+                    "feature:road|visibility:off",
+                    "feature:poi|visibility:off",
+                    "feature:transit|visibility:off",
+                    "element:labels|visibility:off"
+                ].map { |s| "style=#{s}" }.join("&")
+                "https://maps.googleapis.com/maps/api/staticmap?center=#{lat},#{lon}&zoom=11&size=200x200&scale=2&maptype=terrain&#{styles}&markers=color:#{accent_color}|#{lat},#{lon}&key=#{ENV['GOOGLE_MAPS_API_KEY']}"
+            elsif ENV['GEOAPIFY_API_KEY'].to_s.strip.length > 0
+                # Geoapify fallback (free tier: 3,000 requests/day)
+                color = accent_color.sub('0x', '%23')
+                "https://maps.geoapify.com/v1/staticmap?style=dark-matter&width=400&height=400&center=lonlat:#{lon},#{lat}&zoom=11&marker=lonlat:#{lon},#{lat};color:#{color};size:large&apiKey=#{ENV['GEOAPIFY_API_KEY']}"
+            else
+                nil  # No map service configured - will show placeholder
+            end
+        end
+    end
+
     ##
     ## URL entry points
     ##
