@@ -197,7 +197,7 @@ class="relative flex-shrink-0">
     >
         <!-- Sources filtered by depth (for currents) - dynamically rendered -->
         <div class="py-1">
-            <template x-for="(source, idx) in filteredSources" :key="source.id">
+            <template x-for="(source, idx) in filteredSources" :key="source.id + '-' + idx">
                 <button
                     @click="selectSource(source.id)"
                     class="w-full px-3 py-2 flex items-center justify-between hover:bg-navy-800 transition-colors text-left"
