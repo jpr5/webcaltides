@@ -10,28 +10,40 @@ module Clients
             @logger = logger
         end
 
+        MAX_RETRIES = 5
+
         def get_url(url)
             agent   = Mechanize.new
             json    = nil
             retries = 0
 
             begin
-
                 json = agent.get(url).body
                 logger.debug "json.length = #{json.length}"
-
             rescue Mechanize::ResponseCodeError => e
-
-                # seeing gateway timeouts from time to time
-                if e.response_code == "502" || e.response_code == "504" and retries < 3
+                # Retry on gateway errors with exponential backoff
+                if (e.response_code == "502" || e.response_code == "504") && retries < MAX_RETRIES
                     retries += 1
-                    sleep rand(0..Float(2**retries))
+                    delay = rand(0.5..(2.0 ** retries))
+                    logger.warn "#{e.response_code} from #{url.split('?').first}, retry #{retries}/#{MAX_RETRIES} in #{delay.round(1)}s"
+                    sleep delay
                     retry
                 end
 
-                logger.error "GET failed: #{e.detailed_message} (#{e.page&.content})"
-                raise e # doing this will pop out to an HTTP 500
+                logger.error "GET failed after #{retries} retries: #{e.detailed_message}"
+                raise e
+            rescue Net::OpenTimeout, Net::ReadTimeout => e
+                # Retry on network timeouts
+                if retries < MAX_RETRIES
+                    retries += 1
+                    delay = rand(0.5..(2.0 ** retries))
+                    logger.warn "Timeout for #{url.split('?').first}, retry #{retries}/#{MAX_RETRIES} in #{delay.round(1)}s"
+                    sleep delay
+                    retry
+                end
 
+                logger.error "Timeout after #{retries} retries: #{e.message}"
+                raise e
             end
 
             return json
