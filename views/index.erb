@@ -192,8 +192,9 @@ document.addEventListener('DOMContentLoaded', function() {
             var viewportBottom = viewportTop + window.innerHeight;
             var margin = 100; // Small margin to catch cards just entering view
 
+            var loaded = 0, skipped = 0, outOfView = 0;
             document.querySelectorAll('.station-card[data-station-type]').forEach(function(card) {
-                if (card.dataset.loaded) return; // Already loaded
+                if (card.dataset.loaded) { skipped++; return; } // Already loaded
 
                 var rect = card.getBoundingClientRect();
                 var cardTop = rect.top + window.scrollY;
@@ -204,9 +205,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 cardTop <= (viewportBottom + margin);
 
                 if (isVisible) {
+                    loaded++;
                     loadCardData(card);
+                } else {
+                    outOfView++;
                 }
             });
+            console.log('loadVisibleCards: viewport=' + viewportTop + '-' + viewportBottom + ', loaded=' + loaded + ', skipped=' + skipped + ', outOfView=' + outOfView);
         }
 
         // Debounced scroll handler
