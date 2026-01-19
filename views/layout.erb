@@ -700,7 +700,7 @@
                     <span>Built by</span>
                     <a href="https://www.linkedin.com/in/jordanritter/" target="_blank" class="text-slate-400 hover:text-ocean-400 transition-colors">Jordan Ritter</a>
                     <span>with</span>
-                    <div x-data="{ open: false, timeout: null }" class="relative"
+                    <div x-data="{ open: false, timeout: null }" class="relative z-50"
                          @mouseenter="clearTimeout(timeout); open = true"
                          @mouseleave="timeout = setTimeout(() => open = false, 150)">
                         <button class="text-slate-400 hover:text-ocean-400 transition-colors">
@@ -722,7 +722,9 @@
                         GitHub
                     </a>
 
-                    <div x-data="{ open: false }" class="relative" @mouseenter="open = true" @mouseleave="open = false">
+                    <div x-data="{ open: false, timeout: null }" class="relative z-50"
+                         @mouseenter="clearTimeout(timeout); open = true"
+                         @mouseleave="timeout = setTimeout(() => open = false, 150)">
                         <button class="text-slate-400 hover:text-ocean-400 transition-colors">
                             Licenses
                         </button>
@@ -735,7 +737,9 @@
                         </div>
                     </div>
 
-                    <div x-data="{ open: false }" class="relative" @mouseenter="open = true" @mouseleave="open = false">
+                    <div x-data="{ open: false, timeout: null }" class="relative z-50"
+                         @mouseenter="clearTimeout(timeout); open = true"
+                         @mouseleave="timeout = setTimeout(() => open = false, 150)">
                         <button class="text-slate-400 hover:text-ocean-400 transition-colors">
                             What's New
                         </button>
