@@ -554,6 +554,24 @@ module WebCalTides
     def cache_current_stations(at:current_station_cache_file, stations: [])
         current_clients.values.uniq.each { |c| stations.concat(c.current_stations) } if stations.empty?
 
+        # Enrich NOAA current stations with region data from nearest NOAA tide station
+        # (NOAA currents API doesn't provide state/region info, but tide stations do)
+        noaa_current_stations = stations.select { |s| s.provider == 'noaa' && s.region == 'United States' }
+        if noaa_current_stations.any?
+            noaa_tide_stations = tide_stations.select { |s| s.provider == 'noaa' }
+            logger.info "enriching #{noaa_current_stations.size} NOAA current stations with region data"
+
+            noaa_current_stations.each do |cs|
+                next unless cs.lat && cs.lon
+                # Find closest tide station
+                closest = noaa_tide_stations.min_by do |ts|
+                    next Float::INFINITY unless ts.lat && ts.lon
+                    Geocoder::Calculations.distance_between([cs.lat, cs.lon], [ts.lat, ts.lon])
+                end
+                cs.region = closest.region if closest&.region
+            end
+        end
+
         logger.debug "storing current station list at #{at}"
         File.write(at, stations.map(&:to_h).to_json)
 
@@ -617,7 +635,8 @@ module WebCalTides
                 (s.bid.downcase.start_with?(b) rescue false) ||
                 (s.id.downcase.start_with?(b) rescue false) ||
                 (s.id.downcase.include?(b) rescue false) ||
-                (s.name.downcase.include?(b)) rescue false
+                (s.name.downcase.include?(b) rescue false) ||
+                (s.region.downcase.include?(b) rescue false)
             end
         end
 

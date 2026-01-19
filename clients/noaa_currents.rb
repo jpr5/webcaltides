@@ -37,6 +37,7 @@ module Clients
                     bid:      js["bid"],
                     id:       js["id"],
                     name:     js["name"],
+                    region:   "United States",  # NOAA currents API doesn't provide region data
                     lat:      js["lat"],
                     lon:      js["lng"],
                     depth:    js["depth"],

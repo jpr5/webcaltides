@@ -426,6 +426,8 @@ module Harmonics
                         'meridian' => cache_entry['meridian'],
                         'units' => cache_entry['units'],
                         'region' => cache_entry['region'],
+                        'state' => cache_entry['state'],
+                        'country' => cache_entry['country'],
                         'type' => cache_entry['type'],
                         'ref_key' => cache_entry['ref_key'],
                         'h_time_offset' => cache_entry['h_time_offset'],
@@ -506,8 +508,21 @@ module Harmonics
                         }
                     end
                 when :data_sets
-                    # (index, name, station_id_context, station_id, lat, lng, timezone, country, units, ..., meridian, ..., state)
+                    # Schema: (index, name, station_id_context, station_id, lat, lng, timezone, country, units,
+                    #          min_dir, max_dir, legalese, notes, comments, source, restriction, date_imported,
+                    #          xfields, meridian, datumkind, datum, months_on_station, last_date_on_station,
+                    #          ref_index, min_time_add, min_level_add, min_level_multiply, max_time_add,
+                    #          max_level_add, max_level_multiply, flood_begins, ebb_begins, original_name, state)
                     idx = parts[0].to_i
+                    country = parts[7]
+                    state = parts[33] == '\N' ? nil : parts[33]
+
+                    # Build region from state and country
+                    # Use full state name if available for better searchability
+                    # e.g., "Massachusetts, USA" or "Hawaii, USA" or just "USA" if no state
+                    state_full = state ? STATE_NAMES[state.upcase] : nil
+                    region = state_full ? "#{state_full}, #{country}" : (state ? "#{state}, #{country}" : country)
+
                     stations_data << {
                         'idx' => idx,
                         'name' => parts[1],
@@ -515,7 +530,9 @@ module Harmonics
                         'lat' => parts[4].to_f,
                         'lng' => parts[5].to_f,
                         'timezone' => parts[6].sub(/^:/, ''),
-                        'region' => parts[7],
+                        'country' => country,
+                        'state' => state,
+                        'region' => region,
                         'units' => parts[8],
                         'meridian' => parts[18],
                         'datum_offset' => parts[20].to_f,
@@ -587,12 +604,18 @@ module Harmonics
                     @logger.warn "Station #{data['name']} (#{idx}) has no constituents (ref_index: #{data['ref_index']})"
                 end
 
+                # For current stations, clean up the display name
+                # (remove " Current" suffix, state from name since we have it in the data)
+                display_name = clean_station_name(data['name'], data['type'], data['state'])
+
                 station = {
-                    'name' => data['name'],
+                    'name' => display_name,
                     'alternate_names' => [],
                     'id' => base_id,
                     'public_id' => base_id,
                     'region' => data['region'],
+                    'state' => data['state'],
+                    'country' => data['country'],
                     'location' => data['name'],
                     'lat' => data['lat'],
                     'lon' => data['lng'],
@@ -614,6 +637,8 @@ module Harmonics
                     'meridian' => data['meridian'],
                     'units' => data['units'],
                     'region' => data['region'],
+                    'state' => data['state'],
+                    'country' => data['country'],
                     'type' => data['type'],
                     'ref_key' => ref_key,
                     'h_time_offset' => data['h_time_offset'],
@@ -624,6 +649,48 @@ module Harmonics
             end
 
             stations
+        end
+
+        # State abbreviation to full name mapping for cleaning station names
+        STATE_NAMES = {
+            'AL' => 'Alabama', 'AK' => 'Alaska', 'AZ' => 'Arizona', 'AR' => 'Arkansas',
+            'CA' => 'California', 'CO' => 'Colorado', 'CT' => 'Connecticut', 'DE' => 'Delaware',
+            'FL' => 'Florida', 'GA' => 'Georgia', 'HI' => 'Hawaii', 'ID' => 'Idaho',
+            'IL' => 'Illinois', 'IN' => 'Indiana', 'IA' => 'Iowa', 'KS' => 'Kansas',
+            'KY' => 'Kentucky', 'LA' => 'Louisiana', 'ME' => 'Maine', 'MD' => 'Maryland',
+            'MA' => 'Massachusetts', 'MI' => 'Michigan', 'MN' => 'Minnesota', 'MS' => 'Mississippi',
+            'MO' => 'Missouri', 'MT' => 'Montana', 'NE' => 'Nebraska', 'NV' => 'Nevada',
+            'NH' => 'New Hampshire', 'NJ' => 'New Jersey', 'NM' => 'New Mexico', 'NY' => 'New York',
+            'NC' => 'North Carolina', 'ND' => 'North Dakota', 'OH' => 'Ohio', 'OK' => 'Oklahoma',
+            'OR' => 'Oregon', 'PA' => 'Pennsylvania', 'RI' => 'Rhode Island', 'SC' => 'South Carolina',
+            'SD' => 'South Dakota', 'TN' => 'Tennessee', 'TX' => 'Texas', 'UT' => 'Utah',
+            'VT' => 'Vermont', 'VA' => 'Virginia', 'WA' => 'Washington', 'WV' => 'West Virginia',
+            'WI' => 'Wisconsin', 'WY' => 'Wyoming', 'DC' => 'District of Columbia',
+            'PR' => 'Puerto Rico', 'VI' => 'Virgin Islands', 'GU' => 'Guam',
+            'AS' => 'American Samoa', 'MP' => 'Northern Mariana Islands'
+        }.freeze
+
+        # Clean up station display name by removing redundant suffixes and state names
+        # that are already captured in the region field.
+        # Examples:
+        #   "Little Misery Island (depth 50 ft), Salem Sound, Massachusetts Current" -> "Little Misery Island (depth 50 ft), Salem Sound"
+        #   "Portland, Casco Bay, Maine" -> "Portland, Casco Bay"
+        def clean_station_name(name, type, state_abbrev)
+            clean = name.dup
+
+            # For currents, remove " Current" suffix
+            clean = clean.sub(/ Current$/i, '') if type == 'current'
+
+            # Remove trailing state name if it matches the state field
+            if state_abbrev
+                state_full = STATE_NAMES[state_abbrev.upcase]
+                if state_full
+                    # Remove ", StateName" from the end
+                    clean = clean.sub(/,\s*#{Regexp.escape(state_full)}$/i, '')
+                end
+            end
+
+            clean.strip
         end
 
         def parse_ticon_file
