@@ -135,24 +135,16 @@
                     <% end %>
                     <% end %>
 
-                    <!-- Station ID (clickable for official sources) -->
-                    <!-- For currents with multiple sources, make ID reactive to selected source -->
-                    <% if type == :current %>
-                    <template x-if="currentSource?.url">
+                    <!-- Station ID (clickable only for official sources with real URLs) -->
+                    <!-- xtide/ticon have placeholder URLs like #xtide, so check for http -->
+                    <template x-if="currentSource?.url?.startsWith('http')">
                         <a :href="currentSource.url" target="_blank" class="text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
                             <span x-text="currentSource.publicId || selectedSource"></span> ↗
                         </a>
                     </template>
-                    <template x-if="!currentSource?.url">
+                    <template x-if="!currentSource?.url?.startsWith('http')">
                         <p class="text-slate-600 text-xs font-mono" x-text="currentSource?.publicId || selectedSource"></p>
                     </template>
-                    <% elsif station.provider.in?(['xtide', 'ticon']) %>
-                    <p class="text-slate-600 text-xs font-mono"><%= public_id %></p>
-                    <% else %>
-                    <a href="<%= station.url %>" target="_blank" class="text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
-                        <%= public_id %> ↗
-                    </a>
-                    <% end %>
                 </div>
 
                 <!-- Source selectors (provider badge and depth selector) -->
