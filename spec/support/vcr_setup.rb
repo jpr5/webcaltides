@@ -10,9 +10,13 @@ VCR.configure do |config|
   # Allow localhost connections (for rack-test)
   config.ignore_localhost = true
 
-  # Record mode - use :new_episodes to record missing cassettes
+  # Record mode:
+  #   VCR_RECORD=1 - re-record all cassettes from live APIs
+  #   (unset)      - use existing cassettes, record only new requests
+  record_mode = ENV['VCR_RECORD'] ? :all : :new_episodes
+
   config.default_cassette_options = {
-    record: :new_episodes,
+    record: record_mode,
     match_requests_on: [:method, :uri, :body],
     allow_playback_repeats: true
   }
