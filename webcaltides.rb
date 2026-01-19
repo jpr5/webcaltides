@@ -11,7 +11,7 @@ require 'dotenv/load'
 require 'bundler/setup'
 Bundler.require(:default, ENV['RACK_ENV'] || 'development')
 
-require_relative 'gps'
+require_relative 'lib/gps'
 require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
@@ -37,7 +37,7 @@ module WebCalTides
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze
 
-    def settings; return Server.settings; end
+    def settings; return Server.settings rescue Struct.new(:cache_dir).new('cache') end
     def logger; $LOG; end
 
     ##
