@@ -3,9 +3,9 @@
 RSpec.describe WebCalTides do
     describe '#update_tzcache' do
         around do |example|
-            # Reset tzcache state before each test
-            WebCalTides.instance_variable_set(:@tzcache, nil)
-            WebCalTides.instance_variable_set(:@tzcache_mutex, nil)
+            # Reset tzcache state before each test (class variables for cross-request thread safety)
+            WebCalTides.class_variable_set(:@@tzcache, nil) if WebCalTides.class_variable_defined?(:@@tzcache)
+            WebCalTides.class_variable_set(:@@tzcache_mutex, nil) if WebCalTides.class_variable_defined?(:@@tzcache_mutex)
 
             with_test_cache_dir do |dir|
                 example.run
@@ -15,7 +15,7 @@ RSpec.describe WebCalTides do
         it 'updates the cache and persists to disk' do
             WebCalTides.update_tzcache("42.0 -71.0", "America/New_York")
 
-            cache = WebCalTides.instance_variable_get(:@tzcache)
+            cache = WebCalTides.class_variable_get(:@@tzcache)
             expect(cache["42.0 -71.0"]).to eq("America/New_York")
 
             # Verify file was written
@@ -37,7 +37,7 @@ RSpec.describe WebCalTides do
             # Update should load existing cache first
             WebCalTides.update_tzcache("new_key", "New/Zone")
 
-            cache = WebCalTides.instance_variable_get(:@tzcache)
+            cache = WebCalTides.class_variable_get(:@@tzcache)
             expect(cache["existing_key"]).to eq("Existing/Zone")
             expect(cache["new_key"]).to eq("New/Zone")
         end
@@ -50,7 +50,7 @@ RSpec.describe WebCalTides do
             end
             threads.each(&:join)
 
-            cache = WebCalTides.instance_variable_get(:@tzcache)
+            cache = WebCalTides.class_variable_get(:@@tzcache)
             expect(cache.keys.length).to eq(10)
 
             # Verify all values are present
@@ -67,8 +67,8 @@ RSpec.describe WebCalTides do
 
     describe '#timezone_for' do
         around do |example|
-            WebCalTides.instance_variable_set(:@tzcache, nil)
-            WebCalTides.instance_variable_set(:@tzcache_mutex, nil)
+            WebCalTides.class_variable_set(:@@tzcache, nil) if WebCalTides.class_variable_defined?(:@@tzcache)
+            WebCalTides.class_variable_set(:@@tzcache_mutex, nil) if WebCalTides.class_variable_defined?(:@@tzcache_mutex)
 
             with_test_cache_dir do |dir|
                 example.run

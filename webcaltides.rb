@@ -49,12 +49,12 @@ module WebCalTides
 
     def tide_clients(provider = nil)
         @tide_clients ||= begin
-            @@harmonics ||= Clients::Harmonics.new(logger)
+            harmonics = get_harmonics_client
             {
                 noaa:  Clients::NoaaTides.new(logger),
                 chs:   Clients::ChsTides.new(logger),
-                xtide: @@harmonics,
-                ticon: @@harmonics
+                xtide: harmonics,
+                ticon: harmonics
             }
         end
 
@@ -63,15 +63,23 @@ module WebCalTides
 
     def current_clients(provider = nil)
         @current_clients ||= begin
-            @@harmonics ||= Clients::Harmonics.new(logger)
+            harmonics = get_harmonics_client
             {
                 noaa:  Clients::NoaaCurrents.new(logger),
-                xtide: @@harmonics,
-                ticon: @@harmonics
+                xtide: harmonics,
+                ticon: harmonics
             }
         end
 
         provider ? @current_clients[provider.to_sym] : @current_clients
+    end
+
+    # Thread-safe harmonics client accessor (singleton across all requests)
+    def get_harmonics_client
+        return @@harmonics if defined?(@@harmonics) && @@harmonics
+        (@@harmonics_mutex ||= Mutex.new).synchronize do
+            @@harmonics ||= Clients::Harmonics.new(logger)
+        end
     end
 
     def lunar_client
@@ -141,10 +149,11 @@ module WebCalTides
 
         key = "#{lat} #{long}"
 
-        # Thread-safe cache read
-        @tzcache_mutex ||= Mutex.new
-        cached = @tzcache_mutex.synchronize { @tzcache&.[](key) }
-        return cached if cached
+        # Thread-safe cache read (class variables for cross-request safety)
+        (@@tzcache_mutex ||= Mutex.new).synchronize do
+            @@tzcache ||= load_tzcache
+            return @@tzcache[key] if @@tzcache[key]
+        end
 
         # External lookup (outside mutex to avoid blocking other threads)
         logger.debug "looking up tz for GPS #{key}"
@@ -172,12 +181,11 @@ module WebCalTides
         update_tzcache(key, res)
     end
 
-    # Thread-safe timezone cache update. Memoizes mutex internally for self-containment.
+    # Thread-safe timezone cache update with cross-request class-level mutex.
     def update_tzcache(key, value)
-        @tzcache_mutex ||= Mutex.new
-        @tzcache_mutex.synchronize do
-            @tzcache ||= load_tzcache
-            @tzcache[key] = value
+        (@@tzcache_mutex ||= Mutex.new).synchronize do
+            @@tzcache ||= load_tzcache
+            @@tzcache[key] = value
             write_tzcache_to_disk
         end
         value
@@ -197,7 +205,7 @@ module WebCalTides
     def write_tzcache_to_disk
         filename = "#{settings.cache_dir}/tzs.json"
         temp_file = "#{filename}.tmp.#{$$}"
-        File.write(temp_file, @tzcache.to_json)
+        File.write(temp_file, @@tzcache.to_json)
         File.rename(temp_file, filename)
     rescue => e
         logger.error "Failed to write tzcache: #{e.message}"
