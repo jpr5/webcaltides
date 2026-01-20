@@ -17,7 +17,7 @@ class NoaaTideFetcher
     def fetch_tides(loc, date, _tz)
         station_id = loc[:noaa_id]
         unless station_id
-            @logger.warn "No NOAA station id for #{loc[:name]}"
+            @logger.warn "no NOAA station id for #{loc[:name]}"
             return []
         end
 
@@ -58,7 +58,7 @@ class TideForecastScraper
         return [] unless slug
 
         url = "https://www.tide-forecast.com/locations/#{slug}/tides/latest"
-        @logger.debug "Fetching live data from #{url}"
+        @logger.debug "fetching live data from #{url}"
 
         begin
             page = @agent.get(url)
@@ -110,7 +110,7 @@ class TideForecastScraper
             end
             tide_events
         rescue => e
-            @logger.error "Failed to fetch from tide-forecast: #{e.message}"
+            @logger.error "failed to fetch from tide-forecast: #{e.message}"
             []
         end
     end

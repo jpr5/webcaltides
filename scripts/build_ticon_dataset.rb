@@ -28,13 +28,13 @@ $logger.level = Logger::INFO
 
 # Configure Timezone lookup (Google strictly required for dataset building)
 if ENV['GOOGLE_API_KEY']
-    $logger.info "Using Google Maps Time Zone API"
+    $logger.info "using Google Maps Time Zone API"
     Timezone::Lookup.config(:google) do |c|
         c.api_key = ENV['GOOGLE_API_KEY']
     end
 else
-    $logger.error "GOOGLE_API_KEY environment variable is required for dataset building."
-    $logger.error "Geonames fallback disabled to protect production environment limits."
+    $logger.error "GOOGLE_API_KEY environment variable is required for dataset building"
+    $logger.error "Geonames fallback disabled to protect production environment limits"
     exit 1
 end
 
@@ -96,7 +96,7 @@ class Spinner
 end
 
 def main
-    $logger.info "Starting TICON dataset builder..."
+    $logger.info "starting TICON dataset builder..."
 
     # 1. Load GESLA Metadata for naming and precision
     gesla_map = load_gesla_metadata
@@ -107,12 +107,12 @@ def main
     # 3. Write to JSON
     write_json(stations)
 
-    $logger.info "Done! Unified TICON dataset written to #{OUTPUT_PATH}"
+    $logger.info "done, unified TICON dataset written to #{OUTPUT_PATH}"
 end
 
 def load_gesla_metadata
     return {} unless File.exist?(GESLA_PATH)
-    $logger.info "Loading GESLA metadata from #{GESLA_PATH}"
+    $logger.info "loading GESLA metadata from #{GESLA_PATH}"
 
     map = []
     # Columns: FILE NAME,SITE NAME,SITE CODE,COUNTRY,...,LATITUDE,LONGITUDE,...
@@ -127,13 +127,13 @@ def load_gesla_metadata
             country: row['COUNTRY']
         }
     end
-    $logger.info "Loaded metadata for #{map.length} GESLA stations."
+    $logger.info "loaded metadata for #{map.length} GESLA stations"
     map
 end
 
 def parse_ticon_data(gesla_map)
     return {} unless File.exist?(TICON_PATH)
-    $logger.info "Parsing TICON data from #{TICON_PATH}"
+    $logger.info "parsing TICON data from #{TICON_PATH}"
 
     # Load persistent timezone cache
     FileUtils.mkdir_p(File.dirname(TZ_CACHE_PATH))
@@ -194,7 +194,7 @@ def parse_ticon_data(gesla_map)
                     # In this case, we default to UTC as it's the safest for ocean data
                     'UTC'
                 rescue Timezone::Error::Base, StandardError => e
-                    $logger.error "Timezone lookup failed for #{id} (#{final_lat}, #{final_lon}): #{e.message}"
+                    $logger.error "timezone lookup failed for #{id} (#{final_lat}, #{final_lon}): #{e.message}"
                     'UTC'
                 end
                 tz_cache[id] = tz

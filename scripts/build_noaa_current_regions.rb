@@ -25,15 +25,15 @@ end
 $logger.level = Logger::INFO
 
 def main
-    $logger.info "Fetching NOAA tide stations..."
+    $logger.info "fetching NOAA tide stations..."
     tide_client = Clients::NoaaTides.new($logger)
     tide_stations = tide_client.tide_stations
-    $logger.info "Loaded #{tide_stations.length} NOAA tide stations"
+    $logger.info "loaded #{tide_stations.length} NOAA tide stations"
 
-    $logger.info "Fetching NOAA current stations..."
+    $logger.info "fetching NOAA current stations..."
     current_client = Clients::NoaaCurrents.new($logger)
     current_stations = current_client.current_stations
-    $logger.info "Loaded #{current_stations.length} NOAA current stations"
+    $logger.info "loaded #{current_stations.length} NOAA current stations"
 
     # Filter to stations that need enrichment (region is generic "United States")
     stations_to_enrich = current_stations.select { |s| s.region == 'United States' }
@@ -60,11 +60,11 @@ def main
 
         # Progress indicator
         if (idx + 1) % 500 == 0 || idx + 1 == total
-            $logger.info "Processed #{idx + 1}/#{total} stations (#{enriched} enriched)"
+            $logger.info "processed #{idx + 1}/#{total} stations (#{enriched} enriched)"
         end
     end
 
-    $logger.info "Writing mapping to #{OUTPUT_PATH}"
+    $logger.info "writing mapping to #{OUTPUT_PATH}"
     File.write(OUTPUT_PATH, JSON.pretty_generate({
         'generated_at' => Time.now.utc.iso8601,
         'tide_station_count' => tide_stations.length,
@@ -73,7 +73,7 @@ def main
         'regions' => mapping
     }))
 
-    $logger.info "Done! Mapped #{enriched} current stations to regions."
+    $logger.info "done, mapped #{enriched} current stations to regions"
 end
 
 main

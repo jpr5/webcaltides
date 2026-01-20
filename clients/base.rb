@@ -37,12 +37,12 @@ module Clients
                 if retries < MAX_RETRIES
                     retries += 1
                     delay = rand(0.5..(2.0 ** retries))
-                    logger.warn "Timeout for #{url.split('?').first}, retry #{retries}/#{MAX_RETRIES} in #{delay.round(1)}s"
+                    logger.warn "timeout for #{url.split('?').first}, retry #{retries}/#{MAX_RETRIES} in #{delay.round(1)}s"
                     sleep delay
                     retry
                 end
 
-                logger.error "Timeout after #{retries} retries: #{e.message}"
+                logger.error "timeout after #{retries} retries: #{e.message}"
                 raise e
             end
 

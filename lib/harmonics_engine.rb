@@ -112,7 +112,7 @@ module Harmonics
             current = stations_cache_file
             Dir.glob("#{@cache_dir}/xtide_stations_*.json").each do |f|
                 next if f == current
-                @logger.info "Removing old station cache: #{f}"
+                @logger.info "removing old station cache: #{f}"
                 File.unlink(f)
             end
         end
@@ -153,7 +153,7 @@ module Harmonics
             # and then apply offsets.
             if station_data['ref_key']
                 ref_key = station_data['ref_key']
-                @logger.debug "Station #{station_id} is subordinate to #{ref_key}. Predicting via ref station."
+                @logger.debug "station #{station_id} is subordinate to #{ref_key}, predicting via ref station"
 
                 # We need to predict a slightly larger window for the ref station to ensure
                 # we don't miss peaks that shift into our requested window after offsets.
@@ -169,7 +169,7 @@ module Harmonics
             constituents = station_data['constituents'] || []
 
             if constituents.empty?
-                @logger.warn "No constituents found for station #{station_id}"
+                @logger.warn "no constituents found for station #{station_id}"
                 return []
             end
 
@@ -315,7 +315,7 @@ module Harmonics
 
             constituents = station_data['constituents'] || []
             if constituents.empty?
-                @logger.warn "No constituents found for station #{station_id}"
+                @logger.warn "no constituents found for station #{station_id}"
                 return []
             end
 
@@ -345,7 +345,7 @@ module Harmonics
         # Optimized subordinate peak generation with reference station caching
         def generate_subordinate_peaks_optimized(station_id, station_data, start_time, end_time, options)
             ref_key = station_data['ref_key']
-            @logger.debug "Station #{station_id} is subordinate to #{ref_key}. Predicting via cached ref peaks."
+            @logger.debug "station #{station_id} is subordinate to #{ref_key}, predicting via cached ref peaks"
 
             # Normalize window to month boundaries for consistent cache keys
             # Add 1 month buffer on each side to handle subordinate time offsets
@@ -359,7 +359,7 @@ module Harmonics
             prune_reference_peaks_cache(ref_start)
 
             ref_peaks = @reference_peaks_cache[cache_key] ||= begin
-                @logger.debug "Generating reference peaks for #{ref_key} (caching for subordinates)"
+                @logger.debug "generating reference peaks for #{ref_key} (caching for subordinates)"
                 generate_peaks_optimized(ref_key, ref_start, ref_end, options)
             end
 
@@ -470,7 +470,7 @@ module Harmonics
                     different_matches.each do |other|
                         id1 = primary['bid'] || primary['id']
                         id2 = other['bid'] || other['id']
-                        @logger.debug "Station cluster match [#{name_key}] at #{primary['lat']},#{primary['lon']} has different constituents: #{id1} vs #{id2}"
+                        @logger.debug "station cluster match [#{name_key}] at #{primary['lat']},#{primary['lon']} has different constituents: #{id1} vs #{id2}"
                     end
 
                     # For identical ones, we merge them into one entry
@@ -500,7 +500,7 @@ module Harmonics
                 end
             end
 
-            @logger.info "Deduplicated stations: #{stations.length} -> #{final_stations.length}"
+            @logger.info "deduplicated stations: #{stations.length} -> #{final_stations.length}"
             final_stations
         end
 
@@ -544,7 +544,7 @@ module Harmonics
             cache_file = stations_cache_file
             return nil unless File.exist?(cache_file)
 
-            @logger.debug "Loading merged stations from cache: #{cache_file}"
+            @logger.debug "loading merged stations from cache: #{cache_file}"
             data = JSON.parse(File.read(cache_file))
 
             stations = []
@@ -561,7 +561,7 @@ module Harmonics
         def save_stations_to_cache(stations)
             FileUtils.mkdir_p(@cache_dir)
             cache_file = stations_cache_file
-            @logger.debug "Caching xtide stations to: #{cache_file}"
+            @logger.debug "caching xtide stations to: #{cache_file}"
 
             cache_data = {
                 'speeds' => @speeds,
@@ -594,7 +594,7 @@ module Harmonics
         end
 
         def parse_xtide_file
-            @logger.info "Parsing SQL XTide file: #{@xtide_file}"
+            @logger.info "parsing SQL XTide file: #{@xtide_file}"
             stations_data = []
             constants_by_index = Hash.new { |h, k| h[k] = [] }
             current_table = nil
@@ -761,7 +761,7 @@ module Harmonics
                                end
 
                 if constituents.empty?
-                    @logger.warn "Station #{data['name']} (#{idx}) has no constituents (ref_index: #{data['ref_index']})"
+                    @logger.warn "station #{data['name']} (#{idx}) has no constituents (ref_index: #{data['ref_index']})"
                 end
 
                 # For current stations, clean up the display name
@@ -855,7 +855,7 @@ module Harmonics
 
         def parse_ticon_file
             return [] unless File.exist?(@ticon_file)
-            @logger.info "Loading TICON data from: #{@ticon_file}"
+            @logger.info "loading TICON data from: #{@ticon_file}"
 
             begin
                 data = JSON.parse(File.read(@ticon_file))
@@ -918,10 +918,10 @@ module Harmonics
                     }
                 end
 
-                @logger.info "Loaded #{stations.length} TICON stations from JSON."
+                @logger.info "loaded #{stations.length} TICON stations from JSON"
                 stations
             rescue => e
-                @logger.error "Failed to parse TICON JSON: #{e.message}"
+                @logger.error "failed to parse TICON JSON: #{e.message}"
                 []
             end
         end
@@ -961,7 +961,7 @@ module Harmonics
             # Only log once per month to reduce verbosity
             month_key = "#{year}-#{month}_#{meridian_offset}_#{nodal_hour}"
             unless @logged_nodal_months[month_key]
-                @logger.info "Calculating nodal factors for #{year}-#{month} (m:#{meridian_offset}, h:#{nodal_hour})"
+                @logger.info "calculating nodal factors for #{year}-#{month} (m:#{meridian_offset}, h:#{nodal_hour})"
                 @logged_nodal_months[month_key] = true
             end
 

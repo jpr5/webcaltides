@@ -241,14 +241,14 @@ module WebCalTides
                 retry
             end
         rescue => e
-            logger.error "Timezone lookup failed for #{key}: #{e.message}"
+            logger.error "timezone lookup failed for #{key}: #{e.message}"
         end
 
         # Fallback chain when GeoNames returns nil (offshore locations)
         if tz.nil?
             res = timezone_fallback(lat, long, station)
             if res != 'UTC'
-                logger.info "Timezone fallback for #{key}: #{res} (via region/longitude)"
+                logger.info "timezone fallback for #{key}: #{res} (via region/longitude)"
             else
                 logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC"
             end
@@ -287,7 +287,7 @@ module WebCalTides
         File.write(temp_file, @@tzcache.to_json)
         File.rename(temp_file, filename)
     rescue => e
-        logger.error "Failed to write tzcache: #{e.message}"
+        logger.error "failed to write tzcache: #{e.message}"
         File.unlink(temp_file) if File.exist?(temp_file)
     end
 
