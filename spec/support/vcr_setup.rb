@@ -23,7 +23,7 @@ VCR.configure do |config|
 
     # Filter sensitive data from cassettes
     config.filter_sensitive_data('<GEONAMES_USERNAME>') { ENV['GEONAMES_USERNAME'] }
-    config.filter_sensitive_data('<GOOGLE_MAPS_API_KEY>') { ENV['GOOGLE_MAPS_API_KEY'] }
+    config.filter_sensitive_data('<GOOGLE_API_KEY>') { ENV['GOOGLE_API_KEY'] }
     config.filter_sensitive_data('<GEOAPIFY_API_KEY>') { ENV['GEOAPIFY_API_KEY'] }
 
     # Allow real HTTP connections when recording

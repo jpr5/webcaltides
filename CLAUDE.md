@@ -44,15 +44,15 @@ rackup
 RACK_ENV=production puma -C puma.rb
 ```
 
-Requires a [Geonames](https://www.geonames.org/login) account for timezone lookups. Set username in `server.rb` configure block or via ENV.
+Timezone lookups use Google Time Zone API (preferred) or Geonames (fallback). Set API keys via environment variables.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GEONAMES_USERNAME` | Yes | Username for Geonames timezone lookups |
-| `GOOGLE_MAPS_API_KEY` | No | Google Maps Static API key for map thumbnails (preferred) |
-| `GEOAPIFY_API_KEY` | No | Geoapify API key for map thumbnails (free fallback) |
+| `GOOGLE_API_KEY` | Recommended | Google API key for Time Zone API (timezone lookups, 50x faster) and Maps Static API (map thumbnails) |
+| `GEONAMES_USERNAME` | Optional | Username for Geonames timezone lookups (fallback if Google API key not available) |
+| `GEOAPIFY_API_KEY` | Optional | Geoapify API key for map thumbnails (fallback if Google API key not available) |
 
 ## API Endpoints
 

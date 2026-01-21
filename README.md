@@ -28,11 +28,11 @@ Set the `GEONAMES_USERNAME` environment variable with your Geonames username.
 
 Station cards can display location map thumbnails. Two services are supported:
 
-**Google Maps Static API** (preferred):
+**Google API** (preferred):
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a project and enable the "Maps Static API"
-3. Create an API key and restrict it to the Static Maps API
-4. Set `GOOGLE_MAPS_API_KEY` environment variable
+2. Create a project and enable the "Time Zone API" and "Maps Static API"
+3. Create an API key and restrict it to these two APIs
+4. Set `GOOGLE_API_KEY` environment variable
 
 **Geoapify** (free fallback):
 1. Register at [Geoapify](https://www.geoapify.com/) (free, no credit card required)

@@ -28,8 +28,20 @@ class Server < ::Sinatra::Base
 
         helpers ::Rack::Utils
 
-        Timezone::Lookup.config(:geonames) do |c|
-            c.username = ENV['USER']
+        # Configure timezone lookup provider (prefer Google, fallback to Geonames)
+        if ENV['GOOGLE_API_KEY']
+            $LOG.info "configuring Google Maps Time Zone API for timezone lookups"
+            Timezone::Lookup.config(:google) do |c|
+                c.api_key = ENV['GOOGLE_API_KEY']
+            end
+        elsif ENV['GEONAMES_USERNAME']
+            $LOG.info "configuring Geonames for timezone lookups (fallback)"
+            Timezone::Lookup.config(:geonames) do |c|
+                c.username = ENV['GEONAMES_USERNAME'] || ENV['USER']
+            end
+        else
+            $LOG.warn "no timezone API configured (GOOGLE_API_KEY or GEONAMES_USERNAME missing)"
+            $LOG.warn "timezone lookups will rely on region metadata and longitude approximation"
         end
 
         FileUtils.mkdir_p settings.cache_dir
@@ -46,11 +58,11 @@ class Server < ::Sinatra::Base
 
     helpers do
         # Generate static map URL with fallback chain:
-        # 1. Google Maps Static API (if GOOGLE_MAPS_API_KEY is set)
+        # 1. Google Maps Static API (if GOOGLE_API_KEY is set)
         # 2. Geoapify Static Maps (if GEOAPIFY_API_KEY is set)
         # 3. nil (placeholder icon shown)
         def static_map_url(lat:, lon:, accent_color:)
-            if ENV['GOOGLE_MAPS_API_KEY'].to_s.strip.length > 0
+            if ENV['GOOGLE_API_KEY'].to_s.strip.length > 0
                 # Google Maps Static API (preferred)
                 styles = [
                     "feature:water|color:#{accent_color}",
@@ -60,7 +72,7 @@ class Server < ::Sinatra::Base
                     "feature:transit|visibility:off",
                     "element:labels|visibility:off"
                 ].map { |s| "style=#{s}" }.join("&")
-                "https://maps.googleapis.com/maps/api/staticmap?center=#{lat},#{lon}&zoom=11&size=200x200&scale=2&maptype=terrain&#{styles}&markers=color:#{accent_color}|#{lat},#{lon}&key=#{ENV['GOOGLE_MAPS_API_KEY']}"
+                "https://maps.googleapis.com/maps/api/staticmap?center=#{lat},#{lon}&zoom=11&size=200x200&scale=2&maptype=terrain&#{styles}&markers=color:#{accent_color}|#{lat},#{lon}&key=#{ENV['GOOGLE_API_KEY']}"
             elsif ENV['GEOAPIFY_API_KEY'].to_s.strip.length > 0
                 # Geoapify fallback (free tier: 3,000 requests/day)
                 color = accent_color.sub('0x', '%23')
