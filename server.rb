@@ -22,6 +22,45 @@ class Server < ::Sinatra::Base
     set :views,         settings.root + '/views'
     set :static,        true
 
+    # Warm caches in background thread to prevent blocking server startup
+    # Loads harmonics engine cache, tide stations cache, and current stations cache
+    def self.warm_caches
+        Thread.new do
+            begin
+                total_start = Time.now
+                $LOG.info "warming caches on bootup"
+
+                # Step 1: Harmonics engine cache (loads XTide + TICON data, deduplicates stations)
+                $LOG.info "warming harmonics engine cache"
+                start = Time.now
+                harmonics = WebCalTides.get_harmonics_client
+                harmonics.engine.stations # Force load
+                elapsed = (Time.now - start).round(2)
+                $LOG.info "harmonics engine cache warmed in #{elapsed}s"
+
+                # Step 2: Tide stations cache (loads NOAA, CHS, merges with harmonics)
+                $LOG.info "warming tide stations cache"
+                start = Time.now
+                WebCalTides.tide_stations # Force load and cache
+                elapsed = (Time.now - start).round(2)
+                $LOG.info "tide stations cache warmed in #{elapsed}s"
+
+                # Step 3: Current stations cache (loads NOAA currents, merges with harmonics)
+                $LOG.info "warming current stations cache"
+                start = Time.now
+                WebCalTides.current_stations # Force load and cache
+                elapsed = (Time.now - start).round(2)
+                $LOG.info "current stations cache warmed in #{elapsed}s"
+
+                total_elapsed = (Time.now - total_start).round(2)
+                $LOG.info "all caches warmed in #{total_elapsed}s"
+            rescue => e
+                $LOG.error "cache warming failed: #{e.class} - #{e.message}"
+                $LOG.error e.backtrace.first(5).join("\n") if e.backtrace
+            end
+        end
+    end
+
     configure do
         enable :show_exceptions
         disable :sessions, :logging
@@ -45,6 +84,9 @@ class Server < ::Sinatra::Base
         end
 
         FileUtils.mkdir_p settings.cache_dir
+
+        # Warm caches on bootup in production/staging to prevent 45-60s first request delay
+        warm_caches if ENV['RACK_ENV'].to_s.in?(%w[production staging])
     end
 
     configure :development do
