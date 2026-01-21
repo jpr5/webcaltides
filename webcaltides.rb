@@ -2,9 +2,6 @@
 ## Primary library of functions.  Included on Server.
 ##
 #
-# FIXME: Code runs under a threaded server (puma), but is not threadsafe. 🤷‍♂️
-# I like my patterns more than the odds of it happening.  My code is *tight*, yo! 😂
-#
 
 require 'dotenv/load'
 
@@ -517,6 +514,7 @@ module WebCalTides
 
     def tide_stations
         # Double-checked locking for thread safety
+        # First check is optimization - safe because array assignment is atomic in Ruby
         return @tide_stations if @tide_stations
 
         (@@tide_stations_mutex ||= Mutex.new).synchronize do
@@ -529,7 +527,6 @@ module WebCalTides
             json = File.read(cache_file)
 
             logger.debug "parsing tide station list"
-
             data = JSON.parse(json) rescue []
             @tide_stations = data.map { |js| Models::Station.from_hash(js) }
         end
@@ -778,6 +775,7 @@ module WebCalTides
 
     def current_stations
         # Double-checked locking for thread safety
+        # First check is optimization - safe because array assignment is atomic in Ruby
         return @current_stations if @current_stations
 
         (@@current_stations_mutex ||= Mutex.new).synchronize do
@@ -791,7 +789,6 @@ module WebCalTides
 
             logger.debug "parsing current station list"
             data = JSON.parse(json) rescue []
-
             @current_stations = data.map { |js| Models::Station.from_hash(js) }
         end
     end
@@ -1034,35 +1031,41 @@ module WebCalTides
     end
 
     def lunar_phases(from, to)
-        @lunar_phases ||= {}
         ret = []
 
         (from.year .. to.year).each do |year|
-            cache_file = lunar_phase_cache_file(year)
-            unless File.exist?(cache_file)
-                unless phases = lunar_client.phases_for_year(year)
-                    logger.error "failed to retrieve lunar phase data for #{year}"
-                    return
+            # Thread-safe lazy initialization per year
+            phases = (@@lunar_phases_mutex ||= Mutex.new).synchronize do
+                @@lunar_phases ||= {}
+
+                @@lunar_phases[year] ||= begin
+                    cache_file = lunar_phase_cache_file(year)
+                    unless File.exist?(cache_file)
+                        unless year_phases = lunar_client.phases_for_year(year)
+                            logger.error "failed to retrieve lunar phase data for #{year}"
+                            return nil
+                        end
+
+                        cache_lunar_phases(on:year, phases:year_phases)
+                    end
+
+                    logger.debug "reading #{cache_file}"
+                    json = File.read(cache_file)
+
+                    logger.debug "parsing lunar phases for #{year}"
+                    data = JSON.parse(json) rescue []
+
+                    data.map do |phase|
+                        {
+                            datetime: DateTime.parse(phase["datetime"].to_s),
+                            type:     phase["type"].to_sym,
+                        }
+                    end.sort_by { |phase| phase[:datetime] }
                 end
-
-                cache_lunar_phases(on:year, phases:phases)
-                @lunar_phases[year] = nil
             end
 
-            ret << @lunar_phases[year] ||= begin
-                logger.debug "reading #{cache_file}"
-                json = File.read(cache_file)
-
-                logger.debug "parsing lunar phases for #{year}"
-                data = JSON.parse(json) rescue []
-
-                data.map do |phase|
-                    {
-                        datetime: DateTime.parse(phase["datetime"].to_s),
-                        type:     phase["type"].to_sym,
-                    }
-                end.sort_by { |phase| phase[:datetime] }
-            end
+            return [] unless phases
+            ret << phases
         end
 
         return ret.flatten.select { |e| e[:datetime] >= from and e[:datetime] <= to }
