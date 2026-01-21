@@ -140,8 +140,8 @@ class HarmonicsTestRunner
         { name: "Jaluit Atoll", slug: "Jaluit-Atoll-SE-Pass-Marshall-Islands" },
         { name: "Sydney (Fort Denison)", slug: "Sydney-Australia", id: "Tb07b950" },
         { name: "Tokyo", slug: "Tokyo-Japan", id: "Tffa2a40" },
-        { name: "San Francisco", slug: "San-Francisco-California", id: "X973a1be", noaa_id: "9414290" },
-        { name: "Seattle", slug: "Seattle-Washington", id: "X4b5d76b", noaa_id: "9447130" }
+        { name: "San Francisco", slug: "San-Francisco-California", id: "X8b5db6b", noaa_id: "9414290" },
+        { name: "Seattle", slug: "Seattle-Washington", id: "X4939291", noaa_id: "9447130" }
     ]
 
     def initialize(logger, engine, live_fetcher, live_label)

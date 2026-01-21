@@ -119,7 +119,11 @@ module WebCalTides
         return Server.settings if defined?(Server)
         Struct.new(:cache_dir).new('cache')
     end
-    def logger; $LOG; end
+    def logger
+        return $LOG ||= Logger.new(STDOUT).tap do |log|
+            log.formatter = proc { |s, d, _, m| "#{d.strftime("%Y-%m-%d %H:%M:%S")} #{s} #{m}\n" }
+        end
+    end
 
     ##
     ## Clients
@@ -890,6 +894,11 @@ module WebCalTides
             end
         end
 
+        # Deduplicate multi-depth stations: keep only shallowest depth per base station ID
+        # This matches production behavior where search results show one depth per station
+        # (depth selection happens in UI after clicking on a station)
+        by_stations = dedupe_current_stations_by_depth(by_stations)
+
         # can only do radius search with one result, ignore otherwise
         return by_stations unless within and by_stations.size == 1
 
@@ -901,9 +910,29 @@ module WebCalTides
     def find_current_stations_by_gps(lat, long, within:nil, units:'mi')
         within = within.to_i
 
-        return current_stations.select do |s|
+        stations = current_stations.select do |s|
             Geocoder::Calculations.distance_between([lat, long], [s.lat,s.lon], units: units.to_sym) <= within
         end
+
+        # Deduplicate multi-depth stations (same as find_current_stations)
+        dedupe_current_stations_by_depth(stations)
+    end
+
+    # For current stations with multiple depth bins (same base ID, different BIDs),
+    # keep only the shallowest depth. This matches production behavior where search
+    # results show one representative depth per station (depth selection happens
+    # in UI after clicking on a station).
+    def dedupe_current_stations_by_depth(stations)
+        by_base_id = stations.group_by { |s| s.id }
+
+        by_base_id.map do |base_id, station_group|
+            # If only one depth, return it
+            next station_group.first if station_group.size == 1
+
+            # Multiple depths: select shallowest (smallest depth value)
+            # Stations without depth info go first (depth == nil treated as 0)
+            station_group.min_by { |s| s.depth.to_f }
+        end.compact
     end
 
     def cache_current_data_for(station, at:, around:)

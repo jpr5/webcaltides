@@ -17,6 +17,7 @@ gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
 gem 'timezone'
 gem 'geocoder'
+gem 'tcd', git: 'https://github.com/jpr5/tcd.git', branch: 'master'
 
 gem 'rack', '>= 3.2.3'
 gem 'rack-session', '>= 2.1.1'

@@ -5,7 +5,8 @@ RSpec.describe Clients::Harmonics do
     let(:client) { described_class.new(logger) }
 
     # Paths to test fixture files
-    let(:fixture_xtide) { File.expand_path('../../fixtures/harmonics/test-xtide.sql', __FILE__) }
+    # Use real TCD file from data/ directory (tests will use actual harmonics data)
+    let(:fixture_xtide) { Dir.glob(File.expand_path('../../../data/harmonics-dwf-*.tcd', __FILE__)).max }
     let(:fixture_ticon) { File.expand_path('../../fixtures/harmonics/test-ticon.json', __FILE__) }
 
     describe '#initialize' do
@@ -46,6 +47,25 @@ RSpec.describe Clients::Harmonics do
                 # Tide stations have type='tide' (filtered by client)
                 # All returned stations should have numeric depth (or nil for tide stations)
                 expect(stations).to all(satisfy { |s| s.depth.nil? || s.depth.is_a?(Numeric) })
+            end
+
+            it 'returns stations with valid IANA timezone format (no leading colon)' do
+                # Test at engine level where timezone metadata is available
+                engine_stations = client.engine.stations.select { |s| s['type'] == 'tide' }
+                stations_with_tz = engine_stations.reject { |s| s['timezone'].nil? || s['timezone'].empty? }
+                expect(stations_with_tz).not_to be_empty
+
+                stations_with_tz.each do |station|
+                    tz = station['timezone']
+                    # Timezone should not start with colon (TCD format artifact that should be stripped)
+                    expect(tz).not_to start_with(':'),
+                        "Station '#{station['name']}' has invalid timezone: #{tz}"
+
+                    # Timezone should match IANA format (e.g., America/New_York, Pacific/Honolulu)
+                    # Or be 'UTC' for some stations
+                    expect(tz).to match(%r{^(UTC|[A-Z][a-z_]+/[A-Z][a-z_]+)}),
+                        "Station '#{station['name']}' has invalid timezone format: #{tz}"
+                end
             end
         end
 

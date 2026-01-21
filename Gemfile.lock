@@ -1,3 +1,10 @@
+GIT
+  remote: https://github.com/jpr5/tcd.git
+  revision: 5abaabbe9c0b908763b304a3770281c624e859b7
+  branch: master
+  specs:
+    tcd (1.0.2)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -183,6 +190,7 @@ DEPENDENCIES
   simplecov (~> 0.22)
   sinatra (~> 4.2.1)
   sinatra-reloader
+  tcd!
   timecop (~> 0.9)
   timezone
   vcr (~> 6.2)

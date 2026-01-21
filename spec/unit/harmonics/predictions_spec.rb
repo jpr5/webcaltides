@@ -83,7 +83,7 @@ RSpec.describe Harmonics::Engine do
 
     describe 'file paths' do
         it 'has default XTIDE_FILE path' do
-            expect(Harmonics::Engine::XTIDE_FILE).to include('latest-xtide.sql')
+            expect(Harmonics::Engine::XTIDE_FILE).to include('latest-xtide.tcd')
         end
 
         it 'has default TICON_FILE path' do

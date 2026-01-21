@@ -3,12 +3,13 @@ require 'fileutils'
 require 'date'
 require 'active_support/all'
 require 'digest'
+require 'tcd'
 
 module Harmonics
     class Engine
         class MissingSourceFilesError < StandardError; end
 
-        XTIDE_FILE = File.expand_path('../data/latest-xtide.sql', __dir__)
+        XTIDE_FILE = File.expand_path('../data/latest-xtide.tcd', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
 
         attr_reader :speeds, :stations_cache, :xtide_file, :ticon_file, :logger
@@ -594,220 +595,167 @@ module Harmonics
         end
 
         def parse_xtide_file
-            @logger.info "parsing SQL XTide file: #{@xtide_file}"
-            stations_data = []
-            constants_by_index = Hash.new { |h, k| h[k] = [] }
-            current_table = nil
+            @logger.info "parsing TCD file: #{@xtide_file}"
 
-            # Use ISO-8859-1 (Latin-1) encoding as specified in the SQL file
-            File.foreach(@xtide_file, encoding: 'ISO-8859-1:UTF-8') do |line|
-                line.strip!
+            stations = []
+            all_tcd_stations = []
 
-                if line.start_with?('COPY public.constituents ')
-                    current_table = :constituents
-                    next
-                elsif line.start_with?('COPY public.data_sets ')
-                    current_table = :data_sets
-                    next
-                elsif line.start_with?('COPY public.constants ')
-                    current_table = :constants
-                    next
-                elsif line == '\.'
-                    current_table = nil
-                    next
+            TCD.open(@xtide_file) do |db|
+                @logger.info "TCD file opened: #{db.station_count} stations, #{db.constituent_count} constituents"
+
+                # Load constituent speeds and definitions
+                const_names = []
+                db.constituents.each do |const|
+                    const_names << const.name
+                    @speeds[const.name] = const.speed
+
+                    # Map constituent to formula number using existing BASES or default
+                    f_formula = map_constituent_to_formula(const.name)
+
+                    @constituent_definitions[const.name] = {
+                        'type' => 'Basic',  # TCD doesn't distinguish Basic/Compound
+                        'speed' => const.speed,
+                        'f_formula' => f_formula
+                    }
                 end
 
-                next unless current_table
-                parts = line.split("\t")
+                # Store all stations first for reference lookups
+                all_tcd_stations = db.stations.to_a
 
-                case current_table
-                when :constituents
-                    # (name, definition, speed)
-                    name = parts[0]
-                    definition_str = parts[1]
-                    speed = parts[2].to_f
-                    @speeds[name] = speed
+                # Process each station
+                all_tcd_stations.each_with_index do |tcd_station, idx|
+                    # Extract state from country if present (e.g., "United States" might have state in name)
+                    state = extract_state_from_name(tcd_station.name)
+                    country = tcd_station.country || "Unknown"
 
-                    # Parse definition
-                    def_parts = definition_str.split(/\s+/)
-                    type = def_parts[0]
-
-                    if type == 'Basic'
-                        v_coeffs = def_parts[1..6].map(&:to_f)
-                        u_coeffs = def_parts[7..12].map(&:to_f)
-                        # Handle optional 7th u term (Qu) and f_formula logic matching libcongen
-                        f_formula = 1
-                        if def_parts.length > 14
-                            u_coeffs << def_parts[13].to_f
-                            f_formula = def_parts[14].to_i
-                        else
-                            u_coeffs << 0.0
-                            f_formula = def_parts[13].to_i
-                        end
-
-                        @constituent_definitions[name] = {
-                            'type' => 'Basic',
-                            'v' => v_coeffs,
-                            'u' => u_coeffs,
-                            'f_formula' => f_formula,
-                            'speed' => speed
-                        }
-                    elsif type == 'Compound'
-                        coeffs = def_parts[1..].map(&:to_f)
-                        @constituent_definitions[name] = {
-                            'type' => 'Compound',
-                            'coefficients' => coeffs,
-                            'speed' => speed
-                        }
-                    end
-                when :data_sets
-                    # Schema: (index, name, station_id_context, station_id, lat, lng, timezone, country, units,
-                    #          min_dir, max_dir, legalese, notes, comments, source, restriction, date_imported,
-                    #          xfields, meridian, datumkind, datum, months_on_station, last_date_on_station,
-                    #          ref_index, min_time_add, min_level_add, min_level_multiply, max_time_add,
-                    #          max_level_add, max_level_multiply, flood_begins, ebb_begins, original_name, state)
-                    idx = parts[0].to_i
-                    country = parts[7]
-                    state = parts[33] == '\N' ? nil : parts[33]
-
-                    # Build region from state and country
-                    # Use full state name if available for better searchability
-                    # e.g., "Massachusetts, USA" or "Hawaii, USA" or just "USA" if no state
+                    # Build region
                     state_full = state ? STATE_NAMES[state.upcase] : nil
                     region = state_full ? "#{state_full}, #{country}" : (state ? "#{state}, #{country}" : country)
 
-                    stations_data << {
-                        'idx' => idx,
-                        'name' => parts[1],
-                        'station_id' => parts[3],
-                        'lat' => parts[4].to_f,
-                        'lng' => parts[5].to_f,
-                        'timezone' => parts[6].sub(/^:/, ''),
-                        'country' => country,
-                        'state' => state,
-                        'region' => region,
-                        'units' => parts[8],
-                        'meridian' => parts[18],
-                        'datum_offset' => parts[20].to_f,
-                        'ref_index' => parts[23] == '\N' ? nil : parts[23].to_i,
-                        'h_time_offset' => parts[24] == '\N' ? nil : parts[24],
-                        'h_height_mult' => parts[26] == '\N' ? 1.0 : parts[26].to_f,
-                        'l_time_offset' => parts[27] == '\N' ? nil : parts[27],
-                        'l_height_mult' => parts[29] == '\N' ? 1.0 : parts[29].to_f,
-                        'type' => parts[8].downcase == 'knots' ? 'current' : 'tide'
-                    }
-                when :constants
-                    # (index, name, phase, amp)
-                    data_set_id = parts[0].to_i
-                    name = parts[1]
-                    phase = parts[2].to_f
-                    amp = parts[3].to_f
-                    constants_by_index[data_set_id] << { 'name' => name, 'amp' => amp, 'phase' => phase }
-                end
-            end
+                    # Convert zone_offset from HHMM integer to string (e.g., -500 -> "-05:00:00")
+                    meridian = format_zone_offset(tcd_station.zone_offset)
 
-            stations = []
-            stations_data.each do |data|
-                idx = data['idx']
+                    # Determine station type
+                    station_type = tcd_station.tide? ? 'tide' : 'current'
+                    units = tcd_station.level_units || 'feet'
 
-                # Generate stable ID based on coordinates to match legacy X-IDs
-                coord_string = sprintf("%.8f_%.8f", data['lat'], data['lng'])
-                base_hash = Digest::SHA256.hexdigest(coord_string)[0...7]
-                base_id = "X#{base_hash}"
-
-                # Handle depth and BID for currents
-                depth = data['datum_offset']
-                station_bid = nil
-                cache_key = base_id
-
-                if data['type'] == 'current'
-                    depth_suffix = nil
-                    if data['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
-                        depth_suffix = $1
-                        depth = $1.to_f
-                    end
-                    station_bid = depth_suffix ? "#{base_id}_#{depth_suffix}" : base_id
-                    cache_key = station_bid
-                else
-                    station_bid = nil
-                    cache_key = base_id
-                end
-
-                # If this is a subordinate station, store its offsets and the reference station's cache key
-                ref_key = nil
-                if data['ref_index']
-                    ref_station = stations_data.find { |s| s['idx'] == data['ref_index'] }
-                    if ref_station
-                        ref_coord_string = sprintf("%.8f_%.8f", ref_station['lat'], ref_station['lng'])
-                        ref_base_hash = Digest::SHA256.hexdigest(ref_coord_string)[0...7]
-                        ref_base_id = "X#{ref_base_hash}"
-
-                        # For current stations, include depth suffix in ref_key to match cache_key
-                        if ref_station['type'] == 'current' && ref_station['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
-                            ref_key = "#{ref_base_id}_#{$1}"
-                        else
-                            ref_key = ref_base_id
+                    # Build constituents array for reference stations
+                    constituents = []
+                    if tcd_station.reference?
+                        tcd_station.amplitudes.each_with_index do |amp, i|
+                            next if amp.nil? || amp.zero?
+                            constituents << {
+                                'name' => const_names[i],
+                                'amp' => amp,
+                                'phase' => tcd_station.epochs[i]
+                            }
                         end
                     end
+
+                    # Generate stable ID based on coordinates
+                    coord_string = sprintf("%.8f_%.8f", tcd_station.latitude, tcd_station.longitude)
+                    base_hash = Digest::SHA256.hexdigest(coord_string)[0...7]
+                    base_id = "X#{base_hash}"
+
+                    # Handle depth and BID for currents
+                    depth = tcd_station.datum_offset || 0.0
+                    station_bid = nil
+                    cache_key = base_id
+
+                    if station_type == 'current'
+                        depth_suffix = nil
+                        if tcd_station.name =~ /\(depth (\d+)\s*(ft|m)\)/i
+                            depth_suffix = $1
+                            depth = $1.to_f
+                        end
+                        station_bid = depth_suffix ? "#{base_id}_#{depth_suffix}" : base_id
+                        cache_key = station_bid
+                    else
+                        station_bid = nil
+                        cache_key = base_id
+                    end
+
+                    # Handle subordinate station references
+                    ref_key = nil
+                    h_time_offset = nil
+                    l_time_offset = nil
+                    h_height_mult = 1.0
+                    l_height_mult = 1.0
+
+                    if tcd_station.subordinate?
+                        ref_station = all_tcd_stations[tcd_station.reference_station]
+                        if ref_station
+                            ref_coord_string = sprintf("%.8f_%.8f", ref_station.latitude, ref_station.longitude)
+                            ref_base_hash = Digest::SHA256.hexdigest(ref_coord_string)[0...7]
+                            ref_base_id = "X#{ref_base_hash}"
+
+                            # For current stations, include depth suffix
+                            if ref_station.current? && ref_station.name =~ /\(depth (\d+)\s*(ft|m)\)/i
+                                ref_key = "#{ref_base_id}_#{$1}"
+                            else
+                                ref_key = ref_base_id
+                            end
+                        end
+
+                        # Convert time offsets from minutes to "HH:MM:SS" format
+                        h_time_offset = format_minutes_offset(tcd_station.max_time_add)
+                        l_time_offset = format_minutes_offset(tcd_station.min_time_add)
+                        h_height_mult = tcd_station.max_level_multiply || 1.0
+                        l_height_mult = tcd_station.min_level_multiply || 1.0
+                    end
+
+                    if constituents.empty? && tcd_station.reference?
+                        @logger.warn "reference station #{tcd_station.name} (#{idx}) has no constituents"
+                    end
+
+                    # Clean up display name
+                    display_name = clean_station_name(tcd_station.name, station_type, state)
+
+                    station = {
+                        'name' => display_name,
+                        'alternate_names' => [],
+                        'id' => base_id,
+                        'public_id' => base_id,
+                        'region' => region,
+                        'state' => state,
+                        'country' => country,
+                        'location' => tcd_station.name,
+                        'lat' => tcd_station.latitude,
+                        'lon' => tcd_station.longitude,
+                        'timezone' => tcd_station.tzfile,
+                        'url' => "#xtide",
+                        'provider' => 'xtide',
+                        'bid' => station_bid,
+                        'units' => units,
+                        'depth' => depth,
+                        'meridian' => meridian,
+                        'type' => station_type
+                    }
+                    stations << station
+
+                    @stations_cache[cache_key] = {
+                        'name' => tcd_station.name,
+                        'constituents' => constituents,
+                        'datum_offset' => depth,
+                        'timezone' => tcd_station.tzfile,
+                        'meridian' => meridian,
+                        'units' => units,
+                        'region' => region,
+                        'state' => state,
+                        'country' => country,
+                        'type' => station_type,
+                        'ref_key' => ref_key,
+                        'h_time_offset' => h_time_offset,
+                        'h_height_mult' => h_height_mult,
+                        'l_time_offset' => l_time_offset,
+                        'l_height_mult' => l_height_mult,
+                        'latitude' => tcd_station.latitude,
+                        'longitude' => tcd_station.longitude
+                    }
                 end
-
-                # If this is a subordinate station, copy constituents from the reference station if it has them
-                # OR we might need to handle it purely via ref-station prediction later.
-                # For now, let's keep the constituent copying but also store the ref_key and offsets.
-                constituents = if data['ref_index']
-                                   constants_by_index[data['ref_index']] || []
-                               else
-                                   constants_by_index[idx] || []
-                               end
-
-                if constituents.empty?
-                    @logger.warn "station #{data['name']} (#{idx}) has no constituents (ref_index: #{data['ref_index']})"
-                end
-
-                # For current stations, clean up the display name
-                # (remove " Current" suffix, state from name since we have it in the data)
-                display_name = clean_station_name(data['name'], data['type'], data['state'])
-
-                station = {
-                    'name' => display_name,
-                    'alternate_names' => [],
-                    'id' => base_id,
-                    'public_id' => base_id,
-                    'region' => data['region'],
-                    'state' => data['state'],
-                    'country' => data['country'],
-                    'location' => data['name'],
-                    'lat' => data['lat'],
-                    'lon' => data['lng'],
-                    'timezone' => data['timezone'],
-                    'url' => "#xtide",
-                    'provider' => 'xtide',
-                    'bid' => station_bid,
-                    'units' => data['units'],
-                    'depth' => depth,
-                    'meridian' => data['meridian'],
-                    'type' => data['type']
-                }
-                stations << station
-                @stations_cache[cache_key] = {
-                    'name' => data['name'],
-                    'constituents' => constituents,
-                    'datum_offset' => data['datum_offset'],
-                    'timezone' => data['timezone'],
-                    'meridian' => data['meridian'],
-                    'units' => data['units'],
-                    'region' => data['region'],
-                    'state' => data['state'],
-                    'country' => data['country'],
-                    'type' => data['type'],
-                    'ref_key' => ref_key,
-                    'h_time_offset' => data['h_time_offset'],
-                    'h_height_mult' => data['h_height_mult'],
-                    'l_time_offset' => data['l_time_offset'],
-                    'l_height_mult' => data['l_height_mult']
-                }
             end
 
+            @logger.info "Loaded #{@speeds.size} constituents, #{stations.size} stations from TCD"
             stations
         end
 
@@ -829,6 +777,62 @@ module Harmonics
             'PR' => 'Puerto Rico', 'VI' => 'Virgin Islands', 'GU' => 'Guam',
             'AS' => 'American Samoa', 'MP' => 'Northern Mariana Islands'
         }.freeze
+
+        # Helper methods for TCD parsing
+
+        # Map constituent name to SP 98 formula number
+        def map_constituent_to_formula(name)
+            # Use existing BASES mapping if available
+            return BASES[name]['f_formula'] if BASES[name]
+
+            # Default formulas for common constituents not in BASES
+            formula_map = {
+                'SA' => 1, '2SM' => 78, 'MSF' => 78, 'MF' => 74, 'MM' => 73,
+                '2Q1' => 75, 'SIGMA1' => 75, 'RHO1' => 75, 'M11' => 76,
+                'M12' => 78, 'CHI1' => 75, 'PI1' => 1, 'PHI1' => 75,
+                'THETA1' => 75, 'J1' => 76, 'OO1' => 77, '2MK3' => 149,
+                'M3' => 149, 'MK3' => 149, 'MN4' => 78, 'MS4' => 78,
+                'MK4' => 78, 'SN4' => 78, 'S4' => 1, 'SK4' => 78,
+                '2MN6' => 78, 'M6' => 78, '2MS6' => 78, '2MK6' => 78,
+                '2SM6' => 78, 'MSK6' => 78
+            }
+            formula_map[name] || 1  # Default to formula 1
+        end
+
+        # Convert TCD zone_offset (HHMM integer) to "HH:MM:SS" string
+        def format_zone_offset(hhmm_int)
+            return "00:00:00" if hhmm_int.nil? || hhmm_int.zero?
+
+            sign = hhmm_int < 0 ? '-' : '+'
+            abs_val = hhmm_int.abs
+            hours = abs_val / 100
+            minutes = abs_val % 100
+
+            "#{sign}%02d:%02d:00" % [hours, minutes]
+        end
+
+        # Convert minutes to "HH:MM:SS" string
+        def format_minutes_offset(minutes)
+            return nil if minutes.nil?
+            return "+00:00:00" if minutes.zero?
+
+            sign = minutes < 0 ? '-' : '+'
+            abs_min = minutes.abs
+            hours = abs_min / 60
+            mins = abs_min % 60
+
+            "#{sign}%02d:%02d:00" % [hours, mins]
+        end
+
+        # Extract state abbreviation from station name if present
+        def extract_state_from_name(name)
+            # Look for state patterns at the end of name
+            STATE_NAMES.each do |abbrev, full_name|
+                return abbrev if name =~ /,\s*#{Regexp.escape(full_name)}$/i
+                return abbrev if name =~ /,\s*#{abbrev}$/i
+            end
+            nil
+        end
 
         # Clean up station display name by removing redundant suffixes and state names
         # that are already captured in the region field.
