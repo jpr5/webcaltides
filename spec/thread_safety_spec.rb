@@ -34,10 +34,9 @@ RSpec.describe "Thread Safety" do
                 allow(File).to receive(:exist?).with(WebCalTides.tide_station_cache_file).and_return(true)
                 allow(File).to receive(:read).and_call_original
                 allow(File).to receive(:read).with(WebCalTides.tide_station_cache_file).and_return('[]')
+                # Clear the instance variable so first thread will initialize it
+                WebCalTides.instance_variable_set(:@tide_stations, nil)
             end
-
-            # Get reference to current value
-            original = WebCalTides.instance_variable_get(:@tide_stations)
 
             threads = 5.times.map do
                 Thread.new { WebCalTides.tide_stations }
@@ -47,8 +46,6 @@ RSpec.describe "Thread Safety" do
 
             # All threads should get the same object_id
             expect(results.map(&:object_id).uniq.size).to eq(1)
-            # And it should be the original (already initialized by cache warming or previous test)
-            expect(results.first.object_id).to eq(original.object_id) if original
         end
     end
 
@@ -61,10 +58,9 @@ RSpec.describe "Thread Safety" do
                 allow(File).to receive(:exist?).with(WebCalTides.current_station_cache_file).and_return(true)
                 allow(File).to receive(:read).and_call_original
                 allow(File).to receive(:read).with(WebCalTides.current_station_cache_file).and_return('[]')
+                # Clear the instance variable so first thread will initialize it
+                WebCalTides.instance_variable_set(:@current_stations, nil)
             end
-
-            # Get reference to current value
-            original = WebCalTides.instance_variable_get(:@current_stations)
 
             threads = 5.times.map do
                 Thread.new { WebCalTides.current_stations }
@@ -74,8 +70,6 @@ RSpec.describe "Thread Safety" do
 
             # All threads should get the same object_id
             expect(results.map(&:object_id).uniq.size).to eq(1)
-            # And it should be the original (already initialized)
-            expect(results.first.object_id).to eq(original.object_id) if original
         end
     end
 
