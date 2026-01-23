@@ -73,11 +73,31 @@ Timezone lookups use Google Time Zone API (preferred) or Geonames (fallback). Se
 
 ## Caching
 
-All data is cached to `cache/` directory:
-- Station lists: quarterly refresh (`tide_stations_v{version}_{YYYY}Q{Q}.json`)
-- Tide/current data: monthly (`tides_v{version}_{id}_{YYYYMM}.json`)
-- Timezone lookups: permanent (`tzs.json`)
-- Calendar files: monthly (`.ics` files)
+All data is cached to `cache/` directory (Railway persistent volume in production):
+
+### Cache File Types
+
+| Type | Pattern | Lifecycle |
+|------|---------|-----------|
+| Tide/current data | `{type}_v{ver}_{id}_{YYYYMM}.json` | Monthly, pruned on write + startup |
+| iCal calendars | `{type}_v{ver}_{id}_{YYYYMM}_{units}_{solar}_{lunar}.ics` | Monthly, pruned on write + startup |
+| Station lists | `{type}_stations_v{ver}_{YYYY}Q{Q}_{provider}.json` | Quarterly, pruned on startup |
+| NOAA current regions | `noaa_current_regions_{YYYY}Q{Q}.json` | Quarterly, pruned on startup |
+| Lunar phases | `lunar_phases_{YYYY}.json` | Annual, keeps current + prior year |
+| Timezone lookups | `tzs.json` | Permanent, never pruned |
+
+### Cache Lifecycle
+
+1. **Creation**: Cache files are written atomically (temp file + rename) to prevent partial reads in multi-process Puma
+2. **Lazy pruning**: When a new monthly file is written, older months for the same station/type are deleted via `retire_old_cache_files`
+3. **Startup cleanup**: On production/staging boot, `cleanup_old_cache_files` deletes all files older than current month/quarter
+4. **No background threads**: All cleanup is synchronous (either at write time or startup) for multi-process safety
+
+### Key Methods
+
+- `WebCalTides.atomic_write(filename, content)` — atomic file write (temp + rename)
+- `WebCalTides.retire_old_cache_files(current_file)` — delete older months for same station
+- `WebCalTides.cleanup_old_cache_files` — bulk delete all expired cache files
 
 ## Code Patterns
 
@@ -93,4 +113,10 @@ All data is cached to `cache/` directory:
 
 ## Testing
 
-No formal test suite currently. Manual testing via browser or curl.
+```bash
+bundle exec rspec                              # Run full suite
+bundle exec rspec spec/unit/                   # Unit tests only
+bundle exec rspec --format documentation       # Verbose output
+```
+
+Tests use RSpec with VCR cassettes for HTTP mocking, Timecop for time freezing, and WebMock for request stubbing. Coverage reports are generated via SimpleCov.
