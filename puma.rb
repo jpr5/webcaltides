@@ -6,7 +6,11 @@ log_requests false # controlled from sinatra, don't want dupe
 env = ENV["FU_ENV"] || ENV["RAILS_ENV"] || ENV["RACK_ENV"]
 
 if env == "production"
-    root = File.expand_path(".")
-    bind "unix://" + root + "/webcaltides.sock"
-    stdout_redirect "/srv/webcaltides/logs/webcaltides.log", "/srv/webcaltides/logs/webcaltides.log", true
+    if ENV["RAILWAY_ENVIRONMENT"]
+        port ENV.fetch("PORT", 3000)
+    else
+        root = File.expand_path(".")
+        bind "unix://" + root + "/webcaltides.sock"
+        stdout_redirect("/srv/webcaltides/logs/webcaltides.log", "/srv/webcaltides/logs/webcaltides.log", true)
+    end
 end
