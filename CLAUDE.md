@@ -89,14 +89,14 @@ All data is cached to `cache/` directory (Railway persistent volume in productio
 ### Cache Lifecycle
 
 1. **Creation**: Cache files are written atomically (temp file + rename) to prevent partial reads in multi-process Puma
-2. **Lazy pruning**: When a new monthly file is written, older months for the same station/type are deleted via `retire_old_cache_files`
-3. **Startup cleanup**: On production/staging boot, `cleanup_old_cache_files` deletes all files older than current month/quarter
-4. **No background threads**: All cleanup is synchronous (either at write time or startup) for multi-process safety
+2. **Startup cleanup**: On boot, `cleanup_old_cache_files` deletes all files older than current month/quarter
+3. **Month-rollover cleanup**: `cleanup_if_month_changed` triggers bulk cleanup on first request after a month rolls over (thread-safe, non-blocking)
+4. **No background threads**: All cleanup is synchronous (startup or lazy on request) for multi-process safety
 
 ### Key Methods
 
 - `WebCalTides.atomic_write(filename, content)` — atomic file write (temp + rename)
-- `WebCalTides.retire_old_cache_files(current_file)` — delete older months for same station
+- `WebCalTides.cleanup_if_month_changed` — lazily trigger cleanup on month rollover (called per-request, no-op after first run in a month)
 - `WebCalTides.cleanup_old_cache_files` — bulk delete all expired cache files
 
 ## Code Patterns

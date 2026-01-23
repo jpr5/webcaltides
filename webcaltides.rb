@@ -29,6 +29,10 @@ module WebCalTides
     @@tide_stations_mutex    = Mutex.new
     @@current_stations_mutex = Mutex.new
     @@lunar_phases_mutex     = Mutex.new
+    @@cleanup_mutex          = Mutex.new
+
+    # Tracks the month stamp of the last cache cleanup run
+    @@last_cleanup_stamp = nil
 
     # Configuration constants
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
@@ -512,7 +516,6 @@ module WebCalTides
 
         logger.debug "storing tide station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
-        retire_old_cache_files(at)
 
         return stations.length > 0
     end
@@ -607,7 +610,6 @@ module WebCalTides
         if tide_data = tide_clients(station.provider).tide_data_for(station, around)
             logger.debug "storing tide data at #{at}"
             atomic_write(at, tide_data.map(&:to_h).to_json)
-            retire_old_cache_files(at)
         end
 
         return tide_data && tide_data.length > 0
@@ -788,7 +790,6 @@ module WebCalTides
             'generated_at' => Time.now.utc.iso8601,
             'regions' => region_map
         }))
-        retire_old_cache_files(regions_file)
 
         region_map
     end
@@ -818,7 +819,6 @@ module WebCalTides
 
         logger.debug "storing current station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
-        retire_old_cache_files(at)
 
         return stations.length > 0
     end
@@ -912,7 +912,6 @@ module WebCalTides
         if current_data = current_clients(station.provider).current_data_for(station, around)
             logger.debug "storing current data at #{at}"
             atomic_write(at, current_data.map(&:to_h).to_json)
-            retire_old_cache_files(at)
         end
 
         return current_data && current_data.length > 0
@@ -1183,20 +1182,25 @@ module WebCalTides
         raise
     end
 
-    # Delete old monthly cache files for the same station/type, keeping the current one
-    def retire_old_cache_files(current_file)
-        basename = File.basename(current_file)
-        if basename =~ /^(.+_)(20\d{4})(.+)$/
-            prefix, stamp, suffix = $1, $2, $3
-            Dir.glob("#{settings.cache_dir}/#{prefix}*#{suffix}").each do |f|
-                next if f == current_file
-                logger.debug "retiring old cache file: #{File.basename(f)}"
-                File.unlink(f) rescue nil
+    # Lazily trigger cache cleanup on month rollover.  Called from request path;
+    # uses try_lock so only one thread runs cleanup while others continue unblocked.
+    # Cleanup runs in a background thread to avoid blocking the request.
+    def cleanup_if_month_changed
+        current_stamp = Time.current.utc.strftime("%Y%m")
+        return if @@last_cleanup_stamp == current_stamp
+
+        if @@cleanup_mutex.try_lock
+            begin
+                return if @@last_cleanup_stamp == current_stamp
+                @@last_cleanup_stamp = current_stamp
+                Thread.new { cleanup_old_cache_files }
+            ensure
+                @@cleanup_mutex.unlock
             end
         end
     end
 
-    # One-time cleanup of all old cache files (called on startup)
+    # Bulk cleanup of all old cache files (called on startup and on month rollover)
     def cleanup_old_cache_files
         current_stamp = Time.current.utc.strftime("%Y%m")
         current_quarter = "#{Time.current.utc.year}Q#{Time.current.utc.quarter}"
@@ -1225,6 +1229,7 @@ module WebCalTides
             end
         end
 
+        @@last_cleanup_stamp = current_stamp
         logger.info "cache cleanup: removed #{deleted_count} files, freed #{freed_bytes / 1024 / 1024}MB"
     end
 

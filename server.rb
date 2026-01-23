@@ -356,6 +356,9 @@ class Server < ::Sinatra::Base
         version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
         cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
 
+        # Cleanup old cache files if month has changed (thread-safe)
+        WebCalTides.cleanup_if_month_changed
+
         # NOTE: Changed my mind on retval's.  In the shit-fucked-up case, we end up sending out a
         # full stack trace + 500, so really if we muck something up internally we should let the
         # exception float up.  Then we can assume that if we arrive without a calendar, then it's
@@ -378,7 +381,6 @@ class Server < ::Sinatra::Base
 
             $LOG.debug "caching to #{cached_ics}"
             WebCalTides.atomic_write(cached_ics, ical = calendar.to_ical)
-            WebCalTides.retire_old_cache_files(cached_ics)
 
             ical
         end

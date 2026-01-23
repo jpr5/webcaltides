@@ -75,100 +75,6 @@ RSpec.describe WebCalTides do
         end
     end
 
-    describe '.retire_old_cache_files' do
-        it 'deletes older monthly files for the same station/type' do
-            with_test_cache_dir do |dir|
-                current = "#{dir}/tides_v1_9410170_202602.json"
-                old1    = "#{dir}/tides_v1_9410170_202601.json"
-                old2    = "#{dir}/tides_v1_9410170_202512.json"
-
-                [current, old1, old2].each { |f| File.write(f, 'data') }
-
-                described_class.retire_old_cache_files(current)
-
-                expect(File.exist?(current)).to be true
-                expect(File.exist?(old1)).to be false
-                expect(File.exist?(old2)).to be false
-            end
-        end
-
-        it 'does not delete files for different stations' do
-            with_test_cache_dir do |dir|
-                current     = "#{dir}/tides_v1_9410170_202602.json"
-                other_station = "#{dir}/tides_v1_8461490_202601.json"
-
-                [current, other_station].each { |f| File.write(f, 'data') }
-
-                described_class.retire_old_cache_files(current)
-
-                expect(File.exist?(current)).to be true
-                expect(File.exist?(other_station)).to be true
-            end
-        end
-
-        it 'does not delete files with different suffixes' do
-            with_test_cache_dir do |dir|
-                current  = "#{dir}/tides_v1_9410170_202602.json"
-                ics_file = "#{dir}/tides_v1_9410170_202601_imperial_1_0.ics"
-
-                [current, ics_file].each { |f| File.write(f, 'data') }
-
-                described_class.retire_old_cache_files(current)
-
-                expect(File.exist?(current)).to be true
-                expect(File.exist?(ics_file)).to be true
-            end
-        end
-
-        it 'handles iCal files with option suffixes' do
-            with_test_cache_dir do |dir|
-                current = "#{dir}/tides_v1_9410170_202602_imperial_1_0.ics"
-                old     = "#{dir}/tides_v1_9410170_202601_imperial_1_0.ics"
-
-                [current, old].each { |f| File.write(f, 'data') }
-
-                described_class.retire_old_cache_files(current)
-
-                expect(File.exist?(current)).to be true
-                expect(File.exist?(old)).to be false
-            end
-        end
-
-        it 'no-ops gracefully when no old files exist' do
-            with_test_cache_dir do |dir|
-                current = "#{dir}/tides_v1_9410170_202602.json"
-                File.write(current, 'data')
-
-                expect { described_class.retire_old_cache_files(current) }.not_to raise_error
-                expect(File.exist?(current)).to be true
-            end
-        end
-
-        it 'no-ops gracefully when filename does not match pattern' do
-            with_test_cache_dir do |dir|
-                current = "#{dir}/tzs.json"
-                File.write(current, 'data')
-
-                expect { described_class.retire_old_cache_files(current) }.not_to raise_error
-                expect(File.exist?(current)).to be true
-            end
-        end
-
-        it 'handles current station files' do
-            with_test_cache_dir do |dir|
-                current = "#{dir}/currents_v1_PUG1515_202602.json"
-                old     = "#{dir}/currents_v1_PUG1515_202601.json"
-
-                [current, old].each { |f| File.write(f, 'data') }
-
-                described_class.retire_old_cache_files(current)
-
-                expect(File.exist?(current)).to be true
-                expect(File.exist?(old)).to be false
-            end
-        end
-    end
-
     describe '.cleanup_old_cache_files' do
         it 'deletes monthly data files older than current month' do
             Timecop.freeze(Time.utc(2026, 2, 15)) do
@@ -356,6 +262,88 @@ RSpec.describe WebCalTides do
 
                     keep.each   { |f| expect(File.exist?(f)).to be(true),  "Expected #{File.basename(f)} to be kept" }
                     delete.each { |f| expect(File.exist?(f)).to be(false), "Expected #{File.basename(f)} to be deleted" }
+                end
+            end
+        end
+    end
+
+    describe '.cleanup_if_month_changed' do
+        before do
+            WebCalTides.class_variable_set(:@@last_cleanup_stamp, nil)
+        end
+
+        it 'runs cleanup on first call when stamp is nil' do
+            Timecop.freeze(Time.utc(2026, 2, 15)) do
+                with_test_cache_dir do |dir|
+                    old = "#{dir}/tides_v1_9410170_202601.json"
+                    File.write(old, 'data')
+
+                    t = described_class.cleanup_if_month_changed
+                    t.join
+
+                    expect(File.exist?(old)).to be false
+                end
+            end
+        end
+
+        it 'does not run cleanup on second call in same month' do
+            Timecop.freeze(Time.utc(2026, 2, 15)) do
+                with_test_cache_dir do |dir|
+                    t = described_class.cleanup_if_month_changed
+                    t.join
+
+                    # Create a file after first cleanup
+                    old = "#{dir}/tides_v1_9410170_202601.json"
+                    File.write(old, 'data')
+
+                    result = described_class.cleanup_if_month_changed
+
+                    # File should still exist because cleanup didn't run again
+                    expect(result).to be_nil
+                    expect(File.exist?(old)).to be true
+                end
+            end
+        end
+
+        it 'runs cleanup again when month changes' do
+            with_test_cache_dir do |dir|
+                Timecop.freeze(Time.utc(2026, 2, 15)) do
+                    t = described_class.cleanup_if_month_changed
+                    t.join
+                end
+
+                # Month rolls over
+                Timecop.freeze(Time.utc(2026, 3, 1)) do
+                    old = "#{dir}/tides_v1_9410170_202602.json"
+                    File.write(old, 'data')
+
+                    t = described_class.cleanup_if_month_changed
+                    t.join
+
+                    expect(File.exist?(old)).to be false
+                end
+            end
+        end
+
+        it 'only one thread runs cleanup when called concurrently' do
+            Timecop.freeze(Time.utc(2026, 2, 15)) do
+                with_test_cache_dir do |dir|
+                    call_count = 0
+                    count_mutex = Mutex.new
+
+                    allow(described_class).to receive(:cleanup_old_cache_files).and_wrap_original do |original|
+                        count_mutex.synchronize { call_count += 1 }
+                        original.call
+                    end
+
+                    results = 10.times.map do
+                        Thread.new { described_class.cleanup_if_month_changed }
+                    end.map(&:value)
+
+                    # Wait for the background cleanup thread to finish
+                    results.compact.each(&:join)
+
+                    expect(call_count).to eq(1)
                 end
             end
         end
