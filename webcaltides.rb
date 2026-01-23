@@ -1207,6 +1207,10 @@ module WebCalTides
         deleted_count = 0
         freed_bytes = 0
 
+        # Set stamp early so concurrent callers (e.g. requests arriving during
+        # warm_caches) see it immediately and don't trigger a redundant run.
+        @@last_cleanup_stamp = current_stamp
+
         Dir.glob("#{settings.cache_dir}/*").each do |f|
             next if File.directory?(f)
             basename = File.basename(f)
@@ -1229,7 +1233,6 @@ module WebCalTides
             end
         end
 
-        @@last_cleanup_stamp = current_stamp
         logger.info "cache cleanup: removed #{deleted_count} files, freed #{freed_bytes / 1024 / 1024}MB"
     end
 
