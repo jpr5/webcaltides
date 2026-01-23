@@ -27,16 +27,10 @@ RSpec.describe "Thread Safety" do
 
     describe "tide_stations" do
         it "initializes once even with concurrent access" do
-            # Ensure cache file exists to avoid triggering API calls in CI
-            unless File.exist?(WebCalTides.tide_station_cache_file)
-                # Mock the cache to avoid HTTP requests
-                allow(File).to receive(:exist?).and_call_original
-                allow(File).to receive(:exist?).with(WebCalTides.tide_station_cache_file).and_return(true)
-                allow(File).to receive(:read).and_call_original
-                allow(File).to receive(:read).with(WebCalTides.tide_station_cache_file).and_return('[]')
-                # Clear the instance variable so first thread will initialize it
-                WebCalTides.instance_variable_set(:@tide_stations, nil)
-            end
+            cache_file = WebCalTides.tide_station_cache_file
+            FileUtils.mkdir_p(File.dirname(cache_file))
+            File.write(cache_file, '[]') unless File.exist?(cache_file)
+            WebCalTides.instance_variable_set(:@tide_stations, nil)
 
             threads = 5.times.map do
                 Thread.new { WebCalTides.tide_stations }
@@ -51,16 +45,10 @@ RSpec.describe "Thread Safety" do
 
     describe "current_stations" do
         it "initializes once even with concurrent access" do
-            # Ensure cache file exists to avoid triggering API calls in CI
-            unless File.exist?(WebCalTides.current_station_cache_file)
-                # Mock the cache to avoid HTTP requests
-                allow(File).to receive(:exist?).and_call_original
-                allow(File).to receive(:exist?).with(WebCalTides.current_station_cache_file).and_return(true)
-                allow(File).to receive(:read).and_call_original
-                allow(File).to receive(:read).with(WebCalTides.current_station_cache_file).and_return('[]')
-                # Clear the instance variable so first thread will initialize it
-                WebCalTides.instance_variable_set(:@current_stations, nil)
-            end
+            cache_file = WebCalTides.current_station_cache_file
+            FileUtils.mkdir_p(File.dirname(cache_file))
+            File.write(cache_file, '[]') unless File.exist?(cache_file)
+            WebCalTides.instance_variable_set(:@current_stations, nil)
 
             threads = 5.times.map do
                 Thread.new { WebCalTides.current_stations }

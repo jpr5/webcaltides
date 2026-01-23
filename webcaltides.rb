@@ -23,6 +23,13 @@ module WebCalTides
 
     include Clients::TimeWindow
 
+    # Thread-safety mutexes (eagerly initialized to avoid ||= race conditions)
+    @@harmonics_mutex        = Mutex.new
+    @@tzcache_mutex          = Mutex.new
+    @@tide_stations_mutex    = Mutex.new
+    @@current_stations_mutex = Mutex.new
+    @@lunar_phases_mutex     = Mutex.new
+
     # Configuration constants
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
@@ -144,7 +151,7 @@ module WebCalTides
     # Thread-safe harmonics client accessor (singleton across all requests)
     def get_harmonics_client
         return @@harmonics if defined?(@@harmonics) && @@harmonics
-        (@@harmonics_mutex ||= Mutex.new).synchronize do
+        @@harmonics_mutex.synchronize do
             @@harmonics ||= Clients::Harmonics.new(logger)
         end
     end
@@ -217,7 +224,7 @@ module WebCalTides
         key = "#{lat} #{long}"
 
         # Thread-safe cache read (class variables for cross-request safety)
-        (@@tzcache_mutex ||= Mutex.new).synchronize do
+        @@tzcache_mutex.synchronize do
             @@tzcache ||= load_tzcache
             return @@tzcache[key] if @@tzcache[key]
         end
@@ -259,7 +266,7 @@ module WebCalTides
 
     # Thread-safe timezone cache update with cross-request class-level mutex.
     def update_tzcache(key, value)
-        (@@tzcache_mutex ||= Mutex.new).synchronize do
+        @@tzcache_mutex.synchronize do
             @@tzcache ||= load_tzcache
             @@tzcache[key] = value
             write_tzcache_to_disk
@@ -280,12 +287,9 @@ module WebCalTides
 
     def write_tzcache_to_disk
         filename = "#{settings.cache_dir}/tzs.json"
-        temp_file = "#{filename}.tmp.#{$$}"
-        File.write(temp_file, @@tzcache.to_json)
-        File.rename(temp_file, filename)
+        atomic_write(filename, @@tzcache.to_json)
     rescue => e
         logger.error "failed to write tzcache: #{e.message}"
-        File.unlink(temp_file) if File.exist?(temp_file)
     end
 
     # Fallback chain for timezone lookup when GeoNames returns nil (offshore locations)
@@ -518,7 +522,7 @@ module WebCalTides
         # First check is optimization - safe because array assignment is atomic in Ruby
         return @tide_stations if @tide_stations
 
-        (@@tide_stations_mutex ||= Mutex.new).synchronize do
+        @@tide_stations_mutex.synchronize do
             return @tide_stations if @tide_stations
 
             cache_file = tide_station_cache_file
@@ -824,7 +828,7 @@ module WebCalTides
         # First check is optimization - safe because array assignment is atomic in Ruby
         return @current_stations if @current_stations
 
-        (@@current_stations_mutex ||= Mutex.new).synchronize do
+        @@current_stations_mutex.synchronize do
             return @current_stations if @current_stations
 
             cache_file = current_station_cache_file
@@ -1082,7 +1086,7 @@ module WebCalTides
 
         (from.year .. to.year).each do |year|
             # Thread-safe lazy initialization per year
-            phases = (@@lunar_phases_mutex ||= Mutex.new).synchronize do
+            phases = @@lunar_phases_mutex.synchronize do
                 @@lunar_phases ||= {}
 
                 @@lunar_phases[year] ||= begin

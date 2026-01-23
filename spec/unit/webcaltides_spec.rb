@@ -3,9 +3,8 @@
 RSpec.describe WebCalTides do
     describe '#update_tzcache' do
         around do |example|
-            # Reset tzcache state before each test (class variables for cross-request thread safety)
+            # Reset tzcache data before each test (but not the mutex)
             WebCalTides.class_variable_set(:@@tzcache, nil) if WebCalTides.class_variable_defined?(:@@tzcache)
-            WebCalTides.class_variable_set(:@@tzcache_mutex, nil) if WebCalTides.class_variable_defined?(:@@tzcache_mutex)
 
             with_test_cache_dir do |dir|
                 example.run
@@ -68,7 +67,6 @@ RSpec.describe WebCalTides do
     describe '#timezone_for' do
         around do |example|
             WebCalTides.class_variable_set(:@@tzcache, nil) if WebCalTides.class_variable_defined?(:@@tzcache)
-            WebCalTides.class_variable_set(:@@tzcache_mutex, nil) if WebCalTides.class_variable_defined?(:@@tzcache_mutex)
 
             with_test_cache_dir do |dir|
                 example.run
@@ -244,7 +242,6 @@ RSpec.describe WebCalTides do
     describe '#timezone_for with fallback' do
         around do |example|
             WebCalTides.class_variable_set(:@@tzcache, nil) if WebCalTides.class_variable_defined?(:@@tzcache)
-            WebCalTides.class_variable_set(:@@tzcache_mutex, nil) if WebCalTides.class_variable_defined?(:@@tzcache_mutex)
 
             with_test_cache_dir do |dir|
                 example.run
