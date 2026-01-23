@@ -1185,6 +1185,7 @@ module WebCalTides
     # Lazily trigger cache cleanup on month rollover.  Called from request path;
     # uses try_lock so only one thread runs cleanup while others continue unblocked.
     # Cleanup runs in a background thread to avoid blocking the request.
+    # Cross-process safe: uses a stamp file with flock to ensure only one worker runs cleanup.
     def cleanup_if_month_changed
         current_stamp = Time.current.utc.strftime("%Y%m")
         return if @@last_cleanup_stamp == current_stamp
@@ -1200,40 +1201,64 @@ module WebCalTides
         end
     end
 
-    # Bulk cleanup of all old cache files (called on startup and on month rollover)
+    # Bulk cleanup of all old cache files (called on startup and on month rollover).
+    # Uses a stamp file with flock for cross-process coordination in multi-worker Puma.
     def cleanup_old_cache_files
         current_stamp = Time.current.utc.strftime("%Y%m")
         current_quarter = "#{Time.current.utc.year}Q#{Time.current.utc.quarter}"
-        deleted_count = 0
-        freed_bytes = 0
 
-        # Set stamp early so concurrent callers (e.g. requests arriving during
-        # warm_caches) see it immediately and don't trigger a redundant run.
+        # Set in-process stamp early so other threads in this worker don't re-trigger
         @@last_cleanup_stamp = current_stamp
 
-        Dir.glob("#{settings.cache_dir}/*").each do |f|
-            next if File.directory?(f)
-            basename = File.basename(f)
-
-            should_delete = case basename
-            when /_(20\d{4})[_.]/
-                $1 < current_stamp
-            when /_(20\d{2}Q\d)[_.]/
-                $1 < current_quarter
-            when /lunar_phases_(\d{4})\.json/
-                $1.to_i < Time.current.utc.year - 1
-            else
-                false
+        # Cross-process gate: only one worker runs cleanup per month
+        stamp_file = "#{settings.cache_dir}/.cleanup_stamp"
+        File.open(stamp_file, File::RDWR | File::CREAT) do |f|
+            # Non-blocking exclusive lock; skip if another process holds it
+            unless f.flock(File::LOCK_EX | File::LOCK_NB)
+                logger.debug "cache cleanup: another process is running cleanup, skipping"
+                return
             end
 
-            if should_delete
-                freed_bytes += File.size(f) rescue 0
-                File.unlink(f) rescue nil
-                deleted_count += 1
+            # Check if cleanup already ran this month (by another worker)
+            existing_stamp = f.read.strip
+            if existing_stamp == current_stamp
+                logger.debug "cache cleanup: already completed for #{current_stamp}"
+                return
             end
+
+            deleted_count = 0
+            freed_bytes = 0
+
+            Dir.glob("#{settings.cache_dir}/*").each do |file|
+                next if File.directory?(file)
+                basename = File.basename(file)
+
+                should_delete = case basename
+                when /_(20\d{4})[_.]/
+                    $1 < current_stamp
+                when /_(20\d{2}Q\d)[_.]/
+                    $1 < current_quarter
+                when /lunar_phases_(\d{4})\.json/
+                    $1.to_i < Time.current.utc.year - 1
+                else
+                    false
+                end
+
+                if should_delete
+                    freed_bytes += File.size(file) rescue 0
+                    File.unlink(file) rescue nil
+                    deleted_count += 1
+                end
+            end
+
+            # Write stamp so other workers know cleanup is done
+            f.rewind
+            f.write(current_stamp)
+            f.truncate(f.pos)
+            f.flush
+
+            logger.info "cache cleanup: removed #{deleted_count} files, freed #{freed_bytes / 1024 / 1024}MB"
         end
-
-        logger.info "cache cleanup: removed #{deleted_count} files, freed #{freed_bytes / 1024 / 1024}MB"
     end
 
 end
