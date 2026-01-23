@@ -11,10 +11,6 @@ FILES = %w[
     data/GESLA4_ALL.csv
     data/TICON_3.csv
     data/ticon.json
-    public/favicon.png
-    public/images/gcal.png
-    public/images/ical.png
-    public/images/water-levels.png
 ]
 
 def download(url, path, limit = 5)
