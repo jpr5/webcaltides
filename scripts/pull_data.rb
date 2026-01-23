@@ -7,7 +7,7 @@ require "fileutils"
 BASE_URL = "https://github.com/jpr5/webcaltides/releases/download/data-v1"
 
 FILES = %w[
-    data/harmonics-dwf-20241229.sql
+    data/harmonics-dwf-20251228-free.tcd
     data/GESLA4_ALL.csv
     data/TICON_3.csv
     data/ticon.json
