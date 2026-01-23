@@ -507,7 +507,8 @@ module WebCalTides
         tide_clients.values.uniq.each { |c| stations.concat(c.tide_stations) } if stations.empty?
 
         logger.debug "storing tide station list at #{at}"
-        File.write(at, stations.map(&:to_h).to_json )
+        atomic_write(at, stations.map(&:to_h).to_json)
+        retire_old_cache_files(at)
 
         return stations.length > 0
     end
@@ -601,7 +602,8 @@ module WebCalTides
 
         if tide_data = tide_clients(station.provider).tide_data_for(station, around)
             logger.debug "storing tide data at #{at}"
-            File.write(at, tide_data.map(&:to_h).to_json)
+            atomic_write(at, tide_data.map(&:to_h).to_json)
+            retire_old_cache_files(at)
         end
 
         return tide_data && tide_data.length > 0
@@ -778,10 +780,11 @@ module WebCalTides
         # Save for future use within this quarter
         regions_file = noaa_current_regions_file
         logger.info "saving region mapping to #{regions_file} (#{region_map.size} mappings)"
-        File.write(regions_file, JSON.generate({
+        atomic_write(regions_file, JSON.generate({
             'generated_at' => Time.now.utc.iso8601,
             'regions' => region_map
         }))
+        retire_old_cache_files(regions_file)
 
         region_map
     end
@@ -810,7 +813,8 @@ module WebCalTides
         end
 
         logger.debug "storing current station list at #{at}"
-        File.write(at, stations.map(&:to_h).to_json)
+        atomic_write(at, stations.map(&:to_h).to_json)
+        retire_old_cache_files(at)
 
         return stations.length > 0
     end
@@ -903,7 +907,8 @@ module WebCalTides
 
         if current_data = current_clients(station.provider).current_data_for(station, around)
             logger.debug "storing current data at #{at}"
-            File.write(at, current_data.map(&:to_h).to_json)
+            atomic_write(at, current_data.map(&:to_h).to_json)
+            retire_old_cache_files(at)
         end
 
         return current_data && current_data.length > 0
@@ -1067,7 +1072,7 @@ module WebCalTides
         cache_file = lunar_phase_cache_file(on)
 
         logger.debug "storing #{phases.length} lunar phases for #{on} at #{cache_file}"
-        File.write(cache_file, phases.to_json)
+        atomic_write(cache_file, phases.to_json)
 
         return phases.length > 0
     end
@@ -1158,6 +1163,65 @@ module WebCalTides
         end
 
         return cal
+    end
+
+    ##
+    ## Cache Management
+    ##
+
+    # Atomic file write: write to temp file then rename (prevents partial reads)
+    def atomic_write(filename, content)
+        temp_file = "#{filename}.tmp.#{$$}.#{Thread.current.object_id}"
+        File.binwrite(temp_file, content)
+        File.rename(temp_file, filename)
+    rescue => e
+        File.unlink(temp_file) rescue nil
+        raise
+    end
+
+    # Delete old monthly cache files for the same station/type, keeping the current one
+    def retire_old_cache_files(current_file)
+        basename = File.basename(current_file)
+        if basename =~ /^(.+_)(20\d{4})(.+)$/
+            prefix, stamp, suffix = $1, $2, $3
+            Dir.glob("#{settings.cache_dir}/#{prefix}*#{suffix}").each do |f|
+                next if f == current_file
+                logger.debug "retiring old cache file: #{File.basename(f)}"
+                File.unlink(f) rescue nil
+            end
+        end
+    end
+
+    # One-time cleanup of all old cache files (called on startup)
+    def cleanup_old_cache_files
+        current_stamp = Time.current.utc.strftime("%Y%m")
+        current_quarter = "#{Time.current.utc.year}Q#{Time.current.utc.quarter}"
+        deleted_count = 0
+        freed_bytes = 0
+
+        Dir.glob("#{settings.cache_dir}/*").each do |f|
+            next if File.directory?(f)
+            basename = File.basename(f)
+
+            should_delete = case basename
+            when /_(20\d{4})[_.]/
+                $1 < current_stamp
+            when /_(20\d{2}Q\d)[_.]/
+                $1 < current_quarter
+            when /lunar_phases_(\d{4})\.json/
+                $1.to_i < Time.current.utc.year - 1
+            else
+                false
+            end
+
+            if should_delete
+                freed_bytes += File.size(f) rescue 0
+                File.unlink(f) rescue nil
+                deleted_count += 1
+            end
+        end
+
+        logger.info "cache cleanup: removed #{deleted_count} files, freed #{freed_bytes / 1024 / 1024}MB"
     end
 
 end

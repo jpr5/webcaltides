@@ -52,6 +52,13 @@ class Server < ::Sinatra::Base
                 elapsed = (Time.now - start).round(2)
                 $LOG.info "current stations cache warmed in #{elapsed}s"
 
+                # Step 4: Clean old cache files
+                $LOG.info "cleaning old cache files"
+                start = Time.now
+                WebCalTides.cleanup_old_cache_files
+                elapsed = (Time.now - start).round(2)
+                $LOG.info "cache cleanup completed in #{elapsed}s"
+
                 total_elapsed = (Time.now - total_start).round(2)
                 $LOG.info "all caches warmed in #{total_elapsed}s"
             rescue => e
@@ -370,7 +377,8 @@ class Server < ::Sinatra::Base
             calendar.publish
 
             $LOG.debug "caching to #{cached_ics}"
-            File.write cached_ics, ical = calendar.to_ical
+            WebCalTides.atomic_write(cached_ics, ical = calendar.to_ical)
+            WebCalTides.retire_old_cache_files(cached_ics)
 
             ical
         end
