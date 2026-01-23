@@ -13,6 +13,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -27,7 +29,6 @@ jobs:
         run: bundle exec rspec --format documentation
         env:
           RACK_ENV: test
-          GEONAMES_USERNAME: ${{ secrets.GEONAMES_USERNAME }}
 
       - name: Archive coverage report
         uses: actions/upload-artifact@v4
