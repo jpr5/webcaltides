@@ -1088,12 +1088,12 @@ module WebCalTides
             phases = @@lunar_phases_mutex.synchronize do
                 @@lunar_phases ||= {}
 
-                @@lunar_phases[year] ||= begin
+                unless @@lunar_phases.key?(year)
                     cache_file = lunar_phase_cache_file(year)
                     unless File.exist?(cache_file)
                         unless year_phases = lunar_client.phases_for_year(year)
                             logger.error "failed to retrieve lunar phase data for #{year}"
-                            return nil
+                            next
                         end
 
                         cache_lunar_phases(on:year, phases:year_phases)
@@ -1105,16 +1105,18 @@ module WebCalTides
                     logger.debug "parsing lunar phases for #{year}"
                     data = JSON.parse(json) rescue []
 
-                    data.map do |phase|
+                    @@lunar_phases[year] = data.map do |phase|
                         {
                             datetime: DateTime.parse(phase["datetime"].to_s),
                             type:     phase["type"].to_sym,
                         }
                     end.sort_by { |phase| phase[:datetime] }
                 end
+
+                @@lunar_phases[year]
             end
 
-            return [] unless phases
+            next unless phases
             ret << phases
         end
 
@@ -1139,7 +1141,7 @@ module WebCalTides
             last_quarter:  "Last Quarter Moon"
         }
 
-        lunar_phases(Date.parse(from), Date.parse(to)).each do |phase|
+        (lunar_phases(Date.parse(from), Date.parse(to)) || []).each do |phase|
             percent_full = case phase[:type]
                 when :new_moon then 0
                 when :first_quarter then 50

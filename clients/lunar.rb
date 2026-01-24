@@ -5,7 +5,7 @@ require 'json'
 module Clients
     class Lunar < Base
         USNO_API_URL = 'https://aa.usno.navy.mil/api/moon/phases/year'
-        ASTRONOMICS_API_URL = 'https://www.astronomics.com/api/v1/moon/phases'
+        MOONDATA_API_URL = 'https://craigchamberlain.github.io/moon-data/api/moon-phase-data'
 
         def phase(date)
             angle = phase_angle(date)
@@ -86,7 +86,15 @@ module Clients
         end
 
         def phases_for_year(year)
-            # Try USNO API first
+            # Try moon-data static API first (GitHub Pages, fast and reliable)
+            begin
+                phases = fetch_from_moondata_api(year.to_i)
+                return phases if phases && !phases.empty?
+            rescue => e
+                logger.error "error fetching from moon-data API: #{e.message}"
+            end
+
+            # If moon-data fails, try USNO API
             begin
                 phases = fetch_from_usno_api(year.to_i)
                 return phases if phases && !phases.empty?
@@ -94,20 +102,61 @@ module Clients
                 logger.error "error fetching from USNO API: #{e.message}"
             end
 
-            # If USNO fails, try Astronomics API
-            begin
-                phases = fetch_from_astronomics_api(year.to_i)
-                return phases if phases && !phases.empty?
-            rescue => e
-                logger.error "error fetching from Astronomics API: #{e.message}"
-            end
-
-            # If all APIs fail, log a warning and return nil
-            logger.warn "no lunar phase data available for #{year}"
-            return nil
+            # If all APIs fail, compute phases from our own ephemeris
+            logger.warn "external APIs failed for #{year}, computing phases from ephemeris"
+            return compute_phases_for_year(year)
         end
 
         private
+
+        # Compute lunar phases algorithmically when external APIs are unavailable.
+        # Scans each hour of the year, detecting when the phase angle crosses
+        # the target angles for new moon (0°), first quarter (90°), full moon (180°),
+        # and last quarter (270°).
+        def compute_phases_for_year(year)
+            phases = []
+            targets = {
+                0   => :new_moon,
+                90  => :first_quarter,
+                180 => :full_moon,
+                270 => :last_quarter,
+            }
+
+            start_date = DateTime.new(year, 1, 1)
+            end_date   = DateTime.new(year, 12, 31, 23, 59, 59)
+
+            prev_angle = phase_angle(start_date)
+
+            # Step through the year in 1-hour increments
+            current = start_date + Rational(1, 24)
+            while current <= end_date
+                curr_angle = phase_angle(current)
+
+                targets.each do |target, type|
+                    # Detect crossing: previous angle was before target, current is at/past it
+                    # Handle the 360->0 wraparound for new moon detection
+                    crossed = if target == 0
+                        prev_angle > 270 && curr_angle < 90
+                    else
+                        prev_angle < target && curr_angle >= target
+                    end
+
+                    if crossed
+                        phases << {
+                            datetime: current,
+                            type: type,
+                        }
+                    end
+                end
+
+                prev_angle = curr_angle
+                current += Rational(1, 24)
+            end
+
+            phases.sort_by! { |p| p[:datetime] }
+            logger.debug "ephemeris: computed #{phases.length} lunar phases for #{year}"
+            phases.empty? ? nil : phases
+        end
 
         def degrees_to_radians(degrees)
             degrees * Math::PI / 180
@@ -151,27 +200,19 @@ module Clients
             return nil
         end
 
-        def fetch_from_astronomics_api(year)
-            logger.debug "connecting to Astronomics API for #{year}"
+        def fetch_from_moondata_api(year)
+            full_url = "#{MOONDATA_API_URL}/#{year}/index.json"
 
-            params = {
-                'year': year,
-                'format': 'json'
-            }
-
-            query_string = params.map { |k, v| "#{k}=#{v}" }.join('&')
-            full_url = "#{ASTRONOMICS_API_URL}?#{query_string}"
-
-            logger.debug "requesting lunar phases from Astronomics API: #{full_url}"
+            logger.debug "requesting lunar phases from moon-data API: #{full_url}"
 
             begin
                 json = get_url(full_url)
 
                 data = JSON.parse(json)
-                return process_astronomics_data(data)
+                return process_moondata(data)
 
             rescue => e
-                logger.error "error fetching from Astronomics API: #{e.message}"
+                logger.error "error fetching from moon-data API: #{e.message}"
                 raise e
             end
 
@@ -230,45 +271,34 @@ module Clients
             return nil
         end
 
-        def process_astronomics_data(data)
-            logger.debug "astron: processing API data for lunar phases"
+        def process_moondata(data)
+            logger.debug "moondata: processing API data for lunar phases"
 
             phases = []
+            phase_map = {
+                0 => :new_moon,
+                1 => :first_quarter,
+                2 => :full_moon,
+                3 => :last_quarter,
+            }
 
-            if !data || !data['moonPhases'] || !data['moonPhases'].is_a?(Array)
-                logger.error "astron: invalid response format"
+            if !data || !data.is_a?(Array)
+                logger.error "moondata: invalid response format"
                 return nil
             end
 
-            data = data['moonPhases']
-
-            #logger.debug "astron: raw API data: #{data.inspect}"
-
             data.each do |entry|
                 begin
-                    pt = entry['phase']&.downcase
-                    dt = DateTime.parse("#{entry['date']} #{entry['time']}")
-
-                    next unless pt && dt
-                    next unless st = case pt
-                        when 'new', 'new moon'   then :new_moon
-                        when 'full', 'full moon' then :full_moon
-                        when 'first quarter',
-                             'first'             then :first_quarter
-                        when 'last quarter',
-                             'third quarter',
-                             'last', 'third'     then :last_quarter
-                        else nil
-                    end
-
-                    #logger.debug "astron: adding #{st} at #{dt.asctime}"
+                    dt = DateTime.parse(entry['Date'])
+                    type = phase_map[entry['Phase']]
+                    next unless dt && type
 
                     phases << {
                         datetime: dt,
-                        type: st,
+                        type: type,
                     }
                 rescue => e
-                    logger.error "astron: failed to process entry: #{e.message}"
+                    logger.error "moondata: failed to process entry: #{e.message}"
                     next
                 end
             end
@@ -276,11 +306,11 @@ module Clients
             if !phases.empty?
                 phases.sort_by! { |phase| phase[:datetime] }
 
-                logger.debug "astron: extracted #{phases.length} lunar phases"
+                logger.debug "moondata: extracted #{phases.length} lunar phases"
                 return phases
             end
 
-            logger.warn "astron: no lunar phases found"
+            logger.warn "moondata: no lunar phases found"
             return nil
         end
 

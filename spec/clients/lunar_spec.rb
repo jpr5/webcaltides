@@ -112,9 +112,16 @@ RSpec.describe Clients::Lunar do
                 }.to_json
             end
 
-            it 'fetches and processes lunar phases from USNO API' do
-                stub_request(:get, /aa.usno.navy.mil/)
-                    .to_return(status: 200, body: usno_response, headers: { 'Content-Type' => 'application/json' })
+            it 'fetches and processes lunar phases from moon-data API' do
+                moondata_response = [
+                    { 'Date' => '2025-01-13T12:00:00', 'Phase' => 2 },
+                    { 'Date' => '2025-01-21T08:30:00', 'Phase' => 3 },
+                    { 'Date' => '2025-01-29T04:15:00', 'Phase' => 0 },
+                    { 'Date' => '2025-02-05T10:45:00', 'Phase' => 1 }
+                ].to_json
+
+                stub_request(:get, /craigchamberlain.github.io/)
+                    .to_return(status: 200, body: moondata_response, headers: { 'Content-Type' => 'application/json' })
 
                 phases = client.phases_for_year(2025)
 
@@ -123,32 +130,29 @@ RSpec.describe Clients::Lunar do
                 expect(phases.map { |p| p[:type] }).to include(:full_moon, :last_quarter, :new_moon, :first_quarter)
             end
 
-            it 'falls back to Astronomics API when USNO fails' do
-                stub_request(:get, /aa.usno.navy.mil/)
+            it 'falls back to USNO API when moon-data fails' do
+                stub_request(:get, /craigchamberlain.github.io/)
                     .to_return(status: 502)
 
-                astronomics_response = {
-                    'moonPhases' => [
-                        { 'date' => '2025-01-13', 'time' => '12:00', 'phase' => 'Full' },
-                        { 'date' => '2025-01-21', 'time' => '08:30', 'phase' => 'Third Quarter' }
-                    ]
-                }.to_json
-
-                stub_request(:get, /astronomics.com/)
-                    .to_return(status: 200, body: astronomics_response, headers: { 'Content-Type' => 'application/json' })
+                stub_request(:get, /aa.usno.navy.mil/)
+                    .to_return(status: 200, body: usno_response, headers: { 'Content-Type' => 'application/json' })
 
                 phases = client.phases_for_year(2025)
 
                 expect(phases).to be_an(Array)
-                expect(phases.length).to eq(2)
+                expect(phases.length).to eq(4)
             end
 
-            it 'returns nil when all APIs fail' do
+            it 'falls back to ephemeris when all APIs fail' do
+                stub_request(:get, /craigchamberlain.github.io/).to_return(status: 502)
                 stub_request(:get, /aa.usno.navy.mil/).to_return(status: 502)
-                stub_request(:get, /astronomics.com/).to_return(status: 502)
 
                 phases = client.phases_for_year(2025)
-                expect(phases).to be_nil
+
+                expect(phases).to be_an(Array)
+                expect(phases.length).to be_between(48, 52)
+                expect(phases.first[:type]).to be_a(Symbol)
+                expect(phases.first[:datetime]).to be_a(DateTime)
             end
         end
     end
