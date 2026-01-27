@@ -10,6 +10,7 @@ gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/c
 
 gem 'date'
 gem 'json'
+gem 'openssl', '>= 3.1.2'  # Fix for OpenSSL 3.5/3.6 CRL verification failures
 gem 'nokogiri', '>= 1.18.9'
 gem 'mechanize', '>= 2.9.1'
 
