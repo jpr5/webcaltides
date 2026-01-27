@@ -21,14 +21,6 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
-        env:
-          GIT_LFS_SKIP_SMUDGE: 1
-
-      - name: Fetch LFS objects for tcd gem
-        run: |
-          cd vendor/bundle/ruby/*/bundler/gems/tcd-*
-          git remote set-url origin https://github.com/jpr5/tcd.git
-          git lfs pull
 
       - name: Create cache directory
         run: mkdir -p cache
