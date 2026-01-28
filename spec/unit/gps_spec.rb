@@ -223,4 +223,99 @@ RSpec.describe WebCalTides, '.parse_gps' do
             expect(result).to be_nil
         end
     end
+
+    context 'fallback parser and edge cases' do
+        it 'uses fallback regex parser when GPS.normalize raises exception' do
+            # Force GPS.normalize to raise an exception
+            allow(WebCalTides::GPS).to receive(:normalize).and_raise(RuntimeError.new('test error'))
+
+            # Fallback should handle decimal format
+            result = WebCalTides.parse_gps("40.7128, -74.006")
+            expect(result).to eq(['40.7128', '-74.006'])
+        end
+
+        it 'handles degree symbol with fallback parser after GPS.normalize fails' do
+            # Force GPS.normalize to raise an exception
+            allow(WebCalTides::GPS).to receive(:normalize).and_raise(RuntimeError.new('test error'))
+
+            # Fallback should handle degree symbol format: 1°2.3
+            result = WebCalTides.parse_gps("40°42.77, -74°0.36")
+            expect(result).not_to be_nil
+            expect(result[0].to_f).to be_within(0.01).of(40.7128)
+            expect(result[1].to_f).to be_within(0.01).of(-74.006)
+        end
+
+        it 'converts DMS to decimal with fallback parser' do
+            # Force GPS.normalize to raise an exception
+            allow(WebCalTides::GPS).to receive(:normalize).and_raise(RuntimeError.new('test error'))
+
+            # Fallback should convert "40°42.77N" to decimal
+            # Note: In fallback logic, N/W are positive, S/E are negative
+            result = WebCalTides.parse_gps("40°42.77N, 74°0.36W")
+            expect(result).not_to be_nil
+            expect(result[0].to_f).to be_within(0.01).of(40.7128)  # N stays positive
+            expect(result[1].to_f).to be_within(0.01).of(74.006)   # W stays positive in fallback
+        end
+
+        it 'rejects latitude > 90' do
+            result = WebCalTides.parse_gps("91.0, -74.0")
+            expect(result).to be_nil
+        end
+
+        it 'rejects latitude < -90' do
+            result = WebCalTides.parse_gps("-91.0, -74.0")
+            expect(result).to be_nil
+        end
+
+        it 'rejects longitude > 180' do
+            result = WebCalTides.parse_gps("40.0, 181.0")
+            expect(result).to be_nil
+        end
+
+        it 'rejects longitude < -180' do
+            result = WebCalTides.parse_gps("40.0, -181.0")
+            expect(result).to be_nil
+        end
+
+        it 'accepts boundary values (90, -90, 180, -180)' do
+            # Latitude boundaries
+            result1 = WebCalTides.parse_gps("90.0, 0.0")
+            expect(result1).to eq(['90.0', '0.0'])
+
+            result2 = WebCalTides.parse_gps("-90.0, 0.0")
+            expect(result2).to eq(['-90.0', '0.0'])
+
+            # Longitude boundaries
+            result3 = WebCalTides.parse_gps("0.0, 180.0")
+            expect(result3).to eq(['0.0', '180.0'])
+
+            result4 = WebCalTides.parse_gps("0.0, -180.0")
+            expect(result4).to eq(['0.0', '-180.0'])
+        end
+
+        it 'handles valid decimal coordinates with space separator' do
+            # Test that simple decimal coordinates work with space separator
+            result = WebCalTides.parse_gps("51.86982 -5.30811")
+            expect(result).not_to be_nil
+            expect(result.length).to eq(2)
+            expect(result[0].to_f).to be_within(0.01).of(51.86982)
+            expect(result[1].to_f).to be_within(0.01).of(-5.30811)
+        end
+
+        it 'handles space-only separator (no comma)' do
+            result = WebCalTides.parse_gps("51.87757 -5.30811")
+            expect(result).to eq(['51.87757', '-5.30811'])
+        end
+
+        it 'handles fallback with cardinal directions (S/E negative conversion)' do
+            # Force GPS.normalize to raise an exception
+            allow(WebCalTides::GPS).to receive(:normalize).and_raise(RuntimeError.new('test error'))
+
+            # S and E should convert to negative
+            result = WebCalTides.parse_gps("33°52.13S, 151°12.56E")
+            expect(result).not_to be_nil
+            expect(result[0].to_f).to be < 0  # South = negative
+            expect(result[1].to_f).to be < 0  # East = negative (based on fallback logic)
+        end
+    end
 end
