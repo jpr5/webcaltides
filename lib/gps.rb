@@ -5,6 +5,12 @@ module GPS
     extend self
 
     def normalize(coord_string)
+        # Normalize European decimal comma format to period format
+        # Convert "51,86982° N" to "51.86982° N" but preserve commas that separate lat/lon
+        # Heuristic: if comma is immediately followed by digits and then degree symbol or hemisphere,
+        # it's a decimal separator (not a lat/lon separator)
+        coord_string = coord_string.gsub(/(\d),(\d+(?:[°′'″\s]*[nsew]|°))/i, '\1.\2')
+
         # Handle the case where coord_string is already a decimal pair like "-33.8688, 151.2093"
         if coord_string.match(/^\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+\s*$/)
             parts = coord_string.split(',').map(&:strip)

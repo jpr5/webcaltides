@@ -296,8 +296,9 @@ class Server < ::Sinatra::Base
 
         return erb :index, locals: { searchtext: nil, units: nil } unless searchtext.length > 0
 
-        # If we see anything like "42.1234, 1234.0132" then treat it like a GPS search
-        if searchtext.match(/\d[°'.]\s*\d/)
+        # If we see anything like "42.1234, 1234.0132" or "42.1234° N" then treat it like a GPS search
+        # Match degree/apostrophe/period symbols followed by digits OR hemisphere indicators
+        if searchtext.match(/\d[°'.]\s*[\d\-nsew]/)
             how = "near"
 
             unless tokens = WebCalTides.parse_gps(searchtext)
@@ -314,10 +315,11 @@ class Server < ::Sinatra::Base
             how = "by"
 
             # Parse search terms.  Matched quotes are taken as-is (still
-            # lowercased), while everything else is tokenized via [ ,]+.
+            # lowercased), while everything else is tokenized via [ ,°'"]+.
+            # Strip degree/minute/second symbols and quotes as they're not useful for text search.
             tokens = searchtext.scan(/["]([^"]+)["]/).flatten
             searchtext.gsub!(/["]([^"]+)["]/, '')
-            tokens += searchtext.split(/[, ]+/).reject(&:empty?)
+            tokens += searchtext.split(/[, °′'″"]+/).reject(&:empty?)
 
             unless tokens.empty?
                 tide_results    = WebCalTides.find_tide_stations(by:tokens, within:radius, units: radius_units)

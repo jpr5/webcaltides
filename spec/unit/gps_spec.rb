@@ -79,6 +79,52 @@ RSpec.describe WebCalTides::GPS do
             end
         end
 
+        context 'with European decimal comma format' do
+            it 'parses "51,86982°  5,31011°" (comma as decimal separator)' do
+                result = described_class.normalize("51,86982°  5,31011°")
+                expect(result[:latitude]).to be_within(tolerance).of(51.86982)
+                expect(result[:longitude]).to be_within(tolerance).of(5.31011)
+            end
+
+            it 'parses "51,86982° N  5,31011° W" (European with hemispheres)' do
+                result = described_class.normalize("51,86982° N  5,31011° W")
+                expect(result[:latitude]).to be_within(tolerance).of(51.86982)
+                expect(result[:longitude]).to be_within(tolerance).of(-5.31011)
+            end
+
+            it 'parses "40,7128° N, 74,0060° W" (European with comma separator)' do
+                result = described_class.normalize("40,7128° N, 74,0060° W")
+                expect(result[:latitude]).to be_within(tolerance).of(40.7128)
+                expect(result[:longitude]).to be_within(tolerance).of(-74.006)
+            end
+
+            it 'parses "48,8584° N, 2,2945° E" (Paris in European format)' do
+                result = described_class.normalize("48,8584° N, 2,2945° E")
+                expect(result[:latitude]).to be_within(tolerance).of(48.8584)
+                expect(result[:longitude]).to be_within(tolerance).of(2.2945)
+            end
+        end
+
+        context 'with UTF-8 degree symbol variations' do
+            it 'parses decimal degrees with UTF-8 degree symbol followed by hemisphere' do
+                result = described_class.normalize("51.87757° N 5.30811° W")
+                expect(result[:latitude]).to be_within(tolerance).of(51.87757)
+                expect(result[:longitude]).to be_within(tolerance).of(-5.30811)
+            end
+
+            it 'parses decimal degrees with degree symbol but no comma separator' do
+                result = described_class.normalize("40.7128° N 74.0060° W")
+                expect(result[:latitude]).to be_within(tolerance).of(40.7128)
+                expect(result[:longitude]).to be_within(tolerance).of(-74.006)
+            end
+
+            it 'parses lowercase hemisphere indicators' do
+                result = described_class.normalize("37.7749° n, 122.4194° w")
+                expect(result[:latitude]).to be_within(tolerance).of(37.7749)
+                expect(result[:longitude]).to be_within(tolerance).of(-122.4194)
+            end
+        end
+
         context 'with edge cases' do
             it 'parses "0°0\'0\"N, 0°0\'0\"E" (origin)' do
                 result = described_class.normalize("0°0'0\"N, 0°0'0\"E")
@@ -134,6 +180,30 @@ RSpec.describe WebCalTides, '.parse_gps' do
             expect(result.length).to eq(2)
             expect(result[0].to_f).to be_within(0.01).of(40.7128)
             expect(result[1].to_f).to be_within(0.01).of(-74.006)
+        end
+
+        it 'parses decimal degrees with UTF-8 degree symbol and hemispheres' do
+            result = WebCalTides.parse_gps("51.87757° N 5.30811° W")
+            expect(result).not_to be_nil
+            expect(result.length).to eq(2)
+            expect(result[0].to_f).to be_within(0.01).of(51.87757)
+            expect(result[1].to_f).to be_within(0.01).of(-5.30811)
+        end
+
+        it 'parses European comma decimal format' do
+            result = WebCalTides.parse_gps("51,86982° N 5,31011° W")
+            expect(result).not_to be_nil
+            expect(result.length).to eq(2)
+            expect(result[0].to_f).to be_within(0.01).of(51.86982)
+            expect(result[1].to_f).to be_within(0.01).of(-5.31011)
+        end
+
+        it 'parses European format without hemispheres' do
+            result = WebCalTides.parse_gps("51,86982°  5,31011°")
+            expect(result).not_to be_nil
+            expect(result.length).to eq(2)
+            expect(result[0].to_f).to be_within(0.01).of(51.86982)
+            expect(result[1].to_f).to be_within(0.01).of(5.31011)
         end
     end
 
