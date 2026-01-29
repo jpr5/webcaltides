@@ -7,6 +7,12 @@ RSpec.describe 'Calendar Generation Error Handling', type: :request do
         Server
     end
 
+    before(:each) do
+        # Mock station data to avoid HTTP calls in integration tests
+        allow(WebCalTides).to receive(:tide_stations).and_return([])
+        allow(WebCalTides).to receive(:current_stations).and_return([])
+    end
+
     describe 'missing data scenarios' do
         it 'returns 404 for non-existent station' do
             get '/tides/INVALID_STATION_12345.ics'
