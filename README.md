@@ -14,32 +14,48 @@ This service can be found at [webcaltides.org](https://webcaltides.org).
 
 First, install the dependencies with `bundle install`.
 
+### Environment Variables
+
+The easiest way to configure API keys is to create a `.env` file in the project root:
+
+```bash
+# .env
+GOOGLE_API_KEY=your_google_api_key_here
+GEONAMES_USERNAME=your_geonames_username
+GEOAPIFY_API_KEY=your_geoapify_key
+```
+
+The `.env` file is gitignored for security. Alternatively, you can set these as shell environment variables.
+
 ### Timezone Lookups
 
-Then you'll need a Geonames account for lat/long => timezone conversion --
-they're free, [go get one](https://www.geonames.org/login).  After you register,
-the API won't work immediately - there's some delay.  At some point after,
-you'll need to log back in and one-time manually [enable web services
-access](https://www.geonames.org/manageaccount).
+For accurate timezone lookups (lat/lon → timezone), configure one of these services:
 
-Set the `GEONAMES_USERNAME` environment variable with your Geonames username.
+**Google Maps Time Zone API** (recommended):
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project and enable the "Time Zone API" (and optionally "Maps Static API" for map thumbnails)
+3. Create an API key and restrict it to these APIs
+4. Add `GOOGLE_API_KEY=your_key_here` to your `.env` file
+
+**Geonames** (free fallback):
+1. Register for a free account at [Geonames](https://www.geonames.org/login)
+2. After registration, log in and [enable web services access](https://www.geonames.org/manageaccount) (one-time)
+3. Add `GEONAMES_USERNAME=your_username` to your `.env` file
+
+Google API is preferred (50x faster), but Geonames works as a fallback. Without either, timezone lookups will use region metadata and longitude approximation.
 
 ### Map Thumbnails (Optional)
 
 Station cards can display location map thumbnails. Two services are supported:
 
-**Google API** (preferred):
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a project and enable the "Time Zone API" and "Maps Static API"
-3. Create an API key and restrict it to these two APIs
-4. Set `GOOGLE_API_KEY` environment variable
+**Google Maps Static API** (if you already set `GOOGLE_API_KEY` above, this works automatically)
 
-**Geoapify** (free fallback):
-1. Register at [Geoapify](https://www.geoapify.com/) (free, no credit card required)
-2. Create a project and copy your API key (free tier: 3,000 requests/day)
-3. Set `GEOAPIFY_API_KEY` environment variable
+**Geoapify** (free alternative):
+1. Register at [Geoapify](https://www.geoapify.com/) (free tier: 3,000 requests/day)
+2. Copy your API key from your project
+3. Add `GEOAPIFY_API_KEY=your_key_here` to your `.env` file
 
-If neither key is configured, a placeholder icon will be shown instead of maps.
+If no map API is configured, a placeholder icon will be shown instead.
 
 OR, just use this one at [webcaltides.org](https://webcaltides.org)!
 
