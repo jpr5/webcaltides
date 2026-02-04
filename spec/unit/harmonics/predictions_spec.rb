@@ -116,4 +116,53 @@ RSpec.describe Harmonics::Engine do
             ENV['TICON_FILE'] = original_ticon
         end
     end
+
+    describe 'constituent definitions' do
+        let(:engine) { described_class.new(logger, 'spec/fixtures/cache') }
+
+        it 'BASES constituents have v and u arrays' do
+            # All BASES constituents should have v/u arrays for nodal factor calculations
+            described_class::BASES.each do |name, definition|
+                expect(definition).to have_key('v'), "#{name} missing 'v' array"
+                expect(definition).to have_key('u'), "#{name} missing 'u' array"
+                expect(definition['v']).to be_an(Array).and(have_attributes(length: 6))
+                expect(definition['u']).to be_an(Array).and(have_attributes(length: 7))
+            end
+        end
+
+        it 'can calculate nodal factors for BASES constituents' do
+            # Verify that calculate_basic_factors works for all BASES constituents
+            # This tests the core calculation without needing TCD files
+            described_class::BASES.each do |name, definition|
+                expect {
+                    arg_start = engine.send(:astronomical_arguments, Time.utc(2026, 1, 1, 12, 0, 0))
+                    arg_mid = engine.send(:astronomical_arguments, Time.utc(2026, 7, 1, 12, 0, 0))
+                    result = engine.send(:calculate_basic_factors, definition, arg_start, arg_mid)
+
+                    expect(result).to have_key('f')
+                    expect(result).to have_key('u')
+                    expect(result).to have_key('V0')
+                }.not_to raise_error, "Failed for constituent #{name}"
+            end
+        end
+
+        it 'loaded constituent definitions must have v/u arrays to calculate nodal factors' do
+            # This tests the bug: if @constituent_definitions has a Basic constituent
+            # without v/u arrays, calculate_basic_factors will fail
+            bad_definition = {
+                'type' => 'Basic',
+                'speed' => 28.9841042,
+                'f_formula' => 78
+                # Missing 'v' and 'u' arrays
+            }
+
+            arg_start = engine.send(:astronomical_arguments, Time.utc(2026, 1, 1, 12, 0, 0))
+            arg_mid = engine.send(:astronomical_arguments, Time.utc(2026, 7, 1, 12, 0, 0))
+
+            # Should raise NoMethodError because v_coeffs will be nil
+            expect {
+                engine.send(:calculate_basic_factors, bad_definition, arg_start, arg_mid)
+            }.to raise_error(NoMethodError, /undefined method `\[\]' for nil/)
+        end
+    end
 end

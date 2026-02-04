@@ -204,4 +204,56 @@ RSpec.describe Clients::Harmonics do
             expect(predictions.last['time'] - crossing_time).to be > 1.hour
         end
     end
+
+    describe 'TCD constituent loading bug fix' do
+        # Bug: When TCD file loads, it overwrites @constituent_definitions for all constituents
+        # including BASES constituents (M2, S2, etc), removing their v/u arrays
+        # This causes NoMethodError when calculating nodal factors
+        context 'when harmonics data files exist' do
+            around do |example|
+                original_xtide = ENV['XTIDE_FILE']
+                original_ticon = ENV['TICON_FILE']
+                ENV['XTIDE_FILE'] = fixture_xtide
+                ENV['TICON_FILE'] = fixture_ticon
+
+                with_test_cache_dir do
+                    example.run
+                end
+            ensure
+                ENV['XTIDE_FILE'] = original_xtide
+                ENV['TICON_FILE'] = original_ticon
+            end
+
+            it 'can calculate nodal factors after loading TCD data' do
+                # This test reproduces the production bug:
+                # 1. Load TCD file (overwrites BASES constituent definitions)
+                # 2. Try to calculate nodal factors (fails because v/u are nil)
+
+                # Load stations to trigger TCD parsing
+                stations = client.tide_stations
+                expect(stations).not_to be_empty
+
+                # Try to get nodal factors - this should not raise NoMethodError
+                expect {
+                    client.engine.send(:get_nodal_factors, 2026, 2, 3, 0.0, 12)
+                }.not_to raise_error
+            end
+
+            it 'generates peaks for XTide station without errors' do
+                # Find a reference XTide station (has constituents, not subordinate)
+                stations = client.tide_stations
+                xtide_station = stations.find do |s|
+                    s.id.to_s.start_with?('X') && !s.id.to_s.start_with?('Xac')
+                end
+
+                skip 'No XTide reference station found' unless xtide_station
+
+                # This should not raise NoMethodError about nil[]
+                expect {
+                    data = client.tide_data_for(xtide_station, Time.utc(2026, 2, 3))
+                    expect(data).to be_an(Array)
+                }.not_to raise_error
+            end
+        end
+    end
 end
