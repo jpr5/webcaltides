@@ -104,8 +104,11 @@ module Harmonics
             end.join("_")
         end
 
+        # Cache version - increment when cache format changes to force regeneration
+        CACHE_VERSION = 2
+
         def stations_cache_file
-            "#{@cache_dir}/xtide_stations_#{source_files_checksum}.json"
+            "#{@cache_dir}/xtide_stations_v#{CACHE_VERSION}_#{source_files_checksum}.json"
         end
 
         # Remove old station cache files that don't match current checksums.
@@ -609,14 +612,23 @@ module Harmonics
                     const_names << const.name
                     @speeds[const.name] = const.speed
 
-                    # Map constituent to formula number using existing BASES or default
-                    f_formula = map_constituent_to_formula(const.name)
-
-                    @constituent_definitions[const.name] = {
-                        'type' => 'Basic',  # TCD doesn't distinguish Basic/Compound
-                        'speed' => const.speed,
-                        'f_formula' => f_formula
-                    }
+                    # If constituent exists in BASES, copy v/u arrays from there
+                    # Otherwise create a basic definition with just speed and f_formula
+                    if BASES[const.name]
+                        # Copy the full definition from BASES (includes v, u, f_formula)
+                        @constituent_definitions[const.name] = BASES[const.name].dup
+                        # Override speed with TCD value in case it's more precise
+                        @constituent_definitions[const.name]['speed'] = const.speed
+                    else
+                        # For non-BASES constituents, create basic definition
+                        # These will not be used for nodal factor calculations
+                        f_formula = map_constituent_to_formula(const.name)
+                        @constituent_definitions[const.name] = {
+                            'type' => 'Basic',
+                            'speed' => const.speed,
+                            'f_formula' => f_formula
+                        }
+                    end
                 end
 
                 # Store all stations first for reference lookups
@@ -986,7 +998,8 @@ module Harmonics
             end
 
             @constituent_definitions.each do |name, d|
-                if d['type'] == 'Basic'
+                if d['type'] == 'Basic' && d['v'] && d['u']
+                    # Only calculate factors for Basic constituents that have v/u arrays
                     factors[name] = calculate_basic_factors(d, arg_start, arg_mid)
                 elsif d['type'] == 'Compound'
                     factors[name] = calculate_compound_factors(d, factors)
