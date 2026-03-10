@@ -48,7 +48,15 @@ module Clients
 
             logger.info "getting tide data from #{url}"
 
-            return nil unless json = get_url(url)
+            begin
+                return nil unless json = get_url(url)
+            rescue Mechanize::ResponseCodeError => e
+                if e.response_code == "404"
+                    logger.warn "404 for station #{station.id}, skipping (may be temporary)"
+                    return nil
+                end
+                raise
+            end
 
             logger.debug "parsing tide predictions for #{station.id} from API #{API_URL}"
             data = JSON.parse(json) rescue []
