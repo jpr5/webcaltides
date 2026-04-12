@@ -341,7 +341,8 @@ class Server < ::Sinatra::Base
         $LOG.info "search #{how} #{for_what} yields #{tide_groups.count + current_groups.count} grouped results (from #{tide_results.count + current_results.count} raw)"
 
         erb :index, locals: { tide_results: tide_groups, current_results: current_groups,
-                              tokens: tokens, how:how, radius: radius, units: ERB::Util.html_escape_once(params['units'] || 'imperial'),
+                              tokens: tokens.map { |t| ERB::Util.html_escape_once(t) }, how:how, radius: radius,
+                              units: ERB::Util.html_escape_once(params['units'] || 'imperial'),
                               placeholder: ERB::Util.html_escape_once(searchparam.empty? ? 'Station...' : searchparam)
                             }
     end
