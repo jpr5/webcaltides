@@ -39,9 +39,12 @@ GEM
       domain_name (~> 0.5)
     i18n (1.14.4)
       concurrent-ruby (~> 1.0)
-    icalendar (2.10.1)
+    icalendar (2.12.2)
+      base64
       ice_cube (~> 0.16)
-    ice_cube (0.16.4)
+      logger
+      ostruct
+    ice_cube (0.17.0)
     io-console (0.7.2)
     irb (1.12.0)
       rdoc
@@ -81,6 +84,7 @@ GEM
       mini_portile2 (~> 2.8.2)
       racc (~> 1.4)
     openssl (4.0.0)
+    ostruct (0.6.3)
     pry (0.14.2)
       coderay (~> 1.1)
       method_source (~> 1.0)
@@ -170,7 +174,7 @@ DEPENDENCIES
   debug
   dotenv
   geocoder
-  icalendar
+  icalendar (>= 2.12.2)
   irb
   json
   mechanize (>= 2.9.1)

@@ -14,7 +14,7 @@ gem 'openssl', '>= 3.1.2'  # Fix for OpenSSL 3.5/3.6 CRL verification failures
 gem 'nokogiri', '>= 1.18.9'
 gem 'mechanize', '>= 2.9.1'
 
-gem 'icalendar', require: [ 'icalendar', 'icalendar/tzinfo' ]
+gem 'icalendar', '>= 2.12.2', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
 gem 'timezone'
 gem 'geocoder'
