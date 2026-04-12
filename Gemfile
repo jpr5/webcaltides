@@ -6,7 +6,7 @@ gem 'irb'
 gem 'byebug'
 gem 'pry'
 
-gem 'activesupport', '>= 7.0.7.1', require: ['active_support', 'active_support/core_ext']
+gem 'activesupport', '>= 7.2.3.1', require: ['active_support', 'active_support/core_ext']
 
 gem 'date'
 gem 'json'
@@ -20,8 +20,8 @@ gem 'timezone'
 gem 'geocoder'
 gem 'tcd'
 
-gem 'rack', '>= 3.2.3'
-gem 'rack-session', '>= 2.1.1'
+gem 'rack', '>= 3.2.6'
+gem 'rack-session', '>= 2.1.2'
 gem 'rackup', '>= 2.2.0'
 gem 'webrick', '>= 1.8.2'
 gem 'puma', '>= 6.6.0'
