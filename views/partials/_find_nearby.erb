@@ -23,7 +23,7 @@
         class="absolute left-0 bottom-full mb-2 p-3 bg-navy-900 border border-navy-700 rounded-xl shadow-xl z-50"
     >
         <form action="/" method="POST" class="flex items-center gap-2">
-            <input type="hidden" name="searchtext" value="<%= station_id %>" />
+            <input type="hidden" name="searchtext" value="<%= Rack::Utils.escape_html(station_id.to_s) %>" />
             <input
                 type="number"
                 name="within"

@@ -17,7 +17,7 @@
     sources: <%= ERB::Util.html_escape(sources_json) %>,
     metric: window.unitUtils.isMetric(),
     _currentDepth: <%= station.depth&.to_i || 0 %>,
-    _currentProvider: '<%= station.provider.upcase %>',
+    _currentProvider: '<%= Rack::Utils.escape_html(station.provider.upcase) %>',
 
     // Get parent card data helper
     getParentData() {

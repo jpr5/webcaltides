@@ -22,10 +22,10 @@
     showCompare: false,
     compareData: null,
     loading: false,
-    provider: '<%= station.provider %>',
+    provider: '<%= Rack::Utils.escape_html(station.provider) %>',
     sources: <%= ERB::Util.html_escape(sources_json) %>,
-    localSelected: '<%= station_id %>',
-    stationType: '<%= api_type %>',
+    localSelected: '<%= Rack::Utils.escape_html(station_id.to_s) %>',
+    stationType: '<%= Rack::Utils.escape_html(api_type.to_s) %>',
     metric: window.unitUtils.isMetric(),
 
     // Get parent card data
@@ -140,7 +140,7 @@
         }
         this.loading = true;
         try {
-            const response = await fetch('/api/stations/compare?type=<%= api_type %>&ids[]=' + ids.join('&ids[]='));
+            const response = await fetch('/api/stations/compare?type=<%= Rack::Utils.escape_html(api_type.to_s) %>&ids[]=' + ids.join('&ids[]='));
             this.compareData = await response.json();
         } catch (e) {
             console.error('Compare error:', e);

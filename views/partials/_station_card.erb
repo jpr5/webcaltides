@@ -49,7 +49,7 @@
         <div class="p-3 md:p-4">
             <!-- Station Name (full width on its own row) -->
             <h3 class="text-lg md:text-xl font-semibold text-white leading-tight mb-3">
-                <%= station.name %>
+                <%= Rack::Utils.escape_html(station.name) %>
             </h3>
 
             <!-- Map, Details, and Source selectors row -->
@@ -57,16 +57,16 @@
                 <!-- Mini Map Thumbnail (clickable to Google Maps) -->
                 <% google_maps_url = "https://www.google.com/maps?q=#{station.lat},#{station.lon}" %>
                 <% if map_url %>
-                <a href="<%= google_maps_url %>" target="_blank" rel="noopener"
+                <a href="<%= Rack::Utils.escape_html(google_maps_url) %>" target="_blank" rel="noopener"
                    class="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden bg-navy-700/50 relative block hover:ring-2 hover:ring-<%= theme[:accent] %>-500/50 transition-all"
                    title="Open in Google Maps"
                    x-data="{ mapError: false }"
                    x-intersect.once="mapLoaded = true">
                     <template x-if="mapLoaded && !mapError">
                         <img
-                            src="<%= map_url %>"
+                            src="<%= Rack::Utils.escape_html(map_url.to_s) %>"
                             @error="mapError = true"
-                            alt="Map of <%= station.name %>"
+                            alt="Map of <%= Rack::Utils.escape_html(station.name) %>"
                             class="w-full h-full object-cover"
                             loading="lazy"
                         />
@@ -85,7 +85,7 @@
                 </a>
                 <% else %>
                 <!-- No map service configured - show placeholder (still clickable) -->
-                <a href="<%= google_maps_url %>" target="_blank" rel="noopener"
+                <a href="<%= Rack::Utils.escape_html(google_maps_url) %>" target="_blank" rel="noopener"
                    class="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden bg-navy-700/50 relative block hover:ring-2 hover:ring-<%= theme[:accent] %>-500/50 transition-all"
                    title="Open in Google Maps">
                     <div class="w-full h-full flex items-center justify-center">
@@ -102,7 +102,7 @@
 
                 <!-- Station Details -->
                 <div class="flex-1 min-w-0">
-                    <p class="text-slate-500 text-sm truncate mb-1"><%= station.region %></p>
+                    <p class="text-slate-500 text-sm truncate mb-1"><%= Rack::Utils.escape_html(station.region.to_s) %></p>
 
                     <% if type == :current && station.respond_to?(:depth) && station.depth %>
                     <% has_depth_selector = defined?(has_multiple_depths) && has_multiple_depths %>
