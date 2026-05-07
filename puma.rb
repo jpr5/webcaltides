@@ -10,9 +10,10 @@ log_requests false # controlled from sinatra, don't want dupe
 workers 0
 threads 4, 10
 
-# Ensure Puma completes shutdown before Railway's SIGKILL timeout (~10s).
-# Without this, Puma may hang on in-flight requests or background threads,
-# get SIGKILL'd, exit 137, and Railway reports "Deploy Crashed".
+# Puma 6.x defaults raise_exception_on_sigterm to true, which raises a
+# SignalException after graceful stop. Ruby then exits 143 (128+SIGTERM),
+# and Railway interprets any non-zero exit as "Deploy Crashed".
+raise_exception_on_sigterm false
 force_shutdown_after 5
 
 if env == "production" || env == "staging"
