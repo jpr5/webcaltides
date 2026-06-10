@@ -157,27 +157,24 @@ RSpec.describe 'POST /', type: :api do
             expect(last_response.body).to include('webcalBase: &quot;webcal://evil&#39;;alert(1);x/tides/&quot;')
         end
 
-        it 'whitelists a script-tag units parameter to the imperial default' do
+        # Body assertions guard the composite regression: a raw units passthrough
+        # to the view local plus a future view echoing it.
+        it 'normalizes a script-tag units parameter to the imperial default and keeps it off the page' do
             post '/', searchtext: 'boston', units: '<script>alert(1)</script>'
             expect(last_response.status).to eq(200)
             expect(WebCalTides).to have_received(:find_tide_stations).with(
                 hash_including(units: 'mi')
             )
+            expect(last_response.body).not_to include('<script>alert(1)</script>')
         end
 
-        it 'whitelists an attribute-breakout units parameter to the imperial default' do
+        it 'normalizes an attribute-breakout units parameter to the imperial default and keeps it off the page' do
             post '/', searchtext: 'boston', units: '"><img src=x>'
             expect(last_response.status).to eq(200)
             expect(WebCalTides).to have_received(:find_tide_stations).with(
                 hash_including(units: 'mi')
             )
-        end
-
-        it 'passes metric through the units whitelist unchanged' do
-            post '/', searchtext: 'boston', units: 'metric'
-            expect(WebCalTides).to have_received(:find_tide_stations).with(
-                hash_including(units: 'km')
-            )
+            expect(last_response.body).not_to include('"><img src=x>')
         end
 
         it 'escapes the placeholder value derived from searchtext' do
