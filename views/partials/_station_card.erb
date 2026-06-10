@@ -9,8 +9,8 @@
     - index: Card index for animation delay
     - theme: Hash with :accent (color name), :text (text color class)
     - map_url: Google Maps static image URL
-    - webcal_base: Base URL for webcal links
-    - https_base: Base URL for https links
+    - webcal_base: Base URL for webcal links (HTML-escaped JS string literal)
+    - https_base: Base URL for https links (HTML-escaped JS string literal)
     - has_alternatives: boolean
     - alternatives: Array of alternative station objects (optional)
     - sources_json: JSON string of sources array
@@ -24,8 +24,8 @@
      x-data="stationCard({
          selectedSource: '<%= station_id %>',
          sources: <%= ERB::Util.html_escape(sources_json) %>,
-         webcalBase: '<%= webcal_base %>',
-         httpsBase: '<%= https_base %>',
+         webcalBase: <%= webcal_base %>,
+         httpsBase: <%= https_base %>,
          stationType: '<%= station_type %>'
      })"
      @click.away="resetSwipe()"

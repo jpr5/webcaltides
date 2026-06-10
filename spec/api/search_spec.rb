@@ -132,7 +132,27 @@ RSpec.describe 'POST /', type: :api do
         end
     end
 
-    describe 'XSS prevention via html_escape_once' do
+    describe 'XSS prevention' do
+        it 'escapes script tags in the searchtext tokens echoed in the results summary' do
+            post '/', searchtext: '<script>alert(1)</script>'
+            expect(last_response.status).to eq(200)
+            expect(last_response.body).not_to include('<script>alert(1)</script>')
+            expect(last_response.body).to include('&lt;script&gt;alert(1)&lt;/script&gt;')
+        end
+
+        it 'encodes webcal/https base URLs so a malicious Host header cannot break out of x-data' do
+            station = build_station
+            group = WebCalTides::StationGroup.new(primary: station, alternatives: [], deltas: nil)
+            allow(WebCalTides).to receive(:group_search_results).and_return([group], [])
+
+            header 'Host', "evil';alert(1);x"
+            post '/', searchtext: 'boston'
+
+            expect(last_response.status).to eq(200)
+            expect(last_response.body).not_to include("webcalBase: 'webcal://evil'")
+            expect(last_response.body).to include('webcalBase: &quot;webcal://evil&#39;;alert(1);x/tides/&quot;')
+        end
+
         it 'escapes script tags in units parameter' do
             post '/', searchtext: 'boston', units: '<script>alert(1)</script>'
             expect(last_response.status).to eq(200)
