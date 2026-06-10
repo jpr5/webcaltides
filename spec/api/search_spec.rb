@@ -61,6 +61,8 @@ RSpec.describe 'POST /', type: :api do
 
         it 'calls group_search_results separately for tides (no match_depth) and currents (match_depth: false)' do
             post '/', searchtext: 'boston'
+            # Exact kwargs (not hash_including) so this also asserts the tides
+            # call site passes NO match_depth key (see server.rb search handler)
             expect(WebCalTides).to have_received(:group_search_results).with(
                 anything, compute_deltas: false
             ).once
@@ -208,8 +210,12 @@ RSpec.describe 'POST /', type: :api do
         it 'returns 200 for benign search terms and renders the results summary' do
             post '/', searchtext: 'boston', units: 'imperial'
             expect(last_response.status).to eq(200)
-            expect(last_response.body).to include('Showing results for')
-            expect(last_response.body).to include('boston')
+            # Anchor on the summary span markup (views/index.erb) so the search
+            # text echoed into the form placeholder attribute cannot satisfy
+            # this assertion when the summary renders nothing
+            expect(last_response.body).to include(
+                'Showing results for "<span class="text-white font-medium">boston</span>"'
+            )
         end
     end
 
