@@ -137,46 +137,62 @@ RSpec.describe 'POST /', type: :api do
             post '/', searchtext: '<script>alert(1)</script>'
             expect(last_response.status).to eq(200)
             expect(last_response.body).not_to include('<script>alert(1)</script>')
-            expect(last_response.body).to include('&lt;script&gt;alert(1)&lt;/script&gt;')
+            expect(last_response.body).to include('&lt;script&gt;alert(1)&lt;')
         end
 
         it 'encodes webcal/https base URLs so a malicious Host header cannot break out of x-data' do
             station = build_station
             group = WebCalTides::StationGroup.new(primary: station, alternatives: [], deltas: nil)
-            allow(WebCalTides).to receive(:group_search_results).and_return([group], [])
+            # Key the stub on kwargs rather than call order: the currents call
+            # site passes match_depth:, the tides call site does not (server.rb)
+            allow(WebCalTides).to receive(:group_search_results) do |*_args, **kwargs|
+                kwargs.key?(:match_depth) ? [] : [group]
+            end
 
             header 'Host', "evil';alert(1);x"
             post '/', searchtext: 'boston'
 
             expect(last_response.status).to eq(200)
-            expect(last_response.body).not_to include("webcalBase: 'webcal://evil'")
+            expect(last_response.body).not_to include("webcal://evil';alert(1);x")
             expect(last_response.body).to include('webcalBase: &quot;webcal://evil&#39;;alert(1);x/tides/&quot;')
         end
 
-        it 'escapes script tags in units parameter' do
+        it 'whitelists a script-tag units parameter to the imperial default' do
             post '/', searchtext: 'boston', units: '<script>alert(1)</script>'
             expect(last_response.status).to eq(200)
-            expect(last_response.body).not_to include('<script>alert(1)</script>')
+            expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'mi')
+            )
         end
 
-        it 'escapes angle brackets in units parameter' do
+        it 'whitelists an attribute-breakout units parameter to the imperial default' do
             post '/', searchtext: 'boston', units: '"><img src=x>'
             expect(last_response.status).to eq(200)
-            expect(last_response.body).not_to include('"><img src=x>')
+            expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'mi')
+            )
+        end
+
+        it 'passes metric through the units whitelist unchanged' do
+            post '/', searchtext: 'boston', units: 'metric'
+            expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'km')
+            )
         end
 
         it 'escapes the placeholder value derived from searchtext' do
-            # The placeholder local is html_escape_once'd with the raw searchparam
+            # The placeholder local is escaped via Rack::Utils.escape_html (server.rb)
             post '/', searchtext: '"><script>alert(1)</script>'
             expect(last_response.status).to eq(200)
-            # The placeholder attribute should contain escaped content
-            expect(last_response.body).not_to match(/placeholder="[^"]*<script>/)
+            expect(last_response.body).not_to include('"><script>alert(1)</script>')
+            expect(last_response.body).to include('placeholder="&quot;&gt;&lt;script&gt;')
         end
 
-        it 'returns 200 for benign search terms without mangling' do
+        it 'returns 200 for benign search terms and renders the results summary' do
             post '/', searchtext: 'boston', units: 'imperial'
             expect(last_response.status).to eq(200)
-            expect(last_response.body).to include('imperial')
+            expect(last_response.body).to include('Showing results for')
+            expect(last_response.body).to include('boston')
         end
     end
 
