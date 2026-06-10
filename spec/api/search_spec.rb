@@ -59,9 +59,14 @@ RSpec.describe 'POST /', type: :api do
             )
         end
 
-        it 'calls group_search_results for tide and current results' do
+        it 'calls group_search_results separately for tides (no match_depth) and currents (match_depth: false)' do
             post '/', searchtext: 'boston'
-            expect(WebCalTides).to have_received(:group_search_results).twice
+            expect(WebCalTides).to have_received(:group_search_results).with(
+                anything, compute_deltas: false
+            ).once
+            expect(WebCalTides).to have_received(:group_search_results).with(
+                anything, hash_including(match_depth: false)
+            ).once
         end
     end
 
@@ -106,11 +111,17 @@ RSpec.describe 'POST /', type: :api do
             expect(WebCalTides).to have_received(:find_tide_stations).with(
                 hash_including(units: 'mi')
             )
+            expect(WebCalTides).to have_received(:find_current_stations).with(
+                hash_including(units: 'mi')
+            )
         end
 
         it 'defaults to imperial units when units param is absent' do
             post '/', searchtext: 'boston'
             expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'mi')
+            )
+            expect(WebCalTides).to have_received(:find_current_stations).with(
                 hash_including(units: 'mi')
             )
         end
@@ -137,7 +148,11 @@ RSpec.describe 'POST /', type: :api do
             post '/', searchtext: '<script>alert(1)</script>'
             expect(last_response.status).to eq(200)
             expect(last_response.body).not_to include('<script>alert(1)</script>')
-            expect(last_response.body).to include('&lt;script&gt;alert(1)&lt;')
+            # Anchor on the results-summary markup so the escaped echo in the
+            # search-form placeholder attribute cannot satisfy this assertion
+            expect(last_response.body).to include(
+                'Showing results for "<span class="text-white font-medium">&lt;script&gt;alert(1)&lt;/script&gt;</span>"'
+            )
         end
 
         it 'encodes webcal/https base URLs so a malicious Host header cannot break out of x-data' do
@@ -155,6 +170,11 @@ RSpec.describe 'POST /', type: :api do
             expect(last_response.status).to eq(200)
             expect(last_response.body).not_to include("webcal://evil';alert(1);x")
             expect(last_response.body).to include('webcalBase: &quot;webcal://evil&#39;;alert(1);x/tides/&quot;')
+            # https_base is built from the same Host header on a separate line in
+            # views/index.erb, so pin its encoding independently of webcal_base
+            # (scheme is http:// under rack-test)
+            expect(last_response.body).not_to include("http://evil';alert(1);x")
+            expect(last_response.body).to include('httpsBase: &quot;http://evil&#39;;alert(1);x/tides/&quot;')
         end
 
         # Body assertions guard the composite regression: a raw units passthrough
