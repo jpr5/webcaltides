@@ -298,9 +298,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     uri.path = "/tides/"
                     uri.query = nil
                     uri.scheme = "webcal"
-                    webcal_base = uri.to_s
+                    # Host derives from the request URL (Host header), so encode as
+                    # HTML-escaped JS string literals before they reach x-data (XSS)
+                    webcal_base = ERB::Util.html_escape(uri.to_s.to_json)
                     uri.scheme = scheme
-                    https_base = uri.to_s
+                    https_base = ERB::Util.html_escape(uri.to_s.to_json)
                     card_id = "tide_#{r.id}"
                     # Build sources array for all cards (needed for dynamic URLs)
                     sources_json = ([r] + alternatives).map { |s|
@@ -349,9 +351,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     uri.path = "/currents/"
                     uri.query = nil
                     uri.scheme = "webcal"
-                    webcal_base = uri.to_s
+                    # Host derives from the request URL (Host header), so encode as
+                    # HTML-escaped JS string literals before they reach x-data (XSS)
+                    webcal_base = ERB::Util.html_escape(uri.to_s.to_json)
                     uri.scheme = scheme
-                    https_base = uri.to_s
+                    https_base = ERB::Util.html_escape(uri.to_s.to_json)
                     card_id = "current_#{r.bid}"
                     # Build sources array for all cards (needed for dynamic URLs)
                     # Include depth, publicId, and url for current stations to support depth selector

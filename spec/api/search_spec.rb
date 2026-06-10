@@ -59,9 +59,16 @@ RSpec.describe 'POST /', type: :api do
             )
         end
 
-        it 'calls group_search_results for tide and current results' do
+        it 'calls group_search_results separately for tides (no match_depth) and currents (match_depth: false)' do
             post '/', searchtext: 'boston'
-            expect(WebCalTides).to have_received(:group_search_results).twice
+            # Exact kwargs (not hash_including) so this also asserts the tides
+            # call site passes NO match_depth key (see server.rb search handler)
+            expect(WebCalTides).to have_received(:group_search_results).with(
+                anything, compute_deltas: false
+            ).once
+            expect(WebCalTides).to have_received(:group_search_results).with(
+                anything, hash_including(match_depth: false)
+            ).once
         end
     end
 
@@ -106,11 +113,17 @@ RSpec.describe 'POST /', type: :api do
             expect(WebCalTides).to have_received(:find_tide_stations).with(
                 hash_including(units: 'mi')
             )
+            expect(WebCalTides).to have_received(:find_current_stations).with(
+                hash_including(units: 'mi')
+            )
         end
 
         it 'defaults to imperial units when units param is absent' do
             post '/', searchtext: 'boston'
             expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'mi')
+            )
+            expect(WebCalTides).to have_received(:find_current_stations).with(
                 hash_including(units: 'mi')
             )
         end
@@ -132,31 +145,77 @@ RSpec.describe 'POST /', type: :api do
         end
     end
 
-    describe 'XSS prevention via html_escape_once' do
-        it 'escapes script tags in units parameter' do
+    describe 'XSS prevention' do
+        it 'escapes script tags in the searchtext tokens echoed in the results summary' do
+            post '/', searchtext: '<script>alert(1)</script>'
+            expect(last_response.status).to eq(200)
+            expect(last_response.body).not_to include('<script>alert(1)</script>')
+            # Anchor on the results-summary markup so the escaped echo in the
+            # search-form placeholder attribute cannot satisfy this assertion
+            expect(last_response.body).to include(
+                'Showing results for "<span class="text-white font-medium">&lt;script&gt;alert(1)&lt;/script&gt;</span>"'
+            )
+        end
+
+        it 'encodes webcal/https base URLs so a malicious Host header cannot break out of x-data' do
+            station = build_station
+            group = WebCalTides::StationGroup.new(primary: station, alternatives: [], deltas: nil)
+            # Key the stub on kwargs rather than call order: the currents call
+            # site passes match_depth:, the tides call site does not (server.rb)
+            allow(WebCalTides).to receive(:group_search_results) do |*_args, **kwargs|
+                kwargs.key?(:match_depth) ? [] : [group]
+            end
+
+            header 'Host', "evil';alert(1);x"
+            post '/', searchtext: 'boston'
+
+            expect(last_response.status).to eq(200)
+            expect(last_response.body).not_to include("webcal://evil';alert(1);x")
+            expect(last_response.body).to include('webcalBase: &quot;webcal://evil&#39;;alert(1);x/tides/&quot;')
+            # https_base is built from the same Host header on a separate line in
+            # views/index.erb, so pin its encoding independently of webcal_base
+            # (scheme is http:// under rack-test)
+            expect(last_response.body).not_to include("http://evil';alert(1);x")
+            expect(last_response.body).to include('httpsBase: &quot;http://evil&#39;;alert(1);x/tides/&quot;')
+        end
+
+        # Body assertions guard the composite regression: a raw units passthrough
+        # to the view local plus a future view echoing it.
+        it 'normalizes a script-tag units parameter to the imperial default and keeps it off the page' do
             post '/', searchtext: 'boston', units: '<script>alert(1)</script>'
             expect(last_response.status).to eq(200)
+            expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'mi')
+            )
             expect(last_response.body).not_to include('<script>alert(1)</script>')
         end
 
-        it 'escapes angle brackets in units parameter' do
+        it 'normalizes an attribute-breakout units parameter to the imperial default and keeps it off the page' do
             post '/', searchtext: 'boston', units: '"><img src=x>'
             expect(last_response.status).to eq(200)
+            expect(WebCalTides).to have_received(:find_tide_stations).with(
+                hash_including(units: 'mi')
+            )
             expect(last_response.body).not_to include('"><img src=x>')
         end
 
         it 'escapes the placeholder value derived from searchtext' do
-            # The placeholder local is html_escape_once'd with the raw searchparam
+            # The placeholder local is escaped via Rack::Utils.escape_html (server.rb)
             post '/', searchtext: '"><script>alert(1)</script>'
             expect(last_response.status).to eq(200)
-            # The placeholder attribute should contain escaped content
-            expect(last_response.body).not_to match(/placeholder="[^"]*<script>/)
+            expect(last_response.body).not_to include('"><script>alert(1)</script>')
+            expect(last_response.body).to include('placeholder="&quot;&gt;&lt;script&gt;')
         end
 
-        it 'returns 200 for benign search terms without mangling' do
+        it 'returns 200 for benign search terms and renders the results summary' do
             post '/', searchtext: 'boston', units: 'imperial'
             expect(last_response.status).to eq(200)
-            expect(last_response.body).to include('imperial')
+            # Anchor on the summary span markup (views/index.erb) so the search
+            # text echoed into the form placeholder attribute cannot satisfy
+            # this assertion when the summary renders nothing
+            expect(last_response.body).to include(
+                'Showing results for "<span class="text-white font-medium">boston</span>"'
+            )
         end
     end
 
