@@ -1162,8 +1162,10 @@ module WebCalTides
         (Date.parse(from)..Date.parse(to)).each do |date|
             tz      = timezone_for(station.lat, station.lon, station)
             calc    = SolarEventCalculator.new(date, station.lat, station.lon)
-            sunrise = calc.compute_official_sunrise(tz)
-            sunset  = calc.compute_official_sunset(tz)
+            # No sunrise or sunset during polar night or midnight sun.  RubySunrise returns nil
+            # for the UTC time then, but its timezone conversion raises on nil, so check first.
+            sunrise = calc.compute_official_sunrise(tz) if calc.compute_utc_official_sunrise
+            sunset  = calc.compute_official_sunset(tz)  if calc.compute_utc_official_sunset
 
             # I dunno why tzid: GMT is correct vs. tzid: tz, but it works..
             cal.event do |e|
@@ -1171,14 +1173,14 @@ module WebCalTides
                 e.dtstart  = Icalendar::Values::DateTime.new(sunrise, tzid: 'GMT')
                 e.dtend    = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
                 e.location = location if location
-            end
+            end if sunrise
 
             cal.event do |e|
                 e.summary  = "Sunset"
                 e.dtstart  = Icalendar::Values::DateTime.new(sunset, tzid: 'GMT')
                 e.dtend    = Icalendar::Values::DateTime.new(e.dtstart, tzid: 'GMT')
                 e.location = location if location
-            end
+            end if sunset
         end
 
         logger.info "solar calendar for #{from}-#{to} generated with #{cal.events.length} events"
