@@ -130,6 +130,33 @@ class Server < ::Sinatra::Base
                 nil  # No map service configured - will show placeholder
             end
         end
+
+        # Parse an .ics ?date= value: YYYYMMDD only, as a UTC-midnight Time (downstream calls
+        # date.utc and the data loaders call around.utc).  Returns nil when malformed or outside
+        # [start of the month a year back, end of the month two years ahead] -- the bound keeps
+        # arbitrary years from reaching upstream fetches or leaving per-month cache files that
+        # cleanup (which only reclaims past 20xx month stamps) never removes.  Shift by years
+        # before snapping to the month edge, so a Feb 10 now reaches Feb 29 two years out.
+        def ics_date(raw)
+            return nil unless raw.is_a?(String) && raw.match?(/\A\d{8}\z/)
+
+            date = Date.strptime(raw, '%Y%m%d').to_time(:utc)
+            now  = Time.current.utc
+
+            date if date.between?((now - 1.year).beginning_of_month, (now + 2.years).end_of_month)
+        rescue Date::Error
+            nil
+        end
+
+        # Log at most a short prefix of the raw value: it is caller-controlled and may be a long
+        # string or a nested hash/array (date[]=, date[k]=v).
+        def reject_ics_date(raw)
+            shown = raw.inspect
+            shown = "#{shown[0, 64]}... (#{shown.length} chars)" if shown.length > 64
+            $LOG.warn "rejecting .ics date #{shown} for #{params[:type]}/#{params[:station]} (not YYYYMMDD or outside the window)"
+            content_type :text
+            halt 422, "date must be YYYYMMDD, from the start of the month a year ago to the end of the month two years ahead\n"
+        end
     end
 
     ##
@@ -358,10 +385,10 @@ class Server < ::Sinatra::Base
     get "/:type/:station.ics" do
         type       = params[:type].tap { |type| type.in?(%w[tides currents]) or halt 404 }
         id         = params[:station].tap { |station| station.in?(WebCalTides.station_ids) or halt 404 }
-        # e.g. 20231201, for utility but unsupported in UI.  Downstream expects a UTC Time
-        # (date.utc below, around.utc in the data loaders), so convert the parsed Date to
-        # UTC midnight.  Unparseable values fall back to now.
-        date       = Date.parse(params[:date]).then { |d| Time.utc(d.year, d.month, d.day) } rescue Time.current.utc
+        # ?date=YYYYMMDD, for utility but unsupported in UI.  Absent or empty means now; anything
+        # else that is malformed (including whitespace) or out of the window is rejected with 422.
+        # The window moves with now, so a subscription URL with a fixed date= starts getting 422.
+        date       = params[:date].in?([nil, '']) ? Time.current.utc : ics_date(params[:date]) || reject_ics_date(params[:date])
         units      = params.fetch(:units, 'imperial').tap { |units| units.in?(%w[imperial metric]) or halt 422 }
         no_solar   = params[:solar].in?(%w[0 false]) # on by default
         add_lunar  = params[:lunar].in?(%w[1 true])  # off by default
