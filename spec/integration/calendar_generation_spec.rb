@@ -309,6 +309,37 @@ RSpec.describe WebCalTides do
         end
     end
 
+    describe '.tide_calendar_for with imi (Marine Institute) provider' do
+        let(:station) do
+            build_station(name: 'Dublin Port', id: 'IE__Dublin_Port', public_id: 'Dublin_Port', provider: 'imi',
+                          lat: 53.34574, lon: -6.22166, location: 'Dublin Port, Co. Dublin, Ireland', region: 'Ireland',
+                          url: Clients::MarineInstituteTides::HOME_URL)
+        end
+
+        # MI ERDDAP, Dublin Port: 2026-10-07T09:05:00Z HIGH 1.329 and 14:40Z LOW -1.184 m OD Malin;
+        # +2.458 m to chart datum
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 3.79, time: DateTime.new(2026, 10, 7, 9, 5), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: 1.27, time: DateTime.new(2026, 10, 7, 14, 40), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        it 'names the calendar with the station name as MI publishes it' do
+            ['Dublin Port', 'Ringaskiddy NMCI', 'Dún Laoghaire'].each do |name|
+                allow(described_class).to receive(:tide_station_for).and_return(station.dup.tap { |s| s.name = name })
+
+                calendar = described_class.tide_calendar_for('IE__Dublin_Port', units: 'metric')
+                expect(calendar.x_wr_calname.first.value).to eq(name)
+            end
+        end
+    end
+
     describe '.current_calendar_for' do
         let(:station) do
             build_station(

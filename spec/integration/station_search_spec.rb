@@ -25,6 +25,33 @@ RSpec.describe WebCalTides do
         end
     end
 
+    describe '.find_tide_stations with Marine Institute stations' do
+        let(:imi) do
+            VCR.use_cassette('Clients_MarineInstituteTides/stationlist', record: :none) do
+                Clients::MarineInstituteTides.new(Logger.new('/dev/null')).tide_stations
+            end
+        end
+        let(:ticon)  { build_station(name: 'Dublin Port, IRL', id: 'Tc4beed3', region: 'IRL', public_id: 'Tc4beed3', provider: 'ticon') }
+        let(:noaa)   { build_station(name: 'CORKSCREW SLOUGH,S.F.BAY', id: '9414505', region: 'San Francisco Bay', public_id: '9414505') }
+
+        before { allow(described_class).to receive(:tide_stations).and_return([noaa] + imi + [ticon]) }
+
+        def ids(*tokens)
+            described_class.find_tide_stations(by: tokens).map(&:id)
+        end
+
+        it 'finds a station by name, by common spelling, and by county' do
+            expect(ids('killybegs')).to eq(['IE__Killybegs'])
+            expect(ids('buncrana')).to eq(['IE__Buncranna'])
+            expect(ids('cork', 'ireland')).to eq(%w[IE__Ballycotton IE__Castletownbere IE__Crosshaven IE__Kinsale IE__Ringaskiddy IE__Union_Hall])
+        end
+
+        it 'finds the MI station alongside TICON with an "IRL" qualifier, and with "Ireland"' do
+            expect(ids('dublin', 'port', 'irl')).to eq(['IE__Dublin_Port', 'Tc4beed3'])
+            expect(ids('dublin', 'port', 'ireland')).to eq(['IE__Dublin_Port'])
+        end
+    end
+
     describe '.find_tide_stations' do
         before do
             # Mock the tide_stations method to return predictable test data
