@@ -3,7 +3,7 @@
 RSpec.describe Models::TideData do
     describe '.version' do
         it 'returns the current version number' do
-            expect(described_class.version).to eq(1)
+            expect(described_class.version).to eq(2)
         end
     end
 
@@ -80,7 +80,9 @@ RSpec.describe Models::TideData do
                 'prediction' => 8.75,
                 'time' => '2025-07-04T14:00:00+00:00',
                 'url' => 'https://example.com/tide',
-                'units' => 'm'
+                'units' => 'm',
+                'dataset_year' => 2025,
+                'notes' => ['Keine Gezeitenhöhen verfügbar']
             }
 
             tide = described_class.from_hash(original)
@@ -92,6 +94,8 @@ RSpec.describe Models::TideData do
             expect(restored.type).to eq(tide.type)
             expect(restored.prediction).to eq(tide.prediction)
             expect(restored.units).to eq(tide.units)
+            expect(restored.dataset_year).to eq(2025)
+            expect(restored.notes).to eq(['Keine Gezeitenhöhen verfügbar'])
             expect(restored.time.year).to eq(tide.time.year)
             expect(restored.time.month).to eq(tide.time.month)
             expect(restored.time.day).to eq(tide.time.day)
