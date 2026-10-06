@@ -218,7 +218,8 @@ module Clients
                 logger.warn "omitting heights of Kartverket data for station #{station.id}: unexpected datum #{datum.inspect} or unit #{unit.inspect}"
             end
 
-            skipped = []
+            skipped   = []
+            no_height = 0
             tides = Array(data&.xpath('waterlevel')).filter_map do |wl|
                 type   = TIDE_TYPES[wl['flag']]
                 time   = parse_timestamp(wl['time']) if type
@@ -228,6 +229,8 @@ module Clients
                     skipped << wl
                     next
                 end
+
+                no_height += 1 if heights && height.nil?
 
                 Models::TideData.new(
                     type: type,
@@ -240,6 +243,10 @@ module Clients
 
             if skipped.any?
                 logger.warn "skipping #{skipped.length} Kartverket events for station #{station.id} with unknown flag or bad timestamp, e.g. #{skipped.first.to_s[0, 200]}"
+            end
+
+            if no_height > 0
+                logger.warn "keeping #{no_height} Kartverket events for station #{station.id} without a usable height"
             end
 
             tides = tides.select { |td| td.time >= from && td.time <= to }.sort_by(&:time)

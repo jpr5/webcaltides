@@ -205,6 +205,15 @@ RSpec.describe Clients::KartverketTides do
                 expect(log.string).to match(/^WARN .*skipping 2 Kartverket events for station NO__TST/)
             end
 
+            it 'keeps events without a usable height, with one warning that counts them' do
+                data = fetch(locationdata(wl('2027-01-01T01:13:00+00:00'), wl('2027-01-01T07:25:00+00:00', flag: 'low', value: ''),
+                                          wl('2027-01-01T13:40:00+00:00', value: 'n/a')))
+
+                expect(data.map(&:prediction)).to eq([1.5, nil, nil])
+                expect(log.string.scan(/^WARN .*Kartverket/).length).to eq(1)
+                expect(log.string).to match(/^WARN .*2 Kartverket events for station NO__TST without a usable height/)
+            end
+
             it 'omits heights, with a warning, when they are not in cm above chart datum' do
                 data = fetch(locationdata(wl('2027-01-01T01:13:00+00:00'), datum: 'MSL'))
 
