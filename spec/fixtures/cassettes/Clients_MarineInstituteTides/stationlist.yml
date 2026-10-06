@@ -1,0 +1,63 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://erddap.marine.ie/erddap/tabledap/IMI_TidePrediction_HighLow.csv?distinct()&stationID,longitude,latitude
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - erddap.marine.ie
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 200
+      message: ''
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Tue, 06 Oct 2026 20:12:45 GMT
+      Content-Type:
+      - text/csv;charset=ISO-8859-1
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Strict-Transport-Security:
+      - max-age=0
+      - max-age=63072000; includeSubdomains
+      X-Frame-Options:
+      - DENY
+      - SAMEORIGIN
+      X-Content-Type-Options:
+      - nosniff
+      - nosniff
+      Last-Modified:
+      - Tue, 06 Oct 2026 20:12:40 GMT
+      Xdods-Server:
+      - dods/3.7
+      Erddap-Server:
+      - '2.14'
+      Content-Disposition:
+      - attachment;filename=IMI_TidePrediction_HighLow_5589_1f0d_158a.csv
+      Content-Encoding:
+      - gzip
+    body:
+      encoding: ASCII-8BIT
+      string: !binary |-
+        H4sIAAAAAAAAAE2Ty27bMBBF9/wWWeBr+FjGCdoESdEiaZGlQVuMJJghAVKO678vh3KC7iRezuOeGZbFLXOKD3ddSHGcl9Pgu1CP8IN0gx+z92XnXVm+fmLKy0RuDtMcwu6hBBeHbsNozyhTHYjeAufkJrv4nrLvNqaXFhTvQPbWWFWVY0jnbqN6JoEL1gHvteVUKrJ1IVwOaVlSxDhKqe6A9YZrfRXH4ErpNrY3FhNyEGSb3WV37/I+nTJmpZYybIMzy8j2FA+1k+i6je6lkoxDB9AzrhTT5NblPI9uSmHBnMowjt2AVVC1sgS/pHPce7Rhe0uFxHaUrC5ug8v+y30VpRRY1VBmyW1OpUzuwzcbXDKGcVpbSe7mOAbfeFVXotVjwvKqnPZhjrtflS7a4JyphlNI0KjG0eUPF9EIAG/YqNIclRW06q1tMTWj1CDJNx/nZswoKfGYa8Yt+e7C2V3wnEptWw2ujAVyn87L1BAq08wIy6QhD3Eu01qiMmr3Kz/yWMfv8n/okdC6AUqwVb/s/ViQgbCyDUwJJVHJpzJhBFBODbZWQ+q4HudYXFiXRqoGW2tNntw0x0MLEMZavG8ZI09+WXx+y+5wbECpMAbLg+Hkh0OY994NCEwIiaihF5opQ5Dx7meefbiS1qz51XVBLXmuI3LlOA/DpbVO29SNJM8pRTdOq1MpeQtRXEBVSqnjxnzVk+IUrliVraRQxXXBYrUTo9rwONSNfzn6uoK+tOdADWN6NQDkJcxjwvqg1l0X+EJ+p/cdrt7R77Z5Hka/GtDiOjBZ2xH1Vp3L526anlnVzHOghvyJ9bnXoYXWKxMC0B2AJa/+71vKA2aUYBplIQxw8jofPp8sZVw3/MZY8g9GV/hwPAQAAA==
+  recorded_at: Tue, 06 Oct 2026 20:12:46 GMT
+recorded_with: VCR 6.4.0

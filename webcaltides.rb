@@ -17,6 +17,7 @@ require_relative 'clients/chs_tides'
 require_relative 'clients/bsh_tides'
 require_relative 'clients/kartverket_tides'
 require_relative 'clients/linz_tides'
+require_relative 'clients/marine_institute_tides'
 require_relative 'clients/noaa_currents'
 require_relative 'clients/harmonics'
 require_relative 'clients/lunar'
@@ -43,11 +44,11 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ) are preferred over harmonic-based
-    # predictions.  NOAA and CHS do have nearby stations along the US/Canada border, so their order
-    # matters there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).  BSH
-    # (Germany), Kartverket (Norway) and LINZ (New Zealand) overlap none of the other agency
-    # sources, so their positions among them have no effect.
+    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ, Marine Institute) are preferred over
+    # harmonic-based predictions.  NOAA and CHS do have nearby stations along the US/Canada border,
+    # so their order matters there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).
+    # BSH (Germany), Kartverket (Norway), LINZ (New Zealand) and the Marine Institute (Ireland)
+    # overlap none of the other agency sources, so their positions among them have no effect.
     #
     # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
     # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
@@ -74,10 +75,19 @@ module WebCalTides
     # beyond STATION_GROUPING_DISTANCE_M, so search shows the LINZ and TICON stations as separate
     # cards there.
     #
+    # Marine Institute vs TICON (Oct 2026): 25 TICON Irish stations are within 2 km of MI stations
+    # (most at the same coordinates), and MI publishes the predictions itself.  Over October 2026
+    # (120 events per station, app feed vs MI's ERDDAP high/low times), TICON's largest difference
+    # was 54 min at Dublin Port, 44 min at Ringaskiddy and Howth, 37 min at Skerries, 32 min at
+    # Killybegs and 26 min at Galway, with no event matching to the minute.  So MI wins where the
+    # two are grouped, and TICON remains an alternative: at 21 of the 25 (0-194 m apart).  The other
+    # 4 (Inishmore, Malin Head, River Tolka, the second Sligo) are 0.5-1.4 km from the MI station,
+    # beyond STATION_GROUPING_DISTANCE_M, so search shows them as separate cards there.
+    #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -136,6 +146,9 @@ module WebCalTides
         /chatham island/i => 'Pacific/Chatham',
         /scott base/i => 'Antarctica/McMurdo',
         /new zealand/i => 'Pacific/Auckland',
+        # Marine Institute stations ("Howth, Co. Dublin, Ireland"); not Bermuda's "Ireland Island"
+        # or Northern Ireland
+        /(?<!northern )\bireland\z/i => 'Europe/Dublin',
         /uk|england|wales|scotland/i => 'Europe/London',
         /japan/i => 'Asia/Tokyo'
     }.freeze
@@ -179,6 +192,7 @@ module WebCalTides
                 bsh:   Clients::BshTides.new(logger),
                 kartverket: Clients::KartverketTides.new(logger),
                 linz:  Clients::LinzTides.new(logger),
+                imi:   Clients::MarineInstituteTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
@@ -790,17 +804,20 @@ module WebCalTides
         data    = tide_data_for(station, around: around) or return nil
 
         cal = Icalendar::Calendar.new
-        # Kartverket and LINZ names are already properly cased; titleize would mangle them
+        # Kartverket, LINZ and Marine Institute names are already properly cased; titleize would mangle them
         # ("Ny-Ålesund" to "Ny ålesund", "Port Ōhope Wharf" to "Port ōhope Wharf", "Waitangi - Chatham Island" loses its dash)
-        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz']) ? station.name : station.name.titleize
+        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz', 'imi']) ? station.name : station.name.titleize
 
         if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
-        # BSH and Kartverket terms require, and LINZ's terms ask for, the source credit in every
-        # presentation, so on the feed and every event
-        credited = { 'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides, 'linz' => Clients::LinzTides }[station.provider]
+        # BSH, Kartverket and Marine Institute terms require, and LINZ's terms ask for, the source
+        # credit in every presentation, so on the feed and every event
+        credited = {
+            'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides, 'linz' => Clients::LinzTides,
+            'imi' => Clients::MarineInstituteTides
+        }[station.provider]
         if credited
             caldesc = credited.feed_description(data)
             cal.description = caldesc
@@ -810,8 +827,8 @@ module WebCalTides
         if data
             data.each do |tide|
                 # Times without heights: BSH gauges that publish times only, Kartverket data with an
-                # unexpected datum, unit or height value, and LINZ windows with a year file whose
-                # units line doesn't say metres
+                # unexpected datum, unit or height value, LINZ windows with a year file whose units
+                # line doesn't say metres, and Marine Institute stations without a chart datum offset
                 title = if tide.prediction.nil?
                     "#{tide.type} Tide"
                 else

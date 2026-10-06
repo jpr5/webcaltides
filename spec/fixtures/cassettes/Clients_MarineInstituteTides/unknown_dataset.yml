@@ -1,0 +1,63 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://erddap.marine.ie/erddap/tabledap/IMI_TidePrediction_HighLow_GONE.csv?stationID=%22Dublin_Port%22&time,stationID,tide_time_category,Water_Level_ODMalin&time%3C=2027-09-30T23:59:59Z&time%3E=2026-09-01T00:00:00Z
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - erddap.marine.ie
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 404
+      message: ''
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Tue, 06 Oct 2026 21:03:30 GMT
+      Content-Type:
+      - text/plain;charset=UTF-8
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Strict-Transport-Security:
+      - max-age=0
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Content-Type-Options:
+      - nosniff
+      Last-Modified:
+      - Tue, 06 Oct 2026 21:03:26 GMT
+      Xdods-Server:
+      - dods/3.7
+      Erddap-Server:
+      - '2.14'
+      Content-Description:
+      - dods-error
+      Content-Encoding:
+      - identity
+    body:
+      encoding: UTF-8
+      string: |
+        Error {
+            code=404;
+            message="Not Found: Currently unknown datasetID=IMI_TidePrediction_HighLow_GONE";
+        }
+  recorded_at: Tue, 06 Oct 2026 12:00:00 GMT
+recorded_with: VCR 6.4.0

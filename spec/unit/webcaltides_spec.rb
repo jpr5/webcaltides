@@ -128,6 +128,30 @@ RSpec.describe WebCalTides do
                 end
             end
         end
+
+        context 'when the lookup fails for a Marine Institute station' do
+            before { allow(Timezone).to receive(:lookup).and_raise(StandardError, 'lookup down') }
+
+            {
+                ['Dublin Port',     'Dublin Port, Co. Dublin, Ireland',  53.34574, -6.22166] => 'Europe/Dublin',
+                ['Killary Harbour', 'Killary Harbour, Ireland',          53.6316,  -9.9016]  => 'Europe/Dublin',
+                ['Tory Island',     'Tory Island, Co. Donegal, Ireland', 55.2508,  -8.1962]  => 'Europe/Dublin'
+            }.each do |(name, location, lat, lon), zone|
+                it "falls back to #{zone} for #{name} and caches it" do
+                    station = build_station(name: name, region: 'Ireland', location: location, lat: lat, lon: lon, provider: 'imi')
+                    expect(WebCalTides.timezone_for(lat, lon, station)).to eq(zone)
+                    expect(WebCalTides.timezone_for(lat, lon)).to eq(zone)
+                end
+            end
+
+            it "does not give Bermuda's Ireland Island or a Northern Ireland station Irish time" do
+                bermuda = build_station(name: 'Ireland Island', region: 'Bermuda Islands', location: 'Ireland Island, Bermuda Islands, ', lat: 32.3167, lon: -64.8333)
+                belfast = build_station(name: 'Belfast', region: 'Northern Ireland', location: 'Belfast, Northern Ireland', lat: 54.6, lon: -5.9)
+
+                expect(WebCalTides.timezone_for(32.3167, -64.8333, bermuda)).not_to eq('Europe/Dublin')
+                expect(WebCalTides.timezone_for(54.6, -5.9, belfast)).not_to eq('Europe/Dublin')
+            end
+        end
     end
 
     describe '#timezone_from_region' do

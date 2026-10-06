@@ -1,0 +1,63 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://erddap.marine.ie/erddap/tabledap/IMI_TidePrediction_HighLow.csv?stationID=%22Dublin_Port%22&time,stationID,tide_time_category,Water_Level_ODMalin&time%3C=2031-05-30T23:59:59Z&time%3E=2030-05-01T00:00:00Z
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - erddap.marine.ie
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 404
+      message: ''
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Tue, 06 Oct 2026 20:12:48 GMT
+      Content-Type:
+      - text/plain;charset=UTF-8
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Strict-Transport-Security:
+      - max-age=0
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Content-Type-Options:
+      - nosniff
+      Last-Modified:
+      - Tue, 06 Oct 2026 20:12:44 GMT
+      Xdods-Server:
+      - dods/3.7
+      Erddap-Server:
+      - '2.14'
+      Content-Description:
+      - dods-error
+      Content-Encoding:
+      - identity
+    body:
+      encoding: UTF-8
+      string: |
+        Error {
+            code=404;
+            message="Not Found: Your query produced no matching results. (nRows = 0)";
+        }
+  recorded_at: Sat, 01 Jun 2030 00:00:00 GMT
+recorded_with: VCR 6.4.0
