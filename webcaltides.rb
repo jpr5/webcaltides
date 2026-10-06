@@ -767,16 +767,30 @@ module WebCalTides
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
+        # BSH terms require the source credit in every presentation, so on the feed and every event
+        bsh = station.provider == 'bsh'
+        if bsh
+            caldesc = Clients::BshTides.feed_description(data)
+            cal.description = caldesc
+            cal.append_custom_property('X-WR-CALDESC', caldesc)
+        end
+
         if data
             data.each do |tide|
-                title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+                # Some BSH gauges publish times only, no heights
+                title = if tide.prediction.nil?
+                    "#{tide.type} Tide"
+                else
+                    "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+                end
 
                 cal.event do |e|
-                    e.summary  = title
-                    e.dtstart  = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
-                    e.dtend    = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
-                    e.url      = tide.url
-                    e.location = station.location
+                    e.summary     = title
+                    e.dtstart     = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                    e.dtend       = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                    e.url         = tide.url
+                    e.location    = station.location
+                    e.description = Clients::BshTides.event_description(tide) if bsh
                 end
             end
         end
