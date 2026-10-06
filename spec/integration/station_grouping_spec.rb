@@ -156,7 +156,7 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
     describe 'provider hierarchy' do
         it 'defines PROVIDER_HIERARCHY constant' do
-            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh kartverket xtide ticon])
+            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh kartverket linz xtide ticon])
         end
 
         it 'prefers NOAA over CHS' do
@@ -215,6 +215,21 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
         it 'registers Kartverket as a tide client' do
             expect(described_class.tide_clients(:kartverket)).to be_a(Clients::KartverketTides)
+        end
+
+        it 'prefers LINZ over TICON' do
+            # Auckland: LINZ port 070 and TICON T9162534 share the same (rounded) coordinates
+            linz  = build_station(provider: 'linz', id: 'NZ__auckland', lat: -36.85, lon: 174.7667)
+            ticon = build_station(provider: 'ticon', id: 'T9162534', lat: -36.85, lon: 174.767)
+
+            groups = described_class.group_stations_by_proximity([ticon, linz])
+            expect(groups.length).to eq(1)
+            expect(groups.first.primary.provider).to eq('linz')
+            expect(groups.first.alternatives.map(&:provider)).to eq(['ticon'])
+        end
+
+        it 'registers LINZ as a tide client' do
+            expect(described_class.tide_clients(:linz)).to be_a(Clients::LinzTides)
         end
 
         it 'prefers XTide over TICON' do

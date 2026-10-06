@@ -43,11 +43,11 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Official sources (NOAA, CHS, BSH, Kartverket) are preferred over harmonic-based predictions.
-    # NOAA and CHS do have nearby stations along the US/Canada border, so their order matters
-    # there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).  BSH (Germany) and
-    # Kartverket (Norway) overlap none of the other official sources, so their positions among
-    # the official sources have no effect.
+    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ) are preferred over harmonic-based
+    # predictions.  NOAA and CHS do have nearby stations along the US/Canada border, so their order
+    # matters there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).  BSH
+    # (Germany), Kartverket (Norway) and LINZ (New Zealand) overlap none of the other agency
+    # sources, so their positions among them have no effect.
     #
     # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
     # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
@@ -64,10 +64,20 @@ module WebCalTides
     # Stavanger, and no TICON event matched to the minute.
     # So Kartverket wins wherever it covers a gauge, and TICON remains an alternative.
     #
+    # LINZ vs TICON (Oct 2026): the 12 TICON New Zealand stations are within 2 km of LINZ standard
+    # ports, and LINZ publishes the port predictions itself.  Over September 2026 (116 events per
+    # port, app feed vs the LINZ CSV), TICON's largest difference was 17 min at Auckland, 16 min at
+    # Tauranga and 8 min at Lyttelton, with at most one event matching to the minute.  So LINZ wins
+    # where the two are grouped, and TICON remains an alternative: at 7 of the 12 (Auckland,
+    # Lyttelton, Marsden Point, Napier, Taranaki, Tauranga, Wellington; 24-42 m apart).  The other
+    # 5 (Chatham, Wanganui, Jackson Bay, Gisborne, Westport) are 0.5-1.9 km from the LINZ port,
+    # beyond STATION_GROUPING_DISTANCE_M, so search shows the LINZ and TICON stations as separate
+    # cards there.
+    #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -122,6 +132,10 @@ module WebCalTides
         # Svalbard before Norway: Kartverket's Ny-Ålesund gauge is in "Ny-Ålesund, Norway"
         /svalbard|longyearbyen|ny-ålesund/i => 'Arctic/Longyearbyen',
         /norway/i => 'Europe/Oslo',
+        # LINZ ports: Chatham Islands and Scott Base before the rest of New Zealand
+        /chatham island/i => 'Pacific/Chatham',
+        /scott base/i => 'Antarctica/McMurdo',
+        /new zealand/i => 'Pacific/Auckland',
         /uk|england|wales|scotland/i => 'Europe/London',
         /japan/i => 'Asia/Tokyo'
     }.freeze
@@ -164,6 +178,7 @@ module WebCalTides
                 chs:   Clients::ChsTides.new(logger),
                 bsh:   Clients::BshTides.new(logger),
                 kartverket: Clients::KartverketTides.new(logger),
+                linz:  Clients::LinzTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
@@ -775,8 +790,9 @@ module WebCalTides
         data    = tide_data_for(station, around: around) or return nil
 
         cal = Icalendar::Calendar.new
-        # Kartverket names are already properly cased; titleize would mangle them ("Ny-Ålesund" to "Ny ålesund")
-        cal.x_wr_calname = station.provider == 'kartverket' ? station.name : station.name.titleize
+        # Kartverket and LINZ names are already properly cased; titleize would mangle them
+        # ("Ny-Ålesund" to "Ny ålesund", "Port Ōhope Wharf" to "Port ōhope Wharf", "Waitangi - Chatham Island" loses its dash)
+        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz']) ? station.name : station.name.titleize
 
         if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
