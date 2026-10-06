@@ -1199,4 +1199,36 @@ RSpec.describe 'Rijkswaterstaat credit in the web UI', type: :api do
             %w[bsh kartverket linz imi].each { |p| expect(badge(p).css('.rws-credit, .rws-notice')).to be_empty }
         end
     end
+
+    describe 'station card id' do
+        def card(url)
+            station = build_station(id: 'NL__hoekvanholland.maeslantkering.beneden.noord',
+                                    public_id: 'hoekvanholland.maeslantkering.beneden.noord', provider: 'rws', url: url)
+            html = Server.new!.send(:erb, :'partials/_station_card', layout: false, locals: {
+                type: :tide, station: station, index: 0, theme: { accent: 'ocean', text: 'text-ocean-400' },
+                map_url: nil, webcal_base: "'webcal://x'", https_base: "'https://x'",
+                has_alternatives: false, alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        # A long dotted RWS id must truncate inside its column instead of running under the credit
+        it 'truncates the linked id with an ellipsis, lets the arrow wrap below it and puts the full id in the title' do
+            link = card('https://waterinfo.rws.nl').at_css('template[x-if="currentSource?.url?.startsWith(\'http\')"]').children.at_css('a.station-id')
+
+            expect(link['class'].split).to include('inline-flex', 'flex-wrap', 'max-w-[calc(100%+0.5rem)]')
+            expect(link[':title']).to eq('currentSource.publicId || selectedSource')
+            id_span, arrow = link.css('span').to_a
+            expect(id_span['class'].split).to include('min-w-0', 'truncate')
+            expect(arrow['class']).to include('flex-shrink-0')
+            expect(arrow.text).to eq('↗')
+        end
+
+        it 'truncates the unlinked id the same way' do
+            id = card('#ticon').at_css('template[x-if="!currentSource?.url?.startsWith(\'http\')"]').children.at_css('p.station-id')
+
+            expect(id['class'].split).to include('max-w-[calc(100%+0.5rem)]', 'truncate')
+            expect(id[':title']).to eq('currentSource?.publicId || selectedSource')
+        end
+    end
 end
