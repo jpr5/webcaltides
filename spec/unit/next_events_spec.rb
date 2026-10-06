@@ -592,6 +592,29 @@ RSpec.describe WebCalTides do
             end
         end
 
+        context 'when a side publishes no heights (e.g. a times-only BSH gauge)' do
+            before do
+                allow(WebCalTides).to receive(:next_tide_events).with('PRIMARY1', around: anything).and_return([
+                    { type: 'High', time: Time.utc(2025, 6, 15, 14, 0, 0).in_time_zone('Europe/Berlin'), height: nil, units: nil }
+                ])
+                allow(WebCalTides).to receive(:next_tide_events).with('ALT1', around: anything).and_return([
+                    { type: 'High', time: Time.utc(2025, 6, 15, 14, 12, 0).in_time_zone('Europe/Berlin'), height: 3.8, units: 'm' }
+                ])
+            end
+
+            it 'keeps the time delta and reports no height delta when the primary has no height' do
+                result = WebCalTides.compute_variance(primary, [alt1])
+
+                expect(result['ALT1']).to eq(time: '+12min', height: nil)
+            end
+
+            it 'keeps the time delta and reports no height delta when the alternative has no height' do
+                result = WebCalTides.compute_variance(alt1, [primary])
+
+                expect(result['PRIMARY1']).to eq(time: '-12min', height: nil)
+            end
+        end
+
         context 'with near-zero deltas' do
             before do
                 allow(WebCalTides).to receive(:next_tide_events).with('PRIMARY1', around: anything).and_return([

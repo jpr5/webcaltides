@@ -466,14 +466,17 @@ module WebCalTides
 
             alt_next = alt_events.first
 
-            # Calculate deltas
+            # Calculate deltas.  A side without a height (times-only sources such as many BSH
+            # gauges) has nothing to compare, so the height delta is nil rather than a fake one.
             time_diff_seconds = (alt_next[:time].to_time - primary_next[:time].to_time).to_i
-            height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
-            height_units = primary_next[:units] || 'ft'
+            height_delta = unless alt_next[:height].nil? || primary_next[:height].nil?
+                height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
+                format_height_delta(height_diff, primary_next[:units] || 'ft')
+            end
 
             deltas[alt.id] = {
                 time: format_time_delta(time_diff_seconds),
-                height: format_height_delta(height_diff, height_units)
+                height: height_delta
             }
         end
     end
