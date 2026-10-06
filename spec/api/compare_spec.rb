@@ -181,3 +181,74 @@ RSpec.describe 'GET /api/stations/compare', type: :api do
         end
     end
 end
+
+RSpec.describe 'GET /api/stations/compare with heights above different datums', type: :api do
+    include Rack::Test::Methods
+
+    before do
+        freeze_time
+        allow(WebCalTides).to receive(:tide_station_for).with('NL__stavenisse').and_return(build_station(id: 'NL__stavenisse', provider: 'rws'))
+        allow(WebCalTides).to receive(:tide_station_for).with('T1').and_return(build_station(id: 'T1', provider: 'ticon'))
+        allow(WebCalTides).to receive(:next_tide_events).with('NL__stavenisse').and_return([
+            { type: 'High', time: Time.current + 2.hours, height: 1.58, units: 'm', datum: 'NAP' }
+        ])
+        allow(WebCalTides).to receive(:next_tide_events).with('T1').and_return([
+            { type: 'High', time: Time.current + 2.hours + 20.minutes, height: 3.1, units: 'm' }
+        ])
+    end
+
+    it 'compares the times but not RWS heights above NAP with chart datum heights' do
+        get '/api/stations/compare', type: 'tides', ids: ['NL__stavenisse', 'T1']
+        data = JSON.parse(last_response.body)
+
+        expect(data['stations'][0]['events'][0]['datum']).to eq('NAP')
+        expect(data['stations'][1]['event_deltas']).to eq([{ 'type' => 'High', 'time' => '+20min', 'raw_value' => nil, 'units' => nil }])
+    end
+end
+
+RSpec.describe WebCalTides do
+    describe '.next_tide_events for a Rijkswaterstaat station' do
+        let(:tides) do
+            [build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9)),
+             build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 24, 19, 14))]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_data_for).and_return(tides)
+            allow(described_class).to receive(:timezone_for).and_return('Europe/Amsterdam')
+        end
+
+        it 'names the NAP datum on RWS events only' do
+            allow(described_class).to receive(:tide_station_for).and_return(build_station(id: 'NL__stavenisse', provider: 'rws'))
+            Timecop.freeze(Time.utc(2026, 10, 24, 12)) do
+                expect(described_class.next_tide_events('NL__stavenisse').map { |e| e[:datum] }).to eq(%w[NAP NAP])
+            end
+
+            allow(described_class).to receive(:tide_station_for).and_return(build_station(id: 'T1', provider: 'ticon'))
+            Timecop.freeze(Time.utc(2026, 10, 24, 12)) do
+                expect(described_class.next_tide_events('T1')).to all(satisfy { |e| !e.key?(:datum) })
+            end
+        end
+    end
+
+    describe '.compute_variance with heights above different datums' do
+        let(:rws)   { build_station(id: 'NL__stavenisse', provider: 'rws') }
+        let(:ticon) { build_station(id: 'T1', provider: 'ticon') }
+        let(:other) { build_station(id: 'T2', provider: 'ticon') }
+
+        before do
+            freeze_time
+            allow(described_class).to receive(:next_tide_events).with('NL__stavenisse', anything).and_return([{ type: 'High', time: Time.current, height: 1.58, units: 'm', datum: 'NAP' }])
+            allow(described_class).to receive(:next_tide_events).with('T1', anything).and_return([{ type: 'High', time: Time.current + 20.minutes, height: 3.1, units: 'm' }])
+            allow(described_class).to receive(:next_tide_events).with('T2', anything).and_return([{ type: 'High', time: Time.current + 5.minutes, height: 3.0, units: 'm' }])
+        end
+
+        it 'gives the time delta but no height delta between NAP and chart datum heights' do
+            expect(described_class.compute_variance(rws, [ticon])).to eq('T1' => { time: '+20min', height: nil })
+        end
+
+        it 'still compares heights above the same datum' do
+            expect(described_class.compute_variance(other, [ticon])).to eq('T1' => { time: '+15min', height: '+0.1m' })
+        end
+    end
+end

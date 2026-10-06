@@ -765,8 +765,8 @@ RSpec.describe 'Kartverket credit in the web UI', type: :api do
             expect(html.css('.kartverket-credit')).to all(satisfy { |n| n.key?('x-cloak') })
             expect(html.css('template[x-if="/kartverket/i.test(provider)"] .kartverket-notice')).not_to be_empty
             # Styled as official, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)"]')).not_to be_empty
         end
 
         it 'says on both badges, as the CC BY change notice does, that only heights are converted and times are unchanged (UTC)' do
@@ -837,8 +837,8 @@ RSpec.describe 'LINZ credit in the web UI', type: :api do
             expect(html.at_css('.linz-credit')['class'].split).to include('max-w-[10.5rem]')
             expect(html.css('template[x-if="/linz/i.test(provider)"] .linz-notice')).not_to be_empty
             # Styled as an agency source, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)"]')).not_to be_empty
         end
 
         it 'adds no LINZ credit to NOAA, BSH or Kartverket badges' do
@@ -923,10 +923,10 @@ RSpec.describe 'Marine Institute credit in the web UI', type: :api do
             # Each source's notice is its own x-if, and the credit lines sit outside them all (inside
             # one, Alpine never renders them while another source is selected)
             expect(html.css('template[x-if*="test(provider)"] template[x-if*="test(provider)"]')).to be_empty
-            expect(html.css('p[x-show$="test(provider)"]').map { |n| [n['class'].split.first, n.ancestors('template').length] }).to eq(%w[bsh-credit kartverket-credit linz-credit imi-credit].map { |c| [c, 0] })
+            expect(html.css('p[x-show$="test(provider)"]').map { |n| [n['class'].split.first, n.ancestors('template').length] }).to eq(%w[bsh-credit kartverket-credit linz-credit imi-credit rws-credit].map { |c| [c, 0] })
             # Styled as an agency source, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)"]')).not_to be_empty
         end
 
         it 'adds no MI credit to NOAA, BSH, Kartverket or LINZ badges' do
@@ -1074,5 +1074,129 @@ RSpec.describe 'GET /tides/:station.ics for a partial window', type: :api do
 
         expect(last_response).to be_ok
         expect(WebCalTides).to have_received(:tide_station_for).with('NL__denhelder.marsdiep')
+    end
+end
+
+
+RSpec.describe WebCalTides do
+    describe '.tide_calendar_for with rws (Rijkswaterstaat) provider' do
+        let(:station) do
+            build_station(name: 'IJmuiden, buitenhaven', id: 'NL__ijmuiden.buitenhaven', public_id: 'ijmuiden.buitenhaven', provider: 'rws',
+                          lat: 52.463, lon: 4.555, location: 'IJmuiden, buitenhaven, Netherlands', region: 'Netherlands',
+                          url: Clients::RijkswaterstaatTides::HOME_URL)
+        end
+
+        # RWS Stavenisse: 2026-10-24T14:09+01:00 HW 158 cm and 2026-10-26T09:07+01:00 LW -119 cm vs NAP
+        # (summer time on the 24th, winter time on the 26th; RWS gives +01:00 for both)
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 26, 8, 7), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NL__ijmuiden.buitenhaven', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'names the source, the NAP datum, what we changed and the disclaimer on the feed' do
+            caldesc = Icalendar::Values::Text.new(Clients::RijkswaterstaatTides.feed_description(tide_data)).value_ical
+
+            expect(ical).to include("DESCRIPTION:#{caldesc}", "X-WR-CALDESC:#{caldesc}")
+            expect(ical).to match(/^X-WR-CALDESC:Source: Rijkswaterstaat .*CC0.*Heights are above NAP .*not chart datum.*NOT FOR NAVIGATION/)
+            expect(ical).to match(/^X-WR-CALDESC:.*no uptime guarantee and is not suitable for critical applications\\?, and that use is at your own risk\./)
+            expect(ical).not_to match(/liab/i)
+            expect(ical).not_to include('This program is distributed')
+        end
+
+        it 'names the source and the datum on every event' do
+            expect(calendar.events.map { |e| e.description.to_s }).to all(eq(Clients::RijkswaterstaatTides.event_description(tide_data.first)))
+            expect(calendar.events.first.description.to_s).to include('Height above NAP')
+        end
+
+        it 'keeps the instants RWS publishes at a fixed +01:00 (no summer time shift) and labels heights in metres above NAP' do
+            # 14:09+01:00 is 13:09 UTC; read as Dutch summer time (+02:00) it would be 12:09
+            expect(ical).to include('DTSTART;TZID=GMT:20261024T130900', 'DTSTART;TZID=GMT:20261026T080700')
+            expect(ical).not_to include('DTSTART;TZID=GMT:20261024T120900')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 1.58 m NAP', 'Low Tide -1.19 m NAP'])
+        end
+
+        it 'converts the heights to feet in the default (imperial) units, still labelled NAP' do
+            calendar = described_class.tide_calendar_for('NL__ijmuiden.buitenhaven')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 5.184 ft NAP', 'Low Tide -3.904 ft NAP'])
+        end
+
+        it 'adds no NAP label or RWS credit to other providers' do
+            allow(described_class).to receive(:tide_station_for).and_return(station.dup.tap { |s| s.provider = 'ticon' })
+            calendar = described_class.tide_calendar_for('T1', units: 'metric')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 1.58 m', 'Low Tide -1.19 m'])
+            expect(calendar.to_ical).not_to include('Rijkswaterstaat')
+        end
+
+    end
+end
+
+# Rijkswaterstaat's data is CC0, but the UI names the source and that heights are above NAP
+RSpec.describe 'Rijkswaterstaat credit in the web UI', type: :api do
+    describe 'footer' do
+        it 'names RWS with links, the NAP datum and what we changed, outside any hover popover' do
+            get '/'
+            node = Nokogiri::HTML(last_response.body).at_css('footer #rws-credit')
+
+            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.text.squish).to eq(
+                'Dutch tide predictions: Rijkswaterstaat astronomical tide, CC0; heights above NAP (Dutch land datum), not chart datum, ' \
+                'converted from cm to the selected units; times converted from +01:00 to UTC. Weather not included. Not for navigation.'
+            )
+            expect(node.css('a').map { |a| [a.text, a['href']] }).to eq([
+                ['Rijkswaterstaat', 'https://waterinfo.rws.nl'], ['CC0', 'https://creativecommons.org/publicdomain/zero/1.0/']
+            ])
+        end
+    end
+
+    describe 'provider badge' do
+        def badge(provider, has_alternatives: false)
+            station = build_station(id: 'S1', provider: provider)
+            html = Server.new!.send(:erb, :'partials/_provider_badge', layout: false, locals: {
+                type: :tide, theme: { accent: 'ocean' }, station: station, has_alternatives: has_alternatives,
+                alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        it 'shows RWS with a not-for-navigation note, the NAP datum and the linked source, narrow enough to wrap' do
+            html = badge('rws')
+
+            expect(html.at_css('.badge-warning')).to be_nil
+            expect(html.at_css('.rws-credit').text).to eq('Rijkswaterstaat · CC0 · Heights vs NAP · Not for navigation')
+            expect(html.at_css('.rws-credit')['class']).to include('max-w-[10.5rem]')
+            expect(html.at_css('.rws-credit a')['href']).to eq(Clients::RijkswaterstaatTides::HOME_URL)
+            expect(html.at_css('.rws-notice')).not_to be_nil
+            expect(html.text).to include('NOT FOR NAVIGATION', 'Heights are above NAP (the Dutch land datum), not chart datum.')
+        end
+
+        it 'does the same on the multi-source badge, shown (and cloaked until Alpine starts) only while RWS is selected' do
+            html = badge('rws', has_alternatives: true)
+
+            expect(html.css('.rws-credit').map { |n| n['x-show'] }).to eq(['/rws/i.test(provider)', '/rws/i.test(station.provider)'])
+            expect(html.css('.rws-credit')).to all(satisfy { |n| n.key?('x-cloak') })
+            expect(html.css('template[x-if="/rws/i.test(provider)"] .rws-notice')).not_to be_empty
+            # The credit line sits outside every source's x-if, so Alpine renders it under the badge
+            expect(html.at_css('p.rws-credit[x-show="/rws/i.test(provider)"]').ancestors('template')).to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+        end
+
+        it 'names the datum after compared heights' do
+            expect(badge('rws', has_alternatives: true).to_html).to include("(event.datum ? ' ' + event.datum : '')")
+        end
+
+        it 'adds no RWS credit to other badges' do
+            expect(badge('noaa').to_html).not_to include('Rijkswaterstaat')
+            %w[bsh kartverket linz imi].each { |p| expect(badge(p).css('.rws-credit, .rws-notice')).to be_empty }
+        end
     end
 end

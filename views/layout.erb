@@ -777,6 +777,11 @@
             <p id="imi-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
                 Irish tide predictions: data supplied by <a href="<%= escape_html(Clients::MarineInstituteTides::HOME_URL) %>" class="underline hover:text-slate-400">Marine Institute</a>, licensed under <a href="<%= escape_html(Clients::MarineInstituteTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; heights, where shown, converted from OD Malin to chart datum (LAT) with a fixed offset per station, and to the selected units; times unchanged (UTC). Storm surge not included. Not for navigation.
             </p>
+
+            <!-- Rijkswaterstaat data is CC0 (no credit required); the footer still names the source and the height datum -->
+            <p id="rws-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
+                Dutch tide predictions: <a href="<%= escape_html(Clients::RijkswaterstaatTides::HOME_URL) %>" class="underline hover:text-slate-400">Rijkswaterstaat</a> astronomical tide, <a href="<%= escape_html(Clients::RijkswaterstaatTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC0</a>; heights above NAP (Dutch land datum), not chart datum, converted from cm to the selected units; times converted from +01:00 to UTC. Weather not included. Not for navigation.
+            </p>
         </div>
     </footer>
 </body>

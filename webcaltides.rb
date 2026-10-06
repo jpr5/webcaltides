@@ -533,7 +533,8 @@ module WebCalTides
             # Calculate deltas.  A side without a height (times-only sources such as many BSH
             # gauges) has nothing to compare, so the height delta is nil rather than a fake one.
             time_diff_seconds = (alt_next[:time].to_time - primary_next[:time].to_time).to_i
-            height_delta = unless alt_next[:height].nil? || primary_next[:height].nil?
+            # Heights above different datums (NAP vs chart datum) aren't comparable either.
+            height_delta = unless alt_next[:height].nil? || primary_next[:height].nil? || alt_next[:datum] != primary_next[:datum]
                 height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
                 format_height_delta(height_diff, primary_next[:units] || 'ft')
             end
@@ -801,7 +802,8 @@ module WebCalTides
     end
 
     # Returns the next high and low tide events for a station
-    # Returns array of hashes: [{ type: 'High', time: DateTime, height: Float, units: String }, ...]
+    # Returns array of hashes: [{ type: 'High', time: DateTime, height: Float, units: String }, ...],
+    # plus datum: (e.g. 'NAP') for a source whose heights are not above chart datum
     def next_tide_events(id, around: Time.current.utc)
         station = tide_station_for(id) or return nil
         data = tide_data_for(station, around: around) or return nil
@@ -832,6 +834,10 @@ module WebCalTides
             }
         end
 
+        # Heights above another datum (Rijkswaterstaat: NAP) say so, and are not compared with chart datum heights
+        client = tide_clients(station.provider)
+        events.each { |e| e[:datum] = client.class.height_datum } if client.class.respond_to?(:height_datum)
+
         # Sort by time so first tide is the soonest
         events.sort_by { |e| e[:time] }
     end
@@ -852,11 +858,14 @@ module WebCalTides
         end
 
         # BSH, Kartverket and Marine Institute terms require, and LINZ's terms ask for, the source
-        # credit in every presentation, so on the feed and every event
+        # credit in every presentation, so on the feed and every event.  Rijkswaterstaat's CC0
+        # doesn't, but the feed must say its heights are above NAP, not chart datum.
         credited = {
             'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides, 'linz' => Clients::LinzTides,
-            'imi' => Clients::MarineInstituteTides
+            'imi' => Clients::MarineInstituteTides, 'rws' => Clients::RijkswaterstaatTides
         }[station.provider]
+        # A height datum other than chart datum is named after every height ("1.74 m NAP")
+        datum = credited.respond_to?(:height_datum) ? " #{credited.height_datum}" : ""
         if credited
             caldesc = credited.feed_description(data)
             cal.description = caldesc
@@ -871,7 +880,7 @@ module WebCalTides
                 title = if tide.prediction.nil?
                     "#{tide.type} Tide"
                 else
-                    "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+                    "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}#{datum}"
                 end
 
                 cal.event do |e|

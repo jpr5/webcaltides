@@ -262,10 +262,11 @@ class Server < ::Sinatra::Base
                                 units: nil
                             }
                         end
-                    elsif p_event[:height].nil? || a_event[:height].nil?
+                    elsif p_event[:height].nil? || a_event[:height].nil? || p_event[:datum] != a_event[:datum]
                         # Some sources publish times only (e.g. many BSH gauges).  There is
                         # nothing to compare, so emit no height delta (nil.to_f would be 0.0 and
-                        # show the other side's full height as a fake difference).
+                        # show the other side's full height as a fake difference).  Nor between
+                        # heights above different datums (Rijkswaterstaat's NAP vs chart datum).
                         event_deltas << {
                             type: p_event[:type],
                             time: WebCalTides.format_time_delta(time_diff),
