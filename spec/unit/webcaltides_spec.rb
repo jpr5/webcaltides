@@ -110,6 +110,24 @@ RSpec.describe WebCalTides do
                 end
             end
         end
+
+        context 'when the lookup fails for a LINZ port' do
+            before { allow(Timezone).to receive(:lookup).and_raise(StandardError, 'lookup down') }
+
+            {
+                ['Auckland',                    'Auckland, New Zealand',                    -36.85,   174.7667] => 'Pacific/Auckland',
+                ['Ōkukari Bay',                 'Ōkukari Bay, New Zealand',                 -41.2,    174.3167] => 'Pacific/Auckland',
+                ['Fishing Rock - Raoul Island', 'Fishing Rock - Raoul Island, New Zealand', -29.25,  -177.9167] => 'Pacific/Auckland',
+                ['Waitangi - Chatham Island',   'Waitangi - Chatham Island, New Zealand',   -43.95,  -176.5667] => 'Pacific/Chatham',
+                ['Scott Base',                  'Scott Base, Antarctica',                   -77.8333, 166.6667] => 'Antarctica/McMurdo'
+            }.each do |(name, location, lat, lon), zone|
+                it "falls back to #{zone} for #{name} and caches it" do
+                    station = build_station(name: name, region: 'New Zealand', location: location, lat: lat, lon: lon, provider: 'linz')
+                    expect(WebCalTides.timezone_for(lat, lon, station)).to eq(zone)
+                    expect(WebCalTides.timezone_for(lat, lon)).to eq(zone)
+                end
+            end
+        end
     end
 
     describe '#timezone_from_region' do

@@ -1,6 +1,30 @@
 # frozen_string_literal: true
 
 RSpec.describe WebCalTides do
+    describe '.find_tide_stations with LINZ ports' do
+        let(:linz)  { Clients::LinzTides.new(Logger.new('/dev/null')).tide_stations }
+        let(:ticon) { build_station(name: 'Auckland, NZL', id: 'T9162534', region: 'NZL', public_id: 'T9162534', provider: 'ticon') }
+
+        before { allow(described_class).to receive(:tide_stations).and_return(linz + [ticon]) }
+
+        def ids(*tokens)
+            described_class.find_tide_stations(by: tokens).map(&:id)
+        end
+
+        it 'finds a port by its macronised name, its plain-ASCII spelling, or LINZ header spelling' do
+            expect(ids('whakatāne')).to eq(['NZ__whakatane'])
+            expect(ids('whakatane')).to eq(['NZ__whakatane'])
+            expect(ids('kaikoura')).to eq(['NZ__kaikoura'])
+            expect(ids('oban')).to eq(['NZ__halfmoon-bay-oban'])
+        end
+
+        it 'finds the LINZ port alongside TICON with an "NZ" or "NZL" qualifier, and with "New Zealand"' do
+            expect(ids('auckland', 'nz')).to eq(['NZ__auckland', 'T9162534'])
+            expect(ids('auckland', 'nzl')).to eq(['NZ__auckland', 'T9162534'])
+            expect(ids('auckland', 'new', 'zealand')).to eq(['NZ__auckland'])
+        end
+    end
+
     describe '.find_tide_stations' do
         before do
             # Mock the tide_stations method to return predictable test data
