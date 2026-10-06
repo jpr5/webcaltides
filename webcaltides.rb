@@ -42,10 +42,11 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Official sources (NOAA, CHS, BSH) are preferred over harmonic-based predictions.  NOAA and
-    # CHS do have nearby stations along the US/Canada border, so their order matters there: NOAA
-    # wins (pinned by spec/integration/station_grouping_spec.rb).  BSH (Germany) overlaps neither,
-    # so its position among the official sources has no effect.
+    # Official sources (NOAA, CHS, BSH, Kartverket) are preferred over harmonic-based predictions.
+    # NOAA and CHS do have nearby stations along the US/Canada border, so their order matters
+    # there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).  BSH (Germany) and
+    # Kartverket (Norway) overlap none of the other official sources, so their positions among
+    # the official sources have no effect.
     #
     # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
     # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
@@ -55,10 +56,17 @@ module WebCalTides
     # as an alternative.  Ranking is by provider alone and never inspects predictions; this is
     # pinned by spec/integration/station_grouping_spec.rb.
     #
+    # Kartverket vs TICON (Oct 2026): TICON's Norwegian stations sit on Kartverket's own gauges
+    # (often at identical coordinates), but their high/low times differ from Kartverket's official
+    # predictions.  Over November 2026 (116 events per gauge, app feed vs Kartverket's own
+    # high/low list), the largest difference was 29 min at Bergen, 46 min at Tromsø and 73 min at
+    # Stavanger, and no TICON event matched to the minute.
+    # So Kartverket wins wherever it covers a gauge, and TICON remains an alternative.
+    #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs bsh xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -110,6 +118,9 @@ module WebCalTides
         /atlantic.*canada/i => 'America/Halifax',
         /australia.*sydney/i => 'Australia/Sydney',
         /australia.*perth/i => 'Australia/Perth',
+        # Svalbard before Norway: Kartverket's Ny-Ålesund gauge is in "Ny-Ålesund, Norway"
+        /svalbard|longyearbyen|ny-ålesund/i => 'Arctic/Longyearbyen',
+        /norway/i => 'Europe/Oslo',
         /uk|england|wales|scotland/i => 'Europe/London',
         /japan/i => 'Asia/Tokyo'
     }.freeze
@@ -151,6 +162,7 @@ module WebCalTides
                 noaa:  Clients::NoaaTides.new(logger),
                 chs:   Clients::ChsTides.new(logger),
                 bsh:   Clients::BshTides.new(logger),
+                kartverket: Clients::KartverketTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
