@@ -1,0 +1,101 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://erddap.marine.ie/erddap/tabledap/IMI_TidePrediction_HighLow.csv?stationID=%22Dublin_Port%22&time,stationID,tide_time_category,Water_Level_ODMalin&time%3C=2027-09-30T23:59:59Z&time%3E=2026-09-01T00:00:00Z
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - erddap.marine.ie
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 200
+      message: ''
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Tue, 06 Oct 2026 20:12:53 GMT
+      Content-Type:
+      - text/csv;charset=ISO-8859-1
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Strict-Transport-Security:
+      - max-age=0
+      - max-age=63072000; includeSubdomains
+      X-Frame-Options:
+      - DENY
+      - SAMEORIGIN
+      X-Content-Type-Options:
+      - nosniff
+      - nosniff
+      Last-Modified:
+      - Tue, 06 Oct 2026 20:12:48 GMT
+      Xdods-Server:
+      - dods/3.7
+      Erddap-Server:
+      - '2.14'
+      Content-Disposition:
+      - attachment;filename=IMI_TidePrediction_HighLow_baa8_31fb_3e8d.csv
+    body:
+      encoding: UTF-8
+      string: |
+        time,stationID,tide_time_category,Water_Level_ODMalin
+        UTC,,,metres
+        2026-09-01T01:35:00Z,Dublin_Port,HIGH,1.758
+        2026-09-01T07:15:00Z,Dublin_Port,LOW,-1.924
+        2026-09-01T14:00:00Z,Dublin_Port,HIGH,1.444
+        2026-09-01T19:30:00Z,Dublin_Port,LOW,-1.75
+        2026-10-06T01:20:00Z,Dublin_Port,LOW,-1.347
+        2026-10-06T08:05:00Z,Dublin_Port,HIGH,1.161
+        2026-10-06T13:45:00Z,Dublin_Port,LOW,-0.97
+        2026-10-06T20:20:00Z,Dublin_Port,HIGH,1.462
+        2026-10-07T02:20:00Z,Dublin_Port,LOW,-1.569
+        2026-10-07T09:05:00Z,Dublin_Port,HIGH,1.329
+        2026-10-07T14:40:00Z,Dublin_Port,LOW,-1.184
+        2026-10-07T21:15:00Z,Dublin_Port,HIGH,1.645
+        2026-10-08T03:10:00Z,Dublin_Port,LOW,-1.748
+        2026-10-08T09:55:00Z,Dublin_Port,HIGH,1.46
+        2026-10-08T15:25:00Z,Dublin_Port,LOW,-1.385
+        2026-10-08T22:05:00Z,Dublin_Port,HIGH,1.777
+        2026-10-23T02:55:00Z,Dublin_Port,LOW,-1.378
+        2026-10-23T09:30:00Z,Dublin_Port,HIGH,1.314
+        2026-10-23T15:05:00Z,Dublin_Port,LOW,-1.189
+        2026-10-23T21:30:00Z,Dublin_Port,HIGH,1.535
+        2026-10-24T03:30:00Z,Dublin_Port,LOW,-1.568
+        2026-10-24T10:10:00Z,Dublin_Port,HIGH,1.472
+        2026-10-24T15:40:00Z,Dublin_Port,LOW,-1.407
+        2026-10-24T22:10:00Z,Dublin_Port,HIGH,1.677
+        2026-10-25T04:00:00Z,Dublin_Port,LOW,-1.726
+        2026-10-25T10:45:00Z,Dublin_Port,HIGH,1.595
+        2026-10-25T16:15:00Z,Dublin_Port,LOW,-1.599
+        2026-10-25T22:50:00Z,Dublin_Port,HIGH,1.781
+        2026-10-26T04:35:00Z,Dublin_Port,LOW,-1.842
+        2026-10-26T11:20:00Z,Dublin_Port,HIGH,1.684
+        2026-10-26T16:50:00Z,Dublin_Port,LOW,-1.751
+        2026-10-26T23:25:00Z,Dublin_Port,HIGH,1.839
+        2026-10-27T05:10:00Z,Dublin_Port,LOW,-1.897
+        2026-10-27T11:55:00Z,Dublin_Port,HIGH,1.737
+        2026-10-27T17:25:00Z,Dublin_Port,LOW,-1.843
+        2027-09-30T04:40:00Z,Dublin_Port,LOW,-2.186
+        2027-09-30T11:25:00Z,Dublin_Port,HIGH,1.766
+        2027-09-30T16:50:00Z,Dublin_Port,LOW,-1.928
+        2027-09-30T23:40:00Z,Dublin_Port,HIGH,2.088
+  recorded_at: Tue, 06 Oct 2026 12:00:00 GMT
+recorded_with: VCR 6.4.0
