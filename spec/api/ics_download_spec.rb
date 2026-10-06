@@ -137,17 +137,64 @@ RSpec.describe 'GET /:type/:station.ics', type: :api do
         end
 
         context 'with date parameter' do
-            # Note: The date parameter has a bug where Date.parse returns a Date object
-            # which doesn't respond to #utc, causing errors. Documenting actual behavior.
+            it 'accepts a YYYYMMDD date and generates the calendar around it' do
+                get '/tides/NOAA123.ics', date: '20260929'
+
+                expect(last_response).to be_ok
+                expect(WebCalTides).to have_received(:tide_calendar_for)
+                    .with('NOAA123', hash_including(around: Time.utc(2026, 9, 29)))
+            end
+
+            it 'accepts a YYYY-MM-DD date' do
+                get '/tides/NOAA123.ics', date: '2026-09-29'
+
+                expect(last_response).to be_ok
+                expect(WebCalTides).to have_received(:tide_calendar_for)
+                    .with('NOAA123', hash_including(around: Time.utc(2026, 9, 29)))
+            end
+
+            it 'passes the parsed date to solar and lunar calendars' do
+                get '/tides/NOAA123.ics', date: '20260929', lunar: '1'
+
+                expect(WebCalTides).to have_received(:solar_calendar_for).with(anything, around: Time.utc(2026, 9, 29))
+                expect(WebCalTides).to have_received(:lunar_calendar_for).with(anything, around: Time.utc(2026, 9, 29))
+            end
+
+            it 'caches the calendar under the requested month' do
+                get '/tides/NOAA123.ics', date: '20260929'
+
+                expect(Dir.glob("#{test_cache_dir}/tides_*_NOAA123_202609_*.ics")).not_to be_empty
+            end
+
             it 'falls back to current date for invalid date' do
                 get '/tides/NOAA123.ics', date: 'invalid'
 
                 expect(last_response).to be_ok
+                expect(WebCalTides).to have_received(:tide_calendar_for)
+                    .with('NOAA123', hash_including(around: Time.utc(2025, 6, 15)))
+            end
+
+            it 'falls back to current date for empty or out-of-range dates' do
+                ['', '20261399'].each do |bad|
+                    get '/tides/NOAA123.ics', date: bad
+
+                    expect(last_response).to be_ok
+                end
             end
         end
     end
 
     describe 'current calendar' do
+        context 'with date parameter' do
+            it 'accepts a YYYYMMDD date and generates the calendar around it' do
+                get '/currents/CURR456.ics', date: '20260929'
+
+                expect(last_response).to be_ok
+                expect(WebCalTides).to have_received(:current_calendar_for)
+                    .with('CURR456', around: Time.utc(2026, 9, 29))
+            end
+        end
+
         context 'with valid station' do
             it 'returns iCal content' do
                 get '/currents/CURR456.ics'

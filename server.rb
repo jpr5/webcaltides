@@ -358,7 +358,10 @@ class Server < ::Sinatra::Base
     get "/:type/:station.ics" do
         type       = params[:type].tap { |type| type.in?(%w[tides currents]) or halt 404 }
         id         = params[:station].tap { |station| station.in?(WebCalTides.station_ids) or halt 404 }
-        date       = Date.parse(params[:date]) rescue Time.current.utc # e.g. 20231201, for utility but unsupported in UI
+        # e.g. 20231201, for utility but unsupported in UI.  Downstream expects a UTC Time
+        # (date.utc below, around.utc in the data loaders), so convert the parsed Date to
+        # UTC midnight.  Unparseable values fall back to now.
+        date       = Date.parse(params[:date]).then { |d| Time.utc(d.year, d.month, d.day) } rescue Time.current.utc
         units      = params.fetch(:units, 'imperial').tap { |units| units.in?(%w[imperial metric]) or halt 422 }
         no_solar   = params[:solar].in?(%w[0 false]) # on by default
         add_lunar  = params[:lunar].in?(%w[1 true])  # off by default
