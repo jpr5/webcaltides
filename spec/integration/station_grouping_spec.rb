@@ -156,7 +156,7 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
     describe 'provider hierarchy' do
         it 'defines PROVIDER_HIERARCHY constant' do
-            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh kartverket linz imi xtide ticon])
+            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh kartverket linz imi rws xtide ticon])
         end
 
         it 'prefers NOAA over CHS' do
@@ -245,6 +245,42 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
         it 'registers the Marine Institute as a tide client' do
             expect(described_class.tide_clients(:imi)).to be_a(Clients::MarineInstituteTides)
+        end
+
+        it 'prefers Rijkswaterstaat over TICON' do
+            # Den Helder: RWS denhelder.marsdiep and TICON Tf2bcd2c are at the same position (TICON's is
+            # 0.2 m off); Hoek van Holland's are about 75 m apart
+            rws   = build_station(provider: 'rws', id: 'NL__denhelder.marsdiep', lat: 52.964359, lon: 4.74499)
+            ticon = build_station(provider: 'ticon', id: 'Tf2bcd2c', lat: 52.964357, lon: 4.74499)
+            hvh_rws   = build_station(provider: 'rws', id: 'NL__hoekvanholland', lat: 51.976899, lon: 4.119827)
+            hvh_ticon = build_station(provider: 'ticon', id: 'T3ee6a65', lat: 51.977572, lon: 4.119881)
+
+            groups = described_class.group_stations_by_proximity([ticon, rws, hvh_ticon, hvh_rws])
+            expect(groups.map { |g| [g.primary.id, g.alternatives.map(&:id)] }).to eq([
+                ['NL__denhelder.marsdiep', ['Tf2bcd2c']], ['NL__hoekvanholland', ['T3ee6a65']]
+            ])
+        end
+
+        it 'prefers BSH over Rijkswaterstaat where their gauges coincide' do
+            # Knock and Dukegat on the Ems-Dollard: the RWS and BSH stations are at the same coordinates
+            knock_rws   = build_station(provider: 'rws', id: 'NL__knock', lat: 53.327222, lon: 7.030556)
+            knock_bsh   = build_station(provider: 'bsh', id: 'DE__802P', lat: 53.32722, lon: 7.03056)
+            dukegat_rws = build_station(provider: 'rws', id: 'NL__dukegat', lat: 53.433611, lon: 6.926111)
+            dukegat_bsh = build_station(provider: 'bsh', id: 'DE__799G', lat: 53.43361, lon: 6.92611)
+
+            groups = described_class.group_stations_by_proximity([knock_rws, knock_bsh, dukegat_rws, dukegat_bsh])
+            expect(groups.map { |g| [g.primary.id, g.alternatives.map(&:id)] }).to eq([
+                ['DE__802P', ['NL__knock']], ['DE__799G', ['NL__dukegat']]
+            ])
+        end
+
+        it 'ranks Rijkswaterstaat below the other agency sources and above the harmonic ones' do
+            expect(described_class::PROVIDER_HIERARCHY.index('rws')).to be > described_class::PROVIDER_HIERARCHY.index('imi')
+            expect(described_class::PROVIDER_HIERARCHY.index('rws')).to be < described_class::PROVIDER_HIERARCHY.index('xtide')
+        end
+
+        it 'registers Rijkswaterstaat as a tide client' do
+            expect(described_class.tide_clients(:rws)).to be_a(Clients::RijkswaterstaatTides)
         end
 
         it 'prefers XTide over TICON' do

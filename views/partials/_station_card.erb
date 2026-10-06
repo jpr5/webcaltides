@@ -138,12 +138,16 @@
                     <!-- Station ID (clickable only for official sources with real URLs) -->
                     <!-- xtide/ticon have placeholder URLs like #xtide, so check for http -->
                     <template x-if="currentSource?.url?.startsWith('http')">
-                        <a :href="currentSource.url" target="_blank" class="text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
-                            <span x-text="currentSource.publicId || selectedSource"></span> ↗
+                        <!-- Long ids (e.g. Rijkswaterstaat dotted names) truncate with an ellipsis so they
+                             never run under the provider credit; the full id stays in the title. The id may
+                             use 0.5rem of the 0.75rem gap so a short id in a narrow column (Kartverket "BGO")
+                             still shows whole; the arrow wraps below it when there is no room. -->
+                        <a :href="currentSource.url" target="_blank" :title="currentSource.publicId || selectedSource" class="station-id inline-flex flex-wrap max-w-[calc(100%+0.5rem)] gap-x-1 text-<%= theme[:accent] %>-400/70 hover:text-<%= theme[:accent] %>-400 text-xs font-mono transition-colors">
+                            <span class="min-w-0 truncate" x-text="currentSource.publicId || selectedSource"></span><span class="flex-shrink-0">↗</span>
                         </a>
                     </template>
                     <template x-if="!currentSource?.url?.startsWith('http')">
-                        <p class="text-slate-600 text-xs font-mono" x-text="currentSource?.publicId || selectedSource"></p>
+                        <p class="station-id max-w-[calc(100%+0.5rem)] truncate text-slate-600 text-xs font-mono" :title="currentSource?.publicId || selectedSource" x-text="currentSource?.publicId || selectedSource"></p>
                     </template>
                 </div>
 

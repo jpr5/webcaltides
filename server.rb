@@ -262,10 +262,11 @@ class Server < ::Sinatra::Base
                                 units: nil
                             }
                         end
-                    elsif p_event[:height].nil? || a_event[:height].nil?
+                    elsif p_event[:height].nil? || a_event[:height].nil? || p_event[:datum] != a_event[:datum]
                         # Some sources publish times only (e.g. many BSH gauges).  There is
                         # nothing to compare, so emit no height delta (nil.to_f would be 0.0 and
-                        # show the other side's full height as a fake difference).
+                        # show the other side's full height as a fake difference).  Nor between
+                        # heights above different datums (Rijkswaterstaat's NAP vs chart datum).
                         event_deltas << {
                             type: p_event[:type],
                             time: WebCalTides.format_time_delta(time_diff),
@@ -432,8 +433,16 @@ class Server < ::Sinatra::Base
 
             calendar.publish
 
-            $LOG.debug "caching to #{cached_ics}"
-            WebCalTides.atomic_write(cached_ics, ical = calendar.to_ical)
+            ical = calendar.to_ical
+
+            # A feed built from a window the source hasn't published in full is not cached for the
+            # month (see WebCalTides.cache_tide_data_for)
+            if calendar.respond_to?(:partial?) && calendar.partial?
+                $LOG.info "not caching #{cached_ics}: partial tide data"
+            else
+                $LOG.debug "caching to #{cached_ics}"
+                WebCalTides.atomic_write(cached_ics, ical)
+            end
 
             ical
         end

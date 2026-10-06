@@ -1,0 +1,56 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+    body:
+      encoding: UTF-8
+      string: '{"Locatie":{"Code":"stavenisse"},"AquoPlusWaarnemingMetadata":{"AquoMetadata":{"ProcesType":"astronomisch","Groepering":{"Code":"GETETBRKD2"}}},"Periode":{"Begindatumtijd":"2029-05-01T00:00:00.000+00:00","Einddatumtijd":"2030-05-30T23:59:59.000+00:00"}}'
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - application/json
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - ddapi20-waterwebservices.rijkswaterstaat.nl
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '253'
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 204
+      message: No Content
+    headers:
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 06 Oct 2026 20:34:04 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=15552000 ; includeSubDomains
+      - max-age=31536000
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+    body:
+      encoding: UTF-8
+      string: ''
+  recorded_at: Tue, 06 Oct 2026 20:34:04 GMT
+recorded_with: VCR 6.4.0

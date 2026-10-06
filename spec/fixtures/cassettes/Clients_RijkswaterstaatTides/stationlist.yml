@@ -1,0 +1,156 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus
+    body:
+      encoding: UTF-8
+      string: '{"CatalogusFilter":{"Grootheden":true,"Groeperingen":true,"Hoedanigheden":true,"ProcesTypes":true}}'
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - application/json
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - ddapi20-waterwebservices.rijkswaterstaat.nl
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '99'
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 06 Oct 2026 20:33:55 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=15552000 ; includeSubDomains
+      - max-age=31536000
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+    body:
+      encoding: ASCII-8BIT
+      string: '{"Succesvol":true,"AquoMetadataLijst":[{"AquoMetadata_MessageID":173,"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch"},{"AquoMetadata_MessageID":174,"Groepering":{"Code":"GETETBRKDMSL2","Omschrijving":"Getijextreem
+        berekend t.o.v. MSL"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch"},{"AquoMetadata_MessageID":242,"Groepering":{"Code":"","Omschrijving":""},"Grootheid":{"Code":"WATHTE","Omschrijving":"Waterhoogte"},"Hoedanigheid":{"Code":"MSL","Omschrijving":"t.o.v.
+        Mean Sea Level"},"Parameter_Wat_Omschrijving":"Waterhoogte astronomisch in
+        Oppervlaktewater t.o.v. Mean Sea Level in cm","ProcesType":"astronomisch"},{"AquoMetadata_MessageID":244,"Groepering":{"Code":"GETETBRKDMSL2","Omschrijving":"Getijextreem
+        berekend t.o.v. MSL"},"Grootheid":{"Code":"WATHTE","Omschrijving":"Waterhoogte"},"Hoedanigheid":{"Code":"MSL","Omschrijving":"t.o.v.
+        Mean Sea Level"},"Parameter_Wat_Omschrijving":"Waterhoogte astronomisch in
+        Oppervlaktewater t.o.v. Mean Sea Level in cm","ProcesType":"astronomisch"},{"AquoMetadata_MessageID":246,"Groepering":{"Code":"","Omschrijving":""},"Grootheid":{"Code":"WATHTE","Omschrijving":"Waterhoogte"},"Hoedanigheid":{"Code":"NAP","Omschrijving":"t.o.v.
+        Normaal Amsterdams Peil"},"Parameter_Wat_Omschrijving":"Waterhoogte astronomisch
+        in Oppervlaktewater t.o.v. Normaal Amsterdams Peil in cm","ProcesType":"astronomisch"},{"AquoMetadata_MessageID":250,"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"WATHTE","Omschrijving":"Waterhoogte"},"Hoedanigheid":{"Code":"NAP","Omschrijving":"t.o.v.
+        Normaal Amsterdams Peil"},"Parameter_Wat_Omschrijving":"Waterhoogte astronomisch
+        in Oppervlaktewater t.o.v. Normaal Amsterdams Peil in cm","ProcesType":"astronomisch"},{"AquoMetadata_MessageID":248,"Groepering":{"Code":"","Omschrijving":""},"Grootheid":{"Code":"WATHTE","Omschrijving":"Waterhoogte"},"Hoedanigheid":{"Code":"NAP","Omschrijving":"t.o.v.
+        Normaal Amsterdams Peil"},"Parameter_Wat_Omschrijving":"Waterhoogte in Oppervlaktewater
+        t.o.v. Normaal Amsterdams Peil in cm","ProcesType":"meting"}],"AquoMetadataLocatieLijst":[{"AquoMetaData_MessageID":173,"Locatie_MessageID":499},{"AquoMetaData_MessageID":173,"Locatie_MessageID":1319},{"AquoMetaData_MessageID":173,"Locatie_MessageID":3352},{"AquoMetaData_MessageID":173,"Locatie_MessageID":5811},{"AquoMetaData_MessageID":173,"Locatie_MessageID":6102},{"AquoMetaData_MessageID":173,"Locatie_MessageID":6200},{"AquoMetaData_MessageID":173,"Locatie_MessageID":9627},{"AquoMetaData_MessageID":173,"Locatie_MessageID":11500},{"AquoMetaData_MessageID":173,"Locatie_MessageID":12898},{"AquoMetaData_MessageID":174,"Locatie_MessageID":7748},{"AquoMetaData_MessageID":242,"Locatie_MessageID":7748},{"AquoMetaData_MessageID":244,"Locatie_MessageID":7748},{"AquoMetaData_MessageID":246,"Locatie_MessageID":499},{"AquoMetaData_MessageID":246,"Locatie_MessageID":1319},{"AquoMetaData_MessageID":246,"Locatie_MessageID":3352},{"AquoMetaData_MessageID":246,"Locatie_MessageID":5811},{"AquoMetaData_MessageID":246,"Locatie_MessageID":6102},{"AquoMetaData_MessageID":246,"Locatie_MessageID":6200},{"AquoMetaData_MessageID":246,"Locatie_MessageID":9627},{"AquoMetaData_MessageID":246,"Locatie_MessageID":11500},{"AquoMetaData_MessageID":246,"Locatie_MessageID":12898},{"AquoMetaData_MessageID":248,"Locatie_MessageID":1319},{"AquoMetaData_MessageID":248,"Locatie_MessageID":3352},{"AquoMetaData_MessageID":248,"Locatie_MessageID":5811},{"AquoMetaData_MessageID":248,"Locatie_MessageID":6102},{"AquoMetaData_MessageID":248,"Locatie_MessageID":6200},{"AquoMetaData_MessageID":248,"Locatie_MessageID":11500},{"AquoMetaData_MessageID":248,"Locatie_MessageID":12898},{"AquoMetaData_MessageID":250,"Locatie_MessageID":499},{"AquoMetaData_MessageID":250,"Locatie_MessageID":1319},{"AquoMetaData_MessageID":250,"Locatie_MessageID":3352},{"AquoMetaData_MessageID":250,"Locatie_MessageID":5811},{"AquoMetaData_MessageID":250,"Locatie_MessageID":6102},{"AquoMetaData_MessageID":250,"Locatie_MessageID":6200},{"AquoMetaData_MessageID":250,"Locatie_MessageID":9627},{"AquoMetaData_MessageID":250,"Locatie_MessageID":11500},{"AquoMetaData_MessageID":250,"Locatie_MessageID":12898}],"BemonsteringshoogteLijst":["-1049","-2379","-1048"],"LocatieLijst":[{"Locatie_MessageID":10603,"Code":"4epetroleumhaven","Coordinatenstelsel":"ETRS89","Lat":51.953524,"Lon":4.140491,"Naam":"4e
+        Petroleumhaven","Omschrijving":"4e Petroleumhaven"},{"Locatie_MessageID":6200,"Code":"ameland.nes","Coordinatenstelsel":"ETRS89","Lat":53.429766,"Lon":5.759448,"Naam":"Ameland,
+        Nes","Omschrijving":"Ameland, Nes"},{"Locatie_MessageID":6102,"Code":"antwerpen.prosperpolder","Coordinatenstelsel":"ETRS89","Lat":51.342082,"Lon":4.247633,"Naam":"Antwerpen,
+        Prosperpolder","Omschrijving":"Antwerpen, Prosperpolder"},{"Locatie_MessageID":499,"Code":"beerkanaal","Coordinatenstelsel":"ETRS89","Lat":51.971117,"Lon":4.097315,"Naam":"Beerkanaal","Omschrijving":"Beerkanaal"},{"Locatie_MessageID":11500,"Code":"denhelder.marsdiep","Coordinatenstelsel":"ETRS89","Lat":52.964359,"Lon":4.74499,"Naam":"Den
+        Helder, Marsdiep","Omschrijving":"Den Helder, Marsdiep"},{"Locatie_MessageID":7748,"Code":"europlatform","Coordinatenstelsel":"ETRS89","Lat":51.99781,"Lon":3.275071,"Naam":"Europlatform","Omschrijving":"Europlatform"},{"Locatie_MessageID":3352,"Code":"harlingen.waddenzee","Coordinatenstelsel":"ETRS89","Lat":53.175634,"Lon":5.409342,"Naam":"Harlingen,
+        Waddenzee","Omschrijving":"Harlingen, Waddenzee"},{"Locatie_MessageID":1319,"Code":"hoekvanholland","Coordinatenstelsel":"ETRS89","Lat":51.976899,"Lon":4.119827,"Naam":"Hoek
+        van Holland","Omschrijving":"rechter oever kilometer 1030.1"},{"Locatie_MessageID":9627,"Code":"knock","Coordinatenstelsel":"ETRS89","Lat":53.327222,"Lon":7.030556,"Naam":"Knock","Omschrijving":"Knock"},{"Locatie_MessageID":12898,"Code":"stavenisse","Coordinatenstelsel":"ETRS89","Lat":51.598,"Lon":4.004,"Naam":"Stavenisse","Omschrijving":"Stavenisse"},{"Locatie_MessageID":5811,"Code":"vlissingen","Coordinatenstelsel":"ETRS89","Lat":51.442,"Lon":3.6,"Naam":"Vlissingen","Omschrijving":"Vlissingen"}],"OpdrachtgevendeInstantieLijst":["ONXXREG_AFVOER","RIKZ_AFVOER","RIZAMON_AFVOER"],"ReferentievlakLijst":["","SPRONGLG","ONB"],"StatuswaardeLijst":["Ongecontroleerd","Gecontroleerd","Definitief"]}'
+  recorded_at: Tue, 06 Oct 2026 20:33:58 GMT
+- request:
+    method: post
+    uri: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenAantalWaarnemingen
+    body:
+      encoding: UTF-8
+      string: '{"LocatieLijst":[{"Code":"ameland.nes"},{"Code":"antwerpen.prosperpolder"},{"Code":"beerkanaal"},{"Code":"denhelder.marsdiep"},{"Code":"harlingen.waddenzee"},{"Code":"hoekvanholland"},{"Code":"knock"},{"Code":"stavenisse"},{"Code":"vlissingen"}],"AquoMetadataLijst":[{"ProcesType":"astronomisch","Groepering":{"Code":"GETETBRKD2"},"Typering":{"Code":"GETETTPE"}}],"Groeperingsperiode":"Jaar","Periode":{"Begindatumtijd":"2026-10-06T00:00:00.000+00:00","Einddatumtijd":"2026-11-06T00:00:00.000+00:00"}}'
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - application/json
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - ddapi20-waterwebservices.rijkswaterstaat.nl
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '501'
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 06 Oct 2026 22:21:52 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Strict-Transport-Security:
+      - max-age=15552000 ; includeSubDomains
+      - max-age=31536000
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+    body:
+      encoding: ASCII-8BIT
+      string: '{"Succesvol":true,"AantalWaarnemingenPerPeriodeLijst":[{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":119,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F012","Omschrijving":"Astronomische
+        waterhoogte mbv harmonische analyse"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"harlingen.waddenzee","Coordinatenstelsel":"ETRS89","Lat":53.175634,"Lon":5.409342,"Naam":"Harlingen,
+        Waddenzee","Omschrijving":"Harlingen, Waddenzee"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}},{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":120,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F012","Omschrijving":"Astronomische
+        waterhoogte mbv harmonische analyse"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"denhelder.marsdiep","Coordinatenstelsel":"ETRS89","Lat":52.964359,"Lon":4.74499,"Naam":"Den
+        Helder, Marsdiep","Omschrijving":"Den Helder, Marsdiep"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}},{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":120,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F012","Omschrijving":"Astronomische
+        waterhoogte mbv harmonische analyse"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"vlissingen","Coordinatenstelsel":"ETRS89","Lat":51.442,"Lon":3.6,"Naam":"Vlissingen","Omschrijving":"Vlissingen"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}},{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":119,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F012","Omschrijving":"Astronomische
+        waterhoogte mbv harmonische analyse"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"ameland.nes","Coordinatenstelsel":"ETRS89","Lat":53.429766,"Lon":5.759448,"Naam":"Ameland,
+        Nes","Omschrijving":"Ameland, Nes"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}},{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":119,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F012","Omschrijving":"Astronomische
+        waterhoogte mbv harmonische analyse"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"stavenisse","Coordinatenstelsel":"ETRS89","Lat":51.598,"Lon":4.004,"Naam":"Stavenisse","Omschrijving":"Stavenisse"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}},{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":120,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F012","Omschrijving":"Astronomische
+        waterhoogte mbv harmonische analyse"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"hoekvanholland","Coordinatenstelsel":"ETRS89","Lat":51.976899,"Lon":4.119827,"Naam":"Hoek
+        van Holland","Omschrijving":"rechter oever kilometer 1030.1"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}},{"AantalMetingenPerPeriodeLijst":[{"AantalMetingen":120,"Groeperingsperiode":{"Jaarnummer":2026}}],"AquoMetadata":{"BemonsteringsApparaat":{"Code":"8000","Omschrijving":"NVT"},"BemonsteringsMethode":{"Code":"NVT","Omschrijving":"NVT"},"BemonsteringsSoort":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxon":{"Code":"NVT","Omschrijving":"NVT"},"BioTaxonType":{"Code":"","Omschrijving":""},"Compartiment":{"Code":"OW","Omschrijving":"Oppervlaktewater"},"Eenheid":{"Code":"DIMSLS","Omschrijving":"dimensieloos"},"Groepering":{"Code":"GETETBRKD2","Omschrijving":"Getijextreem
+        berekend"},"Grootheid":{"Code":"NVT","Omschrijving":"NVT"},"Hoedanigheid":{"Code":"NVT","Omschrijving":"NVT"},"MeetApparaat":{"Code":"8000","Omschrijving":"NVT"},"Orgaan":{"Code":"NVT","Omschrijving":"NVT"},"Parameter":{"Code":"NVT","Omschrijving":"NVT"},"Parameter_Wat_Omschrijving":"Getijextreemtype
+        astronomisch in Oppervlaktewater","ProcesType":"astronomisch","Typering":{"Code":"GETETTPE","Omschrijving":"Getijextreemtype"},"WaardeBepalingsMethode":{"Code":"other:F227","Omschrijving":"getijanalyse
+        methode HORN"},"WaardeBepalingsTechniek":{"Code":"NVT","Omschrijving":"NVT"},"WaardeBewerkingsMethode":{"Code":"NVT","Omschrijving":"NVT"}},"Locatie":{"Code":"knock","Coordinatenstelsel":"ETRS89","Lat":53.327222,"Lon":7.030556,"Naam":"Knock","Omschrijving":"Knock"},"WaarnemingMetadata":{"Bemonsteringshoogte":"-999999999","OpdrachtgevendeInstantie":"RIKZMON_WAT","Referentievlak":"NVT"}}]}'
+  recorded_at: Tue, 06 Oct 2026 22:21:52 GMT
+recorded_with: VCR 6.4.0

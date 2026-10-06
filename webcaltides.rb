@@ -18,6 +18,7 @@ require_relative 'clients/bsh_tides'
 require_relative 'clients/kartverket_tides'
 require_relative 'clients/linz_tides'
 require_relative 'clients/marine_institute_tides'
+require_relative 'clients/rijkswaterstaat_tides'
 require_relative 'clients/noaa_currents'
 require_relative 'clients/harmonics'
 require_relative 'clients/lunar'
@@ -44,11 +45,16 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ, Marine Institute) are preferred over
+    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ, Marine Institute, Rijkswaterstaat) are preferred over
     # harmonic-based predictions.  NOAA and CHS do have nearby stations along the US/Canada border,
     # so their order matters there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).
-    # BSH (Germany), Kartverket (Norway), LINZ (New Zealand) and the Marine Institute (Ireland)
-    # overlap none of the other agency sources, so their positions among them have no effect.
+    # Kartverket (Norway), LINZ (New Zealand) and the Marine Institute (Ireland) overlap none of the
+    # other agency sources within the grouping distance, so their positions among them have no
+    # effect.  BSH (Germany) and Rijkswaterstaat (Netherlands) do overlap on the Ems-Dollard border:
+    # RWS NL__dukegat and NL__knock are at the same coordinates (0 m) as BSH DE__799G (Dukegat) and
+    # DE__802P (Knock, Ems), so each pair is grouped and BSH is the primary there because bsh comes
+    # before rws below (pinned by spec/integration/station_grouping_spec.rb).  RWS NL__pogum is 351 m
+    # from BSH DE__803P (Pogum, Ems), beyond the grouping distance, so those two stay separate.
     #
     # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
     # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
@@ -84,10 +90,19 @@ module WebCalTides
     # 4 (Inishmore, Malin Head, River Tolka, the second Sligo) are 0.5-1.4 km from the MI station,
     # beyond STATION_GROUPING_DISTANCE_M, so search shows them as separate cards there.
     #
+    # Rijkswaterstaat vs TICON (Oct 2026): 73 TICON Dutch stations are within 2 km of RWS gauges, and
+    # RWS publishes the astronomical predictions itself.  Over October 2026 (119-120 events per
+    # station, app feed vs RWS's own high/low list), TICON's largest difference was 46 min at
+    # Stavenisse, 64 min at Vlissingen, 111 min at Harlingen, 152 min at Den Helder and 171 min at
+    # Hoek van Holland, with no event matching to the minute.  So RWS wins where it groups with a
+    # TICON station (Den Helder, Harlingen, Hoek van Holland), and TICON remains an alternative;
+    # where the two are further apart than the grouping distance (Stavenisse and Vlissingen, about
+    # 300 m) they are separate results, RWS listed first.  RWS heights are above NAP, not chart datum.
+    #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi rws xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -149,6 +164,11 @@ module WebCalTides
         # Marine Institute stations ("Howth, Co. Dublin, Ireland"); not Bermuda's "Ireland Island"
         # or Northern Ireland
         /(?<!northern )\bireland\z/i => 'Europe/Dublin',
+        # Rijkswaterstaat gauges (region "Netherlands"); not "Netherlands Antilles" or "Caribbean Netherlands"
+        /(?<!caribbean )\bnetherlands\b(?! antilles)/i => 'Europe/Amsterdam',
+        # BSH gauges and the Rijkswaterstaat gauges in Belgium and Germany
+        /\bbelgium\b/i => 'Europe/Brussels',
+        /\bgermany\b/i => 'Europe/Berlin',
         /uk|england|wales|scotland/i => 'Europe/London',
         /japan/i => 'Asia/Tokyo'
     }.freeze
@@ -193,6 +213,7 @@ module WebCalTides
                 kartverket: Clients::KartverketTides.new(logger),
                 linz:  Clients::LinzTides.new(logger),
                 imi:   Clients::MarineInstituteTides.new(logger),
+                rws:   Clients::RijkswaterstaatTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
@@ -512,7 +533,8 @@ module WebCalTides
             # Calculate deltas.  A side without a height (times-only sources such as many BSH
             # gauges) has nothing to compare, so the height delta is nil rather than a fake one.
             time_diff_seconds = (alt_next[:time].to_time - primary_next[:time].to_time).to_i
-            height_delta = unless alt_next[:height].nil? || primary_next[:height].nil?
+            # Heights above different datums (NAP vs chart datum) aren't comparable either.
+            height_delta = unless alt_next[:height].nil? || primary_next[:height].nil? || alt_next[:datum] != primary_next[:datum]
                 height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
                 format_height_delta(height_diff, primary_next[:units] || 'ft')
             end
@@ -734,16 +756,30 @@ module WebCalTides
         end
     end
 
+    # Fetches and caches the station's data for the month.  Returns the data, or false if there is
+    # none.
     def cache_tide_data_for(station, at:, around:)
         return false unless station
 
+        tide_data = tide_clients(station.provider).tide_data_for(station, around)
+
         # Nothing to cache for an empty list either -- it would serve "no tides" for the month
-        if (tide_data = tide_clients(station.provider).tide_data_for(station, around)).present?
+        return false if tide_data.blank?
+
+        # A window the source hasn't published in full yet (Clients::PartialWindow) is served but
+        # not cached, or the month would keep it partial after the rest is published
+        if partial?(tide_data)
+            logger.info "not caching partial tide data for #{station.id} at #{at}"
+        else
             logger.debug "storing tide data at #{at}"
             atomic_write(at, tide_data.map(&:to_h).to_json)
         end
 
-        return tide_data && tide_data.length > 0
+        return tide_data
+    end
+
+    def partial?(data)
+        data.respond_to?(:partial?) && data.partial?
     end
 
     def tide_data_for(station, around: Time.current.utc)
@@ -751,7 +787,10 @@ module WebCalTides
 
         datestamp = around.utc.strftime("%Y%m")
         filename  = "#{settings.cache_dir}/tides_v#{Models::TideData.version}_#{station.id}_#{datestamp}.json"
-        return nil unless File.exist?(filename) || cache_tide_data_for(station, at:filename, around:around)
+        unless File.exist?(filename)
+            tide_data = cache_tide_data_for(station, at:filename, around:around) or return nil
+            return tide_data if partial?(tide_data)
+        end
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -763,7 +802,8 @@ module WebCalTides
     end
 
     # Returns the next high and low tide events for a station
-    # Returns array of hashes: [{ type: 'High', time: DateTime, height: Float, units: String }, ...]
+    # Returns array of hashes: [{ type: 'High', time: DateTime, height: Float, units: String }, ...],
+    # plus datum: (e.g. 'NAP') for a source whose heights are not above chart datum
     def next_tide_events(id, around: Time.current.utc)
         station = tide_station_for(id) or return nil
         data = tide_data_for(station, around: around) or return nil
@@ -794,6 +834,10 @@ module WebCalTides
             }
         end
 
+        # Heights above another datum (Rijkswaterstaat: NAP) say so, and are not compared with chart datum heights
+        client = tide_clients(station.provider)
+        events.each { |e| e[:datum] = client.class.height_datum } if client.class.respond_to?(:height_datum)
+
         # Sort by time so first tide is the soonest
         events.sort_by { |e| e[:time] }
     end
@@ -804,20 +848,24 @@ module WebCalTides
         data    = tide_data_for(station, around: around) or return nil
 
         cal = Icalendar::Calendar.new
-        # Kartverket, LINZ and Marine Institute names are already properly cased; titleize would mangle them
-        # ("Ny-Ålesund" to "Ny ålesund", "Port Ōhope Wharf" to "Port ōhope Wharf", "Waitangi - Chatham Island" loses its dash)
-        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz', 'imi']) ? station.name : station.name.titleize
+        # Kartverket, LINZ, Marine Institute and Rijkswaterstaat names are already properly cased; titleize would mangle them
+        # ("Ny-Ålesund" to "Ny ålesund", "Port Ōhope Wharf" to "Port ōhope Wharf", "Waitangi - Chatham Island" loses its dash,
+        # "IJmuiden, buitenhaven" to "I Jmuiden, Buitenhaven", "Hoek van Holland" to "Hoek Van Holland")
+        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz', 'imi', 'rws']) ? station.name : station.name.titleize
 
         if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
         # BSH, Kartverket and Marine Institute terms require, and LINZ's terms ask for, the source
-        # credit in every presentation, so on the feed and every event
+        # credit in every presentation, so on the feed and every event.  Rijkswaterstaat's CC0
+        # doesn't, but the feed must say its heights are above NAP, not chart datum.
         credited = {
             'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides, 'linz' => Clients::LinzTides,
-            'imi' => Clients::MarineInstituteTides
+            'imi' => Clients::MarineInstituteTides, 'rws' => Clients::RijkswaterstaatTides
         }[station.provider]
+        # A height datum other than chart datum is named after every height ("1.74 m NAP")
+        datum = credited.respond_to?(:height_datum) ? " #{credited.height_datum}" : ""
         if credited
             caldesc = credited.feed_description(data)
             cal.description = caldesc
@@ -832,7 +880,7 @@ module WebCalTides
                 title = if tide.prediction.nil?
                     "#{tide.type} Tide"
                 else
-                    "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+                    "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}#{datum}"
                 end
 
                 cal.event do |e|
@@ -848,6 +896,9 @@ module WebCalTides
 
         cal.define_singleton_method(:station)  { station }
         cal.define_singleton_method(:location) { station.location }
+        # Built from a partial window: the server doesn't cache the feed for the month either
+        partial = partial?(data)
+        cal.define_singleton_method(:partial?) { partial }
 
         logger.info "tide calendar for #{station.name} generated with #{cal.events.length} events"
 

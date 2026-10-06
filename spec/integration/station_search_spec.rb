@@ -52,6 +52,44 @@ RSpec.describe WebCalTides do
         end
     end
 
+    describe '.find_tide_stations with Rijkswaterstaat stations' do
+        let(:rws) do
+            VCR.use_cassette('Clients_RijkswaterstaatTides/stationlist', record: :none) do
+                Clients::RijkswaterstaatTides.new(Logger.new('/dev/null')).tide_stations
+            end
+        end
+        let(:ticon) do
+            [['Stavenisse, NLD', 'Tdb6d7c0'], ['Vlissingen, NLD', 'Tf72e951'], ['Hoek van Holland, NLD', 'T3ee6a65'],
+             ['Den Helder, NLD', 'Tf2bcd2c'], ['Harlingen, NLD', 'T51a982b']].map do |name, id|
+                build_station(name: name, id: id, region: 'NLD', location: name, public_id: id, provider: 'ticon')
+            end
+        end
+
+        # The station list request carries today's date, so replay it on the day it was recorded
+        before { Timecop.freeze(Time.utc(2026, 10, 6, 12)) }
+        after  { Timecop.return }
+
+        # As the app builds the list: agency sources before the harmonic ones
+        before { allow(described_class).to receive(:tide_stations).and_return(rws + ticon) }
+
+        def ids(*tokens)
+            described_class.find_tide_stations(by: tokens).map(&:id)
+        end
+
+        it 'finds the RWS station before TICON by place name, including names RWS qualifies ("Den Helder, Marsdiep")' do
+            expect(ids('stavenisse')).to eq(%w[NL__stavenisse Tdb6d7c0])
+            expect(ids('vlissingen')).to eq(%w[NL__vlissingen Tf72e951])
+            expect(ids('hoek', 'van', 'holland')).to eq(%w[NL__hoekvanholland T3ee6a65])
+            expect(ids('den', 'helder')).to eq(%w[NL__denhelder.marsdiep Tf2bcd2c])
+            expect(ids('harlingen')).to eq(%w[NL__harlingen.waddenzee T51a982b])
+        end
+
+        it 'finds the RWS station alongside TICON with an "NLD" qualifier, and with "Netherlands"' do
+            expect(ids('stavenisse', 'nld')).to eq(%w[NL__stavenisse Tdb6d7c0])
+            expect(ids('stavenisse', 'netherlands')).to eq(%w[NL__stavenisse])
+        end
+    end
+
     describe '.find_tide_stations' do
         before do
             # Mock the tide_stations method to return predictable test data

@@ -152,6 +152,33 @@ RSpec.describe WebCalTides do
                 expect(WebCalTides.timezone_for(54.6, -5.9, belfast)).not_to eq('Europe/Dublin')
             end
         end
+
+        context 'when the lookup fails for a Rijkswaterstaat station' do
+            before { allow(Timezone).to receive(:lookup).and_raise(StandardError, 'lookup down') }
+
+            {
+                ['Stavenisse',               'Netherlands', 'Stavenisse, Netherlands',           51.598,    4.004]    => 'Europe/Amsterdam',
+                ['Delfzijl',                 'Netherlands', 'Delfzijl, Netherlands',             53.328,    6.931]    => 'Europe/Amsterdam',
+                # RWS gauges outside the Netherlands: their own country's zone (same CET/CEST rules)
+                ['Antwerpen, Prosperpolder', 'Belgium',     'Antwerpen, Prosperpolder, Belgium', 51.342082, 4.247633] => 'Europe/Brussels',
+                ['Knock',                    'Germany',     'Knock, Germany',                    53.327222, 7.030556] => 'Europe/Berlin',
+                ['Pogum',                    'Germany',     'Pogum, Germany',                    53.321485, 7.253999] => 'Europe/Berlin'
+            }.each do |(name, region, location, lat, lon), zone|
+                it "falls back to #{zone} for #{name} and caches it" do
+                    station = build_station(name: name, region: region, location: location, lat: lat, lon: lon, provider: 'rws')
+                    expect(WebCalTides.timezone_for(lat, lon, station)).to eq(zone)
+                    expect(WebCalTides.timezone_for(lat, lon)).to eq(zone)
+                end
+            end
+
+            it 'does not give the former Netherlands Antilles or the Caribbean Netherlands Dutch time' do
+                curacao = build_station(name: 'Willemstad', region: 'Netherlands Antilles', location: 'Willemstad, Netherlands Antilles', lat: 12.1, lon: -68.9)
+                bonaire = build_station(name: 'Kralendijk', region: 'Caribbean Netherlands', location: 'Kralendijk, Caribbean Netherlands', lat: 12.15, lon: -68.27)
+
+                expect(WebCalTides.timezone_for(12.1, -68.9, curacao)).not_to eq('Europe/Amsterdam')
+                expect(WebCalTides.timezone_for(12.15, -68.27, bonaire)).not_to eq('Europe/Amsterdam')
+            end
+        end
     end
 
     describe '#timezone_from_region' do

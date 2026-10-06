@@ -765,8 +765,8 @@ RSpec.describe 'Kartverket credit in the web UI', type: :api do
             expect(html.css('.kartverket-credit')).to all(satisfy { |n| n.key?('x-cloak') })
             expect(html.css('template[x-if="/kartverket/i.test(provider)"] .kartverket-notice')).not_to be_empty
             # Styled as official, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)"]')).not_to be_empty
         end
 
         it 'says on both badges, as the CC BY change notice does, that only heights are converted and times are unchanged (UTC)' do
@@ -837,8 +837,8 @@ RSpec.describe 'LINZ credit in the web UI', type: :api do
             expect(html.at_css('.linz-credit')['class'].split).to include('max-w-[10.5rem]')
             expect(html.css('template[x-if="/linz/i.test(provider)"] .linz-notice')).not_to be_empty
             # Styled as an agency source, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)"]')).not_to be_empty
         end
 
         it 'adds no LINZ credit to NOAA, BSH or Kartverket badges' do
@@ -923,15 +923,312 @@ RSpec.describe 'Marine Institute credit in the web UI', type: :api do
             # Each source's notice is its own x-if, and the credit lines sit outside them all (inside
             # one, Alpine never renders them while another source is selected)
             expect(html.css('template[x-if*="test(provider)"] template[x-if*="test(provider)"]')).to be_empty
-            expect(html.css('p[x-show$="test(provider)"]').map { |n| [n['class'].split.first, n.ancestors('template').length] }).to eq(%w[bsh-credit kartverket-credit linz-credit imi-credit].map { |c| [c, 0] })
+            expect(html.css('p[x-show$="test(provider)"]').map { |n| [n['class'].split.first, n.ancestors('template').length] }).to eq(%w[bsh-credit kartverket-credit linz-credit imi-credit rws-credit].map { |c| [c, 0] })
             # Styled as an agency source, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)"]')).not_to be_empty
         end
 
         it 'adds no MI credit to NOAA, BSH, Kartverket or LINZ badges' do
             expect(badge('noaa').to_html).not_to include('Marine Institute')
             %w[bsh kartverket linz].each { |p| expect(badge(p).css('.imi-credit, .imi-notice')).to be_empty }
+        end
+    end
+end
+
+RSpec.describe WebCalTides do
+    describe '.tide_calendar_for with rws (Rijkswaterstaat) provider: calendar name' do
+        let(:station) do
+            build_station(name: 'IJmuiden, buitenhaven', id: 'NL__ijmuiden.buitenhaven', public_id: 'ijmuiden.buitenhaven', provider: 'rws',
+                          lat: 52.463, lon: 4.555, location: 'IJmuiden, buitenhaven, Netherlands', region: 'Netherlands',
+                          url: Clients::RijkswaterstaatTides::HOME_URL)
+        end
+
+        # RWS Stavenisse: 2026-10-24T14:09+01:00 HW 158 cm and 2026-10-26T09:07+01:00 LW -119 cm vs NAP
+        # (summer time on the 24th, winter time on the 26th; RWS gives +01:00 for both)
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 26, 8, 7), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NL__ijmuiden.buitenhaven', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'names the calendar with the RWS name as published (titleize would give "I Jmuiden, Buitenhaven")' do
+            expect(calendar.x_wr_calname.first.value).to eq('IJmuiden, buitenhaven')
+            allow(described_class).to receive(:tide_station_for).and_return(station.dup.tap { |s| s.name = 'Hoek van Holland' })
+            expect(described_class.tide_calendar_for('NL__hoekvanholland').x_wr_calname.first.value).to eq('Hoek van Holland')
+        end
+
+    end
+end
+
+RSpec.describe WebCalTides do
+    describe '.tide_calendar_for with rws (Rijkswaterstaat) provider: partial window' do
+        let(:station) do
+            build_station(name: 'IJmuiden, buitenhaven', id: 'NL__ijmuiden.buitenhaven', public_id: 'ijmuiden.buitenhaven', provider: 'rws',
+                          lat: 52.463, lon: 4.555, location: 'IJmuiden, buitenhaven, Netherlands', region: 'Netherlands',
+                          url: Clients::RijkswaterstaatTides::HOME_URL)
+        end
+
+        # RWS Stavenisse: 2026-10-24T14:09+01:00 HW 158 cm and 2026-10-26T09:07+01:00 LW -119 cm vs NAP
+        # (summer time on the 24th, winter time on the 26th; RWS gives +01:00 for both)
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 26, 8, 7), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NL__ijmuiden.buitenhaven', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'says whether it was built from a partial window' do
+            expect(calendar).not_to be_partial
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data.dup.extend(Clients::PartialWindow))
+            expect(described_class.tide_calendar_for('NL__ijmuiden.buitenhaven')).to be_partial
+        end
+    end
+
+    describe '.tide_data_for with a partial window' do
+        let(:station) { build_station(id: 'NL__stavenisse', public_id: 'stavenisse', provider: 'rws') }
+        let(:client)  { instance_double(Clients::RijkswaterstaatTides) }
+        let(:tides)   { [build_tide_data(type: 'High', units: 'm', prediction: 1.2, time: DateTime.new(2027, 12, 31, 4, 27))] }
+        let(:file)    { "#{described_class.settings.cache_dir}/tides_v#{Models::TideData.version}_NL__stavenisse_202706.json" }
+
+        around { |example| with_test_cache_dir { example.run } }
+
+        before do
+            allow(described_class).to receive(:tide_clients).and_call_original
+            allow(described_class).to receive(:tide_clients).with('rws').and_return(client)
+        end
+
+        it 'serves it without caching it for the month, and fetches it again next time' do
+            allow(client).to receive(:tide_data_for).and_return(tides.dup.extend(Clients::PartialWindow))
+
+            2.times { expect(described_class.tide_data_for(station, around: Time.utc(2027, 6, 15))).to eq(tides) }
+            expect(File.exist?(file)).to be(false)
+            expect(client).to have_received(:tide_data_for).twice
+        end
+
+        it 'caches a complete window as before' do
+            allow(client).to receive(:tide_data_for).and_return(tides)
+
+            2.times { expect(described_class.tide_data_for(station, around: Time.utc(2027, 6, 15)).map(&:prediction)).to eq([1.2]) }
+            expect(File.exist?(file)).to be(true)
+            expect(client).to have_received(:tide_data_for).once
+        end
+    end
+end
+
+RSpec.describe 'GET /tides/:station.ics for a partial window', type: :api do
+    include Rack::Test::Methods
+
+    let(:station) { build_station(name: 'Stavenisse', id: 'NL__stavenisse', public_id: 'stavenisse', provider: 'rws', location: 'Stavenisse, Netherlands') }
+    let(:tides)   { [build_tide_data(type: 'High', units: 'm', prediction: 1.2, time: DateTime.new(2027, 12, 31, 4, 27))] }
+    let(:ics)     { "#{Server.settings.cache_dir}/tides_v#{Models::TideData.version}_NL__stavenisse_202706_metric_0_0.ics" }
+
+    # The clock is frozen in 2027, which would make the route start the monthly cache cleanup;
+    # keep it out of the real cache/ by using a temp cache dir and stubbing the cleanup.
+    around { |example| with_test_cache_dir { example.run } }
+
+    before do
+        allow(WebCalTides).to receive(:cleanup_if_month_changed)
+        allow(WebCalTides).to receive(:station_ids).and_return(['NL__stavenisse'])
+        allow(WebCalTides).to receive(:tide_station_for).and_return(station)
+    end
+
+    it 'serves the feed without caching it for the month' do
+        allow(WebCalTides).to receive(:tide_data_for).and_return(tides.dup.extend(Clients::PartialWindow))
+        Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__stavenisse.ics', units: 'metric', solar: '0' }
+
+        expect(last_response).to be_ok
+        expect(last_response.body).to include('High Tide 1.2 m')
+        expect(File.exist?(ics)).to be(false)
+    end
+
+    it 'caches a feed from a complete window as before' do
+        allow(WebCalTides).to receive(:tide_data_for).and_return(tides)
+        Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__stavenisse.ics', units: 'metric', solar: '0' }
+
+        expect(last_response).to be_ok
+        expect(File.exist?(ics)).to be(true)
+    end
+
+    it 'serves the RWS station id with dots in it' do
+        allow(WebCalTides).to receive(:station_ids).and_return(['NL__denhelder.marsdiep'])
+        allow(WebCalTides).to receive(:tide_data_for).and_return(tides.dup.extend(Clients::PartialWindow))
+        Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__denhelder.marsdiep.ics', units: 'metric', solar: '0' }
+
+        expect(last_response).to be_ok
+        expect(WebCalTides).to have_received(:tide_station_for).with('NL__denhelder.marsdiep')
+    end
+end
+
+
+RSpec.describe WebCalTides do
+    describe '.tide_calendar_for with rws (Rijkswaterstaat) provider' do
+        let(:station) do
+            build_station(name: 'IJmuiden, buitenhaven', id: 'NL__ijmuiden.buitenhaven', public_id: 'ijmuiden.buitenhaven', provider: 'rws',
+                          lat: 52.463, lon: 4.555, location: 'IJmuiden, buitenhaven, Netherlands', region: 'Netherlands',
+                          url: Clients::RijkswaterstaatTides::HOME_URL)
+        end
+
+        # RWS Stavenisse: 2026-10-24T14:09+01:00 HW 158 cm and 2026-10-26T09:07+01:00 LW -119 cm vs NAP
+        # (summer time on the 24th, winter time on the 26th; RWS gives +01:00 for both)
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 26, 8, 7), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NL__ijmuiden.buitenhaven', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'names the source, the NAP datum, what we changed and the disclaimer on the feed' do
+            caldesc = Icalendar::Values::Text.new(Clients::RijkswaterstaatTides.feed_description(tide_data)).value_ical
+
+            expect(ical).to include("DESCRIPTION:#{caldesc}", "X-WR-CALDESC:#{caldesc}")
+            expect(ical).to match(/^X-WR-CALDESC:Source: Rijkswaterstaat .*CC0.*Heights are above NAP .*not chart datum.*NOT FOR NAVIGATION/)
+            expect(ical).to match(/^X-WR-CALDESC:.*no uptime guarantee and is not suitable for critical applications\\?, and that use is at your own risk\./)
+            expect(ical).not_to match(/liab/i)
+            expect(ical).not_to include('This program is distributed')
+        end
+
+        it 'names the source and the datum on every event' do
+            expect(calendar.events.map { |e| e.description.to_s }).to all(eq(Clients::RijkswaterstaatTides.event_description(tide_data.first)))
+            expect(calendar.events.first.description.to_s).to include('Height above NAP')
+        end
+
+        it 'keeps the instants RWS publishes at a fixed +01:00 (no summer time shift) and labels heights in metres above NAP' do
+            # 14:09+01:00 is 13:09 UTC; read as Dutch summer time (+02:00) it would be 12:09
+            expect(ical).to include('DTSTART;TZID=GMT:20261024T130900', 'DTSTART;TZID=GMT:20261026T080700')
+            expect(ical).not_to include('DTSTART;TZID=GMT:20261024T120900')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 1.58 m NAP', 'Low Tide -1.19 m NAP'])
+        end
+
+        it 'converts the heights to feet in the default (imperial) units, still labelled NAP' do
+            calendar = described_class.tide_calendar_for('NL__ijmuiden.buitenhaven')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 5.184 ft NAP', 'Low Tide -3.904 ft NAP'])
+        end
+
+        it 'adds no NAP label or RWS credit to other providers' do
+            allow(described_class).to receive(:tide_station_for).and_return(station.dup.tap { |s| s.provider = 'ticon' })
+            calendar = described_class.tide_calendar_for('T1', units: 'metric')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 1.58 m', 'Low Tide -1.19 m'])
+            expect(calendar.to_ical).not_to include('Rijkswaterstaat')
+        end
+
+    end
+end
+
+# Rijkswaterstaat's data is CC0, but the UI names the source and that heights are above NAP
+RSpec.describe 'Rijkswaterstaat credit in the web UI', type: :api do
+    describe 'footer' do
+        it 'names RWS with links, the NAP datum and what we changed, outside any hover popover' do
+            get '/'
+            node = Nokogiri::HTML(last_response.body).at_css('footer #rws-credit')
+
+            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.text.squish).to eq(
+                'Dutch tide predictions: Rijkswaterstaat astronomical tide, CC0; heights above NAP (Dutch land datum), not chart datum, ' \
+                'converted from cm to the selected units; times converted from +01:00 to UTC. Weather not included. Not for navigation.'
+            )
+            expect(node.css('a').map { |a| [a.text, a['href']] }).to eq([
+                ['Rijkswaterstaat', 'https://waterinfo.rws.nl'], ['CC0', 'https://creativecommons.org/publicdomain/zero/1.0/']
+            ])
+        end
+    end
+
+    describe 'provider badge' do
+        def badge(provider, has_alternatives: false)
+            station = build_station(id: 'S1', provider: provider)
+            html = Server.new!.send(:erb, :'partials/_provider_badge', layout: false, locals: {
+                type: :tide, theme: { accent: 'ocean' }, station: station, has_alternatives: has_alternatives,
+                alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        it 'shows RWS with a not-for-navigation note, the NAP datum and the linked source, narrow enough to wrap' do
+            html = badge('rws')
+
+            expect(html.at_css('.badge-warning')).to be_nil
+            expect(html.at_css('.rws-credit').text).to eq('Rijkswaterstaat · CC0 · Heights vs NAP · Not for navigation')
+            expect(html.at_css('.rws-credit')['class']).to include('max-w-[10.5rem]')
+            expect(html.at_css('.rws-credit a')['href']).to eq(Clients::RijkswaterstaatTides::HOME_URL)
+            expect(html.at_css('.rws-notice')).not_to be_nil
+            expect(html.text).to include('NOT FOR NAVIGATION', 'Heights are above NAP (the Dutch land datum), not chart datum.')
+        end
+
+        it 'does the same on the multi-source badge, shown (and cloaked until Alpine starts) only while RWS is selected' do
+            html = badge('rws', has_alternatives: true)
+
+            expect(html.css('.rws-credit').map { |n| n['x-show'] }).to eq(['/rws/i.test(provider)', '/rws/i.test(station.provider)'])
+            expect(html.css('.rws-credit')).to all(satisfy { |n| n.key?('x-cloak') })
+            expect(html.css('template[x-if="/rws/i.test(provider)"] .rws-notice')).not_to be_empty
+            # The credit line sits outside every source's x-if, so Alpine renders it under the badge
+            expect(html.at_css('p.rws-credit[x-show="/rws/i.test(provider)"]').ancestors('template')).to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi|rws/i.test(provider)')
+        end
+
+        it 'names the datum after compared heights' do
+            expect(badge('rws', has_alternatives: true).to_html).to include("(event.datum ? ' ' + event.datum : '')")
+        end
+
+        it 'adds no RWS credit to other badges' do
+            expect(badge('noaa').to_html).not_to include('Rijkswaterstaat')
+            %w[bsh kartverket linz imi].each { |p| expect(badge(p).css('.rws-credit, .rws-notice')).to be_empty }
+        end
+    end
+
+    describe 'station card id' do
+        def card(url)
+            station = build_station(id: 'NL__hoekvanholland.maeslantkering.beneden.noord',
+                                    public_id: 'hoekvanholland.maeslantkering.beneden.noord', provider: 'rws', url: url)
+            html = Server.new!.send(:erb, :'partials/_station_card', layout: false, locals: {
+                type: :tide, station: station, index: 0, theme: { accent: 'ocean', text: 'text-ocean-400' },
+                map_url: nil, webcal_base: "'webcal://x'", https_base: "'https://x'",
+                has_alternatives: false, alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        # A long dotted RWS id must truncate inside its column instead of running under the credit
+        it 'truncates the linked id with an ellipsis, lets the arrow wrap below it and puts the full id in the title' do
+            link = card('https://waterinfo.rws.nl').at_css('template[x-if="currentSource?.url?.startsWith(\'http\')"]').children.at_css('a.station-id')
+
+            expect(link['class'].split).to include('inline-flex', 'flex-wrap', 'max-w-[calc(100%+0.5rem)]')
+            expect(link[':title']).to eq('currentSource.publicId || selectedSource')
+            id_span, arrow = link.css('span').to_a
+            expect(id_span['class'].split).to include('min-w-0', 'truncate')
+            expect(arrow['class']).to include('flex-shrink-0')
+            expect(arrow.text).to eq('↗')
+        end
+
+        it 'truncates the unlinked id the same way' do
+            id = card('#ticon').at_css('template[x-if="!currentSource?.url?.startsWith(\'http\')"]').children.at_css('p.station-id')
+
+            expect(id['class'].split).to include('max-w-[calc(100%+0.5rem)]', 'truncate')
+            expect(id[':title']).to eq('currentSource?.publicId || selectedSource')
         end
     end
 end
