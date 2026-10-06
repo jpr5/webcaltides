@@ -36,6 +36,12 @@ RSpec.describe WebCalTides do
             expect(calendar.x_wr_calname.first.value).to eq('Boston Harbor')
         end
 
+        it 'title-cases an all-caps station name' do
+            station.name = 'BOSTON HARBOR'
+            calendar = described_class.tide_calendar_for('NOAA123')
+            expect(calendar.x_wr_calname.first.value).to eq('Boston Harbor')
+        end
+
         it 'creates events for each tide' do
             calendar = described_class.tide_calendar_for('NOAA123')
             expect(calendar.events.length).to eq(3)
@@ -102,23 +108,25 @@ RSpec.describe WebCalTides do
                 expect(calendar.description.to_s).to include('NOT FOR NAVIGATION')
             end
 
-            it 'keeps the harmonic disclaimer and carries no BSH credit' do
+            it 'keeps the harmonic disclaimer and carries no BSH or Kartverket credit' do
                 calendar = described_class.tide_calendar_for('X123')
                 ical     = calendar.to_ical.gsub(/\r\n[ \t]/, '')
 
                 expect(Array(calendar.description)).to match([start_with('NOT FOR NAVIGATION. This program is distributed')])
                 expect(ical).not_to include('Bundesamt')
+                expect(ical).not_to include('Kartverket')
                 expect(ical).not_to include('X-WR-CALDESC')
                 expect(calendar.events.map(&:description)).to all(be_nil)
             end
         end
 
-        it 'carries no BSH credit on an official non-BSH feed' do
+        it 'carries no BSH or Kartverket credit on an official NOAA feed' do
             calendar = described_class.tide_calendar_for('NOAA123')
             ical     = calendar.to_ical.gsub(/\r\n[ \t]/, '')
 
             expect(Array(calendar.description)).to be_empty
             expect(ical).not_to include('Bundesamt')
+            expect(ical).not_to include('Kartverket')
             expect(ical).not_to include('X-WR-CALDESC')
             expect(calendar.events.map(&:description)).to all(be_nil)
         end
@@ -173,6 +181,66 @@ RSpec.describe WebCalTides do
         it 'omits the height when BSH publishes none' do
             calendar = described_class.tide_calendar_for('DE__717P', units: 'metric')
             expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 4.01 m', 'Low Tide'])
+        end
+    end
+
+    describe '.tide_calendar_for with kartverket provider' do
+        let(:station) do
+            build_station(name: 'Bergen', id: 'NO__BGO', public_id: 'BGO', provider: 'kartverket',
+                          lat: 60.398046, lon: 5.320487, location: 'Bergen, Norway',
+                          url: 'https://kartverket.no/en/at-sea/se-havniva/result?latitude=60.398046&longitude=5.320487')
+        end
+
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.617, time: DateTime.new(2026, 10, 1, 0, 22), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: 0.432, time: DateTime.new(2026, 10, 1, 6, 14), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NO__BGO', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'credits © Kartverket with a link and the CC BY 4.0 licence, and disclaims navigation use on the feed' do
+            credit  = '© Kartverket (Norwegian Mapping Authority\\, Hydrographic Service)\\, https://www.kartverket.no/\\, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)'
+            changes = 'Heights converted from cm above chart datum to metres or feet\\, and high and low waters presented as calendar events\\; times unchanged\\, in UTC'
+
+            expect(ical).to match(/^DESCRIPTION:#{Regexp.escape(credit)}\. #{Regexp.escape(changes)}\. NOT FOR NAVIGATION/)
+            expect(ical).to match(/^X-WR-CALDESC:#{Regexp.escape(credit)}\. #{Regexp.escape(changes)}\. NOT FOR NAVIGATION/)
+        end
+
+        it 'credits © Kartverket on every event' do
+            expect(calendar.events.map { |e| e.description.to_s }).to all(eq(Clients::KartverketTides.event_description))
+            expect(calendar.events.map { |e| e.description.to_s }).to all(start_with('© Kartverket'))
+        end
+
+        it 'keeps the Kartverket event times unchanged and shows heights in metres, linking each to the station page' do
+            expect(ical).to include('DTSTART;TZID=GMT:20261001T002200', 'DTSTART;TZID=GMT:20261001T061400')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 1.617 m', 'Low Tide 0.432 m'])
+            expect(calendar.events.map { |e| e.url.to_s }).to all(eq(station.url))
+        end
+
+        it 'carries no BSH credit' do
+            expect(ical).not_to include('Bundesamt')
+        end
+
+        it 'names the calendar with the station name exactly as Kartverket publishes it' do
+            allow(described_class).to receive(:tide_station_for).and_return(station.tap { |s| s.name = 'Ny-Ålesund' })
+
+            expect(calendar.x_wr_calname.first.value).to eq('Ny-Ålesund')
+            expect(ical).to include("X-WR-CALNAME:Ny-Ålesund\r\n")
+        end
+
+        it 'converts the heights to feet in the default (imperial) units, times unchanged' do
+            calendar = described_class.tide_calendar_for('NO__BGO')
+
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 5.305 ft', 'Low Tide 1.417 ft'])
+            expect(calendar.to_ical).to include('DTSTART;TZID=GMT:20261001T002200', 'DTSTART;TZID=GMT:20261001T061400')
         end
     end
 
@@ -397,6 +465,67 @@ RSpec.describe 'BSH credit in the web UI', type: :api do
 
         it 'adds no BSH credit to a NOAA badge' do
             expect(badge('noaa').to_html).not_to include('BSH')
+        end
+    end
+end
+
+# Kartverket's CC BY 4.0 terms want "© Kartverket", with a link, wherever its data is used
+RSpec.describe 'Kartverket credit in the web UI', type: :api do
+    describe 'footer' do
+        it 'shows © Kartverket with links to Kartverket and the licence, outside any hover popover' do
+            get '/'
+            node = Nokogiri::HTML(last_response.body).at_css('footer #kartverket-credit')
+
+            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.text.squish).to eq('Norwegian tide predictions: © Kartverket, licensed under CC BY 4.0; heights converted to the selected units, times unchanged (UTC). Not for navigation.')
+            expect(node.css('a').map { |a| [a.text, a['href']] }).to eq([
+                ['© Kartverket', 'https://www.kartverket.no/'], ['CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/']
+            ])
+        end
+    end
+
+    describe 'provider badge' do
+        def badge(provider, has_alternatives: false)
+            station = build_station(id: 'S1', provider: provider)
+            html = Server.new!.send(:erb, :'partials/_provider_badge', layout: false, locals: {
+                type: :tide, theme: { accent: 'ocean' }, station: station, has_alternatives: has_alternatives,
+                alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        it 'shows Kartverket as an official source with a not-for-navigation note and the linked credit' do
+            html = badge('kartverket')
+
+            expect(html.at_css('.badge-warning')).to be_nil
+            expect(html.at_css('.kartverket-credit').text).to eq('© Kartverket · CC BY 4.0 · Not for navigation')
+            expect(html.at_css('.kartverket-credit a')['href']).to eq('https://www.kartverket.no/')
+            expect(html.at_css('.kartverket-notice')).not_to be_nil
+            expect(html.text).to include('NOT FOR NAVIGATION')
+        end
+
+        it 'does the same on the multi-source badge, shown (and cloaked until Alpine starts) only while Kartverket is selected' do
+            html = badge('kartverket', has_alternatives: true)
+
+            expect(html.css('.kartverket-credit').map { |n| n['x-show'] }).to eq(['/kartverket/i.test(provider)', '/kartverket/i.test(station.provider)'])
+            expect(html.css('.kartverket-credit')).to all(satisfy { |n| n.key?('x-cloak') })
+            expect(html.css('template[x-if="/kartverket/i.test(provider)"] .kartverket-notice')).not_to be_empty
+            # Styled as official, so no harmonic-source warning
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket/i.test(provider)"]')).not_to be_empty
+        end
+
+        it 'says on both badges, as the CC BY change notice does, that only heights are converted and times are unchanged (UTC)' do
+            [badge('kartverket'), badge('kartverket', has_alternatives: true)].each do |html|
+                notes = html.css('p').map { |p| p.text.squish }.select { |t| t.start_with?('© Kartverket, CC BY 4.0.') && t.match?(/convert/i) }
+                expect(notes).to eq(['© Kartverket, CC BY 4.0. Heights converted; times unchanged (UTC).'])
+                expect(html.text).not_to match(/times and heights converted/i)
+            end
+        end
+
+        it 'adds no Kartverket credit to NOAA or BSH badges' do
+            expect(badge('noaa').to_html).not_to include('Kartverket')
+            expect(badge('bsh').css('.kartverket-credit, .kartverket-notice')).to be_empty
         end
     end
 end
