@@ -291,6 +291,43 @@ RSpec.describe WebCalTides do
 
             expect(base_calendar.events.first.location.to_s).to eq('Boston, MA')
         end
+
+        context 'above the Arctic Circle' do
+            let(:base_calendar) do
+                cal = Icalendar::Calendar.new
+                station = build_station(lat: 69.64611, lon: 18.95479) # Tromso
+                cal.define_singleton_method(:station) { station }
+                cal.define_singleton_method(:location) { 'Tromso, NOR' }
+                cal
+            end
+
+            before do
+                allow(described_class).to receive(:timezone_for).and_return('Europe/Oslo')
+            end
+
+            def solar_days(calendar, summary)
+                calendar.events.select { |e| e.summary.to_s == summary }.map { |e| e.dtstart.to_date }
+            end
+
+            it 'skips sunrise and sunset on days without them (polar night, midnight sun)' do
+                freeze_time(Time.utc(2025, 6, 15))
+
+                expect {
+                    described_class.solar_calendar_for(base_calendar, around: Time.current.utc)
+                }.not_to raise_error
+
+                sunrises = solar_days(base_calendar, 'Sunrise')
+                sunsets  = solar_days(base_calendar, 'Sunset')
+
+                # Polar night and midnight sun: no events
+                expect(sunrises).not_to include(Date.new(2025, 12, 21), Date.new(2025, 6, 21))
+                expect(sunsets).not_to include(Date.new(2025, 12, 21), Date.new(2025, 6, 21))
+
+                # Ordinary day: both events
+                expect(sunrises).to include(Date.new(2025, 9, 22))
+                expect(sunsets).to include(Date.new(2025, 9, 22))
+            end
+        end
     end
 
     describe '.lunar_calendar_for' do
