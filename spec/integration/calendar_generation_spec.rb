@@ -330,6 +330,82 @@ RSpec.describe WebCalTides do
             allow(described_class).to receive(:tide_data_for).and_return(tide_data)
         end
 
+        let(:calendar) { described_class.tide_calendar_for('IE__Dublin_Port', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'gives the MI credit with the CC BY 4.0 link, what we changed, and the disclaimer on the feed' do
+            caldesc = Icalendar::Values::Text.new(Clients::MarineInstituteTides.feed_description(tide_data)).value_ical
+
+            expect(ical).to include("DESCRIPTION:#{caldesc}", "X-WR-CALDESC:#{caldesc}")
+            expect(ical).to match(/^X-WR-CALDESC:Data supplied by Marine Institute .*creativecommons\.org\/licenses\/by\/4\.0.*Changes: heights converted from metres above OD Malin to metres above chart datum.*times unchanged.*NOT FOR NAVIGATION/)
+            expect(ical).not_to include('This program is distributed')
+        end
+
+        it 'credits MI on every event' do
+            expect(calendar.events.map { |e| e.description.to_s }).to all(eq(Clients::MarineInstituteTides.event_description))
+        end
+
+        # Through the real client: ERDDAP's response for Dublin Port (a station with a chart datum
+        # offset), with the height unit row as recorded (metres) or changed to feet
+        context 'with the feed built from the ERDDAP response' do
+            let(:erddap_csv) do
+                cassette = YAML.load_file(File.join(__dir__, '../fixtures/cassettes/Clients_MarineInstituteTides/dublin_port.yml'))
+                cassette['http_interactions'].first['response']['body']['string']
+            end
+
+            def feed_for(csv)
+                stub_request(:get, %r{\Ahttps://erddap\.marine\.ie/erddap/tabledap/IMI_TidePrediction_HighLow\.csv})
+                    .to_return(status: 200, body: csv, headers: { 'Content-Type' => 'text/csv;charset=ISO-8859-1' })
+                ical = nil
+                with_test_cache_dir { ical = described_class.tide_calendar_for('IE__Dublin_Port', units: 'metric').to_ical }
+                ical.gsub(/\r\n[ \t]/, '')
+            end
+
+            before do
+                Timecop.freeze(Time.utc(2026, 10, 6, 12))
+                allow(described_class).to receive(:tide_data_for).and_call_original
+            end
+            after { Timecop.return }
+
+            it 'says the heights were converted when they are in metres' do
+                ical = feed_for(erddap_csv)
+
+                expect(ical).to include('SUMMARY:High Tide 3.79 m')
+                expect(ical).to match(/^X-WR-CALDESC:.*Changes: heights converted from metres above OD Malin to metres above chart datum/)
+            end
+
+            it 'does not blame a missing chart datum offset when the heights are left out for their unit' do
+                ical = feed_for(erddap_csv.sub("UTC,,,metres\n", "UTC,,,feet\n"))
+
+                expect(ical).to include('SUMMARY:High Tide')
+                expect(ical).not_to match(/SUMMARY:High Tide \d/)
+                expect(ical).to match(/^X-WR-CALDESC:.*Changes: heights left out\b/)
+                expect(ical).not_to include('no chart datum offset known')
+                expect(ical).not_to include('converted from metres above OD Malin')
+            end
+        end
+
+        it 'shows the times as MI publishes them in UTC (not shifted by Irish summer time) and heights in metres' do
+            expect(ical).to include('DTSTART;TZID=GMT:20261007T090500', 'DTSTART;TZID=GMT:20261007T144000')
+            expect(ical).not_to include('DTSTART;TZID=GMT:20261007T080500', 'DTSTART;TZID=GMT:20261007T100500')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 3.79 m', 'Low Tide 1.27 m'])
+            expect(calendar.events.map { |e| e.url.to_s }).to all(eq(Clients::MarineInstituteTides::HOME_URL))
+        end
+
+        it 'converts the heights to feet in the default (imperial) units, times unchanged' do
+            calendar = described_class.tide_calendar_for('IE__Dublin_Port')
+
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 12.434 ft', 'Low Tide 4.167 ft'])
+            expect(calendar.to_ical).to include('DTSTART;TZID=GMT:20261007T090500', 'DTSTART;TZID=GMT:20261007T144000')
+            expect(calendar.events.map { |e| e.description.to_s }).to all(eq(Clients::MarineInstituteTides.event_description))
+        end
+
+        it 'carries no BSH, Kartverket or LINZ credit' do
+            expect(ical).not_to include('Bundesamt')
+            expect(ical).not_to include('Kartverket')
+            expect(ical).not_to include('Toitū')
+        end
+
         it 'names the calendar with the station name as MI publishes it' do
             ['Dublin Port', 'Ringaskiddy NMCI', 'Dún Laoghaire'].each do |name|
                 allow(described_class).to receive(:tide_station_for).and_return(station.dup.tap { |s| s.name = name })
@@ -689,8 +765,8 @@ RSpec.describe 'Kartverket credit in the web UI', type: :api do
             expect(html.css('.kartverket-credit')).to all(satisfy { |n| n.key?('x-cloak') })
             expect(html.css('template[x-if="/kartverket/i.test(provider)"] .kartverket-notice')).not_to be_empty
             # Styled as official, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
         end
 
         it 'says on both badges, as the CC BY change notice does, that only heights are converted and times are unchanged (UTC)' do
@@ -761,14 +837,101 @@ RSpec.describe 'LINZ credit in the web UI', type: :api do
             expect(html.at_css('.linz-credit')['class'].split).to include('max-w-[10.5rem]')
             expect(html.css('template[x-if="/linz/i.test(provider)"] .linz-notice')).not_to be_empty
             # Styled as an agency source, so no harmonic-source warning
-            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz/i.test(provider)')
-            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz/i.test(provider)"]')).not_to be_empty
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
         end
 
         it 'adds no LINZ credit to NOAA, BSH or Kartverket badges' do
             expect(badge('noaa').to_html).not_to include('LINZ')
             expect(badge('bsh').css('.linz-credit, .linz-notice')).to be_empty
             expect(badge('kartverket').css('.linz-credit, .linz-notice')).to be_empty
+        end
+    end
+end
+
+# The Marine Institute's CC BY 4.0 licence asks for credit, a licence link and a note of changes
+RSpec.describe 'Marine Institute credit in the web UI', type: :api do
+    describe 'footer' do
+        it 'credits MI with links to its tidal predictions page and the licence, and says what we changed, outside any hover popover' do
+            get '/'
+            node = Nokogiri::HTML(last_response.body).at_css('footer #imi-credit')
+
+            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.text.squish).to eq(
+                'Irish tide predictions: data supplied by Marine Institute, licensed under CC BY 4.0; ' \
+                'heights, where shown, converted from OD Malin to chart datum (LAT) with a fixed offset per station, and to the selected units; ' \
+                'times unchanged (UTC). Storm surge not included. Not for navigation.'
+            )
+            # The footer serves every MI station, including those whose heights are left out
+            expect(node.text.squish).not_to include('; heights converted')
+            expect(node.css('a').map { |a| [a.text, a['href']] }).to eq([
+                ['Marine Institute', 'https://www.marine.ie/site-area/data-services/real-time-observations/tidal-predictions'],
+                ['CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/']
+            ])
+        end
+    end
+
+    describe 'provider badge' do
+        def badge(provider, has_alternatives: false)
+            station = build_station(id: 'S1', provider: provider)
+            html = Server.new!.send(:erb, :'partials/_provider_badge', layout: false, locals: {
+                type: :tide, theme: { accent: 'ocean' }, station: station, has_alternatives: has_alternatives,
+                alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        it 'shows IMI with a not-for-navigation note and the linked credit' do
+            html = badge('imi')
+
+            expect(html.at_css('.badge-warning')).to be_nil
+            expect(html.at_css('.imi-credit').text).to eq('© Marine Institute · CC BY 4.0 · Not for navigation')
+            expect(html.at_css('.imi-credit a')['href']).to eq(Clients::MarineInstituteTides::HOME_URL)
+            expect(html.at_css('.imi-notice')).not_to be_nil
+            expect(html.at_css('.imi-credit')['class'].split).to include('max-w-[8rem]')
+            expect(html.text).to include('NOT FOR NAVIGATION', 'Heights, where shown, converted from OD Malin to chart datum (LAT); times unchanged (UTC).')
+            # The same badge serves stations without a chart datum offset, whose heights are left out
+            expect(html.text).not_to include('. Heights converted from OD Malin')
+        end
+
+        it 'words the height change on both badges so it is true for a station with or without a chart datum offset' do
+            [badge('imi'), badge('imi', has_alternatives: true)].each do |html|
+                notes = html.css('p').map { |p| p.text.squish }.select { |t| t.start_with?('Data supplied by Marine Institute') && t.match?(/heights/i) }
+                expect(notes).to eq(['Data supplied by Marine Institute, CC BY 4.0. Heights, where shown, converted from OD Malin to chart datum (LAT); times unchanged (UTC).'])
+            end
+        end
+
+        it 'does not call MI predictions official on either badge (part of the set is modelled, not gauge-based)' do
+            [badge('imi'), badge('imi', has_alternatives: true)].each do |html|
+                notices = html.css('.imi-notice').map { |svg| svg.parent.text.squish }
+                expect(notices).not_to be_empty
+                notices.each { |t| expect(t).not_to match(/official/i) }
+                notes = html.css('p').map { |p| p.text.squish }.select { |t| t.include?('MI accepts no responsibility') }
+                expect(notes).to eq(['Marine Institute (Ireland) predictions. MI accepts no responsibility for errors or for their use. Storm surge is not included.'])
+            end
+        end
+
+        it 'does the same on the multi-source badge, shown (and cloaked until Alpine starts) only while MI is selected' do
+            html = badge('imi', has_alternatives: true)
+
+            expect(html.css('.imi-credit').map { |n| n['x-show'] }).to eq(['/imi/i.test(provider)', '/imi/i.test(station.provider)'])
+            expect(html.css('.imi-credit')).to all(satisfy { |n| n.key?('x-cloak') })
+            # The line under the badge wraps to two lines instead of widening the badge column, narrower
+            # than LINZ's because MI station ids run long (Tom_Clarke_Bridge) and spill toward it
+            expect(html.at_css('.imi-credit')['class'].split).to include('max-w-[8rem]')
+            expect(html.css('template[x-if="/imi/i.test(provider)"] .imi-notice')).not_to be_empty
+            # Each source's notice is its own x-if, and the credit lines sit outside them all (inside
+            # one, Alpine never renders them while another source is selected)
+            expect(html.css('template[x-if*="test(provider)"] template[x-if*="test(provider)"]')).to be_empty
+            expect(html.css('p[x-show$="test(provider)"]').map { |n| [n['class'].split.first, n.ancestors('template').length] }).to eq(%w[bsh-credit kartverket-credit linz-credit imi-credit].map { |c| [c, 0] })
+            # Styled as an agency source, so no harmonic-source warning
+            expect(html.at_css('button')[':class']).to start_with('/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)')
+            expect(html.css('template[x-if="!/noaa|chs|bsh|kartverket|linz|imi/i.test(provider)"]')).not_to be_empty
+        end
+
+        it 'adds no MI credit to NOAA, BSH, Kartverket or LINZ badges' do
+            expect(badge('noaa').to_html).not_to include('Marine Institute')
+            %w[bsh kartverket linz].each { |p| expect(badge(p).css('.imi-credit, .imi-notice')).to be_empty }
         end
     end
 end

@@ -772,6 +772,11 @@
             <p id="linz-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
                 New Zealand tide predictions: based on <a href="<%= escape_html(Clients::LinzTides::HOME_URL) %>" class="underline hover:text-slate-400">Toitū Te Whenua Land Information New Zealand</a> data, licensed for re-use under <a href="<%= escape_html(Clients::LinzTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; times converted from New Zealand local time (Chatham Islands time for the Chatham Islands ports) to UTC, high/low labels added, heights converted to the selected units. Not the official tide tables under Maritime Rules Part 25. Not for navigation.
             </p>
+
+            <!-- The Marine Institute's CC BY 4.0 licence asks for credit, a licence link and a note of changes -->
+            <p id="imi-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
+                Irish tide predictions: data supplied by <a href="<%= escape_html(Clients::MarineInstituteTides::HOME_URL) %>" class="underline hover:text-slate-400">Marine Institute</a>, licensed under <a href="<%= escape_html(Clients::MarineInstituteTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; heights, where shown, converted from OD Malin to chart datum (LAT) with a fixed offset per station, and to the selected units; times unchanged (UTC). Storm surge not included. Not for navigation.
+            </p>
         </div>
     </footer>
 </body>

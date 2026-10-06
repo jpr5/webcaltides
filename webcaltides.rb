@@ -812,9 +812,12 @@ module WebCalTides
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
-        # BSH and Kartverket terms require, and LINZ's terms ask for, the source credit in every
-        # presentation, so on the feed and every event
-        credited = { 'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides, 'linz' => Clients::LinzTides }[station.provider]
+        # BSH, Kartverket and Marine Institute terms require, and LINZ's terms ask for, the source
+        # credit in every presentation, so on the feed and every event
+        credited = {
+            'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides, 'linz' => Clients::LinzTides,
+            'imi' => Clients::MarineInstituteTides
+        }[station.provider]
         if credited
             caldesc = credited.feed_description(data)
             cal.description = caldesc
@@ -824,8 +827,8 @@ module WebCalTides
         if data
             data.each do |tide|
                 # Times without heights: BSH gauges that publish times only, Kartverket data with an
-                # unexpected datum, unit or height value, and LINZ windows with a year file whose
-                # units line doesn't say metres
+                # unexpected datum, unit or height value, LINZ windows with a year file whose units
+                # line doesn't say metres, and Marine Institute stations without a chart datum offset
                 title = if tide.prediction.nil?
                     "#{tide.type} Tide"
                 else
