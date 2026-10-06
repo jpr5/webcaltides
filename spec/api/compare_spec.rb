@@ -81,6 +81,46 @@ RSpec.describe 'GET /api/stations/compare', type: :api do
         end
     end
 
+    context 'when a station publishes no heights (e.g. a times-only BSH gauge)' do
+        let(:bsh_station)   { build_station(name: 'Hörnum BSH', id: 'DE__726A', provider: 'bsh') }
+        let(:ticon_station) { build_station(name: 'Hörnum TICON', id: 'T726', provider: 'ticon') }
+
+        before do
+            allow(WebCalTides).to receive(:tide_station_for).with('DE__726A').and_return(bsh_station)
+            allow(WebCalTides).to receive(:tide_station_for).with('T726').and_return(ticon_station)
+
+            allow(WebCalTides).to receive(:next_tide_events).with('DE__726A').and_return([
+                { type: 'High', time: Time.current + 2.hours, height: nil, units: nil },
+                { type: 'Low',  time: Time.current + 8.hours, height: nil, units: nil }
+            ])
+            allow(WebCalTides).to receive(:next_tide_events).with('T726').and_return([
+                { type: 'High', time: Time.current + 2.hours + 12.minutes, height: 3.8, units: 'm' },
+                { type: 'Low',  time: Time.current + 8.hours + 4.minutes,  height: 0.6, units: 'm' }
+            ])
+        end
+
+        it 'reports time deltas but no height delta when the primary has no heights' do
+            get '/api/stations/compare', type: 'tides', ids: ['DE__726A', 'T726']
+
+            alt = JSON.parse(last_response.body)['stations'][1]
+
+            expect(alt['event_deltas'].map { |d| d['time'] }).to eq(['+12min', '+4min'])
+            expect(alt['event_deltas'].map { |d| d['raw_value'] }).to eq([nil, nil])
+            expect(alt['event_deltas'].map { |d| d['units'] }).to eq([nil, nil])
+            expect(alt['delta']).to eq('time' => '+12min', 'raw_value' => nil, 'units' => nil)
+        end
+
+        it 'reports time deltas but no height delta when the alternative has no heights' do
+            get '/api/stations/compare', type: 'tides', ids: ['T726', 'DE__726A']
+
+            alt = JSON.parse(last_response.body)['stations'][1]
+
+            expect(alt['event_deltas'].map { |d| d['time'] }).to eq(['-12min', '-4min'])
+            expect(alt['event_deltas'].map { |d| d['raw_value'] }).to eq([nil, nil])
+            expect(alt['delta']).to eq('time' => '-12min', 'raw_value' => nil, 'units' => nil)
+        end
+    end
+
     context 'with invalid type' do
         it 'returns error for invalid type' do
             get '/api/stations/compare', type: 'invalid', ids: ['NOAA123']

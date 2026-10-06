@@ -101,6 +101,78 @@ RSpec.describe WebCalTides do
                 calendar = described_class.tide_calendar_for('X123')
                 expect(calendar.description.to_s).to include('NOT FOR NAVIGATION')
             end
+
+            it 'keeps the harmonic disclaimer and carries no BSH credit' do
+                calendar = described_class.tide_calendar_for('X123')
+                ical     = calendar.to_ical.gsub(/\r\n[ \t]/, '')
+
+                expect(Array(calendar.description)).to match([start_with('NOT FOR NAVIGATION. This program is distributed')])
+                expect(ical).not_to include('Bundesamt')
+                expect(ical).not_to include('X-WR-CALDESC')
+                expect(calendar.events.map(&:description)).to all(be_nil)
+            end
+        end
+
+        it 'carries no BSH credit on an official non-BSH feed' do
+            calendar = described_class.tide_calendar_for('NOAA123')
+            ical     = calendar.to_ical.gsub(/\r\n[ \t]/, '')
+
+            expect(Array(calendar.description)).to be_empty
+            expect(ical).not_to include('Bundesamt')
+            expect(ical).not_to include('X-WR-CALDESC')
+            expect(calendar.events.map(&:description)).to all(be_nil)
+        end
+    end
+
+    describe '.tide_calendar_for with bsh provider' do
+        let(:station) do
+            build_station(name: 'Hamburg, Cranz, Este-Sperrwerk, AP', id: 'DE__717P', provider: 'bsh',
+                          lat: 53.53583, lon: 9.79167, location: 'Hamburg, Cranz, Este-Sperrwerk, AP, Germany')
+        end
+
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 4.01, time: DateTime.new(2026, 9, 29, 4, 39), dataset_year: 2026),
+                # 00:49 MEZ on 1 January 2027 -- UTC year 2026, BSH dataset 2027
+                build_tide_data(type: 'Low', units: 'm', prediction: nil, time: DateTime.new(2026, 12, 31, 23, 49), dataset_year: 2027,
+                                notes: ['Keine Gezeitenhöhen verfügbar'])
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:ical) { described_class.tide_calendar_for('DE__717P', units: 'metric').to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'credits BSH in the required format and disclaims navigation use on the feed' do
+            credit = 'Datenquelle: Gezeitenvorausberechnungen ©\\, Bundesamt für Seeschifffahrt und Hydrographie\\, Hamburg\\, 2026-2027'
+
+            expect(ical).to match(/^DESCRIPTION:#{Regexp.escape(credit)}\. NOT FOR NAVIGATION/)
+            expect(ical).to match(/^X-WR-CALDESC:#{Regexp.escape(credit)}\. NOT FOR NAVIGATION/)
+        end
+
+        it 'carries the BSH gauge notices into the feed description' do
+            expect(ical).to match(/^X-WR-CALDESC:.*Gewähr\)\. BSH notes \(Hinweise\): Keine Gezeitenhöhen verfügbar\.\r$/)
+        end
+
+        it 'credits BSH on every event with that event\'s dataset year and notices' do
+            calendar = described_class.tide_calendar_for('DE__717P', units: 'metric')
+
+            expect(calendar.events.map { |e| e.description.to_s }).to eq([
+                'Datenquelle: Gezeitenvorausberechnungen ©, Bundesamt für Seeschifffahrt und Hydrographie, Hamburg, 2026. NOT FOR NAVIGATION.',
+                'Datenquelle: Gezeitenvorausberechnungen ©, Bundesamt für Seeschifffahrt und Hydrographie, Hamburg, 2027. NOT FOR NAVIGATION. BSH notes (Hinweise): Keine Gezeitenhöhen verfügbar.'
+            ])
+        end
+
+        it 'keeps the BSH event time unchanged' do
+            expect(ical).to include('DTSTART;TZID=GMT:20260929T043900')
+        end
+
+        it 'omits the height when BSH publishes none' do
+            calendar = described_class.tide_calendar_for('DE__717P', units: 'metric')
+            expect(calendar.events.map { |e| e.summary.to_s }).to eq(['High Tide 4.01 m', 'Low Tide'])
         end
     end
 
@@ -261,6 +333,70 @@ RSpec.describe WebCalTides do
             expect(summaries).to include('Last Quarter Moon')
             expect(summaries).to include('New Moon')
             expect(summaries).to include('First Quarter Moon')
+        end
+    end
+end
+
+# BSH terms (AGB 5(10)) want the source credit on every presentation, including the web UI
+RSpec.describe 'BSH credit in the web UI', type: :api do
+    let(:credit) { 'Datenquelle: Gezeitenvorausberechnungen ©, Bundesamt für Seeschifffahrt und Hydrographie, Hamburg' }
+
+    after { Timecop.return }
+
+    describe 'footer' do
+        def footer_credit
+            get '/'
+            node = Nokogiri::HTML(last_response.body).at_css('footer #bsh-credit')
+            # Visible without hover: neither it nor anything around it is toggled by Alpine
+            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            node.text.squish
+        end
+
+        it 'shows the credit outside any hover popover, for every year served' do
+            Timecop.freeze(Time.utc(2026, 10, 5, 12))
+            expect(footer_credit).to eq("German tide predictions: #{credit}, 2026-2027. Das BSH übernimmt für die angegebenen Informationen keine Gewähr. Not for navigation.")
+        end
+
+        it 'credits only the current year before next year may be published' do
+            Timecop.freeze(Time.utc(2026, 7, 15, 12))
+            expect(footer_credit).to include("#{credit}, 2026.")
+        end
+    end
+
+    describe 'provider badge' do
+        let(:theme) { { accent: 'ocean' } }
+
+        def badge(provider, has_alternatives: false)
+            station = build_station(id: 'S1', provider: provider)
+            html = Server.new!.send(:erb, :'partials/_provider_badge', layout: false, locals: {
+                type: :tide, theme: theme, station: station, has_alternatives: has_alternatives,
+                alternatives: [], sources_json: '[]'
+            })
+            Nokogiri::HTML.fragment(html)
+        end
+
+        before { Timecop.freeze(Time.utc(2026, 10, 5, 12)) }
+
+        it 'puts a not-for-navigation note and the full credit next to a BSH badge' do
+            html = badge('bsh')
+
+            expect(html.at_css('.bsh-credit').text).to eq('© BSH · Not for navigation')
+            expect(html.at_css('.bsh-notice')).not_to be_nil
+            expect(html.text).to include('NOT FOR NAVIGATION')
+            expect(html.text).to include("#{credit}, 2026-2027")
+        end
+
+        it 'does the same on the multi-source badge, shown only while BSH is selected' do
+            html = badge('bsh', has_alternatives: true)
+
+            expect(html.css('.bsh-credit').map { |n| n['x-show'] }).to eq(['/bsh/i.test(provider)', '/bsh/i.test(station.provider)'])
+            expect(html.at_css('.bsh-credit').key?('x-cloak')).to be(true)
+            expect(html.css('template[x-if="/bsh/i.test(provider)"] .bsh-notice')).not_to be_empty
+            expect(html.text).to include("#{credit}, 2026-2027")
+        end
+
+        it 'adds no BSH credit to a NOAA badge' do
+            expect(badge('noaa').to_html).not_to include('BSH')
         end
     end
 end

@@ -757,6 +757,11 @@
                     </div>
                 </div>
             </div>
+
+            <!-- BSH terms (AGB 5(10)) require the source credit on every presentation, so it stays visible -->
+            <p id="bsh-credit" class="mt-4 text-xs text-slate-500 leading-relaxed text-center md:text-left">
+                German tide predictions: <%= escape_html(Clients::BshTides.attribution(Clients::BshTides.served_years)) %>. Das BSH übernimmt für die angegebenen Informationen keine Gewähr. Not for navigation.
+            </p>
         </div>
     </footer>
 </body>

@@ -156,7 +156,7 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
     describe 'provider hierarchy' do
         it 'defines PROVIDER_HIERARCHY constant' do
-            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs xtide ticon])
+            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh xtide ticon])
         end
 
         it 'prefers NOAA over CHS' do
@@ -173,6 +173,33 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
             groups = described_class.group_stations_by_proximity([xtide, chs])
             expect(groups.first.primary.provider).to eq('chs')
+        end
+
+        it 'prefers BSH over TICON' do
+            # Cranz: BSH gauge 717P and TICON T310a3db are ~15m apart
+            bsh = build_station(provider: 'bsh', id: 'DE__717P', lat: 53.53583, lon: 9.79167)
+            ticon = build_station(provider: 'ticon', id: 'T310a3db', lat: 53.53593513, lon: 9.79152582)
+
+            groups = described_class.group_stations_by_proximity([ticon, bsh])
+            expect(groups.length).to eq(1)
+            expect(groups.first.primary.provider).to eq('bsh')
+            expect(groups.first.alternatives.map(&:provider)).to eq(['ticon'])
+        end
+
+        it 'ranks BSH first even for a gauge that publishes no heights' do
+            # Deliberate trade-off (see PROVIDER_HIERARCHY): BSH's official times win over
+            # harmonic heights, so a times-only BSH gauge is still the primary.  Ranking is by
+            # provider alone and never looks at predictions.
+            expect(described_class).not_to receive(:next_tide_events)
+
+            bsh = build_station(provider: 'bsh', id: 'DE__726A', lat: 54.7586, lon: 8.2975)
+            xtide = build_station(provider: 'xtide', lat: 54.7587, lon: 8.2976)
+            ticon = build_station(provider: 'ticon', lat: 54.7585, lon: 8.2974)
+
+            groups = described_class.group_stations_by_proximity([ticon, xtide, bsh])
+            expect(groups.length).to eq(1)
+            expect(groups.first.primary.provider).to eq('bsh')
+            expect(groups.first.alternatives.map(&:provider)).to eq(%w[xtide ticon])
         end
 
         it 'prefers XTide over TICON' do

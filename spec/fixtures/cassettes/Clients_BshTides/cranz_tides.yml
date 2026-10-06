@@ -1,0 +1,262 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://gezeiten.bsh.de/data/DE__717P_tides.json
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - gezeiten.bsh.de
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Tue, 06 Oct 2026 01:17:45 GMT
+      Content-Type:
+      - application/json; charset=utf-8
+      Content-Length:
+      - '6428'
+      Last-Modified:
+      - Thu, 09 Jul 2026 11:33:40 GMT
+      Connection:
+      - keep-alive
+      Etag:
+      - '"6a4f8714-a9253"'
+      Expires:
+      - Tue, 06 Oct 2026 01:18:45 GMT
+      Cache-Control:
+      - max-age=60
+      Content-Security-Policy:
+      - 'default-src ''self''; form-action: ''self''; frame-ancestors ''none''; upgrade-insecure-requests'
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Referrer-Policy:
+      - same-origin
+      Accept-Ranges:
+      - bytes
+    body:
+      encoding: UTF-8
+      string: |-
+        {
+           "station_name": "Hamburg, Cranz, Este-Sperrwerk, AP",
+           "bshnr": "717P",
+           "latitude": 53.53583,
+           "longitude": 9.79167,
+           "gauge_group": 1,
+           "seo_id": "hamburg_cranz",
+           "pegelonline_uuid": "e6b42536-6bf8-42e3-8ef5-7d1a283a8608",
+           "has_wvd": false,
+           "years": [
+              {
+                 "2026": {
+                    "level_tidalvalues": "PNP",
+                    "MHW": 705,
+                    "MNW": 350,
+                    "MHWI": "15:00",
+                    "MNWI": "22:17",
+                    "MFD": "7:17",
+                    "MSD": "5:08",
+                    "MTH": 355,
+                    "MSpHW": 719,
+                    "MSpNW": 343,
+                    "MSpTH": 376,
+                    "MNpHW": 685,
+                    "MNpNW": 361,
+                    "MNpTH": 324,
+                    "PNP (unter NHN)": -505,
+                    "SKN (unter NHN)": -193,
+                    "SKN (ueber PNP)": 312,
+                    "notice": [],
+                    "has_height": true,
+                    "has_curve": true,
+                    "hwnw_prediction": {
+                       "level": "PNP",
+                       "data": [
+                          {
+                             "timestamp": "2026-08-31 13:18:00+01:00",
+                             "height": 352,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-08-31 18:18:00+01:00",
+                             "height": 734,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-09-01 01:43:00+01:00",
+                             "height": 355,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "MT"
+                          },
+                          {
+                             "timestamp": "2026-09-01 06:40:00+01:00",
+                             "height": 705,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "MT"
+                          },
+                          {
+                             "timestamp": "2026-09-28 17:16:00+01:00",
+                             "height": 732,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-09-29 00:40:00+01:00",
+                             "height": 356,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-09-29 05:39:00+01:00",
+                             "height": 713,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-09-29 12:54:00+01:00",
+                             "height": 351,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-09-29 17:54:00+01:00",
+                             "height": 729,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2026-09-30 01:14:00+01:00",
+                             "height": 355,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "MT"
+                          },
+                          {
+                             "timestamp": "2026-09-30 06:11:00+01:00",
+                             "height": 709,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "MT"
+                          },
+                          {
+                             "timestamp": "2026-12-31 16:53:00+01:00",
+                             "height": 367,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "NP"
+                          },
+                          {
+                             "timestamp": "2026-12-31 22:05:00+01:00",
+                             "height": 686,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "NP"
+                          }
+                       ]
+                    }
+                 }
+              },
+              {
+                 "2027": {
+                    "level_tidalvalues": "PNP",
+                    "MHW": 708,
+                    "MNW": 352,
+                    "MHWI": "14:58",
+                    "MNWI": "22:16",
+                    "MFD": "7:18",
+                    "MSD": "5:07",
+                    "MTH": 356,
+                    "MSpHW": 722,
+                    "MSpNW": 346,
+                    "MSpTH": 376,
+                    "MNpHW": 689,
+                    "MNpNW": 364,
+                    "MNpTH": 325,
+                    "PNP (unter NHN)": -505,
+                    "SKN (unter NHN)": -193,
+                    "SKN (ueber PNP)": 312,
+                    "notice": [],
+                    "has_height": true,
+                    "has_curve": true,
+                    "hwnw_prediction": {
+                       "level": "PNP",
+                       "data": [
+                          {
+                             "timestamp": "2027-01-01 04:56:00+01:00",
+                             "height": 377,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "NP"
+                          },
+                          {
+                             "timestamp": "2027-01-01 10:11:00+01:00",
+                             "height": 729,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "NP"
+                          },
+                          {
+                             "timestamp": "2027-09-30 16:16:00+01:00",
+                             "height": 727,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2027-09-30 23:48:00+01:00",
+                             "height": 350,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2027-10-01 04:47:00+01:00",
+                             "height": 707,
+                             "type": "HW",
+                             "moon": null,
+                             "phase": "SP"
+                          },
+                          {
+                             "timestamp": "2027-10-01 11:58:00+01:00",
+                             "height": 357,
+                             "type": "NW",
+                             "moon": null,
+                             "phase": "SP"
+                          }
+                       ]
+                    }
+                 }
+              }
+           ]
+        }
+  recorded_at: Mon, 05 Oct 2026 12:00:00 GMT
+recorded_with: VCR 6.4.0

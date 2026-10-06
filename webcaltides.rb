@@ -8,10 +8,13 @@ require 'dotenv/load'
 require 'bundler/setup'
 Bundler.require(:default, ENV['RACK_ENV'] || 'development')
 
+require 'digest'
+
 require_relative 'lib/gps'
 require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
+require_relative 'clients/bsh_tides'
 require_relative 'clients/noaa_currents'
 require_relative 'clients/harmonics'
 require_relative 'clients/lunar'
@@ -38,12 +41,23 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Official sources (NOAA, CHS) are preferred over harmonic-based predictions.
+    # Official sources (NOAA, CHS, BSH) are preferred over harmonic-based predictions.  NOAA and
+    # CHS do have nearby stations along the US/Canada border, so their order matters there: NOAA
+    # wins (pinned by spec/integration/station_grouping_spec.rb).  BSH (Germany) overlaps neither,
+    # so its position among the official sources has no effect.
+    #
+    # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
+    # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
+    # high waters off by almost an hour).  So BSH wins wherever it covers a gauge -- including gauges where BSH publishes
+    # times only (no heights; a sizeable minority of gauges).  For those the primary shows HW/NW
+    # times without heights, and a co-located XTide/TICON station with heights is offered only
+    # as an alternative.  Ranking is by provider alone and never inspects predictions; this is
+    # pinned by spec/integration/station_grouping_spec.rb.
     #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -135,6 +149,7 @@ module WebCalTides
             {
                 noaa:  Clients::NoaaTides.new(logger),
                 chs:   Clients::ChsTides.new(logger),
+                bsh:   Clients::BshTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
@@ -451,14 +466,17 @@ module WebCalTides
 
             alt_next = alt_events.first
 
-            # Calculate deltas
+            # Calculate deltas.  A side without a height (times-only sources such as many BSH
+            # gauges) has nothing to compare, so the height delta is nil rather than a fake one.
             time_diff_seconds = (alt_next[:time].to_time - primary_next[:time].to_time).to_i
-            height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
-            height_units = primary_next[:units] || 'ft'
+            height_delta = unless alt_next[:height].nil? || primary_next[:height].nil?
+                height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
+                format_height_delta(height_diff, primary_next[:units] || 'ft')
+            end
 
             deltas[alt.id] = {
                 time: format_time_delta(time_diff_seconds),
-                height: format_height_delta(height_diff, height_units)
+                height: height_delta
             }
         end
     end
@@ -507,17 +525,39 @@ module WebCalTides
     ## Tides
     ##
 
-    # Cache quarterly / every three months, versioned by harmonics checksum
+    # Cache quarterly / every three months, versioned by harmonics checksum and the set of tide
+    # providers (so adding a provider doesn't wait for the next quarter to show up)
     def tide_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}.json"
+        providers = Digest::MD5.hexdigest(tide_clients.keys.sort.join(","))[0, 8]
+        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}_#{providers}.json"
+    end
+
+    # If a provider's station list fails, serve the others but don't cache the incomplete list for
+    # the quarter; build it again after this long.
+    TIDE_STATIONS_RETRY = 1.hour
+
+    # Returns [stations, complete]; complete is false if any provider failed (logged).  Each
+    # provider is isolated so one upstream outage doesn't take down search for every region.
+    def fetch_tide_stations
+        complete = true
+
+        stations = tide_clients.values.uniq.flat_map do |c|
+            list = c.tide_stations
+            raise "no station list" unless list
+            list
+        rescue => e
+            logger.error "!! failed to get tide station list from #{c.class.name}, leaving it out: #{e.class} - #{e.message}"
+            complete = false
+            []
+        end
+
+        return stations, complete
     end
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
         # stations: is used in the re-cache scenario
-        tide_clients.values.uniq.each { |c| stations.concat(c.tide_stations) } if stations.empty?
-
         logger.debug "storing tide station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
 
@@ -527,21 +567,60 @@ module WebCalTides
     def tide_stations
         # Double-checked locking for thread safety
         # First check is optimization - safe because array assignment is atomic in Ruby
-        return @tide_stations if @tide_stations
+        return @tide_stations if @tide_stations && !tide_stations_retry_due?
 
         @@tide_stations_mutex.synchronize do
-            return @tide_stations if @tide_stations
+            return @tide_stations if @tide_stations && !tide_stations_retry_due?
 
             cache_file = tide_station_cache_file
-            cache_tide_stations(at: cache_file) unless File.exist?(cache_file)
+            stations   = nil
 
-            logger.debug "reading #{cache_file}"
-            json = File.read(cache_file)
+            # An unreadable cache file is removed and rebuilt once, rather than failing every request
+            2.times do
+                unless File.exist?(cache_file)
+                    # Other requests keep the incomplete list, if there is one, while this rebuilds it
+                    @tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY if @tide_stations
+                    stations, complete = fetch_tide_stations
+                    unless complete
+                        @tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY
+                        logger.warn "serving incomplete tide station list (#{stations.length} stations) uncached, rebuilding after #{@tide_stations_retry_at}"
+                        return @tide_stations = stations
+                    end
 
-            logger.debug "parsing tide station list"
-            data = JSON.parse(json) rescue []
-            @tide_stations = data.map { |js| Models::Station.from_hash(js) }
+                    cache_tide_stations(at: cache_file, stations: stations)
+                end
+
+                loaded = begin
+                    logger.debug "reading #{cache_file}"
+                    data = JSON.parse(File.read(cache_file))
+                    raise TypeError, "expected a station list, got #{data.class}" unless data.is_a?(Array)
+
+                    logger.debug "parsing tide station list"
+                    data.map { |js| Models::Station.from_hash(js) }
+                rescue => e
+                    logger.error "!! unreadable tide station cache #{cache_file}, removing it: #{e.class} - #{e.message}"
+                    File.unlink(cache_file) rescue nil
+                    nil
+                end
+
+                if loaded
+                    # The degraded list stays in place (and is retried) until the complete one is loaded
+                    @tide_stations_retry_at = nil
+                    return @tide_stations = loaded
+                end
+            end
+
+            # Even the rebuilt file couldn't be read back: serve what was fetched, uncached, and retry later
+            @tide_stations = stations || @tide_stations || []
+            @tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY
+            logger.warn "serving tide station list (#{@tide_stations.length} stations) uncached, rebuilding after #{@tide_stations_retry_at}"
+            @tide_stations
         end
+    end
+
+    # Incomplete in-memory list (some provider failed) that is due for another build
+    def tide_stations_retry_due?
+        @tide_stations_retry_at && Time.current.utc >= @tide_stations_retry_at
     end
 
     # This is primarily for CHS tide stations, whose metadata is such a broken mess as to not
@@ -549,8 +628,12 @@ module WebCalTides
     # chs_tides.rb for details.
 
     def remove_tide_station(station_id)
-        @tide_stations.delete_if { |s| s.id == station_id }
-        cache_tide_stations(stations:@tide_stations)
+        # Under the lock, so a rebuild can't swap the list between the removal and the write
+        @@tide_stations_mutex.synchronize do
+            @tide_stations.delete_if { |s| s.id == station_id }
+            # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
+            cache_tide_stations(stations:@tide_stations) unless @tide_stations_retry_at
+        end
     end
 
     def tide_station_for(id)
@@ -611,7 +694,8 @@ module WebCalTides
     def cache_tide_data_for(station, at:, around:)
         return false unless station
 
-        if tide_data = tide_clients(station.provider).tide_data_for(station, around)
+        # Nothing to cache for an empty list either -- it would serve "no tides" for the month
+        if (tide_data = tide_clients(station.provider).tide_data_for(station, around)).present?
             logger.debug "storing tide data at #{at}"
             atomic_write(at, tide_data.map(&:to_h).to_json)
         end
@@ -674,7 +758,7 @@ module WebCalTides
     def tide_calendar_for(id, around: Time.current.utc, units: 'imperial')
         depth_units = units == 'imperial' ? 'ft' : 'm'
         station = tide_station_for(id) or return nil
-        data    = tide_data_for(station, around: around)
+        data    = tide_data_for(station, around: around) or return nil
 
         cal = Icalendar::Calendar.new
         cal.x_wr_calname = station.name.titleize
@@ -683,16 +767,30 @@ module WebCalTides
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
+        # BSH terms require the source credit in every presentation, so on the feed and every event
+        bsh = station.provider == 'bsh'
+        if bsh
+            caldesc = Clients::BshTides.feed_description(data)
+            cal.description = caldesc
+            cal.append_custom_property('X-WR-CALDESC', caldesc)
+        end
+
         if data
             data.each do |tide|
-                title = "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+                # Some BSH gauges publish times only, no heights
+                title = if tide.prediction.nil?
+                    "#{tide.type} Tide"
+                else
+                    "#{tide.type} Tide #{convert_depth_to_correct_units(tide.prediction, tide.units, depth_units)} #{depth_units}"
+                end
 
                 cal.event do |e|
-                    e.summary  = title
-                    e.dtstart  = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
-                    e.dtend    = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
-                    e.url      = tide.url
-                    e.location = station.location
+                    e.summary     = title
+                    e.dtstart     = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                    e.dtend       = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
+                    e.url         = tide.url
+                    e.location    = station.location
+                    e.description = Clients::BshTides.event_description(tide) if bsh
                 end
             end
         end
