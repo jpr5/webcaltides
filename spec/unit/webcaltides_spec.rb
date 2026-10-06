@@ -91,6 +91,25 @@ RSpec.describe WebCalTides do
             result = WebCalTides.timezone_for(35.0, 500.0)  # 500 - 360 = 140
             expect(result).to eq("Asia/Tokyo")
         end
+
+        context 'when the lookup fails for a Kartverket station' do
+            before { allow(Timezone).to receive(:lookup).and_raise(StandardError, 'lookup down') }
+
+            def kartverket_station(name, lat, lon)
+                build_station(name: name, region: 'Norway', location: "#{name}, Norway", lat: lat, lon: lon, provider: 'kartverket')
+            end
+
+            {
+                ['Bergen',     60.398046,  5.320487] => 'Europe/Oslo',
+                ['Vardø',      70.374978, 31.104015] => 'Europe/Oslo',
+                ['Ny-Ålesund', 78.928545, 11.938015] => 'Arctic/Longyearbyen'
+            }.each do |(name, lat, lon), zone|
+                it "falls back to #{zone} for #{name} and caches it" do
+                    expect(WebCalTides.timezone_for(lat, lon, kartverket_station(name, lat, lon))).to eq(zone)
+                    expect(WebCalTides.timezone_for(lat, lon)).to eq(zone)
+                end
+            end
+        end
     end
 
     describe '#timezone_from_region' do

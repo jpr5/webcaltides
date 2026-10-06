@@ -762,6 +762,11 @@
             <p id="bsh-credit" class="mt-4 text-xs text-slate-500 leading-relaxed text-center md:text-left">
                 German tide predictions: <%= escape_html(Clients::BshTides.attribution(Clients::BshTides.served_years)) %>. Das BSH übernimmt für die angegebenen Informationen keine Gewähr. Not for navigation.
             </p>
+
+            <!-- Kartverket's CC BY 4.0 terms require "© Kartverket" with a link wherever its data is used -->
+            <p id="kartverket-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
+                Norwegian tide predictions: <a href="<%= escape_html(Clients::KartverketTides::HOME_URL) %>" class="underline hover:text-slate-400">© Kartverket</a>, licensed under <a href="<%= escape_html(Clients::KartverketTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; heights converted to the selected units, times unchanged (UTC). Not for navigation.
+            </p>
         </div>
     </footer>
 </body>

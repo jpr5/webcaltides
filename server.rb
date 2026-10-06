@@ -175,9 +175,12 @@ class Server < ::Sinatra::Base
         # Search both tide and current stations
         all_stations = WebCalTides.tide_stations + WebCalTides.current_stations
 
-        # Filter and dedupe by name
-        matches = all_stations
-            .select { |s| s.name.downcase.include?(query) || s.region&.downcase&.include?(query) }
+        # Filter and dedupe by name.  Alternate names (e.g. "Tromso" for Tromsø) come after name and
+        # region matches, so they only add suggestions and never push one out of the first 10.
+        by_name, rest = all_stations.partition { |s| s.name.downcase.include?(query) || s.region&.downcase&.include?(query) }
+        by_alternate  = rest.select { |s| Array(s.alternate_names).any? { |n| n&.downcase&.include?(query) } }
+
+        matches = (by_name + by_alternate)
             .uniq { |s| [s.name, s.region] }
             .first(10)
             .map { |s| { name: s.name, region: s.region, type: s.depth ? 'current' : 'tide' } }

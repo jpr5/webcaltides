@@ -73,6 +73,39 @@ RSpec.describe 'GET /api/stations/autocomplete', type: :api do
         end
     end
 
+    context 'with an alternate name' do
+        before do
+            allow(WebCalTides).to receive(:tide_stations).and_return([
+                build_station(name: 'Tromsø', alternate_names: %w[Tromso Tromsoe], region: 'Norway'),
+                build_station(name: 'Tromso, NOR', region: 'NOR'),
+                build_station(name: 'Unnamed', alternate_names: nil, region: 'Nowhere')
+            ])
+            allow(WebCalTides).to receive(:current_stations).and_return([])
+        end
+
+        def names(q)
+            get '/api/stations/autocomplete', q: q
+            JSON.parse(last_response.body)['results'].map { |r| r['name'] }
+        end
+
+        it 'finds a station by a plain-ASCII spelling of its name, shown under its own name' do
+            expect(names('tromsoe')).to eq(['Tromsø'])
+        end
+
+        it 'lists name and region matches before alternate-name-only matches' do
+            expect(names('tromso')).to eq(['Tromso, NOR', 'Tromsø'])
+        end
+
+        it 'never lets alternate-name matches displace name or region matches from the first 10' do
+            allow(WebCalTides).to receive(:tide_stations).and_return(
+                [build_station(name: 'Elsewhere', alternate_names: ['Boston Alias'])] +
+                (1..10).map { |i| build_station(name: "Boston Station #{i}", region: 'Massachusetts, USA') }
+            )
+
+            expect(names('boston')).to eq((1..10).map { |i| "Boston Station #{i}" })
+        end
+    end
+
     context 'with short query' do
         it 'returns empty results for single character' do
             get '/api/stations/autocomplete', q: 'b'

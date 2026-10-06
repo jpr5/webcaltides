@@ -156,7 +156,7 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
 
     describe 'provider hierarchy' do
         it 'defines PROVIDER_HIERARCHY constant' do
-            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh xtide ticon])
+            expect(described_class::PROVIDER_HIERARCHY).to eq(%w[noaa chs bsh kartverket xtide ticon])
         end
 
         it 'prefers NOAA over CHS' do
@@ -200,6 +200,21 @@ RSpec.describe WebCalTides, '.group_stations_by_proximity' do
             expect(groups.length).to eq(1)
             expect(groups.first.primary.provider).to eq('bsh')
             expect(groups.first.alternatives.map(&:provider)).to eq(%w[xtide ticon])
+        end
+
+        it 'prefers Kartverket over TICON' do
+            # Bergen: Kartverket gauge BGO and TICON T01f7ba9 share the same coordinates
+            kartverket = build_station(provider: 'kartverket', id: 'NO__BGO', lat: 60.398046, lon: 5.320487)
+            ticon      = build_station(provider: 'ticon', id: 'T01f7ba9', lat: 60.398046, lon: 5.320487)
+
+            groups = described_class.group_stations_by_proximity([ticon, kartverket])
+            expect(groups.length).to eq(1)
+            expect(groups.first.primary.provider).to eq('kartverket')
+            expect(groups.first.alternatives.map(&:provider)).to eq(['ticon'])
+        end
+
+        it 'registers Kartverket as a tide client' do
+            expect(described_class.tide_clients(:kartverket)).to be_a(Clients::KartverketTides)
         end
 
         it 'prefers XTide over TICON' do

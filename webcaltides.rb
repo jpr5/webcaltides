@@ -15,6 +15,7 @@ require_relative 'clients/base'
 require_relative 'clients/noaa_tides'
 require_relative 'clients/chs_tides'
 require_relative 'clients/bsh_tides'
+require_relative 'clients/kartverket_tides'
 require_relative 'clients/noaa_currents'
 require_relative 'clients/harmonics'
 require_relative 'clients/lunar'
@@ -41,10 +42,11 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Official sources (NOAA, CHS, BSH) are preferred over harmonic-based predictions.  NOAA and
-    # CHS do have nearby stations along the US/Canada border, so their order matters there: NOAA
-    # wins (pinned by spec/integration/station_grouping_spec.rb).  BSH (Germany) overlaps neither,
-    # so its position among the official sources has no effect.
+    # Official sources (NOAA, CHS, BSH, Kartverket) are preferred over harmonic-based predictions.
+    # NOAA and CHS do have nearby stations along the US/Canada border, so their order matters
+    # there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).  BSH (Germany) and
+    # Kartverket (Norway) overlap none of the other official sources, so their positions among
+    # the official sources have no effect.
     #
     # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
     # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
@@ -54,10 +56,17 @@ module WebCalTides
     # as an alternative.  Ranking is by provider alone and never inspects predictions; this is
     # pinned by spec/integration/station_grouping_spec.rb.
     #
+    # Kartverket vs TICON (Oct 2026): TICON's Norwegian stations sit on Kartverket's own gauges
+    # (often at identical coordinates), but their high/low times differ from Kartverket's official
+    # predictions.  Over November 2026 (116 events per gauge, app feed vs Kartverket's own
+    # high/low list), the largest difference was 29 min at Bergen, 46 min at Tromsø and 73 min at
+    # Stavanger, and no TICON event matched to the minute.
+    # So Kartverket wins wherever it covers a gauge, and TICON remains an alternative.
+    #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs bsh xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -109,6 +118,9 @@ module WebCalTides
         /atlantic.*canada/i => 'America/Halifax',
         /australia.*sydney/i => 'Australia/Sydney',
         /australia.*perth/i => 'Australia/Perth',
+        # Svalbard before Norway: Kartverket's Ny-Ålesund gauge is in "Ny-Ålesund, Norway"
+        /svalbard|longyearbyen|ny-ålesund/i => 'Arctic/Longyearbyen',
+        /norway/i => 'Europe/Oslo',
         /uk|england|wales|scotland/i => 'Europe/London',
         /japan/i => 'Asia/Tokyo'
     }.freeze
@@ -150,6 +162,7 @@ module WebCalTides
                 noaa:  Clients::NoaaTides.new(logger),
                 chs:   Clients::ChsTides.new(logger),
                 bsh:   Clients::BshTides.new(logger),
+                kartverket: Clients::KartverketTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
@@ -761,23 +774,26 @@ module WebCalTides
         data    = tide_data_for(station, around: around) or return nil
 
         cal = Icalendar::Calendar.new
-        cal.x_wr_calname = station.name.titleize
+        # Kartverket names are already properly cased; titleize would mangle them ("Ny-Ålesund" to "Ny ålesund")
+        cal.x_wr_calname = station.provider == 'kartverket' ? station.name : station.name.titleize
 
         if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
         end
 
-        # BSH terms require the source credit in every presentation, so on the feed and every event
-        bsh = station.provider == 'bsh'
-        if bsh
-            caldesc = Clients::BshTides.feed_description(data)
+        # BSH and Kartverket terms require the source credit in every presentation, so on the feed
+        # and every event
+        credited = { 'bsh' => Clients::BshTides, 'kartverket' => Clients::KartverketTides }[station.provider]
+        if credited
+            caldesc = credited.feed_description(data)
             cal.description = caldesc
             cal.append_custom_property('X-WR-CALDESC', caldesc)
         end
 
         if data
             data.each do |tide|
-                # Some BSH gauges publish times only, no heights
+                # Times without heights: BSH gauges that publish times only, and Kartverket data
+                # with an unexpected datum, unit or height value
                 title = if tide.prediction.nil?
                     "#{tide.type} Tide"
                 else
@@ -790,7 +806,7 @@ module WebCalTides
                     e.dtend       = Icalendar::Values::DateTime.new(tide.time, tzid: 'GMT')
                     e.url         = tide.url
                     e.location    = station.location
-                    e.description = Clients::BshTides.event_description(tide) if bsh
+                    e.description = credited.event_description(tide) if credited
                 end
             end
         end

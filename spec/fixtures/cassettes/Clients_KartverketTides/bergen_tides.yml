@@ -1,0 +1,224 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://vannstand.kartverket.no/tideapi.php?datatype=tab&dst=0&fromtime=2026-09-01T00:00&lang=en&lat=60.398046&lon=5.320487&refcode=cd&tide_request=locationdata&totime=2027-09-30T23:59&tzone=0
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip,deflate,identity
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Mechanize/2.14.0 Ruby/3.2.2p53 (http://github.com/sparklemotion/mechanize/)
+      Accept-Language:
+      - en-us,en;q=0.5
+      Host:
+      - vannstand.kartverket.no
+      Connection:
+      - keep-alive
+      Keep-Alive:
+      - '300'
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Tue, 06 Oct 2026 18:35:25 GMT
+      Content-Type:
+      - text/xml; charset=utf-8
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      X-Powered-By:
+      - PHP/8.0.30
+      Access-Control-Allow-Origin:
+      - "*"
+    body:
+      encoding: UTF-8
+      string: |
+        <tide>
+        <locationdata>
+        <location name="Bergen" code="BGO" latitude="60.398046" longitude="5.320487" delay="0" factor="1.00" obsname="Bergen" obscode="BGO" descr="Tides from Bergen"/>
+        <reflevelcode>CD</reflevelcode>
+        <data type="prediction" unit="cm" qualityFlag="1" qualityClass="Quality High" qualityDescription="High quality data: It has been verified against measurements that the data represents physical conditions.">
+        <waterlevel value="29.6" time="2026-09-01T06:01:00+00:00" flag="low"/>
+        <waterlevel value="151.9" time="2026-09-01T12:30:00+00:00" flag="high"/>
+        <waterlevel value="38.6" time="2026-09-01T18:12:00+00:00" flag="low"/>
+        <waterlevel value="156.5" time="2026-09-02T00:40:00+00:00" flag="high"/>
+        <waterlevel value="36.4" time="2026-09-02T06:37:00+00:00" flag="low"/>
+        <waterlevel value="147.1" time="2026-09-02T13:12:00+00:00" flag="high"/>
+        <waterlevel value="46.0" time="2026-09-02T18:51:00+00:00" flag="low"/>
+        <waterlevel value="149.8" time="2026-09-03T01:26:00+00:00" flag="high"/>
+        <waterlevel value="46.3" time="2026-09-03T07:18:00+00:00" flag="low"/>
+        <waterlevel value="141.0" time="2026-09-03T13:58:00+00:00" flag="high"/>
+        <waterlevel value="55.3" time="2026-09-03T19:38:00+00:00" flag="low"/>
+        <waterlevel value="141.6" time="2026-09-04T02:18:00+00:00" flag="high"/>
+        <waterlevel value="58.0" time="2026-09-04T08:08:00+00:00" flag="low"/>
+        <waterlevel value="134.6" time="2026-09-04T14:52:00+00:00" flag="high"/>
+        <waterlevel value="64.6" time="2026-09-04T20:44:00+00:00" flag="low"/>
+        <waterlevel value="133.2" time="2026-09-05T03:21:00+00:00" flag="high"/>
+        <waterlevel value="69.1" time="2026-09-05T09:20:00+00:00" flag="low"/>
+        <waterlevel value="129.5" time="2026-09-05T15:58:00+00:00" flag="high"/>
+        <waterlevel value="69.2" time="2026-09-05T22:25:00+00:00" flag="low"/>
+        <waterlevel value="127.8" time="2026-09-06T04:42:00+00:00" flag="high"/>
+        <waterlevel value="73.8" time="2026-09-06T11:06:00+00:00" flag="low"/>
+        <waterlevel value="129.4" time="2026-09-06T17:25:00+00:00" flag="high"/>
+        <waterlevel value="63.3" time="2026-09-07T00:12:00+00:00" flag="low"/>
+        <waterlevel value="130.2" time="2026-09-07T06:21:00+00:00" flag="high"/>
+        <waterlevel value="68.7" time="2026-09-07T12:41:00+00:00" flag="low"/>
+        <waterlevel value="137.3" time="2026-09-07T18:52:00+00:00" flag="high"/>
+        <waterlevel value="51.2" time="2026-09-08T01:24:00+00:00" flag="low"/>
+        <waterlevel value="139.8" time="2026-09-08T07:38:00+00:00" flag="high"/>
+        <waterlevel value="58.9" time="2026-09-08T13:43:00+00:00" flag="low"/>
+        <waterlevel value="149.0" time="2026-09-08T19:53:00+00:00" flag="high"/>
+        <waterlevel value="38.6" time="2026-09-09T02:17:00+00:00" flag="low"/>
+        <waterlevel value="150.2" time="2026-09-09T08:32:00+00:00" flag="high"/>
+        <waterlevel value="48.7" time="2026-09-09T14:31:00+00:00" flag="low"/>
+        <waterlevel value="160.0" time="2026-09-09T20:42:00+00:00" flag="high"/>
+        <waterlevel value="28.5" time="2026-09-10T03:02:00+00:00" flag="low"/>
+        <waterlevel value="158.4" time="2026-09-10T09:16:00+00:00" flag="high"/>
+        <waterlevel value="40.2" time="2026-09-10T15:12:00+00:00" flag="low"/>
+        <waterlevel value="168.1" time="2026-09-10T21:25:00+00:00" flag="high"/>
+        <waterlevel value="22.4" time="2026-09-11T03:42:00+00:00" flag="low"/>
+        <waterlevel value="163.5" time="2026-09-11T09:57:00+00:00" flag="high"/>
+        <waterlevel value="34.7" time="2026-09-11T15:50:00+00:00" flag="low"/>
+        <waterlevel value="172.3" time="2026-09-11T22:06:00+00:00" flag="high"/>
+        <waterlevel value="21.1" time="2026-09-12T04:20:00+00:00" flag="low"/>
+        <waterlevel value="165.4" time="2026-09-12T10:35:00+00:00" flag="high"/>
+        <waterlevel value="33.0" time="2026-09-12T16:26:00+00:00" flag="low"/>
+        <waterlevel value="172.6" time="2026-09-12T22:45:00+00:00" flag="high"/>
+        <waterlevel value="24.2" time="2026-09-13T04:55:00+00:00" flag="low"/>
+        <waterlevel value="164.4" time="2026-09-13T11:13:00+00:00" flag="high"/>
+        <waterlevel value="35.2" time="2026-09-13T17:00:00+00:00" flag="low"/>
+        <waterlevel value="169.4" time="2026-09-13T23:23:00+00:00" flag="high"/>
+        <waterlevel value="31.2" time="2026-09-14T05:28:00+00:00" flag="low"/>
+        <waterlevel value="161.2" time="2026-09-14T11:49:00+00:00" flag="high"/>
+        <waterlevel value="40.8" time="2026-09-14T17:33:00+00:00" flag="low"/>
+        <waterlevel value="163.5" time="2026-09-15T00:01:00+00:00" flag="high"/>
+        <waterlevel value="40.8" time="2026-09-15T05:59:00+00:00" flag="low"/>
+        <waterlevel value="156.2" time="2026-09-15T12:26:00+00:00" flag="high"/>
+        <waterlevel value="49.0" time="2026-09-15T18:05:00+00:00" flag="low"/>
+        <waterlevel value="155.9" time="2026-09-16T00:38:00+00:00" flag="high"/>
+        <waterlevel value="52.0" time="2026-09-16T06:30:00+00:00" flag="low"/>
+        <waterlevel value="150.2" time="2026-09-16T13:02:00+00:00" flag="high"/>
+        <waterlevel value="58.9" time="2026-09-16T18:38:00+00:00" flag="low"/>
+        <waterlevel value="147.2" time="2026-09-17T01:17:00+00:00" flag="high"/>
+        <waterlevel value="63.8" time="2026-09-17T07:02:00+00:00" flag="low"/>
+        <waterlevel value="143.4" time="2026-09-17T13:40:00+00:00" flag="high"/>
+        <waterlevel value="69.4" time="2026-09-17T19:16:00+00:00" flag="low"/>
+        <waterlevel value="138.2" time="2026-09-18T01:59:00+00:00" flag="high"/>
+        <waterlevel value="75.4" time="2026-09-18T07:40:00+00:00" flag="low"/>
+        <waterlevel value="136.5" time="2026-09-18T14:23:00+00:00" flag="high"/>
+        <waterlevel value="79.4" time="2026-09-18T20:09:00+00:00" flag="low"/>
+        <waterlevel value="129.5" time="2026-09-19T02:50:00+00:00" flag="high"/>
+        <waterlevel value="85.8" time="2026-09-19T08:36:00+00:00" flag="low"/>
+        <waterlevel value="130.2" time="2026-09-19T15:15:00+00:00" flag="high"/>
+        <waterlevel value="86.0" time="2026-09-19T21:45:00+00:00" flag="low"/>
+        <waterlevel value="122.7" time="2026-09-20T03:59:00+00:00" flag="high"/>
+        <waterlevel value="91.6" time="2026-09-20T10:22:00+00:00" flag="low"/>
+        <waterlevel value="126.4" time="2026-09-20T16:30:00+00:00" flag="high"/>
+        <waterlevel value="83.5" time="2026-09-20T23:48:00+00:00" flag="low"/>
+        <waterlevel value="121.7" time="2026-09-21T05:49:00+00:00" flag="high"/>
+        <waterlevel value="88.0" time="2026-09-21T12:11:00+00:00" flag="low"/>
+        <waterlevel value="128.8" time="2026-09-21T18:09:00+00:00" flag="high"/>
+        <waterlevel value="74.6" time="2026-09-22T00:56:00+00:00" flag="low"/>
+        <waterlevel value="128.3" time="2026-09-22T07:13:00+00:00" flag="high"/>
+        <waterlevel value="79.2" time="2026-09-22T13:09:00+00:00" flag="low"/>
+        <waterlevel value="136.5" time="2026-09-22T19:15:00+00:00" flag="high"/>
+        <waterlevel value="64.0" time="2026-09-23T01:42:00+00:00" flag="low"/>
+        <waterlevel value="136.6" time="2026-09-23T07:59:00+00:00" flag="high"/>
+        <waterlevel value="68.8" time="2026-09-23T13:51:00+00:00" flag="low"/>
+        <waterlevel value="145.4" time="2026-09-23T19:58:00+00:00" flag="high"/>
+        <waterlevel value="53.4" time="2026-09-24T02:18:00+00:00" flag="low"/>
+        <waterlevel value="144.8" time="2026-09-24T08:34:00+00:00" flag="high"/>
+        <waterlevel value="58.1" time="2026-09-24T14:26:00+00:00" flag="low"/>
+        <waterlevel value="153.9" time="2026-09-24T20:34:00+00:00" flag="high"/>
+        <waterlevel value="43.6" time="2026-09-25T02:51:00+00:00" flag="low"/>
+        <waterlevel value="152.3" time="2026-09-25T09:07:00+00:00" flag="high"/>
+        <waterlevel value="48.3" time="2026-09-25T14:59:00+00:00" flag="low"/>
+        <waterlevel value="161.4" time="2026-09-25T21:08:00+00:00" flag="high"/>
+        <waterlevel value="35.4" time="2026-09-26T03:22:00+00:00" flag="low"/>
+        <waterlevel value="158.6" time="2026-09-26T09:39:00+00:00" flag="high"/>
+        <waterlevel value="40.4" time="2026-09-26T15:31:00+00:00" flag="low"/>
+        <waterlevel value="167.0" time="2026-09-26T21:42:00+00:00" flag="high"/>
+        <waterlevel value="29.6" time="2026-09-27T03:53:00+00:00" flag="low"/>
+        <waterlevel value="163.1" time="2026-09-27T10:12:00+00:00" flag="high"/>
+        <waterlevel value="35.2" time="2026-09-27T16:04:00+00:00" flag="low"/>
+        <waterlevel value="170.3" time="2026-09-27T22:18:00+00:00" flag="high"/>
+        <waterlevel value="27.1" time="2026-09-28T04:26:00+00:00" flag="low"/>
+        <waterlevel value="165.1" time="2026-09-28T10:47:00+00:00" flag="high"/>
+        <waterlevel value="33.4" time="2026-09-28T16:38:00+00:00" flag="low"/>
+        <waterlevel value="170.7" time="2026-09-28T22:56:00+00:00" flag="high"/>
+        <waterlevel value="28.4" time="2026-09-29T05:00:00+00:00" flag="low"/>
+        <waterlevel value="164.4" time="2026-09-29T11:24:00+00:00" flag="high"/>
+        <waterlevel value="35.5" time="2026-09-29T17:14:00+00:00" flag="low"/>
+        <waterlevel value="167.8" time="2026-09-29T23:37:00+00:00" flag="high"/>
+        <waterlevel value="33.9" time="2026-09-30T05:35:00+00:00" flag="low"/>
+        <waterlevel value="160.8" time="2026-09-30T12:05:00+00:00" flag="high"/>
+        <waterlevel value="41.1" time="2026-09-30T17:53:00+00:00" flag="low"/>
+        <waterlevel value="161.7" time="2026-10-01T00:22:00+00:00" flag="high"/>
+        <waterlevel value="43.2" time="2026-10-01T06:14:00+00:00" flag="low"/>
+        <waterlevel value="154.8" time="2026-10-01T12:50:00+00:00" flag="high"/>
+        <waterlevel value="49.5" time="2026-10-01T18:36:00+00:00" flag="low"/>
+        <waterlevel value="153.1" time="2026-10-02T01:12:00+00:00" flag="high"/>
+        <waterlevel value="55.4" time="2026-10-02T06:57:00+00:00" flag="low"/>
+        <waterlevel value="147.3" time="2026-10-02T13:39:00+00:00" flag="high"/>
+        <waterlevel value="59.5" time="2026-10-02T19:31:00+00:00" flag="low"/>
+        <waterlevel value="143.3" time="2026-10-03T02:10:00+00:00" flag="high"/>
+        <waterlevel value="68.4" time="2026-10-03T07:53:00+00:00" flag="low"/>
+        <waterlevel value="139.8" time="2026-10-03T14:37:00+00:00" flag="high"/>
+        <waterlevel value="67.8" time="2026-10-03T20:51:00+00:00" flag="low"/>
+        <waterlevel value="134.4" time="2026-10-04T03:18:00+00:00" flag="high"/>
+        <waterlevel value="78.7" time="2026-10-04T09:16:00+00:00" flag="low"/>
+        <waterlevel value="134.5" time="2026-10-04T15:48:00+00:00" flag="high"/>
+        <waterlevel value="68.9" time="2026-10-04T22:37:00+00:00" flag="low"/>
+        <waterlevel value="130.3" time="2026-10-05T04:46:00+00:00" flag="high"/>
+        <waterlevel value="80.3" time="2026-10-05T11:08:00+00:00" flag="low"/>
+        <waterlevel value="135.2" time="2026-10-05T17:18:00+00:00" flag="high"/>
+        <waterlevel value="61.2" time="2026-10-06T00:08:00+00:00" flag="low"/>
+        <waterlevel value="134.8" time="2026-10-06T06:20:00+00:00" flag="high"/>
+        <waterlevel value="73.0" time="2026-10-06T12:32:00+00:00" flag="low"/>
+        <waterlevel value="143.2" time="2026-10-06T18:39:00+00:00" flag="high"/>
+        <waterlevel value="50.8" time="2026-10-07T01:10:00+00:00" flag="low"/>
+        <waterlevel value="143.9" time="2026-10-07T07:25:00+00:00" flag="high"/>
+        <waterlevel value="63.1" time="2026-10-07T13:26:00+00:00" flag="low"/>
+        <waterlevel value="153.5" time="2026-10-07T19:36:00+00:00" flag="high"/>
+        <waterlevel value="131.0" time="2027-09-24T03:23:00+00:00" flag="high"/>
+        <waterlevel value="77.1" time="2027-09-24T09:18:00+00:00" flag="low"/>
+        <waterlevel value="131.0" time="2027-09-24T15:55:00+00:00" flag="high"/>
+        <waterlevel value="71.0" time="2027-09-24T22:38:00+00:00" flag="low"/>
+        <waterlevel value="128.5" time="2027-09-25T04:49:00+00:00" flag="high"/>
+        <waterlevel value="77.2" time="2027-09-25T11:09:00+00:00" flag="low"/>
+        <waterlevel value="132.9" time="2027-09-25T17:25:00+00:00" flag="high"/>
+        <waterlevel value="61.2" time="2027-09-26T00:12:00+00:00" flag="low"/>
+        <waterlevel value="134.3" time="2027-09-26T06:22:00+00:00" flag="high"/>
+        <waterlevel value="68.3" time="2027-09-26T12:34:00+00:00" flag="low"/>
+        <waterlevel value="142.4" time="2027-09-26T18:44:00+00:00" flag="high"/>
+        <waterlevel value="47.5" time="2027-09-27T01:14:00+00:00" flag="low"/>
+        <waterlevel value="145.2" time="2027-09-27T07:29:00+00:00" flag="high"/>
+        <waterlevel value="56.3" time="2027-09-27T13:31:00+00:00" flag="low"/>
+        <waterlevel value="154.7" time="2027-09-27T19:42:00+00:00" flag="high"/>
+        <waterlevel value="34.5" time="2027-09-28T02:04:00+00:00" flag="low"/>
+        <waterlevel value="156.1" time="2027-09-28T08:20:00+00:00" flag="high"/>
+        <waterlevel value="44.9" time="2027-09-28T14:18:00+00:00" flag="low"/>
+        <waterlevel value="165.9" time="2027-09-28T20:30:00+00:00" flag="high"/>
+        <waterlevel value="24.7" time="2027-09-29T02:49:00+00:00" flag="low"/>
+        <waterlevel value="164.7" time="2027-09-29T09:04:00+00:00" flag="high"/>
+        <waterlevel value="36.1" time="2027-09-29T15:01:00+00:00" flag="low"/>
+        <waterlevel value="173.9" time="2027-09-29T21:15:00+00:00" flag="high"/>
+        <waterlevel value="19.7" time="2027-09-30T03:30:00+00:00" flag="low"/>
+        <waterlevel value="170.0" time="2027-09-30T09:46:00+00:00" flag="high"/>
+        <waterlevel value="31.1" time="2027-09-30T15:41:00+00:00" flag="low"/>
+        <waterlevel value="177.6" time="2027-09-30T21:58:00+00:00" flag="high"/>
+        </data>
+        </locationdata>
+        </tide>
+  recorded_at: Tue, 06 Oct 2026 12:00:00 GMT
+recorded_with: VCR 6.4.0
