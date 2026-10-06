@@ -935,3 +935,37 @@ RSpec.describe 'Marine Institute credit in the web UI', type: :api do
         end
     end
 end
+
+RSpec.describe WebCalTides do
+    describe '.tide_calendar_for with rws (Rijkswaterstaat) provider: calendar name' do
+        let(:station) do
+            build_station(name: 'IJmuiden, buitenhaven', id: 'NL__ijmuiden.buitenhaven', public_id: 'ijmuiden.buitenhaven', provider: 'rws',
+                          lat: 52.463, lon: 4.555, location: 'IJmuiden, buitenhaven, Netherlands', region: 'Netherlands',
+                          url: Clients::RijkswaterstaatTides::HOME_URL)
+        end
+
+        # RWS Stavenisse: 2026-10-24T14:09+01:00 HW 158 cm and 2026-10-26T09:07+01:00 LW -119 cm vs NAP
+        # (summer time on the 24th, winter time on the 26th; RWS gives +01:00 for both)
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 26, 8, 7), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NL__ijmuiden.buitenhaven', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'names the calendar with the RWS name as published (titleize would give "I Jmuiden, Buitenhaven")' do
+            expect(calendar.x_wr_calname.first.value).to eq('IJmuiden, buitenhaven')
+            allow(described_class).to receive(:tide_station_for).and_return(station.dup.tap { |s| s.name = 'Hoek van Holland' })
+            expect(described_class.tide_calendar_for('NL__hoekvanholland').x_wr_calname.first.value).to eq('Hoek van Holland')
+        end
+
+    end
+end

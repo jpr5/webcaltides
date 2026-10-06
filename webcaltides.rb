@@ -45,11 +45,16 @@ module WebCalTides
     STATION_GROUPING_DISTANCE_M = 200  # Meters threshold for grouping nearby stations
 
     # Priority order for selecting primary source when multiple providers cover the same location.
-    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ, Marine Institute) are preferred over
+    # Agency sources (NOAA, CHS, BSH, Kartverket, LINZ, Marine Institute, Rijkswaterstaat) are preferred over
     # harmonic-based predictions.  NOAA and CHS do have nearby stations along the US/Canada border,
     # so their order matters there: NOAA wins (pinned by spec/integration/station_grouping_spec.rb).
-    # BSH (Germany), Kartverket (Norway), LINZ (New Zealand) and the Marine Institute (Ireland)
-    # overlap none of the other agency sources, so their positions among them have no effect.
+    # Kartverket (Norway), LINZ (New Zealand) and the Marine Institute (Ireland) overlap none of the
+    # other agency sources within the grouping distance, so their positions among them have no
+    # effect.  BSH (Germany) and Rijkswaterstaat (Netherlands) do overlap on the Ems-Dollard border:
+    # RWS NL__dukegat and NL__knock are at the same coordinates (0 m) as BSH DE__799G (Dukegat) and
+    # DE__802P (Knock, Ems), so each pair is grouped and BSH is the primary there because bsh comes
+    # before rws below (pinned by spec/integration/station_grouping_spec.rb).  RWS NL__pogum is 351 m
+    # from BSH DE__803P (Pogum, Ems), beyond the grouping distance, so those two stay separate.
     #
     # BSH vs TICON (Oct 2026, issue #49): TICON's timing for German river gauges is materially
     # off vs BSH's official HW/NW tables, which BSH publishes to the minute (issue #49 shows Cranz
@@ -85,10 +90,19 @@ module WebCalTides
     # 4 (Inishmore, Malin Head, River Tolka, the second Sligo) are 0.5-1.4 km from the MI station,
     # beyond STATION_GROUPING_DISTANCE_M, so search shows them as separate cards there.
     #
+    # Rijkswaterstaat vs TICON (Oct 2026): 73 TICON Dutch stations are within 2 km of RWS gauges, and
+    # RWS publishes the astronomical predictions itself.  Over October 2026 (119-120 events per
+    # station, app feed vs RWS's own high/low list), TICON's largest difference was 46 min at
+    # Stavenisse, 64 min at Vlissingen, 111 min at Harlingen, 152 min at Den Helder and 171 min at
+    # Hoek van Holland, with no event matching to the minute.  So RWS wins where it groups with a
+    # TICON station (Den Helder, Harlingen, Hoek van Holland), and TICON remains an alternative;
+    # where the two are further apart than the grouping distance (Stavenisse and Vlissingen, about
+    # 300 m) they are separate results, RWS listed first.  RWS heights are above NAP, not chart datum.
+    #
     # XTide vs TICON (Jan 2026, scripts/compare_harmonic_sources.rb):
     # - Tides: Same timing RMS (~4min), but XTide height RMS 1.56ft vs TICON 3.49ft (2.2x better)
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
-    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi xtide ticon].freeze
+    PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi rws xtide ticon].freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
@@ -150,6 +164,11 @@ module WebCalTides
         # Marine Institute stations ("Howth, Co. Dublin, Ireland"); not Bermuda's "Ireland Island"
         # or Northern Ireland
         /(?<!northern )\bireland\z/i => 'Europe/Dublin',
+        # Rijkswaterstaat gauges (region "Netherlands"); not "Netherlands Antilles" or "Caribbean Netherlands"
+        /(?<!caribbean )\bnetherlands\b(?! antilles)/i => 'Europe/Amsterdam',
+        # BSH gauges and the Rijkswaterstaat gauges in Belgium and Germany
+        /\bbelgium\b/i => 'Europe/Brussels',
+        /\bgermany\b/i => 'Europe/Berlin',
         /uk|england|wales|scotland/i => 'Europe/London',
         /japan/i => 'Asia/Tokyo'
     }.freeze
@@ -194,6 +213,7 @@ module WebCalTides
                 kartverket: Clients::KartverketTides.new(logger),
                 linz:  Clients::LinzTides.new(logger),
                 imi:   Clients::MarineInstituteTides.new(logger),
+                rws:   Clients::RijkswaterstaatTides.new(logger),
                 xtide: harmonics,
                 ticon: harmonics
             }
@@ -805,9 +825,10 @@ module WebCalTides
         data    = tide_data_for(station, around: around) or return nil
 
         cal = Icalendar::Calendar.new
-        # Kartverket, LINZ and Marine Institute names are already properly cased; titleize would mangle them
-        # ("Ny-Ålesund" to "Ny ålesund", "Port Ōhope Wharf" to "Port ōhope Wharf", "Waitangi - Chatham Island" loses its dash)
-        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz', 'imi']) ? station.name : station.name.titleize
+        # Kartverket, LINZ, Marine Institute and Rijkswaterstaat names are already properly cased; titleize would mangle them
+        # ("Ny-Ålesund" to "Ny ålesund", "Port Ōhope Wharf" to "Port ōhope Wharf", "Waitangi - Chatham Island" loses its dash,
+        # "IJmuiden, buitenhaven" to "I Jmuiden, Buitenhaven", "Hoek van Holland" to "Hoek Van Holland")
+        cal.x_wr_calname = station.provider.in?(['kartverket', 'linz', 'imi', 'rws']) ? station.name : station.name.titleize
 
         if station.provider.in?(['xtide', 'ticon'])
             cal.description = "NOT FOR NAVIGATION. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  The author and the publisher each assume no liability for damages arising from use of these predictions.  They are not certified to be correct, and they do not incorporate the effects of tropical storms, El Niño, seismic events, subsidence, uplift, or changes in global sea level."
