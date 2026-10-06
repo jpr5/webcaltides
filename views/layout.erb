@@ -767,6 +767,11 @@
             <p id="kartverket-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
                 Norwegian tide predictions: <a href="<%= escape_html(Clients::KartverketTides::HOME_URL) %>" class="underline hover:text-slate-400">© Kartverket</a>, licensed under <a href="<%= escape_html(Clients::KartverketTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; heights converted to the selected units, times unchanged (UTC). Not for navigation.
             </p>
+
+            <!-- LINZ's CC BY 4.0 terms ask for its attribution wherever its data is used -->
+            <p id="linz-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
+                New Zealand tide predictions: based on <a href="<%= escape_html(Clients::LinzTides::HOME_URL) %>" class="underline hover:text-slate-400">Toitū Te Whenua Land Information New Zealand</a> data, licensed for re-use under <a href="<%= escape_html(Clients::LinzTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; times converted from New Zealand local time (Chatham Islands time for the Chatham Islands ports) to UTC, high/low labels added, heights converted to the selected units. Not the official tide tables under Maritime Rules Part 25. Not for navigation.
+            </p>
         </div>
     </footer>
 </body>
