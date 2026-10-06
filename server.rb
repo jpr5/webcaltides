@@ -432,8 +432,16 @@ class Server < ::Sinatra::Base
 
             calendar.publish
 
-            $LOG.debug "caching to #{cached_ics}"
-            WebCalTides.atomic_write(cached_ics, ical = calendar.to_ical)
+            ical = calendar.to_ical
+
+            # A feed built from a window the source hasn't published in full is not cached for the
+            # month (see WebCalTides.cache_tide_data_for)
+            if calendar.respond_to?(:partial?) && calendar.partial?
+                $LOG.info "not caching #{cached_ics}: partial tide data"
+            else
+                $LOG.debug "caching to #{cached_ics}"
+                WebCalTides.atomic_write(cached_ics, ical)
+            end
 
             ical
         end

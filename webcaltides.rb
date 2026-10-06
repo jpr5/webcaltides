@@ -755,16 +755,30 @@ module WebCalTides
         end
     end
 
+    # Fetches and caches the station's data for the month.  Returns the data, or false if there is
+    # none.
     def cache_tide_data_for(station, at:, around:)
         return false unless station
 
+        tide_data = tide_clients(station.provider).tide_data_for(station, around)
+
         # Nothing to cache for an empty list either -- it would serve "no tides" for the month
-        if (tide_data = tide_clients(station.provider).tide_data_for(station, around)).present?
+        return false if tide_data.blank?
+
+        # A window the source hasn't published in full yet (Clients::PartialWindow) is served but
+        # not cached, or the month would keep it partial after the rest is published
+        if partial?(tide_data)
+            logger.info "not caching partial tide data for #{station.id} at #{at}"
+        else
             logger.debug "storing tide data at #{at}"
             atomic_write(at, tide_data.map(&:to_h).to_json)
         end
 
-        return tide_data && tide_data.length > 0
+        return tide_data
+    end
+
+    def partial?(data)
+        data.respond_to?(:partial?) && data.partial?
     end
 
     def tide_data_for(station, around: Time.current.utc)
@@ -772,7 +786,10 @@ module WebCalTides
 
         datestamp = around.utc.strftime("%Y%m")
         filename  = "#{settings.cache_dir}/tides_v#{Models::TideData.version}_#{station.id}_#{datestamp}.json"
-        return nil unless File.exist?(filename) || cache_tide_data_for(station, at:filename, around:around)
+        unless File.exist?(filename)
+            tide_data = cache_tide_data_for(station, at:filename, around:around) or return nil
+            return tide_data if partial?(tide_data)
+        end
 
         logger.debug "reading #{filename}"
         json = File.read(filename)
@@ -870,6 +887,9 @@ module WebCalTides
 
         cal.define_singleton_method(:station)  { station }
         cal.define_singleton_method(:location) { station.location }
+        # Built from a partial window: the server doesn't cache the feed for the month either
+        partial = partial?(data)
+        cal.define_singleton_method(:partial?) { partial }
 
         logger.info "tide calendar for #{station.name} generated with #{cal.events.length} events"
 

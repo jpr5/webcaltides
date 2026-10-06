@@ -969,3 +969,110 @@ RSpec.describe WebCalTides do
 
     end
 end
+
+RSpec.describe WebCalTides do
+    describe '.tide_calendar_for with rws (Rijkswaterstaat) provider: partial window' do
+        let(:station) do
+            build_station(name: 'IJmuiden, buitenhaven', id: 'NL__ijmuiden.buitenhaven', public_id: 'ijmuiden.buitenhaven', provider: 'rws',
+                          lat: 52.463, lon: 4.555, location: 'IJmuiden, buitenhaven, Netherlands', region: 'Netherlands',
+                          url: Clients::RijkswaterstaatTides::HOME_URL)
+        end
+
+        # RWS Stavenisse: 2026-10-24T14:09+01:00 HW 158 cm and 2026-10-26T09:07+01:00 LW -119 cm vs NAP
+        # (summer time on the 24th, winter time on the 26th; RWS gives +01:00 for both)
+        let(:tide_data) do
+            [
+                build_tide_data(type: 'High', units: 'm', prediction: 1.58, time: DateTime.new(2026, 10, 24, 13, 9), url: station.url),
+                build_tide_data(type: 'Low',  units: 'm', prediction: -1.19, time: DateTime.new(2026, 10, 26, 8, 7), url: station.url)
+            ]
+        end
+
+        before do
+            allow(described_class).to receive(:tide_station_for).and_return(station)
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data)
+        end
+
+        let(:calendar) { described_class.tide_calendar_for('NL__ijmuiden.buitenhaven', units: 'metric') }
+        let(:ical)     { calendar.to_ical.gsub(/\r\n[ \t]/, '') }
+
+        it 'says whether it was built from a partial window' do
+            expect(calendar).not_to be_partial
+            allow(described_class).to receive(:tide_data_for).and_return(tide_data.dup.extend(Clients::PartialWindow))
+            expect(described_class.tide_calendar_for('NL__ijmuiden.buitenhaven')).to be_partial
+        end
+    end
+
+    describe '.tide_data_for with a partial window' do
+        let(:station) { build_station(id: 'NL__stavenisse', public_id: 'stavenisse', provider: 'rws') }
+        let(:client)  { instance_double(Clients::RijkswaterstaatTides) }
+        let(:tides)   { [build_tide_data(type: 'High', units: 'm', prediction: 1.2, time: DateTime.new(2027, 12, 31, 4, 27))] }
+        let(:file)    { "#{described_class.settings.cache_dir}/tides_v#{Models::TideData.version}_NL__stavenisse_202706.json" }
+
+        around { |example| with_test_cache_dir { example.run } }
+
+        before do
+            allow(described_class).to receive(:tide_clients).and_call_original
+            allow(described_class).to receive(:tide_clients).with('rws').and_return(client)
+        end
+
+        it 'serves it without caching it for the month, and fetches it again next time' do
+            allow(client).to receive(:tide_data_for).and_return(tides.dup.extend(Clients::PartialWindow))
+
+            2.times { expect(described_class.tide_data_for(station, around: Time.utc(2027, 6, 15))).to eq(tides) }
+            expect(File.exist?(file)).to be(false)
+            expect(client).to have_received(:tide_data_for).twice
+        end
+
+        it 'caches a complete window as before' do
+            allow(client).to receive(:tide_data_for).and_return(tides)
+
+            2.times { expect(described_class.tide_data_for(station, around: Time.utc(2027, 6, 15)).map(&:prediction)).to eq([1.2]) }
+            expect(File.exist?(file)).to be(true)
+            expect(client).to have_received(:tide_data_for).once
+        end
+    end
+end
+
+RSpec.describe 'GET /tides/:station.ics for a partial window', type: :api do
+    include Rack::Test::Methods
+
+    let(:station) { build_station(name: 'Stavenisse', id: 'NL__stavenisse', public_id: 'stavenisse', provider: 'rws', location: 'Stavenisse, Netherlands') }
+    let(:tides)   { [build_tide_data(type: 'High', units: 'm', prediction: 1.2, time: DateTime.new(2027, 12, 31, 4, 27))] }
+    let(:ics)     { "#{Server.settings.cache_dir}/tides_v#{Models::TideData.version}_NL__stavenisse_202706_metric_0_0.ics" }
+
+    # The clock is frozen in 2027, which would make the route start the monthly cache cleanup;
+    # keep it out of the real cache/ by using a temp cache dir and stubbing the cleanup.
+    around { |example| with_test_cache_dir { example.run } }
+
+    before do
+        allow(WebCalTides).to receive(:cleanup_if_month_changed)
+        allow(WebCalTides).to receive(:station_ids).and_return(['NL__stavenisse'])
+        allow(WebCalTides).to receive(:tide_station_for).and_return(station)
+    end
+
+    it 'serves the feed without caching it for the month' do
+        allow(WebCalTides).to receive(:tide_data_for).and_return(tides.dup.extend(Clients::PartialWindow))
+        Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__stavenisse.ics', units: 'metric', solar: '0' }
+
+        expect(last_response).to be_ok
+        expect(last_response.body).to include('High Tide 1.2 m')
+        expect(File.exist?(ics)).to be(false)
+    end
+
+    it 'caches a feed from a complete window as before' do
+        allow(WebCalTides).to receive(:tide_data_for).and_return(tides)
+        Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__stavenisse.ics', units: 'metric', solar: '0' }
+
+        expect(last_response).to be_ok
+        expect(File.exist?(ics)).to be(true)
+    end
+
+    it 'serves the RWS station id with dots in it' do
+        allow(WebCalTides).to receive(:station_ids).and_return(['NL__denhelder.marsdiep'])
+        allow(WebCalTides).to receive(:tide_data_for).and_return(tides.dup.extend(Clients::PartialWindow))
+        Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__denhelder.marsdiep.ics', units: 'metric', solar: '0' }
+
+        expect(last_response).to be_ok
+        expect(WebCalTides).to have_received(:tide_station_for).with('NL__denhelder.marsdiep')
+    end
+end
