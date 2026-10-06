@@ -326,6 +326,51 @@ RSpec.describe WebCalTides do
                 # Ordinary day: both events
                 expect(sunrises).to include(Date.new(2025, 9, 22))
                 expect(sunsets).to include(Date.new(2025, 9, 22))
+
+                # Transition into midnight sun: sunrise, but no sunset
+                expect(sunrises).to include(Date.new(2025, 5, 18))
+                expect(sunsets).not_to include(Date.new(2025, 5, 18))
+            end
+        end
+
+        context 'below the Antarctic Circle' do
+            let(:base_calendar) do
+                cal = Icalendar::Calendar.new
+                station = build_station(lat: -77.85, lon: 166.67) # McMurdo
+                cal.define_singleton_method(:station) { station }
+                cal.define_singleton_method(:location) { 'McMurdo Station, ATA' }
+                cal
+            end
+
+            before do
+                allow(described_class).to receive(:timezone_for).and_return('Antarctica/McMurdo')
+            end
+
+            def solar_days(calendar, summary)
+                calendar.events.select { |e| e.summary.to_s == summary }.map { |e| e.dtstart.to_date }
+            end
+
+            it 'skips sunrise and sunset on days without them (polar night, midnight sun)' do
+                freeze_time(Time.utc(2025, 6, 15))
+
+                expect {
+                    described_class.solar_calendar_for(base_calendar, around: Time.current.utc)
+                }.not_to raise_error
+
+                sunrises = solar_days(base_calendar, 'Sunrise')
+                sunsets  = solar_days(base_calendar, 'Sunset')
+
+                # Polar night (June) and midnight sun (December): no events
+                expect(sunrises).not_to include(Date.new(2025, 6, 21), Date.new(2025, 12, 21))
+                expect(sunsets).not_to include(Date.new(2025, 6, 21), Date.new(2025, 12, 21))
+
+                # Ordinary day: both events
+                expect(sunrises).to include(Date.new(2025, 9, 22))
+                expect(sunsets).to include(Date.new(2025, 9, 22))
+
+                # Transition out of polar night: sunset, but no sunrise
+                expect(sunsets).to include(Date.new(2025, 8, 19))
+                expect(sunrises).not_to include(Date.new(2025, 8, 19))
             end
         end
     end
