@@ -1073,7 +1073,7 @@ RSpec.describe 'GET /tides/:station.ics for a partial window', type: :api do
         Timecop.freeze(Time.utc(2027, 6, 15)) { get '/tides/NL__denhelder.marsdiep.ics', units: 'metric', solar: '0' }
 
         expect(last_response).to be_ok
-        expect(WebCalTides).to have_received(:tide_station_for).with('NL__denhelder.marsdiep')
+        expect(WebCalTides).to have_received(:tide_station_for).with('NL__denhelder.marsdiep').at_least(:once)
     end
 end
 

@@ -45,6 +45,9 @@ RSpec.describe 'GET /:type/:station.ics', type: :api do
         allow(WebCalTides).to receive(:station_ids).and_return(['NOAA123', 'CURR456'])
         allow(WebCalTides).to receive(:tide_calendar_for).and_return(tide_calendar)
         allow(WebCalTides).to receive(:current_calendar_for).and_return(current_calendar)
+        # The route looks the station up for the cache name (harmonics stations get a dataset/engine key)
+        allow(WebCalTides).to receive(:tide_station_for).and_return(build_station(id: 'NOAA123', provider: 'noaa'))
+        allow(WebCalTides).to receive(:current_station_for).and_return(build_station(id: 'CURR456', bid: 'CURR456', provider: 'noaa'))
         allow(WebCalTides).to receive(:solar_calendar_for).and_return(Icalendar::Calendar.new)
         allow(WebCalTides).to receive(:lunar_calendar_for).and_return(Icalendar::Calendar.new)
 
