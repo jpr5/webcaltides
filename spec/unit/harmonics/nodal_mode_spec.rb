@@ -192,8 +192,18 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
 
     # Output of commit e441ec9 (before per-year TCD nodal corrections) for 2 XTide and 2 TICON
     # stations across the 2026/2027 year boundary.
+    #
+    # Raw hourly heights come out of libm sin/cos, which differ by an ulp or
+    # two between platforms (glibc on Linux vs macOS gave deltas up to 4.4e-16),
+    # so they are compared within 1e-9. That is far below the 3-decimal
+    # precision of any published height and far below the smallest gap between
+    # tcd output and this fixture (5e-4), so it still pins legacy output.
     describe 'legacy mode' do
-        it 'reproduces e441ec9 output exactly' do
+        def match_hourly(golden)
+            match(golden.map { |t, h| [t, be_within(1e-9).of(h)] })
+        end
+
+        it 'reproduces e441ec9 output (peaks exactly, hourly heights to 1e-9)' do
             golden = JSON.parse(File.read("#{fixtures}/legacy_e441ec9_events.json"))
             t0, t1 = golden['window'].map { |w| Time.parse("#{w} UTC") }
             Dir.mktmpdir do |dir|
@@ -202,7 +212,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     golden['stations'].each do |id, g|
                         hourly = engine.generate_predictions(id, Time.utc(2026, 12, 31, 12), Time.utc(2027, 1, 1, 12), step_seconds: 3600)
                         expect(events(engine, id, t0, t1)).to eq(g['peaks']), "peaks differ for #{id}"
-                        expect(hourly.map { |p| [fmt[p['time']], p['height']] }).to eq(g['hourly']), "heights differ for #{id}"
+                        expect(hourly.map { |p| [fmt[p['time']], p['height']] }).to match_hourly(g['hourly']), "heights differ for #{id}"
                     end
                 end
             end
