@@ -253,6 +253,21 @@ module WebCalTides
         tide_clients(:xtide).engine.source_files_checksum
     end
 
+    # Cache-key suffix for data the harmonics engine serves: the dataset (harmonics_checksum) and
+    # the engine version + HARMONICS_NODAL flag, so a change to any of them rebuilds only harmonics
+    # caches.  "" for agency stations, whose names stay as they were.  It goes after the _YYYYMM
+    # datestamp, which must stay the first "_20dddd" token for the monthly cleanup.
+    def harmonics_cache_key(station)
+        return "" unless station&.provider.in?(['xtide', 'ticon'])
+
+        "_#{harmonics_checksum}_#{harmonics_engine_key}"
+    end
+
+    # Engine version + nodal mode of the running engine, so cache names match the output it makes.
+    def harmonics_engine_key
+        tide_clients(:xtide).engine.cache_key_component
+    end
+
     ##
     ## Util
     ##
@@ -786,7 +801,7 @@ module WebCalTides
         return nil unless station
 
         datestamp = around.utc.strftime("%Y%m")
-        filename  = "#{settings.cache_dir}/tides_v#{Models::TideData.version}_#{station.id}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/tides_v#{Models::TideData.version}_#{station.id}_#{datestamp}#{harmonics_cache_key(station)}.json"
         unless File.exist?(filename)
             tide_data = cache_tide_data_for(station, at:filename, around:around) or return nil
             return tide_data if partial?(tide_data)
@@ -1150,7 +1165,7 @@ module WebCalTides
         return nil unless station
 
         datestamp = around.utc.strftime("%Y%m") # 202312
-        filename  = "#{settings.cache_dir}/currents_v#{Models::CurrentData.version}_#{station.bid}_#{datestamp}.json"
+        filename  = "#{settings.cache_dir}/currents_v#{Models::CurrentData.version}_#{station.bid}_#{datestamp}#{harmonics_cache_key(station)}.json"
         return nil unless File.exist?(filename) || cache_current_data_for(station, at:filename, around:around)
 
         logger.debug "reading #{filename}"

@@ -408,7 +408,9 @@ class Server < ::Sinatra::Base
         add_lunar  = params[:lunar].in?(%w[1 true])  # off by default
         stamp      = date.utc.strftime("%Y%m")
         version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
-        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
+        station    = type == "currents" ? WebCalTides.current_station_for(id) : WebCalTides.tide_station_for(id)
+        hkey       = WebCalTides.harmonics_cache_key(station) # "" unless harmonics-served
+        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}#{hkey}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
 
         # Cleanup old cache files if month has changed (thread-safe)
         WebCalTides.cleanup_if_month_changed

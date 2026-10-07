@@ -12,7 +12,7 @@ module Harmonics
         XTIDE_FILE = File.expand_path('../data/latest-xtide.tcd', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
 
-        attr_reader :speeds, :stations_cache, :xtide_file, :ticon_file, :logger
+        attr_reader :speeds, :stations_cache, :xtide_file, :ticon_file, :logger, :nodal_mode
 
         # Astronomical constants from SP 98 Table 1 (via libcongen)
         # These are fixed for the 1900 epoch to match the harmonic data
@@ -46,6 +46,7 @@ module Harmonics
             @xtide_file = ENV['XTIDE_FILE'] || XTIDE_FILE
             @ticon_file = ENV['TICON_FILE'] || TICON_FILE
             @cache_dir = cache_dir || 'cache'
+            @nodal_mode = self.class.nodal_mode(logger)
             @stations_cache = {}
             @speeds = {}
             @constituent_definitions = {}
@@ -92,9 +93,10 @@ module Harmonics
         end
 
         # Generate checksums for source files to version the cache.
-        # Returns "xtidehash_ticonhash" (8 hex chars each).
+        # Returns "xtidehash_ticonhash" (8 hex chars each).  Computed once per engine, the same
+        # lifetime as the dataset it loads; it is in every harmonics cache name, so it runs per request.
         def source_files_checksum
-            [@xtide_file, @ticon_file].map do |f|
+            @source_files_checksum ||= [@xtide_file, @ticon_file].map do |f|
                 if File.exist?(f)
                     # Follow symlinks and hash the actual content
                     Digest::MD5.file(f).hexdigest[0, 8]
@@ -104,8 +106,51 @@ module Harmonics
             end.join("_")
         end
 
-        # Cache version - increment when cache format changes to force regeneration
-        CACHE_VERSION = 2
+        # Cache version - increment when cache format changes to force regeneration.
+        # v3: bumped with ENGINE_VERSION 3 to force a fresh parse; the station
+        # cache format is unchanged from v2 (it holds no nodal factors).
+        CACHE_VERSION = 3
+
+        # Engine version - increment when prediction output changes for the same
+        # input data. Part of every nodal-factor cache file name and of
+        # cache_key_component (tide/currents JSON and ICS cache names), so output
+        # cached by older code is never reused. The station cache file uses
+        # CACHE_VERSION instead.
+        ENGINE_VERSION = 3
+
+        # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
+        #   tcd    (default) - TCD per-year equilibrium argument (V0+u) and node
+        #                      factor (f) for every constituent, as XTide does.
+        #   legacy - engine computes V0/u/f for the 13 BASES only; every other
+        #            constituent runs with V0=0, u=0, f=1 (pre-version-3 output).
+        NODAL_MODES = %w[tcd legacy].freeze
+        DEFAULT_NODAL_MODE = 'tcd'
+
+        # An invalid value (e.g. a typo while rolling back) must not take the
+        # site down: it is logged at ERROR, when a logger is given, and the
+        # default is used.
+        def self.nodal_mode(logger = nil)
+            raw = ENV['HARMONICS_NODAL']
+            mode = raw.to_s.strip.downcase
+            return DEFAULT_NODAL_MODE if mode.empty?
+            return mode if NODAL_MODES.include?(mode)
+
+            logger&.error "invalid HARMONICS_NODAL #{raw.inspect} (must be one of #{NODAL_MODES.join('|')}); using #{DEFAULT_NODAL_MODE}"
+            DEFAULT_NODAL_MODE
+        end
+
+        # Short string naming the engine version and nodal mode (e.g. "hA3tcd"),
+        # for callers to put in harmonics tide/currents cache file names. It holds
+        # no "_20dddd" token, so it cannot shadow a file name's datestamp.
+        def self.cache_key_component(mode = nodal_mode)
+            "hA#{ENGINE_VERSION}#{mode}"
+        end
+
+        # The same, for the nodal mode this engine resolved at construction (the
+        # mode it actually predicts with), not a fresh read of ENV.
+        def cache_key_component
+            self.class.cache_key_component(@nodal_mode)
+        end
 
         def stations_cache_file
             "#{@cache_dir}/xtide_stations_v#{CACHE_VERSION}_#{source_files_checksum}.json"
@@ -213,8 +258,10 @@ module Harmonics
                 t = (current_utc - year_start_utc) / 3600.0
 
                 # Formula: V = V0 + speed * t + u - phase
-                # If meridian is West-positive (e.g. 5 for EST), then t_lst = t_utc - 5.
-                # Since V0 is calculated for Jan 1 00:00:00 LST, we must use t relative to LST.
+                # meridian_offset is east-positive hours (e.g. -5 for EST). t is
+                # measured from Jan 1 00:00 UTC + meridian_offset hours, the instant
+                # V0 is computed for (calculate_nodal_factors; calculate_tcd_nodal_factors
+                # shifts V0 to match).
                 t -= meridian_offset
 
                 constituents.each do |c|
@@ -222,6 +269,9 @@ module Harmonics
                     speed = @speeds[name] || @constituent_definitions[name]&.[]('speed')
                     next unless speed
 
+                    # tcd mode covers every constituent in the TCD (in-range years);
+                    # legacy mode covers only the 13 BASES; anything else runs
+                    # with f=1, u=0, V0=0.
                     nf = nodal[name] || { 'f' => 1.0, 'u' => 0.0, 'V0' => 0.0 }
                     # arg = (speed * t + (V0 + u) - phase)
                     arg = (speed * t + (nf['V0'] + nf['u']) - c['phase']) * Math::PI / 180.0
@@ -621,7 +671,8 @@ module Harmonics
                         @constituent_definitions[const.name]['speed'] = const.speed
                     else
                         # For non-BASES constituents, create basic definition
-                        # These will not be used for nodal factor calculations
+                        # Legacy nodal mode computes no factors for these; tcd mode
+                        # takes them from the TCD per-year tables instead.
                         f_formula = map_constituent_to_formula(const.name)
                         @constituent_definitions[const.name] = {
                             'type' => 'Basic',
@@ -942,35 +993,110 @@ module Harmonics
             end
         end
 
+        # Returns { name => { 'f', 'u', 'V0' } } for the given UTC day.
+        # tcd mode: one table per year (TCD values do not vary within a year).
+        # legacy mode (and tcd mode for a year outside the TCD table): per-day
+        # engine calculation (the 13 BASES only).
         def get_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
+            if @nodal_mode == 'tcd' && tcd_nodal_year?(year)
+                key = "tcd_#{year}_#{meridian_offset}"
+                return @nodal_factors_cache[key] ||= load_nodal_cache(tcd_nodal_cache_file(year, meridian_offset)) || begin
+                    factors = calculate_tcd_nodal_factors(year, meridian_offset)
+                    save_nodal_cache(tcd_nodal_cache_file(year, meridian_offset), factors)
+                    factors
+                end
+            end
+
             key = "#{year}_#{month}_#{day}_#{meridian_offset}_#{nodal_hour}"
-            @nodal_factors_cache[key] ||= load_nodal_cache(year, month, day, meridian_offset, nodal_hour) || begin
+            @nodal_factors_cache[key] ||= load_nodal_cache(nodal_cache_file(year, month, day, meridian_offset, nodal_hour)) || begin
                 factors = calculate_nodal_factors(year, month, day, meridian_offset, nodal_hour)
-                save_nodal_cache(year, month, day, meridian_offset, nodal_hour, factors)
+                save_nodal_cache(nodal_cache_file(year, month, day, meridian_offset, nodal_hour), factors)
                 factors
             end
+        end
+
+        # Versioned prefix for nodal cache files: engine version + nodal mode.
+        # Unversioned files (nodal_factors_YYYY_M_D_...) written by older code
+        # are never read.
+        def nodal_cache_prefix
+            "#{@cache_dir}/nodal_factors_v#{ENGINE_VERSION}_#{@nodal_mode}"
         end
 
         def nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
             # Use safe filename for meridian (e.g. -5.0 -> _m5.0)
             m_str = meridian_offset.to_s.gsub('-', 'm')
-            "#{@cache_dir}/nodal_factors_#{year}_#{month}_#{day}_#{m_str}_h#{nodal_hour}.json"
+            "#{nodal_cache_prefix}_#{year}_#{month}_#{day}_#{m_str}_h#{nodal_hour}.json"
         end
 
-        def load_nodal_cache(year, month, day, meridian_offset, nodal_hour)
-            file = nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
-            if File.exist?(file)
-                # Suppress per-day logging - too verbose
-                return JSON.parse(File.read(file))
-            end
+        # The tables come from the TCD file, so its checksum (the first half of
+        # source_files_checksum) is in the name: a different TCD file never reads
+        # these tables. The "t" prefix keeps the name free of a "_20dddd" token.
+        def tcd_nodal_cache_file(year, meridian_offset)
+            m_str = meridian_offset.to_s.gsub('-', 'm')
+            tcd_sum = source_files_checksum.split('_').first
+            "#{nodal_cache_prefix}_t#{tcd_sum}_#{year}_#{m_str}.json"
+        end
+
+        def load_nodal_cache(file)
+            # Suppress per-day logging - too verbose
+            return nil unless File.exist?(file)
+            JSON.parse(File.read(file))
+        rescue JSON::ParserError => e
+            # A corrupt file is a miss: the caller recomputes and rewrites it.
+            @logger.warn "corrupt nodal cache #{file}, recomputing: #{e.message[0, 80]}"
             nil
         end
 
-        def save_nodal_cache(year, month, day, meridian_offset, nodal_hour, factors)
+        # Atomic write (temp file + rename, as WebCalTides#atomic_write): the
+        # tcd nodal file is shared by every station for a year, so a reader
+        # must never see a partial file.
+        def save_nodal_cache(file, factors)
             FileUtils.mkdir_p(@cache_dir)
-            file = nodal_cache_file(year, month, day, meridian_offset, nodal_hour)
             # Suppress per-day logging - too verbose
-            File.write(file, factors.to_json)
+            temp_file = "#{file}.tmp.#{$$}.#{Thread.current.object_id}"
+            File.binwrite(temp_file, factors.to_json)
+            File.rename(temp_file, file)
+        rescue
+            File.unlink(temp_file) rescue nil
+            raise
+        end
+
+        # Per-year equilibrium arguments and node factors for every constituent,
+        # read from the TCD file (same tables XTide uses).
+        def tcd_nodal_table
+            @tcd_nodal_table ||= TCD.open(@xtide_file) do |db|
+                {
+                    'years' => db.year_range,
+                    'constituents' => db.constituents.to_h { |c| [c.name, c] }
+                }
+            end
+        end
+
+        def tcd_nodal_year?(year)
+            return true if tcd_nodal_table['years'].cover?(year)
+
+            unless @logged_nodal_months["tcd_out_of_range_#{year}"]
+                @logger.warn "year #{year} is outside the TCD nodal table #{tcd_nodal_table['years']}; using legacy nodal factors"
+                @logged_nodal_months["tcd_out_of_range_#{year}"] = true
+            end
+            false
+        end
+
+        # TCD equilibrium arguments are V0+u at Jan 1 00:00 UTC; node factors are
+        # for the year. generate_predictions uses t = t_utc - meridian_offset, so
+        # V0 is shifted to V0' = V0 + speed * meridian_offset; then the argument
+        # equals speed * t_utc + V0 - phase for any meridian_offset. u is folded
+        # into V0'.
+        def calculate_tcd_nodal_factors(year, meridian_offset = 0.0)
+            @logger.info "loading TCD nodal factors for #{year} (m:#{meridian_offset})"
+            first_year = tcd_nodal_table['years'].first
+            tcd_nodal_table['constituents'].each_with_object({}) do |(name, c), factors|
+                v0 = c.equilibrium_for_year(year, first_year)
+                f = c.node_factor_for_year(year, first_year)
+                next if v0.nil? || f.nil?
+
+                factors[name] = { 'f' => f, 'u' => 0.0, 'V0' => v0 + c.speed * meridian_offset }
+            end
         end
 
         def calculate_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
