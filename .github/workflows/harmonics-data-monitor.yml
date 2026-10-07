@@ -1,0 +1,34 @@
+name: Harmonics data monitor
+
+# Fails when a newer XTide or TICON harmonics release appears upstream, or
+# when the check itself breaks. GitHub notifies the user who last changed the
+# cron line (or who last enabled the workflow again), if that user has
+# Actions notifications on. A manual workflow_dispatch run notifies the
+# user who started it.
+# Known baselines live in scripts/check_harmonics_releases.rb.
+
+on:
+  schedule:
+    - cron: '17 9 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde # v1
+        with:
+          ruby-version: '3.2'
+
+      - name: Check for new harmonics releases
+        run: ruby scripts/check_harmonics_releases.rb
