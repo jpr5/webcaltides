@@ -71,6 +71,26 @@ Timezone lookups use Google Time Zone API (preferred) or Geonames (fallback). Se
 | CHS | Tides | Canada |
 | XTide/TICON | Tides, Currents | Global (harmonics-based) |
 
+### Harmonics Data Sources
+
+The harmonics engine (`lib/harmonics_engine.rb`) reads `data/latest-xtide.tcd` and `data/latest-ticon.json`. Both are symlinks to the versioned files. `scripts/pull_data.rb` downloads the files from the `data-v1` GitHub release, because Railway does not support LFS.
+
+| Dataset | In use | Upstream |
+|---------|--------|----------|
+| XTide | `harmonics-dwf-20251228-free.tcd` (2025-12-28 release, "free" licence variant; since 2018 the archive has only the free and SQL variants) | https://flaterco.com/xtide/files.html, archive at https://flaterco.com/files/xtide/ |
+| TICON | `TICON_3.csv` (TICON-3, 2022, CC BY 4.0) plus `GESLA4_ALL.csv`, built into `ticon.json` by `scripts/build_ticon_dataset.rb` | TICON-3: https://doi.org/10.1594/PANGAEA.951610. TICON-4 (2025): https://doi.org/10.17882/109129 |
+
+To check for an update:
+
+- **XTide**: list `harmonics-dwf-YYYYMMDD-*` archives (currently `-free.tar.xz`; the format has changed before) at https://flaterco.com/files/xtide/ and compare the newest date with the file in use. Releases are about once a year, usually in late December or early January (there was also a June 2019 release). The archive holds the `.tcd` file.
+- **TICON**: query DataCite (no credentials needed) the same way the script does, `curl -s 'https://api.datacite.org/dois?query=TICON&page%5Bsize%5D=1000'`, and look for titles that start with "TICON-<n>" (the script also accepts a space, no separator, or another dash between "TICON" and the 1- or 2-digit number). TICON-4 adds columns (gauge name, country, quality, datum), so check `scripts/build_ticon_dataset.rb` against the new CSV before you change to it.
+
+The `Harmonics data monitor` GitHub Actions workflow (`.github/workflows/harmonics-data-monitor.yml`) runs `scripts/check_harmonics_releases.rb` on the 1st of each month. It fails, and GitHub notifies the user who last changed its cron line (or who last enabled it again), when a release newer than the known baseline appears or when a source cannot be checked. A manual run (`workflow_dispatch`) notifies the user who started it. When you adopt or acknowledge a release, bump `KNOWN_XTIDE_RELEASE` or `KNOWN_TICON_RELEASE` in that script. The TICON baseline is 4 because TICON-4 is known, although we use TICON-3.
+
+This repository is public, so GitHub disables the schedule automatically after 60 days with no repository activity. To enable it again, go to the Actions tab, select "Harmonics data monitor", and click **Enable workflow**, or run `gh workflow enable harmonics-data-monitor.yml -R jpr5/webcaltides`. To do a check at any time, run `gh workflow run harmonics-data-monitor.yml -R jpr5/webcaltides`.
+
+To update XTide, add the new `.tcd` file to `data/` and point the `latest-xtide.tcd` symlink at it. To update TICON, add the new CSV to `data/` and rebuild `ticon.json` from it: `latest-ticon.json` points at `ticon.json`, which has no version in its name, so the symlink does not change. `scripts/build_ticon_dataset.rb` reads `data/TICON_3.csv` (`TICON_PATH`), so change that input path to the new CSV first (also its `source` label, "TICON-3 + GESLA-4"). Then update `scripts/pull_data.rb`, upload the new files to the `data-v1` GitHub release (for TICON, both the source CSV and the rebuilt `ticon.json`), and bump the `KNOWN_*_RELEASE` baseline in `scripts/check_harmonics_releases.rb`. The station caches use a checksum of the source files, so they rebuild automatically.
+
 ## Caching
 
 All data is cached to `cache/` directory (Railway persistent volume in production):
