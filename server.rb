@@ -294,8 +294,11 @@ class Server < ::Sinatra::Base
                             units: nil
                         }
                     else
-                        height_diff = (a_event[:height].to_f - p_event[:height].to_f).round(2)
-                        units = p_event[:units] || 'ft'
+                        # Sources report in their own units (NOAA in feet, TICON in metres), so
+                        # bring the alternative into the primary's units before subtracting.
+                        units       = p_event[:units] || 'ft'
+                        a_height    = WebCalTides.convert_depth_to_correct_units(a_event[:height].to_f, a_event[:units] || 'ft', units)
+                        height_diff = (a_height.to_f - p_event[:height].to_f).round(2)
                         event_deltas << {
                             type: p_event[:type],
                             time: WebCalTides.format_time_delta(time_diff),

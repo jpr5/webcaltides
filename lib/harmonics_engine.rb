@@ -14,6 +14,9 @@ module Harmonics
 
         XTIDE_FILE = File.expand_path('../data/latest-xtide.tcd', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
+        # NOAA id => "harmonic" or "subordinate", written by
+        # scripts/build_noaa_station_types.rb (see store_station_data).
+        NOAA_STATION_TYPES_FILE = File.expand_path('../data/noaa_station_types.json', __dir__)
 
         attr_reader :speeds, :stations_cache, :xtide_file, :ticon_file, :logger, :nodal_mode
 
@@ -48,6 +51,7 @@ module Harmonics
             @logger = logger
             @xtide_file = ENV['XTIDE_FILE'] || XTIDE_FILE
             @ticon_file = ENV['TICON_FILE'] || TICON_FILE
+            @noaa_station_types_file = NOAA_STATION_TYPES_FILE
             @cache_dir = cache_dir || 'cache'
             @nodal_mode = self.class.nodal_mode(logger)
             @stations_cache = {}
@@ -139,16 +143,25 @@ module Harmonics
         # Generate checksums for source files to version the cache.
         # Returns "xtidehash_ticonhash" (8 hex chars each).  Computed once per engine, the same
         # lifetime as the dataset it loads; it is in every harmonics cache name, so it runs per request.
+        # The XTide hash also covers the NOAA station types file, which picks between some XTide
+        # stations (store_station_data), so a new types file rebuilds the caches as a new TCD does.
         def source_files_checksum
-            @source_files_checksum ||= [@xtide_file, @ticon_file].map do |f|
-                if File.exist?(f)
-                    # Follow symlinks and hash the actual content
-                    Digest::MD5.file(f).hexdigest[0, 8]
-                else
-                    "00000000"
-                end
-            end.join("_")
+            @source_files_checksum ||= begin
+                xtide = file_checksum(@xtide_file)
+                xtide = Digest::MD5.hexdigest(xtide + Digest::MD5.file(@noaa_station_types_file).hexdigest)[0, 8] if File.exist?(@noaa_station_types_file)
+                [xtide, file_checksum(@ticon_file)].join("_")
+            end
         end
+
+        def file_checksum(f)
+            if File.exist?(f)
+                # Follow symlinks and hash the actual content
+                Digest::MD5.file(f).hexdigest[0, 8]
+            else
+                "00000000"
+            end
+        end
+        private :file_checksum
 
         # Cache version - increment when cache format changes to force regeneration.
         # v3: bumped with ENGINE_VERSION 3 to force a fresh parse; the station
@@ -640,11 +653,51 @@ module Harmonics
 
         # Store a parsed station's data under key, or under its typed key when
         # key already holds a station of the other type (see cache_entry).  A
-        # station of the same type replaces the entry, as before.
-        def store_station_data(key, data)
+        # station of the same type replaces the entry, except for a twin.
+        #
+        # A twin is an XTide reference station and a "(sub)" subordinate at
+        # the same point, so with the same id (41 tides in the 2025-12-28
+        # TCD).  Keep the one that matches how NOAA predicts the station
+        # (noaa_id): the reference for a harmonic station, the "(sub)" for a
+        # subordinate one.  A station NOAA does not list keeps the one parsed
+        # later, as before (the "(sub)" in that TCD).
+        def store_station_data(key, data, noaa_id: nil)
             existing = @stations_cache[key]
             key = typed_key(key, data['type']) if existing && existing['type'] != data['type']
+            existing = @stations_cache[key]
+            if existing && twins?(existing, data) && keep_twin?(existing, noaa_id)
+                @logger.debug "keeping #{existing['name']} over its twin #{data['name']}, NOAA #{noaa_id} is #{noaa_station_types[noaa_id]}"
+                return
+            end
             @stations_cache[key] = data
+        end
+
+        def twins?(a, b)
+            a['type'] == b['type'] && a['ref_key'].nil? != b['ref_key'].nil?
+        end
+
+        # Whether existing, one of a twin, is the one NOAA's type for noaa_id
+        # asks for.
+        def keep_twin?(existing, noaa_id)
+            case noaa_station_types[noaa_id]
+            when 'harmonic'    then existing['ref_key'].nil?
+            when 'subordinate' then !existing['ref_key'].nil?
+            else false
+            end
+        end
+
+        # NOAA id => "harmonic" or "subordinate" ({} when the file is missing
+        # or unreadable, so every twin keeps the one parsed later).
+        def noaa_station_types
+            @noaa_station_types ||= begin
+                types = JSON.parse(File.read(@noaa_station_types_file))
+                raise JSON::ParserError, "expected an object, got #{types.class}" unless types.is_a?(Hash)
+
+                types
+            rescue Errno::ENOENT, JSON::ParserError => e
+                @logger.warn "no NOAA station types (#{e.class}: #{e.message[0, 80]}), keeping the later of each XTide twin"
+                {}
+            end
         end
 
         def deduplicate_stations(stations)
@@ -994,6 +1047,7 @@ module Harmonics
                     }
                     stations << station
 
+                    noaa_id = tcd_station.station_id if tcd_station.station_id_context == 'NOS'
                     store_station_data(cache_key, {
                         'name' => tcd_station.name,
                         'constituents' => constituents,
@@ -1016,7 +1070,7 @@ module Harmonics
                         'ebb_begins' => ebb_begins,
                         'latitude' => tcd_station.latitude,
                         'longitude' => tcd_station.longitude
-                    })
+                    }, noaa_id: noaa_id)
                 end
             end
 
