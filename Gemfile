@@ -33,6 +33,11 @@ gem 'sinatra', '~> 4.2.1', require: 'sinatra/base'
 
 gem 'dotenv'
 
+# BP S1: scripts/gesla reads the GESLA release zip (zip64, deflate).
+group :gesla do
+    gem 'rubyzip', '~> 2.4', require: false
+end
+
 group :development do
     gem 'debug'
     gem 'sinatra-reloader', require: 'sinatra/reloader'
