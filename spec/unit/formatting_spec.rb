@@ -114,5 +114,27 @@ RSpec.describe WebCalTides do
                 expect(result).to be_within(0.001).of(32.808)
             end
         end
+
+        # XTide's TCD names its level units "feet" (and could name them "meters"), TICON uses "m"
+        context 'with spelled-out source units' do
+            it 'leaves a height in "feet" unchanged for feet output' do
+                expect(described_class.convert_depth_to_correct_units(10.014, 'feet', 'ft')).to eq(10.014)
+                expect(described_class.convert_depth_to_correct_units(10.014, 'Feet', 'ft')).to eq(10.014)
+                expect(described_class.convert_depth_to_correct_units(10.014, 'foot', 'ft')).to eq(10.014)
+            end
+
+            it 'converts a height in "feet" to metres' do
+                expect(described_class.convert_depth_to_correct_units(10.0, 'feet', 'm')).to be_within(0.001).of(3.048)
+            end
+
+            it 'leaves a height in "meters" or "metres" unchanged for metre output' do
+                expect(described_class.convert_depth_to_correct_units(2.5, 'meters', 'm')).to eq(2.5)
+                expect(described_class.convert_depth_to_correct_units(2.5, 'metres', 'm')).to eq(2.5)
+            end
+
+            it 'converts a height in "meters" to feet' do
+                expect(described_class.convert_depth_to_correct_units(1.0, 'meters', 'ft')).to be_within(0.001).of(3.281)
+            end
+        end
     end
 end

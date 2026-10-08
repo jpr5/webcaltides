@@ -272,7 +272,22 @@ module WebCalTides
     ## Util
     ##
 
+    # Unit names as sources spell them, to the short form used here.  XTide's TCD reports heights
+    # in "feet" (or "meters"), not "ft", so without this an XTide height already in feet was
+    # multiplied by 3.28084 again for imperial output.
+    LENGTH_UNIT_ALIASES = {
+        'ft' => 'ft', 'feet' => 'ft', 'foot' => 'ft',
+        'm'  => 'm',  'meters' => 'm', 'metres' => 'm', 'meter' => 'm', 'metre' => 'm'
+    }.freeze
+
+    def normalize_length_units(units)
+        LENGTH_UNIT_ALIASES.fetch(units.to_s.strip.downcase, units)
+    end
+
     def convert_depth_to_correct_units(val, curr_units, desired_units)
+        curr_units    = normalize_length_units(curr_units)
+        desired_units = normalize_length_units(desired_units)
+
         if desired_units == curr_units
             val
         elsif desired_units == 'ft' # convert to feet
