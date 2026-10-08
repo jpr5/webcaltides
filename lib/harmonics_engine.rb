@@ -9,6 +9,9 @@ module Harmonics
     class Engine
         class MissingSourceFilesError < StandardError; end
 
+        # A cache file that parses as JSON but does not hold what was written.
+        class CacheShapeError < StandardError; end
+
         XTIDE_FILE = File.expand_path('../data/latest-xtide.tcd', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
 
@@ -59,24 +62,65 @@ module Harmonics
         def stations
             ensure_source_files!
             # Double-checked locking for thread safety
-            return @parsed_stations if @parsed_stations
+            return @parsed_stations if @parsed_stations && !stations_retry_due?
+
+            stations_snapshot.first
+        end
+
+        # [stations, degraded] read together under the lock, so the flag belongs to that list: a
+        # second call could parse again (STATIONS_RETRY) and answer for a different list.
+        def stations_snapshot
+            ensure_source_files!
 
             (@stations_mutex ||= Mutex.new).synchronize do
-                return @parsed_stations if @parsed_stations
-
-                @parsed_stations = load_stations_from_cache || begin
-                    xtide_stations = parse_xtide_file
-                    ticon_stations = parse_ticon_file
-                    merged = xtide_stations + ticon_stations
-
-                    # Deduplicate merged stations by proximity, name, and constituents
-                    deduplicated = deduplicate_stations(merged)
-
-                    save_stations_to_cache(deduplicated)
-                    deduplicated
+                unless @parsed_stations && !stations_retry_due?
+                    if (cached = load_stations_from_cache)
+                        @stations_retry_at = nil
+                        @parsed_stations = cached
+                    else
+                        @parsed_stations = parse_stations
+                    end
                 end
+
+                [@parsed_stations, !@stations_retry_at.nil?]
             end
         end
+
+        # How long a station list built without the TICON stations (a failed
+        # TICON parse) is served before both files are parsed again.
+        STATIONS_RETRY = 1.hour
+
+        # True while the station list was built without the TICON stations: it
+        # is not in the station cache, and it is parsed again after
+        # STATIONS_RETRY.  Callers must not cache a list built from it.
+        def stations_degraded?
+            stations_snapshot.last
+        end
+
+        def stations_retry_due?
+            @stations_retry_at && Time.now >= @stations_retry_at
+        end
+
+        def parse_stations
+            xtide_stations = parse_xtide_file
+            ticon_stations = parse_ticon_file
+
+            # Deduplicate merged stations by proximity, name, and constituents
+            deduplicated = deduplicate_stations(xtide_stations + (ticon_stations || []))
+
+            if ticon_stations
+                @stations_retry_at = nil
+                save_stations_to_cache(deduplicated)
+            else
+                # The cache file name holds the checksum of the good TICON file, so
+                # a list cached now would be served without TICON until the data
+                # changed.
+                @stations_retry_at = Time.now + STATIONS_RETRY
+                @logger.error "!! station list built without TICON stations (#{deduplicated.size} stations), serving it uncached, parsing again after #{@stations_retry_at.utc}"
+            end
+            deduplicated
+        end
+        private :stations_retry_due?, :parse_stations
 
         def ensure_source_files!
             return @files_checked ||= begin
@@ -109,14 +153,32 @@ module Harmonics
         # Cache version - increment when cache format changes to force regeneration.
         # v3: bumped with ENGINE_VERSION 3 to force a fresh parse; the station
         # cache format is unchanged from v2 (it holds no nodal factors).
-        CACHE_VERSION = 3
+        # v4: XTide current stations store the TCD datum offset (it held the
+        # name's depth) and no depth when the name has none (it held the datum
+        # offset; the same for TICON currents, though the shipped TICON data has
+        # none), subordinate currents store flood_begins/ebb_begins, and
+        # subordinate tides store their level adds (h_level_add/l_level_add),
+        # and the second parsed of a tide and a current with the same id is
+        # stored under "<id>@<type>" (see cache_entry).
+        # v5: the level adds and "<id>@<type>" keys came after v4 cache files
+        # had been written by the code before them, which those files lack.
+        CACHE_VERSION = 5
 
         # Engine version - increment when prediction output changes for the same
         # input data. Part of every nodal-factor cache file name and of
         # cache_key_component (tide/currents JSON and ICS cache names), so output
         # cached by older code is never reused. The station cache file uses
         # CACHE_VERSION instead.
-        ENGINE_VERSION = 3
+        # v4: XTide currents get flood, ebb and slack events with signed
+        # velocities (v3 labelled XTide current events flood, because the name
+        # depth was added to the velocity of every current with one),
+        # subordinate stations no longer lose events within their time offset
+        # of the window edges, and subordinate tide heights include the TCD
+        # level add (206 stations), and the 5 tides with a current's id are
+        # predicted from their own data (v3 used the current's).
+        # v5: the level adds and the 5 tides' own data came after v4 output had
+        # been cached by the code before them.
+        ENGINE_VERSION = 5
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
         #   tcd    (default) - TCD per-year equilibrium argument (V0+u) and node
@@ -139,7 +201,8 @@ module Harmonics
             DEFAULT_NODAL_MODE
         end
 
-        # Short string naming the engine version and nodal mode (e.g. "hA3tcd"),
+        # Short string naming the engine version and nodal mode ("hA" +
+        # ENGINE_VERSION + mode, e.g. "hA5tcd"),
         # for callers to put in harmonics tide/currents cache file names. It holds
         # no "_20dddd" token, so it cannot shadow a file name's datestamp.
         def self.cache_key_component(mode = nodal_mode)
@@ -167,8 +230,9 @@ module Harmonics
         end
 
         def find_station(id)
-            # Ensure stations are loaded so @stations_cache is populated
-            stations if @stations_cache.empty?
+            # Wait for the station load: a parse fills @stations_cache one
+            # station at a time, so a non-empty cache can still be incomplete.
+            stations
 
             # First look in the primary list (metadata)
             station = stations.find { |s| s['id'] == id || s['bid'] == id }
@@ -191,28 +255,21 @@ module Harmonics
         end
 
         def generate_predictions(station_id, start_time, end_time, options = {})
-            # Ensure stations are loaded so @stations_cache is populated
-            stations if @stations_cache.empty?
+            # Wait for the station load: a parse fills @stations_cache one
+            # station at a time, so a non-empty cache can still be incomplete.
+            stations
 
-            station_data = @stations_cache[station_id] || {}
+            station_data = cache_entry(station_id, options[:type]) || {}
 
             step_seconds = options.fetch(:step_seconds, 60).to_f
 
             # If this is a subordinate station, we predict for the reference station
             # and then apply offsets.
             if station_data['ref_key']
-                ref_key = station_data['ref_key']
-                @logger.debug "station #{station_id} is subordinate to #{ref_key}, predicting via ref station"
+                @logger.debug "station #{station_id} is subordinate to #{station_data['ref_key']}, predicting via ref station"
 
-                # We need to predict a slightly larger window for the ref station to ensure
-                # we don't miss peaks that shift into our requested window after offsets.
-                # Max offset in XTide is usually around 12-24h but realistically 1-2h.
-                # We'll add 2 hours buffer on both sides.
-                ref_start = start_time - 2.hours
-                ref_end = end_time + 2.hours
-
-                ref_predictions = generate_predictions(ref_key, ref_start, ref_end, options)
-                return apply_subordinate_offsets(ref_predictions, station_data, start_time, end_time, step_seconds: step_seconds)
+                ref_predictions = reference_predictions(station_data, start_time, end_time, options)
+                return subordinate_peaks(ref_predictions, station_data, start_time, end_time, step_seconds: step_seconds)
             end
 
             constituents = station_data['constituents'] || []
@@ -283,6 +340,78 @@ module Harmonics
             end
 
             predictions
+        end
+
+        # Station data from the station cache ({} when unknown).  Waits for
+        # the station load, as generate_predictions does.  With a type ('tide'
+        # or 'current'), only a station of that type is found (see cache_entry).
+        def station_data(station_id, type = nil)
+            stations
+            cache_entry(station_id, type) || {}
+        end
+
+        # XTide station ids come from the coordinates, so a tide and a current
+        # at the same point (5 pairs in the 2025-12-28 TCD, e.g. Sea Bright,
+        # Xc7078fe) have the same id.  Subscribers' URLs hold those ids, so they
+        # stay.  The second of the pair to be parsed is stored under
+        # "<id>@<type>" (typed_key), and a lookup with a type finds the station
+        # of that type only.  A lookup without a type finds the "<id>" entry.
+        TYPED_KEY_SEPARATOR = '@'
+
+        def cache_entry(id, type = nil)
+            data = @stations_cache[cache_key_for(id, type)]
+            return nil if data && type && data['type'] && data['type'] != type
+
+            data
+        end
+
+        # Station cache keys that are station ids (merged/aliased ones too),
+        # without the typed keys.
+        def station_cache_ids
+            stations
+            @stations_cache.keys.reject { |k| k.include?(TYPED_KEY_SEPARATOR) }
+        end
+
+        # The reference station's predictions for a subordinate station, over
+        # [start_time, end_time] widened by subordinate_margin, so that every
+        # reference event the subordinate's time offsets move into the window
+        # is predicted.
+        def reference_predictions(sub_data, start_time, end_time, options = {})
+            margin = subordinate_margin(sub_data)
+            generate_predictions(sub_data['ref_key'], start_time - margin, end_time + margin, ref_options(sub_data, options))
+        end
+
+        # A subordinate station's High/Low peaks in [start_time, end_time]: the
+        # reference_predictions peaks with the subordinate's time offsets, height
+        # multipliers and level adds applied.
+        def subordinate_peaks(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
+            apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: step_seconds)
+        end
+
+        # A subordinate's reference station has the subordinate's type (every
+        # subordinate in the 2025-12-28 TCD), so the reference is looked up
+        # among stations of that type.
+        def ref_options(sub_data, options)
+            sub_data['type'] ? options.merge(type: sub_data['type']) : options
+        end
+
+        # How far outside a window the reference station must be predicted for a
+        # subordinate station: its largest time offset (high, low, flood begins,
+        # ebb begins) plus 1 hour, and never less than 2 hours.  XTide time
+        # offsets reach over 12 hours (tides) and about 9 hours (current slacks).
+        def subordinate_margin(sub_data)
+            offsets = sub_data.values_at('h_time_offset', 'l_time_offset', 'flood_begins', 'ebb_begins')
+            largest = offsets.map { |o| offset_seconds(o).abs }.max
+            [largest + 1.hour.to_i, 2.hours.to_i].max.seconds
+        end
+
+        # "[+-]HH:MM[:SS]" -> signed seconds; nil (or the TCD null '\N') -> 0
+        def offset_seconds(offset)
+            return 0 if offset.nil? || offset == '\N'
+
+            sign = offset.start_with?('-') ? -1 : 1
+            h, m, s = offset.delete('+-').split(':').map(&:to_i)
+            sign * (h * 3600 + m * 60 + (s || 0))
         end
 
         def detect_peaks(predictions, step_seconds: 60)
@@ -357,10 +486,11 @@ module Harmonics
         # 2. Fine pass at 1-min resolution only around each peak (+/- 30 min = 60 points each)
         # Result: ~40,000 points instead of 571,200 = 93% reduction
         def generate_peaks_optimized(station_id, start_time, end_time, options = {})
-            # Ensure stations are loaded so @stations_cache is populated
-            stations if @stations_cache.empty?
+            # Wait for the station load: a parse fills @stations_cache one
+            # station at a time, so a non-empty cache can still be incomplete.
+            stations
 
-            station_data = @stations_cache[station_id] || {}
+            station_data = cache_entry(station_id, options[:type]) || {}
 
             # Handle subordinate stations - use cached reference peaks
             if station_data['ref_key']
@@ -406,15 +536,17 @@ module Harmonics
             ref_start = start_time.beginning_of_month - 1.month
             ref_end = end_time.end_of_month + 1.month
 
-            # Cache key uses normalized month boundaries (YYYYMM format)
-            cache_key = "#{ref_key}:#{ref_start.strftime('%Y%m')}:#{ref_end.strftime('%Y%m')}"
+            # Cache key uses normalized month boundaries (YYYYMM format), and the
+            # type, as the reference's id can be another type's id too
+            ref_opts = ref_options(station_data, options)
+            cache_key = "#{ref_key}:#{ref_opts[:type]}:#{ref_start.strftime('%Y%m')}:#{ref_end.strftime('%Y%m')}"
 
             # Prune stale cache entries (older than current window)
             prune_reference_peaks_cache(ref_start)
 
             ref_peaks = @reference_peaks_cache[cache_key] ||= begin
                 @logger.debug "generating reference peaks for #{ref_key} (caching for subordinates)"
-                generate_peaks_optimized(ref_key, ref_start, ref_end, options)
+                generate_peaks_optimized(ref_key, ref_start, ref_end, ref_opts)
             end
 
             # Apply subordinate offsets to the cached reference peaks
@@ -424,7 +556,7 @@ module Harmonics
         # Remove cache entries for windows that end before the cutoff date
         def prune_reference_peaks_cache(cutoff)
             @reference_peaks_cache.delete_if do |key, _|
-                # Key format: "ref_key:YYYYMM:YYYYMM"
+                # Key format: "ref_key:type:YYYYMM:YYYYMM" (type may be empty)
                 end_month = key.split(':').last
                 end_month < cutoff.strftime('%Y%m')
             end
@@ -436,18 +568,9 @@ module Harmonics
                 is_high = rp['type'] == 'High'
 
                 time_offset_str = is_high ? sub_data['h_time_offset'] : sub_data['l_time_offset']
-                height_mult = is_high ? sub_data['h_height_mult'] : sub_data['l_height_mult']
 
-                # Apply time offset (format is [+-]HH:MM:SS)
-                offset_seconds = 0
-                if time_offset_str && time_offset_str != '\N'
-                    sign = time_offset_str.start_with?('-') ? -1 : 1
-                    parts = time_offset_str.delete('+-').split(':').map(&:to_i)
-                    offset_seconds = sign * (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0))
-                end
-
-                new_time = rp['time'] + offset_seconds.seconds
-                new_height = rp['height'] * height_mult
+                new_time = rp['time'] + offset_seconds(time_offset_str).seconds
+                new_height = subordinate_height(rp, sub_data)
 
                 # Filter to requested window
                 next unless new_time >= start_time && new_time <= end_time
@@ -461,6 +584,19 @@ module Harmonics
             end
         end
 
+        # A subordinate station's height for a reference High or Low: the
+        # reference height times the level multiplier, plus the level add, as
+        # libxtide SubordinateStation.cc does (max offsets for a High or max
+        # flood, min offsets for a Low or max ebb).  The TCD gives the add in
+        # the subordinate's level units; every subordinate with an add has the
+        # same units as its reference.
+        def subordinate_height(ref_peak, sub_data)
+            high = ref_peak['type'] == 'High'
+            mult = (high ? sub_data['h_height_mult'] : sub_data['l_height_mult']) || 1.0
+            add = (high ? sub_data['h_level_add'] : sub_data['l_level_add']) || 0.0
+            ref_peak['height'] * mult + add
+        end
+
         def apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
             # detect_peaks on ref_predictions to get high/low times/heights
             ref_peaks = detect_peaks(ref_predictions, step_seconds: step_seconds)
@@ -469,19 +605,9 @@ module Harmonics
                 is_high = rp['type'] == 'High'
 
                 time_offset_str = is_high ? sub_data['h_time_offset'] : sub_data['l_time_offset']
-                height_mult = is_high ? sub_data['h_height_mult'] : sub_data['l_height_mult']
 
-                # Apply time offset
-                # Format is [+-]HH:MM:SS
-                offset_seconds = 0
-                if time_offset_str && time_offset_str != '\N'
-                    sign = time_offset_str.start_with?('-') ? -1 : 1
-                    parts = time_offset_str.delete('+-').split(':').map(&:to_i)
-                    offset_seconds = sign * (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0))
-                end
-
-                new_time = rp['time'] + offset_seconds.seconds
-                new_height = rp['height'] * height_mult
+                new_time = rp['time'] + offset_seconds(time_offset_str).seconds
+                new_height = subordinate_height(rp, sub_data)
 
                 {
                     'type' => rp['type'],
@@ -493,6 +619,32 @@ module Harmonics
 
             # Filter to requested window
             sub_peaks.select { |p| p['time'] >= start_time && p['time'] <= end_time }
+        end
+
+        def typed_key(id, type)
+            "#{id}#{TYPED_KEY_SEPARATOR}#{type}"
+        end
+
+        # The @stations_cache key of id's entry among stations of type.
+        def cache_key_for(id, type = nil)
+            return id unless type
+
+            typed = typed_key(id, type)
+            @stations_cache.key?(typed) ? typed : id
+        end
+
+        # The @stations_cache key of a station metadata hash.
+        def station_cache_key(station)
+            cache_key_for(station['bid'] || station['id'], station['type'])
+        end
+
+        # Store a parsed station's data under key, or under its typed key when
+        # key already holds a station of the other type (see cache_entry).  A
+        # station of the same type replaces the entry, as before.
+        def store_station_data(key, data)
+            existing = @stations_cache[key]
+            key = typed_key(key, data['type']) if existing && existing['type'] != data['type']
+            @stations_cache[key] = data
         end
 
         def deduplicate_stations(stations)
@@ -514,9 +666,7 @@ module Harmonics
 
                     # Separate those with identical constituents from those with different ones
                     identical_matches = near_matches.select do |other|
-                        key1 = primary['bid'] || primary['id']
-                        key2 = other['bid'] || other['id']
-                        constituents_equal?(key1, key2)
+                        constituents_equal?(station_cache_key(primary), station_cache_key(other))
                     end
                     different_matches = near_matches - identical_matches
 
@@ -538,11 +688,11 @@ module Harmonics
 
                     # Ensure all IDs from the cluster point to the same cache entry
                     # This preserves backward compatibility for merged stations.
-                    best_key = best['bid'] || best['id']
+                    best_key = station_cache_key(best)
                     best_data = @stations_cache[best_key]
 
                     cluster.each do |s|
-                        key = s['bid'] || s['id']
+                        key = station_cache_key(s)
                         next if key == best_key
                         @stations_cache[key] = best_data
                     end
@@ -600,16 +750,43 @@ module Harmonics
 
             @logger.debug "loading merged stations from cache: #{cache_file}"
             data = JSON.parse(File.read(cache_file))
+            check_stations_cache_shape(data)
 
-            stations = []
-            @stations_cache = data['stations_cache'] || {}
-            @speeds = data['speeds'] || {}
-            @constituent_definitions = data['constituent_definitions'] || {}
+            @stations_cache = data['stations_cache']
+            @speeds = data['speeds']
+            @constituent_definitions = data['constituent_definitions']
+            data['stations'].map { |h| h['metadata'] }
+        rescue JSON::ParserError, CacheShapeError => e
+            # A corrupt file (e.g. a write cut short before writes were atomic),
+            # or one that parses but does not hold what save_stations_to_cache
+            # writes, is a miss: remove it, and the caller parses the sources again.
+            @logger.error "!! unreadable station cache #{cache_file}, removing it and rebuilding: #{e.class} - #{e.message[0, 80]}"
+            File.unlink(cache_file) rescue nil
+            nil
+        end
+
+        # Raises CacheShapeError unless data holds what save_stations_to_cache
+        # writes: the station metadata, and a station cache entry with
+        # constituents for every station.
+        def check_stations_cache_shape(data)
+            bad = ->(what) { raise CacheShapeError, "expected #{what}" }
+            bad.("a JSON object, got #{data.class}") unless data.is_a?(Hash)
+            %w[speeds constituent_definitions stations_cache].each do |k|
+                bad.("'#{k}' to be an object, got #{data[k].class}") unless data[k].is_a?(Hash)
+            end
+            bad.("'stations' to be a non-empty array") unless data['stations'].is_a?(Array) && data['stations'].any?
+
+            cache = data['stations_cache']
+            bad_entry = cache.find { |_, v| !(v.is_a?(Hash) && v['constituents'].is_a?(Array)) }
+            bad.("station cache entry #{bad_entry.first.inspect} to have constituents") if bad_entry
 
             data['stations'].each do |h|
-                stations << h['metadata']
+                meta = h['metadata'] if h.is_a?(Hash)
+                bad.("station metadata with an id and a type, got #{h.inspect[0, 60]}") unless meta.is_a?(Hash) && meta['id'].is_a?(String) && meta['type'].is_a?(String)
+
+                key = meta['bid'] || meta['id']
+                bad.("a station cache entry for #{key}") unless cache.key?(key) || cache.key?(typed_key(key, meta['type']))
             end
-            stations
         end
 
         def save_stations_to_cache(stations)
@@ -621,9 +798,11 @@ module Harmonics
                 'speeds' => @speeds,
                 'constituent_definitions' => @constituent_definitions,
                 'stations_cache' => @stations_cache,
+                # Only 'metadata' is read back (load_stations_from_cache).  The other
+                # fields are an informational copy of a few stations_cache fields;
+                # stations_cache above holds them all (e.g. flood_begins/ebb_begins).
                 'stations' => stations.map do |s|
-                    cache_key = s['bid'] || s['id']
-                    cache_entry = @stations_cache[cache_key]
+                    cache_entry = @stations_cache[station_cache_key(s)]
                     {
                         'metadata' => s,
                         'name' => cache_entry['name'],
@@ -644,7 +823,7 @@ module Harmonics
                     }
                 end
             }
-            File.write(cache_file, cache_data.to_json)
+            atomic_write(cache_file, cache_data.to_json)
         end
 
         def parse_xtide_file
@@ -720,12 +899,21 @@ module Harmonics
                     base_hash = Digest::SHA256.hexdigest(coord_string)[0...7]
                     base_id = "X#{base_hash}"
 
-                    # Handle depth and BID for currents
-                    depth = tcd_station.datum_offset || 0.0
+                    # Datum offset (Z0) is the constant term of the prediction. For a
+                    # current it is the mean flow, usually 0. Keep it separate from
+                    # depth: the "(depth N ft)" in a current's name is display data,
+                    # and adding it to the velocity of a current with a depth in its
+                    # name pushed the velocity above zero, so it had no ebb or slack.
+                    datum_offset = tcd_station.datum_offset || 0.0
+
+                    # Handle depth and BID for currents.  A current's depth comes
+                    # only from its name; without one it has no depth (nil).
+                    depth = datum_offset
                     station_bid = nil
                     cache_key = base_id
 
                     if station_type == 'current'
+                        depth = nil
                         depth_suffix = nil
                         if tcd_station.name =~ /\(depth (\d+)\s*(ft|m)\)/i
                             depth_suffix = $1
@@ -744,6 +932,10 @@ module Harmonics
                     l_time_offset = nil
                     h_height_mult = 1.0
                     l_height_mult = 1.0
+                    h_level_add = 0.0
+                    l_level_add = 0.0
+                    flood_begins = nil
+                    ebb_begins = nil
 
                     if tcd_station.subordinate?
                         ref_station = all_tcd_stations[tcd_station.reference_station]
@@ -765,6 +957,12 @@ module Harmonics
                         l_time_offset = format_minutes_offset(tcd_station.min_time_add)
                         h_height_mult = tcd_station.max_level_multiply || 1.0
                         l_height_mult = tcd_station.min_level_multiply || 1.0
+                        h_level_add = tcd_station.max_level_add || 0.0
+                        l_level_add = tcd_station.min_level_add || 0.0
+
+                        # Currents: slack-before-flood and slack-before-ebb time offsets
+                        flood_begins = format_minutes_offset(tcd_station.flood_begins)
+                        ebb_begins = format_minutes_offset(tcd_station.ebb_begins)
                     end
 
                     if constituents.empty? && tcd_station.reference?
@@ -796,10 +994,10 @@ module Harmonics
                     }
                     stations << station
 
-                    @stations_cache[cache_key] = {
+                    store_station_data(cache_key, {
                         'name' => tcd_station.name,
                         'constituents' => constituents,
-                        'datum_offset' => depth,
+                        'datum_offset' => datum_offset,
                         'timezone' => tcd_station.tzfile,
                         'meridian' => meridian,
                         'units' => units,
@@ -812,9 +1010,13 @@ module Harmonics
                         'h_height_mult' => h_height_mult,
                         'l_time_offset' => l_time_offset,
                         'l_height_mult' => l_height_mult,
+                        'h_level_add' => h_level_add,
+                        'l_level_add' => l_level_add,
+                        'flood_begins' => flood_begins,
+                        'ebb_begins' => ebb_begins,
                         'latitude' => tcd_station.latitude,
                         'longitude' => tcd_station.longitude
-                    }
+                    })
                 end
             end
 
@@ -936,8 +1138,9 @@ module Harmonics
 
                     type = d['units'].downcase == 'knots' ? 'current' : 'tide'
 
-                    # Extract depth from name if available
-                    depth = d['datum_offset']
+                    # Extract depth from name if available.  A current without
+                    # one has no depth (nil), as for XTide currents.
+                    depth = type == 'current' ? nil : d['datum_offset']
                     depth_suffix = nil
                     if d['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
                         depth = $1.to_f
@@ -973,7 +1176,7 @@ module Harmonics
                     }
 
                     stations << station
-                    @stations_cache[cache_key] = {
+                    store_station_data(cache_key, {
                         'name' => d['name'],
                         'constituents' => d['constituents'],
                         'datum_offset' => d['datum_offset'],
@@ -982,14 +1185,15 @@ module Harmonics
                         'units' => d['units'],
                         'region' => d['region'],
                         'type' => type
-                    }
+                    })
                 end
 
                 @logger.info "loaded #{stations.length} TICON stations from JSON"
                 stations
             rescue => e
+                # nil, not [], so that #stations does not cache a list without TICON
                 @logger.error "failed to parse TICON JSON: #{e.message}"
-                []
+                nil
             end
         end
 
@@ -1040,21 +1244,37 @@ module Harmonics
         def load_nodal_cache(file)
             # Suppress per-day logging - too verbose
             return nil unless File.exist?(file)
-            JSON.parse(File.read(file))
-        rescue JSON::ParserError => e
-            # A corrupt file is a miss: the caller recomputes and rewrites it.
+            factors = JSON.parse(File.read(file))
+            check_nodal_cache_shape(factors)
+            factors
+        rescue JSON::ParserError, CacheShapeError => e
+            # A corrupt file, or one that parses but does not hold
+            # { name => { 'f', 'u', 'V0' } }, is a miss: the caller recomputes
+            # and rewrites it.
             @logger.warn "corrupt nodal cache #{file}, recomputing: #{e.message[0, 80]}"
             nil
         end
 
-        # Atomic write (temp file + rename, as WebCalTides#atomic_write): the
-        # tcd nodal file is shared by every station for a year, so a reader
+        def check_nodal_cache_shape(factors)
+            raise CacheShapeError, "expected a JSON object, got #{factors.class}" unless factors.is_a?(Hash)
+
+            bad = factors.find { |_, nf| !(nf.is_a?(Hash) && %w[f u V0].all? { |k| nf[k].is_a?(Numeric) }) }
+            raise CacheShapeError, "expected numeric f, u and V0 for #{bad.first.inspect}" if bad
+        end
+
+        # The tcd nodal file is shared by every station for a year, so a reader
         # must never see a partial file.
         def save_nodal_cache(file, factors)
             FileUtils.mkdir_p(@cache_dir)
             # Suppress per-day logging - too verbose
+            atomic_write(file, factors.to_json)
+        end
+
+        # Atomic write (temp file + rename, as WebCalTides#atomic_write), so a
+        # reader or a process killed mid-write never leaves a partial file.
+        def atomic_write(file, content)
             temp_file = "#{file}.tmp.#{$$}.#{Thread.current.object_id}"
-            File.binwrite(temp_file, factors.to_json)
+            File.binwrite(temp_file, content)
             File.rename(temp_file, file)
         rescue
             File.unlink(temp_file) rescue nil

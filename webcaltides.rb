@@ -34,6 +34,7 @@ module WebCalTides
     @@harmonics_mutex        = Mutex.new
     @@tzcache_mutex          = Mutex.new
     @@tide_stations_mutex    = Mutex.new
+    @@retired_tide_stations_mutex = Mutex.new
     @@current_stations_mutex = Mutex.new
     @@lunar_phases_mutex     = Mutex.new
     @@cleanup_mutex          = Mutex.new
@@ -253,6 +254,14 @@ module WebCalTides
         tide_clients(:xtide).engine.source_files_checksum
     end
 
+    # Cache-key part for the quarterly tide and current station lists, which hold station records
+    # from the harmonics engine: the dataset (harmonics_checksum) and the engine's station record
+    # version (Harmonics::Engine::CACHE_VERSION), so a list cached by code that built those records
+    # differently is built again on deploy rather than served until the next quarter.
+    def harmonics_stations_key
+        "#{harmonics_checksum}_hs#{Harmonics::Engine::CACHE_VERSION}"
+    end
+
     # Cache-key suffix for data the harmonics engine serves: the dataset (harmonics_checksum) and
     # the engine version + HARMONICS_NODAL flag, so a change to any of them rebuilds only harmonics
     # caches.  "" for agency stations, whose names stay as they were.  It goes after the _YYYYMM
@@ -272,7 +281,22 @@ module WebCalTides
     ## Util
     ##
 
+    # Unit names as sources spell them, to the short form used here.  XTide's TCD reports heights
+    # in "feet" (or "meters"), not "ft", so without this an XTide height already in feet was
+    # multiplied by 3.28084 again for imperial output.
+    LENGTH_UNIT_ALIASES = {
+        'ft' => 'ft', 'feet' => 'ft', 'foot' => 'ft',
+        'm'  => 'm',  'meters' => 'm', 'metres' => 'm', 'meter' => 'm', 'metre' => 'm'
+    }.freeze
+
+    def normalize_length_units(units)
+        LENGTH_UNIT_ALIASES.fetch(units.to_s.strip.downcase, units)
+    end
+
     def convert_depth_to_correct_units(val, curr_units, desired_units)
+        curr_units    = normalize_length_units(curr_units)
+        desired_units = normalize_length_units(desired_units)
+
         if desired_units == curr_units
             val
         elsif desired_units == 'ft' # convert to feet
@@ -326,9 +350,23 @@ module WebCalTides
         key = "#{lat} #{long}"
 
         # Thread-safe cache read (class variables for cross-request safety)
-        @@tzcache_mutex.synchronize do
+        cached = @@tzcache_mutex.synchronize do
             @@tzcache ||= load_tzcache
-            return @@tzcache[key] if @@tzcache[key]
+            @@tzcache[key]
+        end
+
+        # Entries cached before ids were canonicalised can hold a legacy alias: replace it.  An
+        # id TZInfo doesn't know at all is looked up again.
+        if cached
+            canonical = canonical_timezone(cached)
+            return cached if canonical == cached
+
+            if canonical
+                logger.info "replacing cached timezone for #{key}: #{cached} -> #{canonical}"
+                return update_tzcache(key, canonical)
+            end
+
+            logger.warn "cached timezone #{cached} for #{key} is unknown, looking it up again"
         end
 
         # External lookup (outside mutex to avoid blocking other threads)
@@ -350,16 +388,18 @@ module WebCalTides
             logger.error "timezone lookup failed for #{key}: #{e.message}"
         end
 
+        # Google returns CLDR ids, some of which are tzdata backward links (Asia/Saigon)
+        res = canonical_timezone(tz.name) if tz
+        logger.warn "timezone lookup for #{key} returned unknown zone #{tz.name}" if tz && res.nil?
+
         # Fallback chain when GeoNames returns nil (offshore locations)
-        if tz.nil?
+        if res.nil?
             res = timezone_fallback(lat, long, station)
             if res != 'UTC'
                 logger.info "timezone fallback for #{key}: #{res} (via region/longitude)"
             else
                 logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC"
             end
-        else
-            res = tz.name
         end
 
         # Update cache thread-safely
@@ -377,6 +417,24 @@ module WebCalTides
     end
 
     private
+
+    # The id to store and hand out for a zone: a tzdata backward alias (Asia/Saigon, America/Godthab,
+    # Pacific/Truk) becomes the zone it links to (Asia/Ho_Chi_Minh, America/Nuuk, ...).  Ids that
+    # zone1970.tab lists, the ids our fallback tables use (some are links, e.g. Europe/Oslo) and UTC
+    # are kept.  Returns nil for an id TZInfo doesn't know.
+    def canonical_timezone(name)
+        zone = TZInfo::Timezone.get(name)
+        return name if zone.canonical_identifier == name || kept_timezone_ids.include?(name)
+
+        zone.canonical_identifier
+    rescue TZInfo::InvalidTimezoneIdentifier
+        nil
+    end
+
+    def kept_timezone_ids
+        @kept_timezone_ids ||= Set.new(TZInfo::Country.all.flat_map(&:zone_identifiers) + ['UTC'] +
+            [US_STATE_TIMEZONES, CANADA_REGION_TIMEZONES, REGION_KEYWORDS, LONGITUDE_TIMEZONES].flat_map(&:values))
+    end
 
     def load_tzcache
         filename = "#{settings.cache_dir}/tzs.json"
@@ -447,8 +505,7 @@ module WebCalTides
         # Add all keys from the XTide engine cache to support aliased/merged IDs
         xtide = tide_clients(:xtide)
         if xtide.respond_to?(:engine)
-            xtide.engine.stations # Ensure stations are loaded
-            ids += xtide.engine.stations_cache.keys
+            ids += xtide.engine.station_cache_ids
         end
 
         ids.uniq.compact
@@ -605,13 +662,15 @@ module WebCalTides
     ## Tides
     ##
 
-    # Cache quarterly / every three months, versioned by harmonics checksum and the set of tide
-    # providers (so adding a provider doesn't wait for the next quarter to show up)
+    # Cache quarterly / every three months, versioned by the harmonics dataset and station record
+    # version (harmonics_stations_key) and the set of tide providers (so adding a provider doesn't wait for the next quarter to show up)
     def tide_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        providers = Digest::MD5.hexdigest(tide_clients.keys.sort.join(","))[0, 8]
-        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}_#{providers}.json"
+        # A client's station_list_version (if it has one) is part of it, so a change to which stations a
+        # client lists rebuilds the list on deploy rather than next quarter
+        providers = Digest::MD5.hexdigest(tide_clients.map { |name, c| [name, c.class.try(:station_list_version)].compact.join(":") }.sort.join(","))[0, 8]
+        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_stations_key}_#{providers}.json"
     end
 
     # If a provider's station list fails, serve the others but don't cache the incomplete list for
@@ -626,6 +685,12 @@ module WebCalTides
         stations = tide_clients.values.uniq.flat_map do |c|
             list = c.tide_stations
             raise "no station list" unless list
+            raise "empty station list" if list.empty?
+            if c.try(:station_list_degraded?)
+                # A fallback list (see Clients::ChsTides#tide_stations): serve it, but don't cache it
+                logger.error "!! degraded tide station list from #{c.class.name}, serving it uncached"
+                complete = false
+            end
             list
         rescue => e
             logger.error "!! failed to get tide station list from #{c.class.name}, leaving it out: #{e.class} - #{e.message}"
@@ -638,6 +703,11 @@ module WebCalTides
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
         # stations: is used in the re-cache scenario
+        if stations.empty?
+            logger.error "!! not caching an empty tide station list at #{at}"
+            return false
+        end
+
         logger.debug "storing tide station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
 
@@ -663,6 +733,11 @@ module WebCalTides
                     stations, complete = fetch_tide_stations
                     unless complete
                         @tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY
+                        # A rebuild that got nothing doesn't replace the list we already have
+                        if stations.empty? && @tide_stations.present?
+                            logger.warn "tide station rebuild got no stations, keeping the last list (#{@tide_stations.length} stations) uncached, rebuilding after #{@tide_stations_retry_at}"
+                            return @tide_stations
+                        end
                         logger.warn "serving incomplete tide station list (#{stations.length} stations) uncached, rebuilding after #{@tide_stations_retry_at}"
                         return @tide_stations = stations
                     end
@@ -674,6 +749,8 @@ module WebCalTides
                     logger.debug "reading #{cache_file}"
                     data = JSON.parse(File.read(cache_file))
                     raise TypeError, "expected a station list, got #{data.class}" unless data.is_a?(Array)
+                    # An empty list is never cached on purpose; don't serve one for the quarter
+                    raise "empty station list" if data.empty?
 
                     logger.debug "parsing tide station list"
                     data.map { |js| Models::Station.from_hash(js) }
@@ -716,6 +793,92 @@ module WebCalTides
         end
     end
 
+    RETIRED_TIDE_STATION_SUMMARY = "Station retired by DFO – no tide predictions available"
+
+    def retired_tide_station_cache_file
+        now = Time.current.utc
+        "#{settings.cache_dir}/retired_tide_stations_v1_#{now.strftime("%YQ#{now.quarter}")}.json"
+    end
+
+    # CHS stations left out of the station list because DFO doesn't publish high/low predictions for
+    # them (see Clients::ChsTides#tide_stations).  Existing subscriptions to one get a feed saying
+    # the station is retired instead of a 404.  { id => name }, cached quarterly like the station
+    # lists.  A failed fetch, or a station list the client rejects as unusable, isn't cached: the
+    # last good list (if any) is kept and the fetch is tried again after TIDE_STATIONS_RETRY.  The
+    # in-memory list belongs to its quarter's cache file and is reloaded when the quarter changes.
+    def retired_tide_stations
+        current = -> {
+            @retired_tide_stations && @retired_tide_stations_file == retired_tide_station_cache_file &&
+                !(@retired_tide_stations_retry_at && Time.current.utc >= @retired_tide_stations_retry_at)
+        }
+        return @retired_tide_stations if current.call
+
+        @@retired_tide_stations_mutex.synchronize do
+            return @retired_tide_stations if current.call
+
+            cache_file = retired_tide_station_cache_file
+            stations   = begin
+                if File.exist?(cache_file)
+                    data = JSON.parse(File.read(cache_file))
+                    raise TypeError, "expected { id => name }, got #{data.class}" unless data.is_a?(Hash)
+                    data
+                end
+            rescue => e
+                logger.error "!! unreadable retired tide station cache #{cache_file}, rebuilding it: #{e.class} - #{e.message}"
+                nil
+            end
+
+            unless stations
+                begin
+                    stations = tide_clients(:chs).retired_stations or raise "no station list"
+                    raise TypeError, "expected { id => name }, got #{stations.class}" unless stations.is_a?(Hash)
+                    atomic_write(cache_file, stations.to_json)
+                rescue => e
+                    logger.error "!! failed to get retired CHS stations, retrying after #{TIDE_STATIONS_RETRY.inspect}: #{e.class} - #{e.message}"
+                    @retired_tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY
+                    @retired_tide_stations_file     = cache_file # the last good list stands in until the retry
+                    return @retired_tide_stations ||= {}
+                end
+            end
+
+            @retired_tide_stations_retry_at = nil
+            @retired_tide_stations_file     = cache_file
+            @retired_tide_stations = stations
+        end
+    end
+
+    # Only a CHS-shaped id (24 hex digits) is looked up, so other unknown ids don't load the list
+    def retired_tide_station?(id)
+        return false unless id.is_a?(String) && id.match?(/\A\h{24}\z/)
+
+        retired_tide_stations.key?(id)
+    end
+
+    # One all-day event over the whole month of `month`, saying the station is retired.  The feed
+    # is cached per month, so this keeps the notice current whenever a subscriber syncs.
+    def retired_tide_calendar_for(id, month: Time.current.utc)
+        return nil unless retired_tide_station?(id)
+
+        name  = retired_tide_stations[id].presence || "this station"
+        first = month.utc.to_date.beginning_of_month
+
+        cal = Icalendar::Calendar.new
+        cal.x_wr_calname = "#{name.titleize} (retired)"
+
+        cal.event do |e|
+            e.summary     = RETIRED_TIDE_STATION_SUMMARY
+            e.dtstart     = Icalendar::Values::Date.new(first)
+            e.dtend       = Icalendar::Values::Date.new(first.next_month) # exclusive: through the last day
+            e.description = "Fisheries and Oceans Canada (DFO) no longer publishes tide predictions for #{name}. " \
+                            "Go to https://webcaltides.org to choose another station."
+            e.url         = "https://webcaltides.org"
+        end
+
+        logger.info "retired tide calendar for #{id} (#{name}) generated"
+
+        return cal
+    end
+
     def tide_station_for(id)
         return nil if id.blank?
         station = tide_stations.find { |s| s.id == id }
@@ -724,8 +887,7 @@ module WebCalTides
         # Fallback to looking in the XTide engine cache for aliased/merged IDs
         xtide = tide_clients(:xtide)
         if xtide.respond_to?(:engine)
-            xtide.engine.stations # Ensure stations are loaded
-            if data = xtide.engine.stations_cache[id]
+            if data = xtide.engine.station_data(id, 'tide').presence
                 return Models::Station.from_hash({
                     'name' => data['name'],
                     'id' => id,
@@ -924,11 +1086,12 @@ module WebCalTides
     ## Currents
     ##
 
-    # Cache quarterly / every three months, versioned by harmonics checksum
+    # Cache quarterly / every three months, versioned by the harmonics dataset and station record
+    # version (harmonics_stations_key)
     def current_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}.json"
+        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_stations_key}.json"
     end
 
     # Quarterly-versioned region mapping file
@@ -1013,9 +1176,30 @@ module WebCalTides
         region_map
     end
 
-    def cache_current_stations(at:current_station_cache_file, stations: [])
-        current_clients.values.uniq.each { |c| stations.concat(c.current_stations) } if stations.empty?
+    # If a provider's current station list fails, serve the others but don't cache the incomplete
+    # list for the quarter; build it again after this long.
+    CURRENT_STATIONS_RETRY = 1.hour
 
+    # Returns [stations, complete]; complete is false if any provider failed (logged).  Each
+    # provider is isolated so one upstream outage doesn't take down search for every region.
+    def fetch_current_stations
+        complete = true
+
+        stations = current_clients.values.uniq.flat_map do |c|
+            list = c.current_stations
+            raise "no station list" unless list
+            raise "empty station list" if list.empty?
+            list
+        rescue => e
+            logger.error "!! failed to get current station list from #{c.class.name}, leaving it out: #{e.class} - #{e.message}"
+            complete = false
+            []
+        end
+
+        return stations, complete
+    end
+
+    def enrich_current_stations(stations)
         # Enrich NOAA current stations with region data
         # (NOAA currents API doesn't provide state/region info, but tide stations do)
         noaa_current_stations = stations.select { |s| s.provider == 'noaa' && s.region == 'United States' }
@@ -1036,6 +1220,17 @@ module WebCalTides
             end
         end
 
+        stations
+    end
+
+    def cache_current_stations(at:current_station_cache_file, stations: [])
+        if stations.empty?
+            logger.error "!! not caching an empty current station list at #{at}"
+            return false
+        end
+
+        enrich_current_stations(stations)
+
         logger.debug "storing current station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
 
@@ -1045,26 +1240,76 @@ module WebCalTides
     def current_stations
         # Double-checked locking for thread safety
         # First check is optimization - safe because array assignment is atomic in Ruby
-        return @current_stations if @current_stations
+        return @current_stations if @current_stations && !current_stations_retry_due?
 
         @@current_stations_mutex.synchronize do
-            return @current_stations if @current_stations
+            return @current_stations if @current_stations && !current_stations_retry_due?
 
             cache_file = current_station_cache_file
-            cache_current_stations(at: cache_file) unless File.exist?(cache_file)
+            stations   = nil
 
-            logger.debug "reading #{cache_file}"
-            json = File.read(cache_file)
+            # An unreadable cache file is removed and rebuilt once, rather than failing every request
+            2.times do
+                unless File.exist?(cache_file)
+                    # Other requests keep the incomplete list, if there is one, while this rebuilds it
+                    @current_stations_retry_at = Time.current.utc + CURRENT_STATIONS_RETRY if @current_stations
+                    stations, complete = fetch_current_stations
+                    unless complete
+                        @current_stations_retry_at = Time.current.utc + CURRENT_STATIONS_RETRY
+                        # A rebuild that got nothing doesn't replace the list we already have
+                        if stations.empty? && @current_stations.present?
+                            logger.warn "current station rebuild got no stations, keeping the last list (#{@current_stations.length} stations) uncached, rebuilding after #{@current_stations_retry_at}"
+                            return @current_stations
+                        end
+                        logger.warn "serving incomplete current station list (#{stations.length} stations) uncached, rebuilding after #{@current_stations_retry_at}"
+                        return @current_stations = enrich_current_stations(stations)
+                    end
 
-            logger.debug "parsing current station list"
-            data = JSON.parse(json) rescue []
-            @current_stations = data.map { |js| Models::Station.from_hash(js) }
+                    cache_current_stations(at: cache_file, stations: stations)
+                end
+
+                loaded = begin
+                    logger.debug "reading #{cache_file}"
+                    data = JSON.parse(File.read(cache_file))
+                    raise TypeError, "expected a station list, got #{data.class}" unless data.is_a?(Array)
+                    # An empty list is never cached on purpose; don't serve one for the quarter
+                    raise "empty station list" if data.empty?
+
+                    logger.debug "parsing current station list"
+                    data.map { |js| Models::Station.from_hash(js) }
+                rescue => e
+                    logger.error "!! unreadable current station cache #{cache_file}, removing it: #{e.class} - #{e.message}"
+                    File.unlink(cache_file) rescue nil
+                    nil
+                end
+
+                if loaded
+                    # The degraded list stays in place (and is retried) until the complete one is loaded
+                    @current_stations_retry_at = nil
+                    return @current_stations = loaded
+                end
+            end
+
+            # Even the rebuilt file couldn't be read back: serve what was fetched, uncached, and retry later
+            @current_stations = stations || @current_stations || []
+            @current_stations_retry_at = Time.current.utc + CURRENT_STATIONS_RETRY
+            logger.warn "serving current station list (#{@current_stations.length} stations) uncached, rebuilding after #{@current_stations_retry_at}"
+            @current_stations
         end
     end
 
+    # Incomplete in-memory list (some provider failed) that is due for another build
+    def current_stations_retry_due?
+        @current_stations_retry_at && Time.current.utc >= @current_stations_retry_at
+    end
+
     def remove_current_station(station_id)
-        @current_stations.delete_if { |s| s.id == station_id }
-        cache_current_stations(stations:@current_stations)
+        # Under the lock, so a rebuild can't swap the list between the removal and the write
+        @@current_stations_mutex.synchronize do
+            @current_stations.delete_if { |s| s.id == station_id }
+            # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
+            cache_current_stations(stations:@current_stations) unless @current_stations_retry_at
+        end
     end
 
     def current_station_for(id)
@@ -1075,8 +1320,7 @@ module WebCalTides
         # Fallback to XTide engine
         xtide = current_clients(:xtide)
         if xtide.respond_to?(:engine)
-            xtide.engine.stations # Ensure loaded
-            if data = xtide.engine.stations_cache[id]
+            if data = xtide.engine.station_data(id, 'current').presence
                 return Models::Station.from_hash({
                     'name' => data['name'],
                     'id' => id,
@@ -1153,12 +1397,18 @@ module WebCalTides
     def cache_current_data_for(station, at:, around:)
         return false unless station
 
-        if current_data = current_clients(station.provider).current_data_for(station, around)
-            logger.debug "storing current data at #{at}"
-            atomic_write(at, current_data.map(&:to_h).to_json)
+        current_data = current_clients(station.provider).current_data_for(station, around)
+
+        # Nothing to cache for an empty list either -- it would serve "no currents" for the month
+        if current_data.blank?
+            logger.warn "no current data for #{station.bid} (#{station.provider}) around #{around.utc.to_date}, not caching #{at}"
+            return false
         end
 
-        return current_data && current_data.length > 0
+        logger.debug "storing current data at #{at}"
+        atomic_write(at, current_data.map(&:to_h).to_json)
+
+        return true
     end
 
     def current_data_for(station, around: Time.current.utc)
@@ -1237,9 +1487,10 @@ module WebCalTides
 
         data.each do |current|
             date  = current.time.strftime("%Y-%m-%d")
+            depth = current.depth ? " #{current.depth}ft" : ""
             title = case current.type
-                    when "ebb"   then "Ebb #{current.velocity_major.to_f.abs}kts #{current.mean_ebb_dir}T #{current.depth}ft"
-                    when "flood" then "Flood #{current.velocity_major}kts #{current.mean_flood_dir}T #{current.depth}ft"
+                    when "ebb"   then "Ebb #{current.velocity_major.to_f.abs}kts #{current.mean_ebb_dir}T#{depth}"
+                    when "flood" then "Flood #{current.velocity_major}kts #{current.mean_flood_dir}T#{depth}"
                     when "slack" then "Slack"
                     end
 

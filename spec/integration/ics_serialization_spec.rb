@@ -207,6 +207,15 @@ RSpec.describe 'ICS calendar serialization' do
             expect(ics).to include('Ebb 1.8kts 225T 10ft')
         end
 
+        it 'leaves the depth out of the summary when the station has none' do
+            current_data.each { |c| c.depth = nil }
+            ics = WebCalTides.current_calendar_for('NOAA_ACT1011').to_ical
+
+            expect(ics).to include('Flood 2.5kts 045T')
+            expect(ics).to include('Ebb 1.8kts 225T')
+            expect(ics.lines.grep(/SUMMARY/).join).not_to include('ft')
+        end
+
         it 'generates Slack events' do
             cal = WebCalTides.current_calendar_for('NOAA_ACT1011')
             ics = cal.to_ical

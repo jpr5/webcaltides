@@ -161,6 +161,8 @@ GEM
     timezone (1.3.25)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
+    tzinfo-data (1.2026.5)
+      tzinfo (>= 1.0.0)
     uri (1.1.1)
     vcr (6.4.0)
     webmock (3.26.1)
@@ -200,6 +202,7 @@ DEPENDENCIES
   tcd
   timecop (~> 0.9)
   timezone
+  tzinfo-data
   vcr (~> 6.2)
   webmock (~> 3.23)
   webrick (>= 1.8.2)

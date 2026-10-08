@@ -148,6 +148,24 @@ class Server < ::Sinatra::Base
             nil
         end
 
+        # The retired-station feed is the same for every units/solar/lunar/date choice, so it is
+        # cached once per station and current month, with its notice spanning that month.
+        # The _YYYYMM stamp keeps it in the monthly cleanup.
+        def retired_tide_ics(id)
+            month      = Time.current.utc
+            cached_ics = "#{settings.cache_dir}/tides_retired_#{id}_#{month.strftime("%Y%m")}.ics"
+
+            File.read cached_ics rescue begin
+                calendar = WebCalTides.retired_tide_calendar_for(id, month: month) or halt 404
+                calendar.publish
+
+                ical = calendar.to_ical
+                $LOG.debug "caching to #{cached_ics}"
+                WebCalTides.atomic_write(cached_ics, ical)
+                ical
+            end
+        end
+
         # Log at most a short prefix of the raw value: it is caller-controlled and may be a long
         # string or a nested hash/array (date[]=, date[k]=v).
         def reject_ics_date(raw)
@@ -172,7 +190,9 @@ class Server < ::Sinatra::Base
         query = (params['q'] || '').strip.downcase
         return { results: [] }.to_json if query.length < 2
 
-        # Search both tide and current stations
+        # Search both tide and current stations.  The type comes from the list a station is in
+        # (a station's depth does not say: an XTide current can have no depth).
+        current_ids = WebCalTides.current_stations.map(&:object_id).to_set
         all_stations = WebCalTides.tide_stations + WebCalTides.current_stations
 
         # Filter and dedupe by name.  Alternate names (e.g. "Tromso" for Tromsø) come after name and
@@ -183,7 +203,7 @@ class Server < ::Sinatra::Base
         matches = (by_name + by_alternate)
             .uniq { |s| [s.name, s.region] }
             .first(10)
-            .map { |s| { name: s.name, region: s.region, type: s.depth ? 'current' : 'tide' } }
+            .map { |s| { name: s.name, region: s.region, type: current_ids.include?(s.object_id) ? 'current' : 'tide' } }
 
         content_type :json
         { results: matches }.to_json
@@ -398,7 +418,12 @@ class Server < ::Sinatra::Base
     # For currents, station can be either an ID (we'll use the first bin) or a BID (specific bin)
     get "/:type/:station.ics" do
         type       = params[:type].tap { |type| type.in?(%w[tides currents]) or halt 404 }
-        id         = params[:station].tap { |station| station.in?(WebCalTides.station_ids) or halt 404 }
+        id         = params[:station]
+        # A CHS station DFO no longer publishes predictions for is out of the station list, but its
+        # subscribers get a feed saying so (see WebCalTides.retired_tide_stations).  Checked first:
+        # the station list isn't needed for it, and may still hold it when the CHS listing is degraded.
+        retired    = type == "tides" && WebCalTides.retired_tide_station?(id)
+        retired or id.in?(WebCalTides.station_ids) or halt 404
         # ?date=YYYYMMDD, for utility but unsupported in UI.  Absent or empty means now; anything
         # else that is malformed (including whitespace) or out of the window is rejected with 422.
         # The window moves with now, so a subscription URL with a fixed date= starts getting 422.
@@ -406,6 +431,14 @@ class Server < ::Sinatra::Base
         units      = params.fetch(:units, 'imperial').tap { |units| units.in?(%w[imperial metric]) or halt 422 }
         no_solar   = params[:solar].in?(%w[0 false]) # on by default
         add_lunar  = params[:lunar].in?(%w[1 true])  # off by default
+
+        if retired
+            WebCalTides.cleanup_if_month_changed
+            ics = retired_tide_ics(id) # may halt 404, so the content type is set after it
+            content_type 'text/calendar', charset: 'utf-8'
+            halt ics
+        end
+
         stamp      = date.utc.strftime("%Y%m")
         version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
         station    = type == "currents" ? WebCalTides.current_station_for(id) : WebCalTides.tide_station_for(id)

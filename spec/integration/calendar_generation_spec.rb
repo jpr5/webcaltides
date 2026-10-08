@@ -108,6 +108,23 @@ RSpec.describe WebCalTides do
                 expect(calendar.description.to_s).to include('NOT FOR NAVIGATION')
             end
 
+            # The XTide engine reports heights with the TCD's level units, "feet"
+            context 'with heights in "feet"' do
+                let(:tide_data) do
+                    [build_tide_data(type: 'High', units: 'feet', prediction: 10.014, time: DateTime.new(2026, 10, 8, 1, 25))]
+                end
+
+                it 'shows the height as given in imperial units' do
+                    calendar = described_class.tide_calendar_for('X123', units: 'imperial')
+                    expect(calendar.events.first.summary.to_s).to eq('High Tide 10.014 ft')
+                end
+
+                it 'converts the height to metres in metric units' do
+                    calendar = described_class.tide_calendar_for('X123', units: 'metric')
+                    expect(calendar.events.first.summary.to_s).to eq('High Tide 3.052 m')
+                end
+            end
+
             it 'keeps the harmonic disclaimer and carries no BSH or Kartverket credit' do
                 calendar = described_class.tide_calendar_for('X123')
                 ical     = calendar.to_ical.gsub(/\r\n[ \t]/, '')

@@ -12,7 +12,8 @@ RSpec.describe 'GET /api/stations/autocomplete', type: :api do
 
         allow(WebCalTides).to receive(:current_stations).and_return([
             build_station(name: 'Boston Harbor Entrance', region: 'Massachusetts, USA', depth: 10),
-            build_station(name: 'Cape Cod Canal', region: 'Massachusetts, USA', depth: 15)
+            build_station(name: 'Cape Cod Canal', region: 'Massachusetts, USA', depth: 15),
+            build_station(name: 'Wareham River', region: 'Massachusetts, USA', depth: nil)
         ])
     end
 
@@ -40,6 +41,13 @@ RSpec.describe 'GET /api/stations/autocomplete', type: :api do
             results = JSON.parse(last_response.body)['results']
             types = results.map { |r| r['type'] }
             expect(types).to include('tide', 'current')
+        end
+
+        it 'types stations by the list they are in, not by depth' do
+            get '/api/stations/autocomplete', q: 'wareham'
+
+            results = JSON.parse(last_response.body)['results']
+            expect(results).to eq([{ 'name' => 'Wareham River', 'region' => 'Massachusetts, USA', 'type' => 'current' }])
         end
 
         it 'searches by region' do

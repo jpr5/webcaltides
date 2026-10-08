@@ -115,6 +115,23 @@ RSpec.describe 'Harmonics cache keys' do
             end
         end
 
+        # An empty result (e.g. a station looked up while the station list was still loading) must not
+        # be cached: it would serve an empty feed for the rest of the month.
+        it 'does not cache an empty current prediction, and predicts again on the next request' do
+            allow(client).to receive(:current_data_for).and_return([], [build_current_data(time: DateTime.now)])
+
+            with_test_cache_dir do |dir|
+                station = build_station(id: 'XC2', bid: 'XC2', provider: 'xtide')
+
+                expect(WebCalTides.current_data_for(station)).to be_nil
+                expect(names(dir, 'currents_*')).to be_empty
+
+                expect(WebCalTides.current_data_for(station).size).to eq(1)
+                expect(names(dir, 'currents_*').size).to eq(1)
+                expect(client).to have_received(:current_data_for).twice
+            end
+        end
+
         it 'keeps the NOAA currents file name as before and ignores the flag and dataset' do
             noaa = double('noaa currents')
             allow(noaa).to receive(:current_data_for) { [build_current_data(time: DateTime.now)] }

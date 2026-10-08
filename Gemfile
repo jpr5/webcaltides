@@ -17,6 +17,10 @@ gem 'mechanize', '>= 2.9.1'
 gem 'icalendar', '>= 2.12.2', require: [ 'icalendar', 'icalendar/tzinfo' ]
 gem 'RubySunrise', require: 'solareventcalculator'
 gem 'timezone'
+# Zone data for TZInfo (ActiveSupport, RubySunrise, icalendar) that doesn't depend on the OS image.
+# Debian trixie moved the backward links (Asia/Saigon, America/Godthab, ...) to tzdata-legacy, so
+# with /usr/share/zoneinfo TZInfo rejected ids that Google's lookup still returns.
+gem 'tzinfo-data'
 gem 'geocoder'
 gem 'tcd'
 

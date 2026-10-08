@@ -42,7 +42,7 @@ RSpec.describe 'Tide station cache and tide data cache', :aggregate_failures do
             without_bsh = WebCalTides.tide_station_cache_file
 
             expect(with_bsh).not_to eq(without_bsh)
-            expect(File.basename(with_bsh)).to match(/\Atide_stations_v\d+_20\d\dQ\d_cafebabe_\h{8}\.json\z/)
+            expect(File.basename(with_bsh)).to match(/\Atide_stations_v\d+_20\d\dQ\d_cafebabe_hs\d+_\h{8}\.json\z/)
         end
 
         [
@@ -75,6 +75,49 @@ RSpec.describe 'Tide station cache and tide data cache', :aggregate_failures do
                 expect(WebCalTides.tide_stations.map(&:id)).to contain_exactly('NOAA1', 'DE__717P')
                 expect(station_cache_files).to eq([WebCalTides.tide_station_cache_file])
             end
+        end
+
+        it 'does not cache an empty station list from a provider, and retries it later' do
+            # e.g. NOAA answering 200 with a maintenance page parses to []
+            allow(bsh).to receive(:tide_stations).and_return([])
+
+            start = Time.current.utc
+            expect(WebCalTides.tide_stations.map(&:id)).to eq(['NOAA1'])
+            expect(station_cache_files).to be_empty
+
+            allow(bsh).to receive(:tide_stations).and_return([bsh_station])
+            Timecop.freeze(start + WebCalTides::TIDE_STATIONS_RETRY + 1) do
+                expect(WebCalTides.tide_stations.map(&:id)).to contain_exactly('NOAA1', 'DE__717P')
+                expect(station_cache_files).to eq([WebCalTides.tide_station_cache_file])
+            end
+        end
+
+        it 'does not cache an empty list when every provider comes back empty' do
+            allow(noaa).to receive(:tide_stations).and_return([])
+            allow(bsh).to receive(:tide_stations).and_return([])
+
+            expect(WebCalTides.tide_stations).to eq([])
+            expect(station_cache_files).to be_empty
+        end
+
+        it 'keeps the last list it had when a retry comes back empty' do
+            allow(bsh).to receive(:tide_stations).and_raise(Errno::ECONNREFUSED)
+            start = Time.current.utc
+            WebCalTides.tide_stations
+
+            allow(noaa).to receive(:tide_stations).and_return([])
+            Timecop.freeze(start + WebCalTides::TIDE_STATIONS_RETRY + 1) do
+                expect(WebCalTides.tide_stations.map(&:id)).to eq(['NOAA1'])
+                expect(station_cache_files).to be_empty
+            end
+        end
+
+        it 'rebuilds an empty cached station list instead of serving it for the quarter' do
+            cache_file = WebCalTides.tide_station_cache_file
+            File.write(cache_file, '[]')
+
+            expect(WebCalTides.tide_stations.map(&:id)).to contain_exactly('NOAA1', 'DE__717P')
+            expect(JSON.parse(File.read(cache_file)).length).to eq(2)
         end
 
         it 'does not persist an incomplete list when a station is removed' do
@@ -220,6 +263,35 @@ RSpec.describe 'Tide station cache and tide data cache', :aggregate_failures do
             WebCalTides.tide_stations
 
             expect(station_cache_files).to contain_exactly(sibling, WebCalTides.tide_station_cache_file)
+        end
+
+        # The list and its degraded flag came from two engine calls.  When the engine's TICON retry
+        # fell due between them, a list built without TICON was reported as complete and cached for
+        # the quarter.
+        context 'when the harmonics TICON retry falls due while the list is built' do
+            let(:harmonics) { Clients::Harmonics.new(Logger.new('/dev/null')) }
+            let(:clients)   { { harmonics: harmonics } }
+
+            it 'does not cache the list built without TICON' do
+                engine = ::Harmonics::Engine.new(Logger.new('/dev/null'), Dir.mktmpdir)
+                harmonics.instance_variable_set(:@engine, engine)
+
+                failed = 0
+                allow(File).to receive(:read).and_call_original
+                allow(File).to receive(:read).with(engine.ticon_file).and_wrap_original do |m, *args|
+                    (failed += 1) <= 1 ? raise(Errno::EIO, engine.ticon_file) : m.call(*args)
+                end
+                # The retry falls due right after the client hands back the list
+                allow(harmonics).to receive(:tide_stations).and_wrap_original do |m|
+                    list = m.call
+                    Timecop.travel(Time.now + ::Harmonics::Engine::STATIONS_RETRY + 1)
+                    list
+                end
+
+                stations = WebCalTides.tide_stations
+                expect(stations.count { |s| s.provider == 'ticon' }).to eq(0)
+                expect(station_cache_files).to be_empty
+            end
         end
     end
 
