@@ -8,3 +8,5 @@ spec/.rspec_status
 coverage/
 .windsurf
 .claude
+scripts/gesla/.venv/
+__pycache__/
