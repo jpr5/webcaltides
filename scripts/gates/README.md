@@ -28,9 +28,12 @@ Results, caches, logs and references live in `OTC_GATES_DIR`
 (default `$OTC_WORK/gates`, `OTC_WORK` default `~/.local/share/opentideconstants/work`).
 
 The official-prediction caches (NOAA, BSH, Kartverket, RWS, CHS, IMI, LINZ) may not be
-redistributable, so they are not in this repo. They are release assets on the private repo
-`jpr5/webcaltides-gesla-mirror`, tag `refs-2026-10-07`. `data/gates/refs.lock.json` pins the
-SHA-256 of every asset and of every unpacked tree. Fetching needs `gh` with access to that repo.
+redistributable, so they are not in this repo. They are in the private OpenTideConstants work
+bucket (Cloudflare R2) at `s3://$OTC_WORK_BUCKET/refs/refs-2026-10-07/`, with a `MANIFEST.json`.
+`data/gates/refs.lock.json` names the release and pins the SHA-256 of every asset and of every
+unpacked tree. Fetching needs the `aws` CLI and bucket credentials: in CI the
+`OTC_WORK_ACCESS_KEY_ID`, `OTC_WORK_SECRET_ACCESS_KEY`, `OTC_WORK_BUCKET` and `R2_ACCOUNT_ID`
+variables; locally `~/.config/opentideconstants/r2-work.env` (or the file named by `OTC_WORK_ENV`).
 
 ```
 ruby scripts/gates/fetch_refs.rb           # download, verify by SHA-256, unpack
@@ -40,8 +43,8 @@ ruby scripts/gates/fetch_refs.rb --check   # verify the unpacked tree against th
 A SHA-256 mismatch stops with a non-zero exit and names the asset or group.
 
 To publish new references: stage the same layout (`refs/`, `evid/`, `sets/`, `safety_set.json`,
-`baseline/`, `b/`, `builds/`), run `fetch_refs.rb --pack <stage> <out> jpr5/webcaltides-gesla-mirror refs-<date>`,
-upload the three assets to that tag, and commit the new lock.
+`baseline/`, `b/`, `builds/`), run `fetch_refs.rb --pack <stage> <out> refs-<date>`,
+upload the three assets and a `MANIFEST.json` to `refs/refs-<date>/` in the bucket, and commit the new lock.
 
 ## Run
 

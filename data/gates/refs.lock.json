@@ -1,6 +1,6 @@
 {
-  "repo": "jpr5/webcaltides-gesla-mirror",
-  "tag": "refs-2026-10-07",
+  "store": "s3://$OTC_WORK_BUCKET/refs/refs-2026-10-07/",
+  "release": "refs-2026-10-07",
   "private": true,
   "note": "Official-prediction caches; not redistributable. Fetch with scripts/gates/fetch_refs.rb.",
   "assets": [
