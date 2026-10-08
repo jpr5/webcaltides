@@ -9,10 +9,13 @@ RSpec.describe Harmonics::Engine, '#source_files_checksum' do
     let(:logger) { Logger.new('/dev/null') }
 
     def uncached_checksum(engine)
-        %i[@xtide_file @ticon_file].map do |ivar|
+        xtide, ticon = %i[@xtide_file @ticon_file].map do |ivar|
             f = engine.instance_variable_get(ivar)
             File.exist?(f) ? Digest::MD5.file(f).hexdigest[0, 8] : '00000000'
-        end.join('_')
+        end
+        types = engine.instance_variable_get(:@noaa_station_types_file)
+        xtide = Digest::MD5.hexdigest(xtide + Digest::MD5.file(types).hexdigest)[0, 8] if File.exist?(types)
+        [xtide, ticon].join('_')
     end
 
     it 'hashes the data files once per engine across repeated calls, with the same value' do
@@ -25,7 +28,7 @@ RSpec.describe Harmonics::Engine, '#source_files_checksum' do
             second = engine.source_files_checksum
 
             expect([first, second]).to eq([expected, expected])
-            expect(Digest::MD5).to have_received(:file).twice # one per data file, first call only
+            expect(Digest::MD5).to have_received(:file).exactly(3).times # one per data file, first call only
         end
     end
 

@@ -1,7 +1,8 @@
 name: Harmonics data monitor
 
-# Fails when a newer XTide or TICON harmonics release appears upstream, or
-# when the check itself breaks. GitHub notifies the user who last changed the
+# Fails when a newer XTide or TICON harmonics release appears upstream, when
+# NOAA's harmonic/subordinate station types differ from
+# data/noaa_station_types.json, or when a check itself breaks. GitHub notifies the user who last changed the
 # cron line (or who last enabled the workflow again), if that user has
 # Actions notifications on. A manual workflow_dispatch run notifies the
 # user who started it.
@@ -32,3 +33,7 @@ jobs:
 
       - name: Check for new harmonics releases
         run: ruby scripts/check_harmonics_releases.rb
+
+      - name: Check NOAA station types
+        if: ${{ !cancelled() }}
+        run: ruby scripts/build_noaa_station_types.rb --check
