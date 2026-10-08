@@ -186,15 +186,15 @@ def parse_header(data: bytes) -> dict[str, str]:
 
 
 def modal_interval_min(times_s: np.ndarray) -> int:
-    """The most common positive step between stamps, in whole minutes (ties: the shorter step)."""
+    """The most common positive step between stamps (ties: the shorter step), rounded to whole
+    minutes (half up) and at least 1. A sub-minute or odd step (15 s, 90 s) is described, not
+    rejected: QC (qc.hourly_mask) works on the stamps themselves."""
     steps = np.diff(np.unique(times_s))
     if len(steps) == 0:
         raise ValueError("fewer than two distinct stamps")
     vals, counts = np.unique(steps, return_counts=True)
     step = int(vals[np.argmax(counts)])
-    if step % 60:
-        raise ValueError(f"modal step {step} s is not a whole number of minutes")
-    return step // 60
+    return max(1, (step + 30) // 60)
 
 
 def parse_record(name: str, data: bytes, meta: Mapping[str, str], roles: Mapping[str, ContributorRole], *,

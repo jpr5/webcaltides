@@ -153,7 +153,8 @@ def test_clean_drops_bad_and_duplicates_keeping_first():
                      expected_sha256=hashlib.sha256(data).hexdigest())
     s = clean(r)
     assert s.heights_m.tolist() == [1.0, 1.4, 1.5]
-    assert s.stats == {"rows": 7, "non_null": 6, "flag_dropped": 2, "duplicates_dropped": 1, "hourly": 3}
+    assert s.stats == {"rows": 7, "non_null": 6, "flag_dropped": 2, "duplicates_dropped": 1,
+                       "hours_off_modal_dropped": 0, "hourly": 3}
 
 
 def test_hourly_keeps_the_modal_minute():
@@ -178,6 +179,72 @@ def test_despike_drops_an_injected_spike():
     res[1000] = 1.0
     keep, mad = despike_mask(t, res)
     assert not keep[1000] and keep[500] and 0.005 < mad < 0.02
+
+
+def test_despike_keeps_samples_with_too_few_neighbours():
+    """An isolated fragment cannot be assessed: it is kept and counted, not dropped as a spike."""
+    t = np.arange(0, 2000 * 3600, 3600, dtype=np.int64)
+    t = np.concatenate([t, [t[-1] + 100 * 3600, t[-1] + 101 * 3600]])
+    rng = np.random.default_rng(1)
+    res = rng.normal(0, 0.01, len(t))
+    res[1000] = 1.0
+    keep, mad = despike_mask(t, res)
+    assert keep[-1] and keep[-2] and not keep[1000]
+    assert int((~keep).sum()) == 1
+
+
+def test_despike_six_hourly_series_is_not_wiped_out():
+    t = np.arange(0, 400 * 6 * 3600, 6 * 3600, dtype=np.int64)
+    keep, mad = despike_mask(t, np.random.default_rng(2).normal(0, 0.01, len(t)))
+    assert keep.all() and not np.isfinite(mad)
+    t = t + 1577836800                                           # 2020, inside the fake dump
+    h = 0.5 * np.cos(np.radians(28.9841042 * t / 3600.0))
+    fit = fit_despiked(fake_table(), ["M2"], Series("six-hourly", t, h))
+    assert fit.n == len(t) and fit.stats["spikes_dropped"] == 0
+    assert fit.stats["spikes_unassessed"] == len(t) and fit.stats["spike_mad_m"] is None
+    json.loads(fit.to_json())
+
+
+def test_despike_zero_mad_drops_nothing():
+    t = np.arange(0, 500 * 3600, 3600, dtype=np.int64)
+    res = np.zeros(len(t))
+    res[100] = 1e-9
+    keep, mad = despike_mask(t, res)
+    assert keep.all() and mad == 0.0
+
+
+def test_hourly_keeps_the_hourly_part_of_a_mixed_record():
+    """Hourly at :30 for 300 h, then 15-min data for 500 h: one value for every hour."""
+    hourly = np.arange(0, 300 * 3600, 3600, dtype=np.int64) + 1800
+    sub = np.arange(300 * 3600, 800 * 3600, 900, dtype=np.int64)
+    t = np.concatenate([hourly, sub])
+    tt, _ = to_hourly(t, np.zeros(len(t)))
+    assert len(tt) == 800
+    assert np.array_equal(tt[:300], hourly)
+    assert set((tt[300:] % 3600).tolist()) == {0}
+
+
+def test_hourly_keeps_one_value_per_hour_for_sub_minute_data():
+    t = np.arange(0, 5 * 3600, 15, dtype=np.int64)
+    tt, _ = to_hourly(t, np.zeros(len(t)))
+    assert tt.tolist() == [0, 3600, 7200, 10800, 14400]
+
+
+def test_hourly_counts_hours_without_the_modal_offset():
+    r = make_record(times_s=np.concatenate([np.arange(0, 50 * 3600, 600), np.arange(50 * 3600, 60 * 3600, 600) + 300]).astype(np.int64),
+                    heights_m=np.zeros(360), good=np.ones(360, dtype=bool), interval_min=10)
+    s = clean(r)
+    assert s.stats["hourly"] == 50 and s.stats["hours_off_modal_dropped"] == 10
+
+
+@pytest.mark.parametrize("step, expect", [(15, 1), (90, 2), (60, 1), (3600, 60)])
+def test_reader_interval_for_sub_minute_and_odd_steps(step, expect):
+    lines = "".join(f"2020/01/01 {(k * step) // 3600:02d}:{(k * step) // 60 % 60:02d}:{(k * step) % 60:02d}"
+                    f"     1.0000 1 1\n" for k in range(20))
+    data = (GESLA_TEXT.split("2020/01/01 00:00:00")[0] + lines).encode()
+    r = parse_record("t", data, GESLA_META, {}, source_version="4.1",
+                     expected_sha256=hashlib.sha256(data).hexdigest())
+    assert r.interval_min == expect
 
 
 # --- fit basis (synthetic) -------------------------------------------------------------------------
@@ -254,31 +321,35 @@ def real():
     window = s.times_s >= s.times_s.max() - YEARS_19
     s19 = Series(s.record_id, s.times_s[window], s.heights_m[window], dict(s.stats, in_window=int(window.sum())))
     fit = fit_despiked(table, POC_BOSTON, s19)
+    # The PoC dropped samples it could not assess for spikes (fewer than 6 in their 25-h window);
+    # the default keeps them. Boston has 3 (an isolated 3-hour fragment, 2026-02-24).
+    poc_fit = fit_despiked(table, POC_BOSTON, s19, keep_unassessed=False)
     print(f"\nBOSTON n={fit.n} stats={fit.stats} omit_v0u={OMIT_V0U}")
     for n in NOAA_MAIN:
         a, g = fit.amplitude_m[n] * 100, fit.phase_deg[n]
         na, ng = noaa[n][0] * 100, noaa[n][1]
         print(f"  {n:3s} fit {a:7.2f} cm {g:7.2f} deg | NOAA {na:7.2f} cm {ng:7.2f} deg | "
               f"dA {a - na:+.2f} cm dg {(g - ng + 180) % 360 - 180:+.2f} deg")
-    return record, release, fit, noaa
+    return record, release, fit, noaa, poc_fit
 
 
 def test_boston_record_is_verified(real):
-    record, release, _, _ = real
+    record, release, *_ = real
     assert record.member_sha256 == release.members[BOSTON]["sha256"]
     assert record.contributor == "NOAA" and record.gauge_type == "Coastal" and record.interval_min == 60
     assert record.lat == pytest.approx(42.354801) and record.lon == pytest.approx(-71.0534)
 
 
 def test_boston_m2_reproduces_the_poc(real):
-    _, _, fit, _ = real
+    _, _, _, _, fit = real
+    assert fit.stats["spikes_dropped"] == 277
     assert round(fit.amplitude_m["M2"] * 100, 2) == 137.44
     assert round(fit.phase_deg["M2"], 2) == 109.35
 
 
 @pytest.mark.parametrize("con", NOAA_MAIN)
 def test_boston_matches_noaa_harcon(real, con):
-    _, _, fit, noaa = real
+    _, _, fit, noaa, _ = real
     da = abs(fit.amplitude_m[con] - noaa[con][0]) * 100
     dg = abs((fit.phase_deg[con] - noaa[con][1] + 180) % 360 - 180)
     assert da <= 0.7, f"{con}: |dA| {da:.2f} cm > 0.7 cm"
@@ -287,7 +358,7 @@ def test_boston_matches_noaa_harcon(real, con):
 
 def test_boston_without_v0u_is_off_noaa(real):
     """The V0+u term carries the phase convention: zeroing it moves Boston M2 > 10 deg off NOAA."""
-    _, _, fit, noaa = real
+    _, _, fit, noaa, _ = real
     if not OMIT_V0U:
         pytest.skip("negative control: run with OTC_FIT_OMIT_V0U=1")
     dg = abs((fit.phase_deg["M2"] - noaa["M2"][1] + 180) % 360 - 180)

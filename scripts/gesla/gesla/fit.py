@@ -22,7 +22,7 @@ from typing import Sequence
 
 import numpy as np
 
-from .qc import Series, despike_mask
+from .qc import Series, despike_mask, unassessed_count
 from .tcd_table import TcdTable
 
 HOURS_PER_YEAR = 8766.0
@@ -117,12 +117,16 @@ def lsq(table: TcdTable, names: Sequence[str], times_s: np.ndarray, heights_m: n
                      float(np.sqrt(np.mean(res ** 2))), len(t), dict(stats or {}))
 
 
-def fit_despiked(table: TcdTable, names: Sequence[str], series: Series) -> FitResult:
+def fit_despiked(table: TcdTable, names: Sequence[str], series: Series, *,
+                 keep_unassessed: bool = True) -> FitResult:
     """QC step 6 with the fit: fit, drop spikes (qc.despike_mask), refit on the kept samples.
-    t_mean stays that of the full series, so Z0 and the trend refer to the same epoch."""
+    t_mean stays that of the full series, so Z0 and the trend refer to the same epoch.
+    keep_unassessed=False is the PoC's despike (see qc.despike_mask), for the PoC comparison only."""
     t, h = series.times_s, series.heights_m
     t_mean = float(t.mean())
     first = lsq(table, names, t, h, t_mean_s=t_mean)
-    keep, mad = despike_mask(t, first.residual)
-    stats = dict(series.stats, spikes_dropped=int((~keep).sum()), spike_mad_m=round(mad, 6))
+    keep, mad = despike_mask(t, first.residual, keep_unassessed=keep_unassessed)
+    stats = dict(series.stats, spikes_dropped=int((~keep).sum()),
+                 spikes_unassessed=unassessed_count(t, first.residual),
+                 spike_mad_m=round(mad, 6) if math.isfinite(mad) else None)
     return lsq(table, names, t[keep], h[keep], t_mean_s=t_mean, stats=stats)
