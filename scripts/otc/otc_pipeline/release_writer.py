@@ -27,15 +27,17 @@ import json
 import math
 import os
 import re
+import secrets
 import sys
 from datetime import date
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError, validators
 
-__all__ = ["CSV_COLUMNS", "next_datestamp", "validate_release", "write_release"]
+__all__ = ["CSV_COLUMNS", "default_schema_path", "next_datestamp", "validate_release", "write_release"]
 
-DATESTAMP_RE = re.compile(r"^[0-9]{8}(\.[2-9]|\.[1-9][0-9]+)?$")
+# Use with fullmatch: in Python `$` also matches before a trailing "\n".
+DATESTAMP_RE = re.compile(r"[0-9]{8}(\.[2-9]|\.[1-9][0-9]+)?")
 # OTC_<8 digits>[.<counter>].<extension starting with a letter>
 STEM_RE = re.compile(r"^OTC_([0-9]{8})(?:\.([0-9]+))?\.[A-Za-z]")
 
@@ -112,7 +114,15 @@ _CHILD_KEYS = {
     "constant_set": {"constituents", "record_span", "datum"},
 }
 
-_PARQUET_TYPES = None  # filled lazily: column -> pyarrow type
+SCHEMA_NAME = "otc-0.2.schema.json"
+_MISSING = object()  # "key not present"; never equal to a value read from JSON
+
+
+def default_schema_path() -> Path:
+    """The schema copy: inside the package in a wheel (force-included), else scripts/otc/schema/."""
+    here = Path(__file__).resolve().parent
+    packaged = here / "schema" / SCHEMA_NAME
+    return packaged if packaged.is_file() else here.parent / "schema" / SCHEMA_NAME
 
 
 # --- datestamps -----------------------------------------------------------------
@@ -163,6 +173,23 @@ def _leaf_errors(error):
             yield from _leaf_errors(sub)
 
 
+def _ecma_pattern(patrn: str) -> str:
+    """JSON Schema patterns are ECMA-262: without the multiline flag `$` matches only at the end of
+    the string. In Python `$` also matches before a trailing "\n", so a final unescaped `$` becomes `\\Z`.
+    (Every pattern in schema 0.2 is anchored as ^...$.)"""
+    if patrn.endswith("$") and (len(patrn) - len(patrn[:-1].rstrip("\\")) - 1) % 2 == 0:
+        return patrn[:-1] + r"\Z"
+    return patrn
+
+
+def _pattern_keyword(validator, patrn, instance, schema):
+    if validator.is_type(instance, "string") and not re.search(_ecma_pattern(patrn), instance):
+        yield ValidationError(f"{instance!r} does not match {patrn!r}")
+
+
+_Validator = validators.extend(Draft202012Validator, {"pattern": _pattern_keyword})
+
+
 def _path(parts) -> str:
     return "/".join(str(p) for p in parts) or "(root)"
 
@@ -183,32 +210,45 @@ def _non_json_values(node, path, out):
         out.append(f"{_path(path)}: {type(node).__name__} is not a JSON value")
 
 
+def _list(value) -> list:
+    return value if isinstance(value, list) else []
+
+
+def _dicts(value) -> list[dict]:
+    return [x for x in _list(value) if isinstance(x, dict)]
+
+
 def _cross_reference_errors(release: dict) -> list[str]:
+    """Checks the schema cannot express. Schema-invalid parts are skipped, not trusted: an id is
+    only looked up when it is a string and a container is only walked when it has the right type
+    (the schema pass reports the rest)."""
     errors: list[str] = []
 
     def ids(items, key, what):
         seen = {}
-        for i, item in enumerate(items if isinstance(items, list) else []):
-            if isinstance(item, dict) and key in item:
-                if item[key] in seen:
-                    errors.append(f"duplicate {what} {item[key]!r}")
-                seen.setdefault(item[key], item)
+        for item in _dicts(items):
+            value = item.get(key)
+            if isinstance(value, str):
+                if value in seen:
+                    errors.append(f"duplicate {what} {value!r}")
+                seen.setdefault(value, item)
         return seen
 
     conventions = ids(release.get("conventions"), "convention_id", "convention_id")
     licences = ids(release.get("licences"), "licence_id", "licence_id")
     table: set[tuple[str, str]] = set()
-    for row in release.get("constituents") or []:
-        if isinstance(row, dict):
-            key = (row.get("constituent_table_version"), row.get("name"))
-            if key in table:
-                errors.append(f"duplicate constituent table row {key[1]!r} (version {key[0]!r})")
-            table.add(key)
+    for row in _dicts(release.get("constituents")):
+        key = (row.get("constituent_table_version"), row.get("name"))
+        if not all(isinstance(k, str) for k in key):
+            continue
+        if key in table:
+            errors.append(f"duplicate constituent table row {key[1]!r} (version {key[0]!r})")
+        table.add(key)
 
-    stations = [s for s in (release.get("stations") or []) if isinstance(s, dict)]
+    stations = _dicts(release.get("stations"))
     by_id = ids(stations, "station_id", "station_id")
     set_ids: set[str] = set()
-    alias_owner: dict[tuple[str, str], str] = {}
+    alias_owner: dict[tuple[str, str], object] = {}
 
     for si, st in enumerate(stations):
         sid = st.get("station_id")
@@ -216,44 +256,49 @@ def _cross_reference_errors(release: dict) -> list[str]:
         if st.get("status") != "active":
             continue
         own_sets = set()
-        for ki, cs in enumerate(st.get("constant_sets") or []):
-            if not isinstance(cs, dict):
-                continue
+        for ki, cs in enumerate(_dicts(st.get("constant_sets"))):
             sw = f"{where} constant_sets/{ki} ({cs.get('set_id')})"
-            if "set_id" in cs:
-                if cs["set_id"] in set_ids:
-                    errors.append(f"duplicate set_id {cs['set_id']!r}")
-                set_ids.add(cs["set_id"])
-                own_sets.add(cs["set_id"])
-            conv = conventions.get(cs.get("convention_id")) if "convention_id" in cs else None
-            if "convention_id" in cs and conv is None:
-                errors.append(f"{sw}: convention_id {cs['convention_id']!r} is not defined in conventions")
-            if "licence_id" in cs and cs["licence_id"] not in licences:
-                errors.append(f"{sw}: licence_id {cs['licence_id']!r} is not defined in licences")
-            version = conv.get("constituent_table_version") if isinstance(conv, dict) else None
+            set_id = cs.get("set_id")
+            if isinstance(set_id, str):
+                if set_id in set_ids:
+                    errors.append(f"duplicate set_id {set_id!r}")
+                set_ids.add(set_id)
+                own_sets.add(set_id)
+            conv_id = cs.get("convention_id")
+            conv = conventions.get(conv_id) if isinstance(conv_id, str) else None
+            if isinstance(conv_id, str) and conv is None:
+                errors.append(f"{sw}: convention_id {conv_id!r} is not defined in conventions")
+            lic_id = cs.get("licence_id")
+            if isinstance(lic_id, str) and lic_id not in licences:
+                errors.append(f"{sw}: licence_id {lic_id!r} is not defined in licences")
+            version = conv.get("constituent_table_version") if conv is not None else None
             names_seen = set()
             for field in ("constituents", "dropped_constituents"):
-                for c in cs.get(field) or []:
-                    if not isinstance(c, dict) or "name" not in c:
+                for c in _dicts(cs.get(field)):
+                    name = c.get("name")
+                    if not isinstance(name, str):
                         continue
                     if field == "constituents":
-                        if c["name"] in names_seen:
-                            errors.append(f"{sw}: duplicate constituent {c['name']!r}")
-                        names_seen.add(c["name"])
-                    if conv is not None and (version, c["name"]) not in table:
-                        errors.append(f"{sw}: {field} name {c['name']!r} is not in the constituents "
+                        if name in names_seen:
+                            errors.append(f"{sw}: duplicate constituent {name!r}")
+                        names_seen.add(name)
+                    if isinstance(version, str) and (version, name) not in table:
+                        errors.append(f"{sw}: {field} name {name!r} is not in the constituents "
                                       f"table for constituent_table_version {version!r}")
-        rec = st.get("recommended_set_id", "absent")
+        rec = st.get("recommended_set_id", _MISSING)
+        off = st.get("subordinate_offsets")
         if rec is None:
             if st.get("type") != "subordinate":
                 errors.append(f"{where}: recommended_set_id is null but the station is not subordinate")
-        elif rec != "absent" and rec not in own_sets:
+            elif not isinstance(off, dict):
+                errors.append(f"{where}: recommended_set_id is null but the station has no "
+                              "subordinate_offsets (it cannot be predicted)")
+        elif isinstance(rec, str) and rec not in own_sets:
             errors.append(f"{where}: recommended_set_id {rec!r} is not a set of this station")
-        off = st.get("subordinate_offsets")
         if isinstance(off, dict):
             ref = off.get("reference_station_id")
-            target = by_id.get(ref)
-            if ref == sid:
+            target = by_id.get(ref) if isinstance(ref, str) else None
+            if isinstance(ref, str) and ref == sid:
                 errors.append(f"{where}: subordinate_offsets reference_station_id {ref!r} is the station itself")
             elif not isinstance(target, dict) or target.get("status") != "active":
                 errors.append(f"{where}: subordinate_offsets reference_station_id {ref!r} "
@@ -261,12 +306,14 @@ def _cross_reference_errors(release: dict) -> list[str]:
             elif target.get("type") != "reference":
                 errors.append(f"{where}: subordinate_offsets reference_station_id {ref!r} "
                               "is not a reference station")
-            if "licence_id" in off and off["licence_id"] not in licences:
-                errors.append(f"{where}: subordinate_offsets licence_id {off['licence_id']!r} "
+            off_lic = off.get("licence_id")
+            if isinstance(off_lic, str) and off_lic not in licences:
+                errors.append(f"{where}: subordinate_offsets licence_id {off_lic!r} "
                               "is not defined in licences")
-        for vi, v in enumerate(st.get("validation") or []):
-            if isinstance(v, dict) and "set_id" in v and v["set_id"] not in own_sets:
-                errors.append(f"{where} validation/{vi}: set_id {v['set_id']!r} is not a set of this station")
+        for vi, v in enumerate(_dicts(st.get("validation"))):
+            v_set = v.get("set_id")
+            if isinstance(v_set, str) and v_set not in own_sets:
+                errors.append(f"{where} validation/{vi}: set_id {v_set!r} is not a set of this station")
         aliases = st.get("aliases")
         if isinstance(aliases, dict):
             for system, values in sorted(aliases.items()):
@@ -289,7 +336,7 @@ def validate_release(release: dict, schema_path: Path) -> list[str]:
     if errors:
         return errors
     schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
-    validator = Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
+    validator = _Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
     schema_errors = set()
     for top in validator.iter_errors(release):
         for e in _leaf_errors(top):
@@ -424,8 +471,8 @@ def write_release(release: dict, out_dir: Path, *, datestamp: str,
     Raises ValueError (invalid release or arguments) or FileExistsError (the stem is already used).
     """
     out_dir = Path(out_dir)
-    schema_path = Path(__file__).resolve().parent.parent / "schema" / "otc-0.2.schema.json"
-    if not DATESTAMP_RE.match(datestamp or ""):
+    schema_path = default_schema_path()
+    if not isinstance(datestamp, str) or not DATESTAMP_RE.fullmatch(datestamp):
         raise ValueError(f"datestamp {datestamp!r} is not YYYYMMDD or YYYYMMDD.N (N >= 2)")
     errors = validate_release(release, schema_path)
     if errors:
@@ -464,24 +511,40 @@ def write_release(release: dict, out_dir: Path, *, datestamp: str,
         raise FileExistsError(f"{out_dir}: files of release {stem} already exist; a dated file is never overwritten")
 
     written: list[Path] = []
+    temps: list[Path] = []
     try:
-        for name, data in payloads:
+        for i, (name, data) in enumerate(payloads):
             final = out_dir / name
-            tmp = out_dir / f".{name}.tmp-{os.getpid()}"
+            # A random suffix: a stale temp file of an earlier run cannot collide with this one.
+            tmp = out_dir / f".{name}.{secrets.token_hex(8)}.tmp"
+            temps.append(tmp)
             with open(tmp, "xb") as fh:
                 fh.write(data)
                 fh.flush()
                 os.fsync(fh.fileno())
-            try:
-                os.link(tmp, final)  # fails if final exists: never replaces a file
-            finally:
-                tmp.unlink()
+            if i == len(payloads) - 1:
+                _fsync_dir(out_dir)  # every other file is durable before the .sha256 entry appears
+            os.link(tmp, final)  # fails if final exists: never replaces a file
             written.append(final)
+            tmp.unlink()
+            temps.remove(tmp)
+        _fsync_dir(out_dir)
     except BaseException:
-        for p in written:
-            p.unlink(missing_ok=True)
+        for p in written + temps:
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass  # keep the original error; try to remove the other files
         raise
     return written
+
+
+def _fsync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def main(argv: list[str]) -> int:
@@ -489,8 +552,12 @@ def main(argv: list[str]) -> int:
     if len(argv) != 2 or argv[0] != "validate":
         print(main.__doc__, file=sys.stderr)
         return 2
-    schema_path = Path(__file__).resolve().parent.parent / "schema" / "otc-0.2.schema.json"
-    errors = validate_release(json.loads(Path(argv[1]).read_text(encoding="utf-8")), schema_path)
+    try:
+        release = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"{argv[1]}: cannot read a JSON document: {e}", file=sys.stderr)
+        return 1
+    errors = validate_release(release, default_schema_path())
     for e in errors:
         print(e)
     print(f"{argv[1]}: {'valid' if not errors else f'{len(errors)} errors'}")

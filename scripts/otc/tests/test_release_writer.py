@@ -62,7 +62,8 @@ def test_missing_convention_id_is_rejected(release):
     ("recommended_set_id not a set of the station",
      lambda d: d["stations"][0].__setitem__("recommended_set_id", "OTC-X/none"), "recommended_set_id"),
     ("null recommended_set_id on a reference station",
-     lambda d: d["stations"][0].__setitem__("recommended_set_id", None), "recommended_set_id"),
+     lambda d: d["stations"][0].__setitem__("recommended_set_id", None),
+     "is null but the station is not subordinate"),
     ("subordinate offsets to an unknown station",
      lambda d: d["stations"][0].__setitem__(
          "subordinate_offsets", {"reference_station_id": "OTC-NOPE", "height_adjusted_type": "R"}),
@@ -248,7 +249,7 @@ def test_jsonl_and_meta(release, tmp_path):
 
 def read_csv(path):
     raw = path.read_bytes()
-    assert b"\r" not in raw.replace(b'"\r', b""), "CSV line ends must be LF"
+    assert b"\r" not in raw, "CSV line ends must be LF (and no field here holds a CR)"
     return list(csv.DictReader(io.StringIO(raw.decode("utf-8"), newline="")))
 
 
@@ -363,18 +364,13 @@ def test_sha256_file(release, tmp_path):
         assert hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() == digest
 
 
-def test_sha256_written_last(release, tmp_path):
-    write(release, tmp_path)
-    files = sorted(tmp_path.iterdir(), key=lambda p: p.stat().st_mtime_ns)
-    assert files[-1].name == f"OTC_{D}.sha256"
-
-
 def test_byte_identical_for_identical_input(release, tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir(), b.mkdir()
     pa = write(copy.deepcopy(release), a, app_export=[{"x": 1.5}], parquet=True, jsonl_gz=True)
     pb = write(copy.deepcopy(release), b, app_export=[{"x": 1.5}], parquet=True, jsonl_gz=True)
-    for x, y in zip(pa, pb):
+    assert [p.name for p in pa] == [p.name for p in pb]
+    for x, y in zip(pa, pb, strict=True):
         assert x.read_bytes() == y.read_bytes(), x.name
 
 
@@ -384,7 +380,8 @@ def test_key_order_does_not_change_bytes(release, tmp_path):
     shuffled = json.loads(json.dumps(release), object_pairs_hook=lambda kv: dict(reversed(kv)))
     pa = write(release, a)
     pb = write(shuffled, b)
-    for x, y in zip(pa, pb):
+    assert [p.name for p in pa] == [p.name for p in pb]
+    for x, y in zip(pa, pb, strict=True):
         assert x.read_bytes() == y.read_bytes(), x.name
 
 
@@ -462,3 +459,180 @@ def test_failed_write_removes_its_files(release, tmp_path, monkeypatch):
     with pytest.raises(OSError, match="disk full"):
         write(release, tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+# --- review fixes (F1 CR round 1) ---------------------------------------------
+
+def _set_path(doc, path, value):
+    node = doc
+    for key in path[:-1]:
+        node = node[key]
+    node[path[-1]] = value
+
+
+# Schema-invalid values whose type the cross-reference checks must not trust.
+_WRONG_TYPES = [
+    (("stations",), 5),
+    (("conventions",), 5),
+    (("licences",), 5),
+    (("constituents",), 5),
+    (("conventions", 0, "convention_id"), [1]),
+    (("conventions", 0, "constituent_table_version"), ["x"]),
+    (("licences", 0, "licence_id"), ["x"]),
+    (("constituents", 0, "name"), ["x"]),
+    (("constituents", 0, "constituent_table_version"), {"a": 1}),
+    (("stations", 0, "station_id"), ["x"]),
+    (("stations", 0, "recommended_set_id"), {"a": 1}),
+    (("stations", 0, "constant_sets"), 3),
+    (("stations", 0, "validation"), 5),
+    (("stations", 0, "validation", 0, "set_id"), ["x"]),
+    (("stations", 0, "aliases"), ["x"]),
+    (("stations", 0, "subordinate_offsets"), {"reference_station_id": {"a": 1}, "height_adjusted_type": "R"}),
+    (("stations", 0, "subordinate_offsets"), {"reference_station_id": "OTC-EXAMPLE-0001",
+                                              "height_adjusted_type": "R", "licence_id": ["x"]}),
+    (("stations", 0, "constant_sets", 0, "set_id"), ["x"]),
+    (("stations", 0, "constant_sets", 0, "convention_id"), ["x"]),
+    (("stations", 0, "constant_sets", 0, "licence_id"), {"a": 1}),
+    (("stations", 0, "constant_sets", 0, "constituents"), 5),
+    (("stations", 0, "constant_sets", 0, "dropped_constituents"), 5),
+    (("stations", 0, "constant_sets", 0, "constituents", 0, "name"), ["x"]),
+]
+
+
+@pytest.mark.parametrize("path, value", _WRONG_TYPES, ids=lambda x: str(x))
+def test_validate_returns_errors_for_wrong_types_and_never_raises(release, path, value):
+    _set_path(release, path, value)
+    errors = validate_release(release, SCHEMA)
+    assert errors and all(isinstance(e, str) for e in errors), errors
+
+
+@pytest.mark.parametrize("path, value", [
+    (("release", "datestamp"), D + "\n"),
+    (("stations", 0, "country"), "NOR\n"),
+    (("conventions", 0, "tables_sha256"), "0" * 64 + "\n"),
+])
+def test_trailing_newline_does_not_pass_a_pattern(release, path, value):
+    _set_path(release, path, value)
+    errors = validate_release(release, SCHEMA)
+    assert any("does not match" in e for e in errors), errors
+
+
+def test_write_refuses_datestamp_with_trailing_newline(release, tmp_path):
+    release["release"]["datestamp"] = D + "\n"
+    with pytest.raises(ValueError):
+        write(release, tmp_path, datestamp=D + "\n")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_recommended_set_id_absent_string_is_checked(release):
+    release["stations"][0]["recommended_set_id"] = "absent"
+    errors = validate_release(release, SCHEMA)
+    assert any("recommended_set_id 'absent' is not a set of this station" in e for e in errors), errors
+
+
+def test_subordinate_with_null_recommended_set_needs_offsets(release):
+    sub = subordinate({"reference_station_id": "OTC-EXAMPLE-0001", "height_adjusted_type": "R"})
+    del sub["subordinate_offsets"]
+    release["stations"].append(sub)
+    errors = validate_release(release, SCHEMA)
+    assert any("recommended_set_id is null" in e and "subordinate_offsets" in e for e in errors), errors
+
+
+def test_fsync_failure_leaves_no_files(release, tmp_path, monkeypatch):
+    import otc_pipeline.release_writer as rw
+    real_fsync = rw.os.fsync
+    calls = []
+
+    def fsync(fd):
+        calls.append(fd)
+        if len(calls) == 3:
+            raise OSError("EIO")
+        real_fsync(fd)
+
+    monkeypatch.setattr(rw.os, "fsync", fsync)
+    with pytest.raises(OSError, match="EIO"):
+        write(release, tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_temp_unlink_failure_after_link_rolls_back(release, tmp_path, monkeypatch):
+    import otc_pipeline.release_writer as rw
+    real_unlink = Path.unlink
+    state = {"failed": False}
+
+    def unlink(self, missing_ok=False):
+        if ".tmp" in self.name and self.name.startswith(f".OTC_{D}.csv") and not state["failed"]:
+            state["failed"] = True
+            raise OSError("EACCES")
+        return real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(rw.Path, "unlink", unlink)
+    with pytest.raises(OSError, match="EACCES"):
+        write(release, tmp_path)
+    assert state["failed"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_stale_temp_file_with_same_pid_does_not_block_a_write(release, tmp_path):
+    import os
+    for name in (f"OTC_{D}.json", f"OTC_{D}.csv", f"OTC_{D}.sha256"):
+        (tmp_path / f".{name}.tmp-{os.getpid()}").write_bytes(b"stale")
+    paths = write(release, tmp_path)
+    assert [p.name for p in paths][-1] == f"OTC_{D}.sha256"
+
+
+def test_link_order_sha256_last_and_directory_fsynced(release, tmp_path, monkeypatch):
+    import os
+    import stat
+    import otc_pipeline.release_writer as rw
+    events = []
+    real_link, real_fsync = rw.os.link, rw.os.fsync
+
+    def link(src, dst):
+        events.append(("link", Path(dst).name))
+        real_link(src, dst)
+
+    def fsync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            events.append(("fsync-dir", None))
+        real_fsync(fd)
+
+    monkeypatch.setattr(rw.os, "link", link)
+    monkeypatch.setattr(rw.os, "fsync", fsync)
+    paths = write(release, tmp_path, app_export=[{"a": 1}], parquet=True, jsonl_gz=True)
+    links = [n for kind, n in events if kind == "link"]
+    assert links == [p.name for p in paths]
+    assert links[-1] == f"OTC_{D}.sha256" and len(links) == 9
+    sha_at = events.index(("link", f"OTC_{D}.sha256"))
+    # every other file is durable in the directory before the .sha256 entry appears, and the
+    # .sha256 entry itself is made durable before write_release returns
+    assert ("fsync-dir", None) in events[:sha_at]
+    assert events[sha_at - 1] == ("fsync-dir", None)
+    assert events[-1] == ("fsync-dir", None)
+
+
+def test_cli_validate_bad_json_and_missing_file(tmp_path, capsys):
+    from otc_pipeline.release_writer import main
+    bad = tmp_path / "bad.json"
+    bad.write_text("{bad")
+    assert main(["validate", str(bad)]) != 0
+    assert main(["validate", str(tmp_path / "missing.json")]) != 0
+    assert main(["validate", str(tmp_path)]) != 0
+    err = capsys.readouterr().err
+    assert "bad.json" in err and "missing.json" in err
+
+
+def test_cli_validate_reports_wrong_types(tmp_path, capsys):
+    from otc_pipeline.release_writer import main
+    doc = json.loads(EXAMPLE.read_text())
+    doc["stations"] = 5
+    p = tmp_path / "doc.json"
+    p.write_text(json.dumps(doc))
+    assert main(["validate", str(p)]) == 1
+    assert "errors" in capsys.readouterr().out
+
+
+def test_cli_validate_valid_example(capsys):
+    from otc_pipeline.release_writer import main
+    assert main(["validate", str(EXAMPLE)]) == 0
+    assert "valid" in capsys.readouterr().out

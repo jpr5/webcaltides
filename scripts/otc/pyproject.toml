@@ -23,5 +23,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["otc_pipeline"]
 
+# The schema copy lives in scripts/otc/schema/ (sync_schema.sh); a wheel carries it inside the
+# package, where default_schema_path() looks first.
+[tool.hatch.build.targets.wheel.force-include]
+"schema/otc-0.2.schema.json" = "otc_pipeline/schema/otc-0.2.schema.json"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
