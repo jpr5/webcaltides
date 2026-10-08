@@ -447,6 +447,50 @@ RSpec.describe Clients::Harmonics do
                 expect(peaks.first['height']).to be_within(0.05).of(7.381)
             end
 
+            # XTide ids come from the coordinates.  Sea Bright (tide) and Seabright
+            # Bridge (current, no depth) are at the same point, so both are
+            # Xc7078fe, and the tide feed was predicted from the current's data
+            # (velocities in knots shown as feet).  4 other pairs are the same.
+            it 'predicts a tide from its own data when a current has the same id (Sea Bright, Xc7078fe, NOAA 8531804)' do
+                expect_noaa_tides(tide_feed_peaks('Xc7078fe', Time.utc(2026, 11, 1), Time.utc(2026, 11, 3)), [
+                    [Time.utc(2026, 11, 1, 0, 26), 'Low', 0.295],
+                    [Time.utc(2026, 11, 1, 6, 41), 'High', 3.086],
+                    [Time.utc(2026, 11, 1, 12, 27), 'Low', 0.526],
+                    [Time.utc(2026, 11, 1, 18, 58), 'High', 3.561],
+                    [Time.utc(2026, 11, 2, 1, 34), 'Low', 0.338],
+                    [Time.utc(2026, 11, 2, 7, 43), 'High', 3.135],
+                    [Time.utc(2026, 11, 2, 13, 44), 'Low', 0.595],
+                    [Time.utc(2026, 11, 2, 20, 0), 'High', 3.45]
+                ])
+
+                expect(engine.station_data('Xc7078fe', 'tide')['name']).to start_with('Sea Bright')
+                expect(engine.station_data('Xc7078fe', 'current')['name']).to start_with('Seabright Bridge')
+                expect(engine.station_cache_ids).to include('Xc7078fe')
+                expect(engine.station_cache_ids).not_to include(a_string_including('@'))
+            end
+
+            it 'still predicts the current with the same id as a tide (Seabright Bridge, Xc7078fe)' do
+                from, to = Time.utc(2026, 11, 1), Time.utc(2026, 11, 3)
+                station = client.current_stations.find { |s| s.bid == 'Xc7078fe' }
+                allow(client).to receive(:beginning_of_window).and_return(from)
+                allow(client).to receive(:end_of_window).and_return(to)
+
+                events = client.current_data_for(station, from)
+                expect(events.map(&:type).uniq).to contain_exactly('flood', 'ebb', 'slack')
+                expect(events.map(&:velocity_major).max).to be_between(0.5, 3.0)
+            end
+
+            it 'keeps a tide and a current with the same id apart in a warm station cache' do
+                client.engine.stations # cold: parses the TCD and writes the station cache
+                warm = described_class.new(logger).engine
+                expect(warm).not_to receive(:parse_xtide_file)
+
+                %w[Xc7078fe X00ccbd8 Xbfea58e X5ba9a0a X5389118].each do |id|
+                    expect(warm.station_data(id, 'tide')['type']).to eq('tide'), id
+                    expect(warm.station_data(id, 'current')['type']).to eq('current'), id
+                end
+            end
+
             it 'stores the TCD datum offset (mean flow) of a current and predicts around it' do
                 # Glacier Bay entrance has a real mean ebb flow of 1.244 knots
                 data = engine.station_data('X0114c7a_17')
@@ -533,7 +577,7 @@ RSpec.describe Clients::Harmonics do
             before do
                 allow(client).to receive(:beginning_of_window).and_return(Time.utc(2026, 10, 7))
                 allow(client).to receive(:end_of_window).and_return(Time.utc(2026, 10, 8))
-                allow(client.engine).to receive(:station_data).with('SUB')
+                allow(client.engine).to receive(:station_data).with('SUB', 'current')
                     .and_return({ 'ref_key' => 'REF', 'flood_begins' => nil, 'ebb_begins' => '+00:30:00' })
                 allow(client.engine).to receive(:reference_predictions).and_return([])
                 allow(client.engine).to receive(:subordinate_peaks).and_return(peaks)

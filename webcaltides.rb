@@ -505,8 +505,7 @@ module WebCalTides
         # Add all keys from the XTide engine cache to support aliased/merged IDs
         xtide = tide_clients(:xtide)
         if xtide.respond_to?(:engine)
-            xtide.engine.stations # Ensure stations are loaded
-            ids += xtide.engine.stations_cache.keys
+            ids += xtide.engine.station_cache_ids
         end
 
         ids.uniq.compact
@@ -875,8 +874,7 @@ module WebCalTides
         # Fallback to looking in the XTide engine cache for aliased/merged IDs
         xtide = tide_clients(:xtide)
         if xtide.respond_to?(:engine)
-            xtide.engine.stations # Ensure stations are loaded
-            if data = xtide.engine.stations_cache[id]
+            if data = xtide.engine.station_data(id, 'tide').presence
                 return Models::Station.from_hash({
                     'name' => data['name'],
                     'id' => id,
@@ -1227,8 +1225,7 @@ module WebCalTides
         # Fallback to XTide engine
         xtide = current_clients(:xtide)
         if xtide.respond_to?(:engine)
-            xtide.engine.stations # Ensure loaded
-            if data = xtide.engine.stations_cache[id]
+            if data = xtide.engine.station_data(id, 'current').presence
                 return Models::Station.from_hash({
                     'name' => data['name'],
                     'id' => id,

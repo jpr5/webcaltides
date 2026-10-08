@@ -34,9 +34,10 @@ module Clients
             start_time = beginning_of_window(around)
             end_time = end_of_window(around)
 
-            # Use bid if available (e.g. for currents with different depths), fallback to id
+            # Use bid if available (e.g. for currents with different depths), fallback to id.
+            # A tide can have the same id (see Engine#cache_entry), so look among currents only.
             lookup_id = station.bid || station.id
-            station_data = @engine.station_data(lookup_id)
+            station_data = @engine.station_data(lookup_id, 'current')
 
             if station_data['ref_key']
                 # Subordinate station: one reference series gives both its peaks
@@ -47,7 +48,7 @@ module Clients
 
                 slacks = subordinate_slack_waters(lookup_id, station_data, ref_predictions, peaks, start_time, end_time)
             else
-                predictions = @engine.generate_predictions(lookup_id, start_time, end_time)
+                predictions = @engine.generate_predictions(lookup_id, start_time, end_time, type: 'current')
                 return [] if predictions.empty?
 
                 # Peaks are the maxima and minima of the signed velocity, and
@@ -167,8 +168,9 @@ module Clients
             # Use bid if available (e.g. for currents with different depths), fallback to id
             lookup_id = station.bid || station.id
 
-            # Use optimized coarse-to-fine peak generation (93% fewer prediction points)
-            peaks = @engine.generate_peaks_optimized(lookup_id, start_time, end_time)
+            # Use optimized coarse-to-fine peak generation (93% fewer prediction points).  A
+            # current can have the same id (see Engine#cache_entry), so look among tides only.
+            peaks = @engine.generate_peaks_optimized(lookup_id, start_time, end_time, type: 'tide')
 
             peaks.map do |p|
                 Models::TideData.new(

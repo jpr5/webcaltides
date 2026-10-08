@@ -113,7 +113,9 @@ module Harmonics
         # name's depth) and no depth when the name has none (it held the datum
         # offset; the same for TICON currents, though the shipped TICON data has
         # none), subordinate currents store flood_begins/ebb_begins, and
-        # subordinate tides store their level adds (h_level_add/l_level_add).
+        # subordinate tides store their level adds (h_level_add/l_level_add),
+        # and the second parsed of a tide and a current with the same id is
+        # stored under "<id>@<type>" (see cache_entry).
         CACHE_VERSION = 4
 
         # Engine version - increment when prediction output changes for the same
@@ -126,7 +128,8 @@ module Harmonics
         # depth was added to the velocity of every current with one),
         # subordinate stations no longer lose events within their time offset
         # of the window edges, and subordinate tide heights include the TCD
-        # level add (206 stations).
+        # level add (206 stations), and the 5 tides with a current's id are
+        # predicted from their own data (v3 used the current's).
         ENGINE_VERSION = 4
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
@@ -208,7 +211,7 @@ module Harmonics
             # station at a time, so a non-empty cache can still be incomplete.
             stations
 
-            station_data = @stations_cache[station_id] || {}
+            station_data = cache_entry(station_id, options[:type]) || {}
 
             step_seconds = options.fetch(:step_seconds, 60).to_f
 
@@ -292,10 +295,33 @@ module Harmonics
         end
 
         # Station data from the station cache ({} when unknown).  Waits for
-        # the station load, as generate_predictions does.
-        def station_data(station_id)
+        # the station load, as generate_predictions does.  With a type ('tide'
+        # or 'current'), only a station of that type is found (see cache_entry).
+        def station_data(station_id, type = nil)
             stations
-            @stations_cache[station_id] || {}
+            cache_entry(station_id, type) || {}
+        end
+
+        # XTide station ids come from the coordinates, so a tide and a current
+        # at the same point (5 pairs in the 2025-12-28 TCD, e.g. Sea Bright,
+        # Xc7078fe) have the same id.  Subscribers' URLs hold those ids, so they
+        # stay.  The second of the pair to be parsed is stored under
+        # "<id>@<type>" (typed_key), and a lookup with a type finds the station
+        # of that type only.  A lookup without a type finds the "<id>" entry.
+        TYPED_KEY_SEPARATOR = '@'
+
+        def cache_entry(id, type = nil)
+            data = @stations_cache[cache_key_for(id, type)]
+            return nil if data && type && data['type'] && data['type'] != type
+
+            data
+        end
+
+        # Station cache keys that are station ids (merged/aliased ones too),
+        # without the typed keys.
+        def station_cache_ids
+            stations
+            @stations_cache.keys.reject { |k| k.include?(TYPED_KEY_SEPARATOR) }
         end
 
         # The reference station's predictions for a subordinate station, over
@@ -304,7 +330,7 @@ module Harmonics
         # is predicted.
         def reference_predictions(sub_data, start_time, end_time, options = {})
             margin = subordinate_margin(sub_data)
-            generate_predictions(sub_data['ref_key'], start_time - margin, end_time + margin, options)
+            generate_predictions(sub_data['ref_key'], start_time - margin, end_time + margin, ref_options(sub_data, options))
         end
 
         # A subordinate station's High/Low peaks in [start_time, end_time]: the
@@ -312,6 +338,13 @@ module Harmonics
         # height multipliers applied.
         def subordinate_peaks(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
             apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: step_seconds)
+        end
+
+        # A subordinate's reference station has the subordinate's type (every
+        # subordinate in the 2025-12-28 TCD), so the reference is looked up
+        # among stations of that type.
+        def ref_options(sub_data, options)
+            sub_data['type'] ? options.merge(type: sub_data['type']) : options
         end
 
         # How far outside a window the reference station must be predicted for a
@@ -409,7 +442,7 @@ module Harmonics
             # station at a time, so a non-empty cache can still be incomplete.
             stations
 
-            station_data = @stations_cache[station_id] || {}
+            station_data = cache_entry(station_id, options[:type]) || {}
 
             # Handle subordinate stations - use cached reference peaks
             if station_data['ref_key']
@@ -455,15 +488,17 @@ module Harmonics
             ref_start = start_time.beginning_of_month - 1.month
             ref_end = end_time.end_of_month + 1.month
 
-            # Cache key uses normalized month boundaries (YYYYMM format)
-            cache_key = "#{ref_key}:#{ref_start.strftime('%Y%m')}:#{ref_end.strftime('%Y%m')}"
+            # Cache key uses normalized month boundaries (YYYYMM format), and the
+            # type, as the reference's id can be another type's id too
+            ref_opts = ref_options(station_data, options)
+            cache_key = "#{ref_key}:#{ref_opts[:type]}:#{ref_start.strftime('%Y%m')}:#{ref_end.strftime('%Y%m')}"
 
             # Prune stale cache entries (older than current window)
             prune_reference_peaks_cache(ref_start)
 
             ref_peaks = @reference_peaks_cache[cache_key] ||= begin
                 @logger.debug "generating reference peaks for #{ref_key} (caching for subordinates)"
-                generate_peaks_optimized(ref_key, ref_start, ref_end, options)
+                generate_peaks_optimized(ref_key, ref_start, ref_end, ref_opts)
             end
 
             # Apply subordinate offsets to the cached reference peaks
@@ -538,6 +573,32 @@ module Harmonics
             sub_peaks.select { |p| p['time'] >= start_time && p['time'] <= end_time }
         end
 
+        def typed_key(id, type)
+            "#{id}#{TYPED_KEY_SEPARATOR}#{type}"
+        end
+
+        # The @stations_cache key of id's entry among stations of type.
+        def cache_key_for(id, type = nil)
+            return id unless type
+
+            typed = typed_key(id, type)
+            @stations_cache.key?(typed) ? typed : id
+        end
+
+        # The @stations_cache key of a station metadata hash.
+        def station_cache_key(station)
+            cache_key_for(station['bid'] || station['id'], station['type'])
+        end
+
+        # Store a parsed station's data under key, or under its typed key when
+        # key already holds a station of the other type (see cache_entry).  A
+        # station of the same type replaces the entry, as before.
+        def store_station_data(key, data)
+            existing = @stations_cache[key]
+            key = typed_key(key, data['type']) if existing && existing['type'] != data['type']
+            @stations_cache[key] = data
+        end
+
         def deduplicate_stations(stations)
             # Group by normalized name (lowercase, alphanumeric only)
             groups = stations.group_by { |s| s['name'].downcase.gsub(/[^a-z0-9]/, '') }
@@ -557,9 +618,7 @@ module Harmonics
 
                     # Separate those with identical constituents from those with different ones
                     identical_matches = near_matches.select do |other|
-                        key1 = primary['bid'] || primary['id']
-                        key2 = other['bid'] || other['id']
-                        constituents_equal?(key1, key2)
+                        constituents_equal?(station_cache_key(primary), station_cache_key(other))
                     end
                     different_matches = near_matches - identical_matches
 
@@ -581,11 +640,11 @@ module Harmonics
 
                     # Ensure all IDs from the cluster point to the same cache entry
                     # This preserves backward compatibility for merged stations.
-                    best_key = best['bid'] || best['id']
+                    best_key = station_cache_key(best)
                     best_data = @stations_cache[best_key]
 
                     cluster.each do |s|
-                        key = s['bid'] || s['id']
+                        key = station_cache_key(s)
                         next if key == best_key
                         @stations_cache[key] = best_data
                     end
@@ -671,8 +730,7 @@ module Harmonics
                 # fields are an informational copy of a few stations_cache fields;
                 # stations_cache above holds them all (e.g. flood_begins/ebb_begins).
                 'stations' => stations.map do |s|
-                    cache_key = s['bid'] || s['id']
-                    cache_entry = @stations_cache[cache_key]
+                    cache_entry = @stations_cache[station_cache_key(s)]
                     {
                         'metadata' => s,
                         'name' => cache_entry['name'],
@@ -864,7 +922,7 @@ module Harmonics
                     }
                     stations << station
 
-                    @stations_cache[cache_key] = {
+                    store_station_data(cache_key, {
                         'name' => tcd_station.name,
                         'constituents' => constituents,
                         'datum_offset' => datum_offset,
@@ -886,7 +944,7 @@ module Harmonics
                         'ebb_begins' => ebb_begins,
                         'latitude' => tcd_station.latitude,
                         'longitude' => tcd_station.longitude
-                    }
+                    })
                 end
             end
 
@@ -1046,7 +1104,7 @@ module Harmonics
                     }
 
                     stations << station
-                    @stations_cache[cache_key] = {
+                    store_station_data(cache_key, {
                         'name' => d['name'],
                         'constituents' => d['constituents'],
                         'datum_offset' => d['datum_offset'],
@@ -1055,7 +1113,7 @@ module Harmonics
                         'units' => d['units'],
                         'region' => d['region'],
                         'type' => type
-                    }
+                    })
                 end
 
                 @logger.info "loaded #{stations.length} TICON stations from JSON"
