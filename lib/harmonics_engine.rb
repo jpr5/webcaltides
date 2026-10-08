@@ -110,7 +110,8 @@ module Harmonics
         # v3: bumped with ENGINE_VERSION 3 to force a fresh parse; the station
         # cache format is unchanged from v2 (it holds no nodal factors).
         # v4: XTide current stations store the TCD datum offset (it held the
-        # name's depth), and subordinate currents store flood_begins/ebb_begins.
+        # name's depth) and no depth when the name has none (it held the datum
+        # offset), and subordinate currents store flood_begins/ebb_begins.
         CACHE_VERSION = 4
 
         # Engine version - increment when prediction output changes for the same
@@ -768,12 +769,14 @@ module Harmonics
                     # and adding it to the velocity made every current positive.
                     datum_offset = tcd_station.datum_offset || 0.0
 
-                    # Handle depth and BID for currents
+                    # Handle depth and BID for currents.  A current's depth comes
+                    # only from its name; without one it has no depth (nil).
                     depth = datum_offset
                     station_bid = nil
                     cache_key = base_id
 
                     if station_type == 'current'
+                        depth = nil
                         depth_suffix = nil
                         if tcd_station.name =~ /\(depth (\d+)\s*(ft|m)\)/i
                             depth_suffix = $1
@@ -992,8 +995,9 @@ module Harmonics
 
                     type = d['units'].downcase == 'knots' ? 'current' : 'tide'
 
-                    # Extract depth from name if available
-                    depth = d['datum_offset']
+                    # Extract depth from name if available.  A current without
+                    # one has no depth (nil), as for XTide currents.
+                    depth = type == 'current' ? nil : d['datum_offset']
                     depth_suffix = nil
                     if d['name'] =~ /\(depth (\d+)\s*(ft|m)\)/i
                         depth = $1.to_f

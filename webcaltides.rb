@@ -1237,9 +1237,10 @@ module WebCalTides
 
         data.each do |current|
             date  = current.time.strftime("%Y-%m-%d")
+            depth = current.depth ? " #{current.depth}ft" : ""
             title = case current.type
-                    when "ebb"   then "Ebb #{current.velocity_major.to_f.abs}kts #{current.mean_ebb_dir}T #{current.depth}ft"
-                    when "flood" then "Flood #{current.velocity_major}kts #{current.mean_flood_dir}T #{current.depth}ft"
+                    when "ebb"   then "Ebb #{current.velocity_major.to_f.abs}kts #{current.mean_ebb_dir}T#{depth}"
+                    when "flood" then "Flood #{current.velocity_major}kts #{current.mean_flood_dir}T#{depth}"
                     when "slack" then "Slack"
                     end
 

@@ -370,6 +370,12 @@ RSpec.describe Clients::Harmonics do
                 expect(mean).to be_within(0.05).of(-1.244)
             end
 
+            it 'gives a current its name depth, and no depth when the name has none' do
+                stations = client.current_stations.index_by(&:bid)
+                expect(stations['X5016721_13'].depth).to eq(13.0)  # "(depth 13 ft)"
+                expect(stations['X2d7f27f'].depth).to be_nil       # Wareham River, no depth in name
+            end
+
             it 'gives the same subordinate events from a warm station cache as from a cold one' do
                 # Cold: parses the TCD and writes the station cache.  Warm: a new
                 # engine on the same cache dir loads the station cache instead.

@@ -172,7 +172,9 @@ class Server < ::Sinatra::Base
         query = (params['q'] || '').strip.downcase
         return { results: [] }.to_json if query.length < 2
 
-        # Search both tide and current stations
+        # Search both tide and current stations.  The type comes from the list a station is in
+        # (a station's depth does not say: an XTide current can have no depth).
+        current_ids = WebCalTides.current_stations.map(&:object_id).to_set
         all_stations = WebCalTides.tide_stations + WebCalTides.current_stations
 
         # Filter and dedupe by name.  Alternate names (e.g. "Tromso" for Tromsø) come after name and
@@ -183,7 +185,7 @@ class Server < ::Sinatra::Base
         matches = (by_name + by_alternate)
             .uniq { |s| [s.name, s.region] }
             .first(10)
-            .map { |s| { name: s.name, region: s.region, type: s.depth ? 'current' : 'tide' } }
+            .map { |s| { name: s.name, region: s.region, type: current_ids.include?(s.object_id) ? 'current' : 'tide' } }
 
         content_type :json
         { results: matches }.to_json
