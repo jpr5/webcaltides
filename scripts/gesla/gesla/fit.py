@@ -28,6 +28,9 @@ from .tcd_table import TcdTable
 HOURS_PER_YEAR = 8766.0
 AMP_DECIMALS = 5     # metres: 0.01 mm
 PHASE_DECIMALS = 3   # degrees: 0.001
+# Largest accepted condition number of the design. Records the selection (G03c) admits are far
+# below it (19-year Boston, 45 constituents: about 8); 6 hourly samples for M2 + K1: about 3e7.
+MAX_CONDITION = 1e6
 
 
 def year_and_hours(times_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -59,7 +62,7 @@ def design(table: TcdTable, names: Sequence[str], times_s: np.ndarray) -> np.nda
     return cols
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class FitResult:
     names: tuple[str, ...]          # TCD names, in input order
     z0: float                       # m, at t_mean
@@ -76,6 +79,7 @@ class FitResult:
         """Rounded output: amplitude to 0.01 mm, phase to 0.001 deg."""
         return {
             "z0_m": round(self.z0, AMP_DECIMALS),
+            "t_mean_s": round(self.t_mean_s, 3),
             "trend_m_per_yr": round(self.trend_m_per_yr, 7),
             "rms_m": round(self.rms_m, AMP_DECIMALS),
             "n": self.n,
@@ -88,25 +92,39 @@ class FitResult:
         }
 
     def to_json(self) -> str:
-        """Stable JSON: sorted keys, fixed separators, newline at the end."""
-        return json.dumps(self.to_dict(), sort_keys=True, indent=1, separators=(",", ": ")) + "\n"
+        """Stable JSON: sorted keys, fixed separators, newline at the end. NaN or infinity raises."""
+        return json.dumps(self.to_dict(), sort_keys=True, indent=1, separators=(",", ": "), allow_nan=False) + "\n"
 
 
 def lsq(table: TcdTable, names: Sequence[str], times_s: np.ndarray, heights_m: np.ndarray, *,
-        t_mean_s: float | None = None, stats: dict | None = None) -> FitResult:
-    """One least-squares fit of Z0, trend and the named constituents."""
+        t_mean_s: float | None = None, stats: dict | None = None, record_id: str = "?") -> FitResult:
+    """One least-squares fit of Z0, trend and the named constituents.
+    Every error names record_id. Non-finite heights and a rank-deficient or ill-conditioned
+    design (condition number above MAX_CONDITION) raise."""
     names = tuple(table.name(n) for n in names)
     if len(set(names)) != len(names):
-        raise ValueError(f"duplicate constituents in {names}")
+        raise ValueError(f"{record_id}: duplicate constituents in {names}")
     t = np.asarray(times_s, dtype=np.int64)
     h = np.asarray(heights_m, dtype=np.float64)
-    if len(t) < 2 + 2 * len(names):
-        raise ValueError(f"{len(t)} samples for {2 + 2 * len(names)} unknowns")
+    if t.ndim != 1 or h.ndim != 1 or len(h) != len(t):
+        raise ValueError(f"{record_id}: {len(h)} heights for {len(t)} times")
+    if not np.all(np.isfinite(h)):
+        raise ValueError(f"{record_id}: {int((~np.isfinite(h)).sum())} non-finite heights (QC drops them first)")
+    unknowns = 2 + 2 * len(names)
+    if len(t) < unknowns:
+        raise ValueError(f"{record_id}: {len(t)} samples for {unknowns} unknowns")
     if t_mean_s is None:
         t_mean_s = float(t.mean())
     tt = (t - t_mean_s) / 3600.0 / HOURS_PER_YEAR
-    m = np.column_stack([np.ones(len(t)), tt, design(table, names, t)])
-    coef, *_ = np.linalg.lstsq(m, h, rcond=None)
+    try:
+        m = np.column_stack([np.ones(len(t)), tt, design(table, names, t)])
+    except ValueError as e:
+        raise ValueError(f"{record_id}: {e}") from e
+    coef, _, rank, sv = np.linalg.lstsq(m, h, rcond=None)
+    cond = float(sv[0] / sv[-1]) if sv[-1] > 0 else math.inf
+    if rank < unknowns or cond > MAX_CONDITION:
+        raise ValueError(f"{record_id}: design rank {rank} of {unknowns}, condition {cond:.3g} "
+                         f"(limit {MAX_CONDITION:.0e}): the record cannot separate {', '.join(names)}")
     res = h - m @ coef
     amp, pha = {}, {}
     for j, n in enumerate(names):
@@ -124,9 +142,9 @@ def fit_despiked(table: TcdTable, names: Sequence[str], series: Series, *,
     keep_unassessed=False is the PoC's despike (see qc.despike_mask), for the PoC comparison only."""
     t, h = series.times_s, series.heights_m
     t_mean = float(t.mean())
-    first = lsq(table, names, t, h, t_mean_s=t_mean)
+    first = lsq(table, names, t, h, t_mean_s=t_mean, record_id=series.record_id)
     keep, mad = despike_mask(t, first.residual, keep_unassessed=keep_unassessed)
     stats = dict(series.stats, spikes_dropped=int((~keep).sum()),
                  spikes_unassessed=unassessed_count(t, first.residual),
                  spike_mad_m=round(mad, 6) if math.isfinite(mad) else None)
-    return lsq(table, names, t[keep], h[keep], t_mean_s=t_mean, stats=stats)
+    return lsq(table, names, t[keep], h[keep], t_mean_s=t_mean, stats=stats, record_id=series.record_id)

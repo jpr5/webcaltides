@@ -12,6 +12,7 @@ negative control: the strict Boston check must then fail (M2 phase off NOAA by >
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
@@ -280,6 +281,46 @@ def test_basis_rejects_years_outside_the_dump():
     t = np.array([1609459200 + 366 * 86400 * k for k in range(4)], dtype=np.int64)
     with pytest.raises(ValueError, match="outside the TCD dump"):
         lsq(fake_table(), ["M2"], t, np.zeros(len(t)))
+
+
+def _hourly_2020(n):
+    return 1577836800 + np.arange(n, dtype=np.int64) * 3600
+
+
+def test_lsq_rejects_a_rank_deficient_design_naming_the_record():
+    t = _hourly_2020(6)                       # 6 h cannot separate M2 from K1
+    with pytest.raises(ValueError, match=r"rec-1: design rank 6 of 6, condition .* cannot separate M2, K1"):
+        lsq(fake_table(), ["M2", "K1"], t, np.zeros(len(t)), record_id="rec-1")
+
+
+def test_lsq_rejects_nan_heights_and_length_mismatch_naming_the_record():
+    t = _hourly_2020(200)
+    h = np.zeros(len(t))
+    h[3] = np.nan
+    with pytest.raises(ValueError, match=r"rec-2: .*non-finite"):
+        lsq(fake_table(), ["M2"], t, h, record_id="rec-2")
+    with pytest.raises(ValueError, match=r"rec-3: .*199 heights for 200 times"):
+        lsq(fake_table(), ["M2"], t, np.zeros(199), record_id="rec-3")
+
+
+def test_lsq_errors_name_the_record():
+    t = _hourly_2020(3)
+    with pytest.raises(ValueError, match=r"rec-4: 3 samples for 4 unknowns"):
+        lsq(fake_table(), ["M2"], t, np.zeros(3), record_id="rec-4")
+    with pytest.raises(ValueError, match=r"rec-5: years"):
+        lsq(fake_table(), ["M2"], _hourly_2020(200) - 10 * 366 * 86400, np.zeros(200), record_id="rec-5")
+    with pytest.raises(ValueError, match=r"short: 3 samples"):
+        fit_despiked(fake_table(), ["M2"], Series("short", t, np.zeros(3)))
+
+
+def test_fit_json_has_t_mean_and_rejects_nan():
+    t = _hourly_2020(200)
+    r = lsq(fake_table(), ["M2"], t, np.cos(np.arange(200.0)))
+    out = json.loads(r.to_json())
+    assert out["t_mean_s"] == pytest.approx(float(t.mean()))
+    bad = dataclasses.replace(r, rms_m=float("nan"))
+    with pytest.raises(ValueError):
+        bad.to_json()
 
 
 # --- real record: Boston 8443970, GESLA 4.1 ---------------------------------------------------------
