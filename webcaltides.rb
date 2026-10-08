@@ -1305,12 +1305,18 @@ module WebCalTides
     def cache_current_data_for(station, at:, around:)
         return false unless station
 
-        if current_data = current_clients(station.provider).current_data_for(station, around)
-            logger.debug "storing current data at #{at}"
-            atomic_write(at, current_data.map(&:to_h).to_json)
+        current_data = current_clients(station.provider).current_data_for(station, around)
+
+        # Nothing to cache for an empty list either -- it would serve "no currents" for the month
+        if current_data.blank?
+            logger.warn "no current data for #{station.bid} (#{station.provider}) around #{around.utc.to_date}, not caching #{at}"
+            return false
         end
 
-        return current_data && current_data.length > 0
+        logger.debug "storing current data at #{at}"
+        atomic_write(at, current_data.map(&:to_h).to_json)
+
+        return true
     end
 
     def current_data_for(station, around: Time.current.utc)

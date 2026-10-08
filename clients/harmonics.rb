@@ -102,8 +102,9 @@ module Clients
         # ebb-begins time offsets.  ref_predictions must cover the window plus
         # Engine#subordinate_margin (Engine#reference_predictions does).
         #
-        # Without both offsets (none in the current TCD), fall back to
-        # interpolating between the subordinate's peaks, which is less accurate.
+        # Without both offsets, fall back to interpolating between the
+        # subordinate's peaks, which is less accurate.  Every subordinate current
+        # in the 2025-12-28 TCD has both, so this is a safeguard.
         def subordinate_slack_waters(lookup_id, station_data, ref_predictions, peaks, start_time, end_time)
             flood_begins = station_data['flood_begins']
             ebb_begins = station_data['ebb_begins']

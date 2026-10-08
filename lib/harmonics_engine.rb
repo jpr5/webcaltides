@@ -111,7 +111,9 @@ module Harmonics
         # cache format is unchanged from v2 (it holds no nodal factors).
         # v4: XTide current stations store the TCD datum offset (it held the
         # name's depth) and no depth when the name has none (it held the datum
-        # offset), and subordinate currents store flood_begins/ebb_begins.
+        # offset; the same for TICON currents, though the shipped TICON data has
+        # none), subordinate currents store flood_begins/ebb_begins, and
+        # subordinate tides store their level adds (h_level_add/l_level_add).
         CACHE_VERSION = 4
 
         # Engine version - increment when prediction output changes for the same
@@ -120,9 +122,11 @@ module Harmonics
         # cached by older code is never reused. The station cache file uses
         # CACHE_VERSION instead.
         # v4: XTide currents get flood, ebb and slack events with signed
-        # velocities (v3 labelled XTide current events flood, because a name
-        # depth was added to every velocity), and subordinate stations no longer
-        # lose events within their time offset of the window edges.
+        # velocities (v3 labelled XTide current events flood, because the name
+        # depth was added to the velocity of every current with one),
+        # subordinate stations no longer lose events within their time offset
+        # of the window edges, and subordinate tide heights include the TCD
+        # level add (206 stations).
         ENGINE_VERSION = 4
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
@@ -146,7 +150,8 @@ module Harmonics
             DEFAULT_NODAL_MODE
         end
 
-        # Short string naming the engine version and nodal mode (e.g. "hA3tcd"),
+        # Short string naming the engine version and nodal mode ("hA" +
+        # ENGINE_VERSION + mode, e.g. "hA4tcd"),
         # for callers to put in harmonics tide/currents cache file names. It holds
         # no "_20dddd" token, so it cannot shadow a file name's datestamp.
         def self.cache_key_component(mode = nodal_mode)
@@ -174,8 +179,9 @@ module Harmonics
         end
 
         def find_station(id)
-            # Ensure stations are loaded so @stations_cache is populated
-            stations if @stations_cache.empty?
+            # Wait for the station load: a parse fills @stations_cache one
+            # station at a time, so a non-empty cache can still be incomplete.
+            stations
 
             # First look in the primary list (metadata)
             station = stations.find { |s| s['id'] == id || s['bid'] == id }
@@ -198,8 +204,9 @@ module Harmonics
         end
 
         def generate_predictions(station_id, start_time, end_time, options = {})
-            # Ensure stations are loaded so @stations_cache is populated
-            stations if @stations_cache.empty?
+            # Wait for the station load: a parse fills @stations_cache one
+            # station at a time, so a non-empty cache can still be incomplete.
+            stations
 
             station_data = @stations_cache[station_id] || {}
 
@@ -284,9 +291,10 @@ module Harmonics
             predictions
         end
 
-        # Station data from the station cache ({} when unknown).
+        # Station data from the station cache ({} when unknown).  Waits for
+        # the station load, as generate_predictions does.
         def station_data(station_id)
-            stations if @stations_cache.empty?
+            stations
             @stations_cache[station_id] || {}
         end
 
@@ -397,8 +405,9 @@ module Harmonics
         # 2. Fine pass at 1-min resolution only around each peak (+/- 30 min = 60 points each)
         # Result: ~40,000 points instead of 571,200 = 93% reduction
         def generate_peaks_optimized(station_id, start_time, end_time, options = {})
-            # Ensure stations are loaded so @stations_cache is populated
-            stations if @stations_cache.empty?
+            # Wait for the station load: a parse fills @stations_cache one
+            # station at a time, so a non-empty cache can still be incomplete.
+            stations
 
             station_data = @stations_cache[station_id] || {}
 
@@ -476,18 +485,9 @@ module Harmonics
                 is_high = rp['type'] == 'High'
 
                 time_offset_str = is_high ? sub_data['h_time_offset'] : sub_data['l_time_offset']
-                height_mult = is_high ? sub_data['h_height_mult'] : sub_data['l_height_mult']
 
-                # Apply time offset (format is [+-]HH:MM:SS)
-                offset_seconds = 0
-                if time_offset_str && time_offset_str != '\N'
-                    sign = time_offset_str.start_with?('-') ? -1 : 1
-                    parts = time_offset_str.delete('+-').split(':').map(&:to_i)
-                    offset_seconds = sign * (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0))
-                end
-
-                new_time = rp['time'] + offset_seconds.seconds
-                new_height = rp['height'] * height_mult
+                new_time = rp['time'] + offset_seconds(time_offset_str).seconds
+                new_height = subordinate_height(rp, sub_data)
 
                 # Filter to requested window
                 next unless new_time >= start_time && new_time <= end_time
@@ -501,6 +501,19 @@ module Harmonics
             end
         end
 
+        # A subordinate station's height for a reference High or Low: the
+        # reference height times the level multiplier, plus the level add, as
+        # libxtide SubordinateStation.cc does (max offsets for a High or max
+        # flood, min offsets for a Low or max ebb).  The TCD gives the add in
+        # the subordinate's level units; every subordinate with an add has the
+        # same units as its reference.
+        def subordinate_height(ref_peak, sub_data)
+            high = ref_peak['type'] == 'High'
+            mult = (high ? sub_data['h_height_mult'] : sub_data['l_height_mult']) || 1.0
+            add = (high ? sub_data['h_level_add'] : sub_data['l_level_add']) || 0.0
+            ref_peak['height'] * mult + add
+        end
+
         def apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
             # detect_peaks on ref_predictions to get high/low times/heights
             ref_peaks = detect_peaks(ref_predictions, step_seconds: step_seconds)
@@ -509,19 +522,9 @@ module Harmonics
                 is_high = rp['type'] == 'High'
 
                 time_offset_str = is_high ? sub_data['h_time_offset'] : sub_data['l_time_offset']
-                height_mult = is_high ? sub_data['h_height_mult'] : sub_data['l_height_mult']
 
-                # Apply time offset
-                # Format is [+-]HH:MM:SS
-                offset_seconds = 0
-                if time_offset_str && time_offset_str != '\N'
-                    sign = time_offset_str.start_with?('-') ? -1 : 1
-                    parts = time_offset_str.delete('+-').split(':').map(&:to_i)
-                    offset_seconds = sign * (parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0))
-                end
-
-                new_time = rp['time'] + offset_seconds.seconds
-                new_height = rp['height'] * height_mult
+                new_time = rp['time'] + offset_seconds(time_offset_str).seconds
+                new_height = subordinate_height(rp, sub_data)
 
                 {
                     'type' => rp['type'],
@@ -640,16 +643,19 @@ module Harmonics
 
             @logger.debug "loading merged stations from cache: #{cache_file}"
             data = JSON.parse(File.read(cache_file))
+            raise JSON::ParserError, "expected a JSON object with 'stations', got #{data.class}" unless data.is_a?(Hash) && data['stations'].is_a?(Array)
 
-            stations = []
+            stations = data['stations'].map { |h| h['metadata'] }
             @stations_cache = data['stations_cache'] || {}
             @speeds = data['speeds'] || {}
             @constituent_definitions = data['constituent_definitions'] || {}
-
-            data['stations'].each do |h|
-                stations << h['metadata']
-            end
             stations
+        rescue JSON::ParserError => e
+            # A corrupt file (e.g. a write cut short before writes were atomic)
+            # is a miss: remove it, and the caller parses the sources again.
+            @logger.error "!! unreadable station cache #{cache_file}, removing it and rebuilding: #{e.class} - #{e.message[0, 80]}"
+            File.unlink(cache_file) rescue nil
+            nil
         end
 
         def save_stations_to_cache(stations)
@@ -687,7 +693,7 @@ module Harmonics
                     }
                 end
             }
-            File.write(cache_file, cache_data.to_json)
+            atomic_write(cache_file, cache_data.to_json)
         end
 
         def parse_xtide_file
@@ -766,7 +772,8 @@ module Harmonics
                     # Datum offset (Z0) is the constant term of the prediction. For a
                     # current it is the mean flow, usually 0. Keep it separate from
                     # depth: the "(depth N ft)" in a current's name is display data,
-                    # and adding it to the velocity made every current positive.
+                    # and adding it to the velocity of a current with a depth in its
+                    # name pushed the velocity above zero, so it had no ebb or slack.
                     datum_offset = tcd_station.datum_offset || 0.0
 
                     # Handle depth and BID for currents.  A current's depth comes
@@ -795,6 +802,8 @@ module Harmonics
                     l_time_offset = nil
                     h_height_mult = 1.0
                     l_height_mult = 1.0
+                    h_level_add = 0.0
+                    l_level_add = 0.0
                     flood_begins = nil
                     ebb_begins = nil
 
@@ -818,6 +827,8 @@ module Harmonics
                         l_time_offset = format_minutes_offset(tcd_station.min_time_add)
                         h_height_mult = tcd_station.max_level_multiply || 1.0
                         l_height_mult = tcd_station.min_level_multiply || 1.0
+                        h_level_add = tcd_station.max_level_add || 0.0
+                        l_level_add = tcd_station.min_level_add || 0.0
 
                         # Currents: slack-before-flood and slack-before-ebb time offsets
                         flood_begins = format_minutes_offset(tcd_station.flood_begins)
@@ -869,6 +880,8 @@ module Harmonics
                         'h_height_mult' => h_height_mult,
                         'l_time_offset' => l_time_offset,
                         'l_height_mult' => l_height_mult,
+                        'h_level_add' => h_level_add,
+                        'l_level_add' => l_level_add,
                         'flood_begins' => flood_begins,
                         'ebb_begins' => ebb_begins,
                         'latitude' => tcd_station.latitude,
@@ -1107,14 +1120,19 @@ module Harmonics
             nil
         end
 
-        # Atomic write (temp file + rename, as WebCalTides#atomic_write): the
-        # tcd nodal file is shared by every station for a year, so a reader
+        # The tcd nodal file is shared by every station for a year, so a reader
         # must never see a partial file.
         def save_nodal_cache(file, factors)
             FileUtils.mkdir_p(@cache_dir)
             # Suppress per-day logging - too verbose
+            atomic_write(file, factors.to_json)
+        end
+
+        # Atomic write (temp file + rename, as WebCalTides#atomic_write), so a
+        # reader or a process killed mid-write never leaves a partial file.
+        def atomic_write(file, content)
             temp_file = "#{file}.tmp.#{$$}.#{Thread.current.object_id}"
-            File.binwrite(temp_file, factors.to_json)
+            File.binwrite(temp_file, content)
             File.rename(temp_file, file)
         rescue
             File.unlink(temp_file) rescue nil

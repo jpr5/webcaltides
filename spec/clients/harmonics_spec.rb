@@ -110,6 +110,12 @@ RSpec.describe Clients::Harmonics do
                 stations_with_depth = stations.select { |s| s.depth || s.bid }
                 expect(stations_with_depth).not_to be_empty
             end
+
+            it 'gives a TICON current its name depth, and no depth (not its datum offset) when the name has none' do
+                ticon = client.current_stations.select { |s| s.provider == 'ticon' }.index_by(&:name)
+                expect(ticon['Active Pass (depth 10 ft), British Columbia Current'].depth).to eq(10.0)
+                expect(ticon.fetch('Sydney Harbour Current').depth).to be_nil
+            end
         end
     end
 
@@ -186,6 +192,18 @@ RSpec.describe Clients::Harmonics do
             # With heights 2.0 and -1.0, ratio = 2.0/(2.0+1.0) = 0.667
             # Expected crossing: 06:00 + 0.667 * 6 hours = 06:00 + 4 hours = 10:00
             expect(crossing_time).to be_within(1.minute).of(Time.utc(2025, 6, 15, 10, 0))
+        end
+
+        # Subordinate slack times take flood_begins for the slack before flood
+        # and ebb_begins for the slack before ebb, so the direction must be right.
+        it 'marks a crossing from ebb to flood as the slack before flood, and from flood to ebb as before ebb' do
+            predictions = [
+                { 'time' => Time.utc(2025, 6, 15, 0, 0), 'height' => -1.0, 'units' => 'knots' },
+                { 'time' => Time.utc(2025, 6, 15, 1, 0), 'height' => 1.0, 'units' => 'knots' },
+                { 'time' => Time.utc(2025, 6, 15, 2, 0), 'height' => -1.0, 'units' => 'knots' }
+            ]
+
+            expect(client.detect_zero_crossings(predictions).map { |c| c['begins'] }).to eq(%w[flood ebb])
         end
 
         it 'places slack time hours between peaks, not seconds after' do
@@ -351,13 +369,82 @@ RSpec.describe Clients::Harmonics do
 
             let(:engine) { client.engine }
 
-            it 'keeps subordinate tide peaks moved in from before the window start (time offsets +11:36/+12:21)' do
+            # Tide feeds (tide_data_for) take a subordinate's peaks from its
+            # reference's peaks over the window's months plus one month each side.
+            # Each call uses a new client, so the engine's per-month reference
+            # peak cache from one window cannot fill in for another.
+            def tide_feed_peaks(id, from, to)
+                feed = described_class.new(logger)
+                station = feed.tide_stations.find { |s| s.id == id }
+                allow(feed).to receive(:beginning_of_window).and_return(from)
+                allow(feed).to receive(:end_of_window).and_return(to)
+                feed.tide_data_for(station, from).map { |t| [t.type, t.time.to_time.utc.round, t.prediction] }
+            end
+
+            it 'keeps subordinate tide peaks moved in from before the window start in a tide feed (time offsets +11:36/+12:21)' do
+                from, to = Time.utc(2026, 10, 7), Time.utc(2026, 10, 8)
+                narrow = tide_feed_peaks('X0f812f0', from, to)
+                wide = tide_feed_peaks('X0f812f0', from - 12.hours, to + 12.hours).select { |_, t, _| t.between?(from, to) }
+
+                expect(narrow).to eq(wide)
+                expect(narrow.map { |type, t, _| [type, t] }).to include(['Low', Time.utc(2026, 10, 7, 9, 41, 41)])
+            end
+
+            # The same, through Engine#generate_predictions, which shares
+            # reference_predictions and subordinate_peaks (and so the
+            # subordinate_margin) with subordinate current feeds.
+            it 'keeps subordinate tide peaks moved in from before the window start in Engine#generate_predictions' do
                 from, to = Time.utc(2026, 10, 7), Time.utc(2026, 10, 8)
                 peaks = ->(a, b) { engine.generate_predictions('X0f812f0', a, b).map { |p| [p['type'], p['time'].round] } }
                 wide = peaks.(from - 12.hours, to + 12.hours).select { |_, t| t.between?(from, to) }
 
                 expect(peaks.(from, to)).to eq(wide)
                 expect(wide).to include(['Low', Time.utc(2026, 10, 7, 9, 41, 41)])
+            end
+
+            # Subordinate tide heights are the reference's times the level
+            # multiplier plus the level add.  206 XTide subordinate tides have an
+            # add (and a multiplier of 1).  Expected values are NOAA's own
+            # predictions (datum MLLW, interval=hilo, feet), fetched 2026-10-07.
+            def expect_noaa_tides(peaks, noaa)
+                expect(peaks.map(&:first)).to eq(noaa.map { |_, type, _| type })
+                peaks.zip(noaa).each do |(type, time, height), (noaa_time, _, noaa_height)|
+                    expect(time).to be_within(2.minutes).of(noaa_time), "#{type} at #{time}, NOAA #{noaa_time}"
+                    expect(height).to be_within(0.05).of(noaa_height), "#{type} at #{time}: #{height} ft, NOAA #{noaa_height} ft"
+                end
+            end
+
+            it 'adds the level add to subordinate tide heights (Newark Slough, NOAA 9414506, high +2.6 ft, low +0.1 ft)' do
+                expect(engine.station_data('X373345f')).to include('h_level_add' => 2.6, 'l_level_add' => 0.1, 'h_height_mult' => 1.0)
+
+                expect_noaa_tides(tide_feed_peaks('X373345f', Time.utc(2026, 11, 1), Time.utc(2026, 11, 3)), [
+                    [Time.utc(2026, 11, 1, 7, 54), 'Low', -0.335],
+                    [Time.utc(2026, 11, 1, 14, 51), 'High', 7.381],
+                    [Time.utc(2026, 11, 1, 20, 22), 'Low', 3.343],
+                    [Time.utc(2026, 11, 2, 1, 10), 'High', 7.992],
+                    [Time.utc(2026, 11, 2, 9, 2), 'Low', -0.047],
+                    [Time.utc(2026, 11, 2, 15, 46), 'High', 7.623],
+                    [Time.utc(2026, 11, 2, 21, 49), 'Low', 2.845]
+                ])
+            end
+
+            it 'adds a negative level add to subordinate tide heights (Ano Nuevo Island, NOAA 9413878, high -0.7 ft, low -0.1 ft)' do
+                expect_noaa_tides(tide_feed_peaks('X8e55f8e', Time.utc(2026, 11, 1), Time.utc(2026, 11, 3)), [
+                    [Time.utc(2026, 11, 1, 4, 52), 'Low', -0.532],
+                    [Time.utc(2026, 11, 1, 12, 16), 'High', 4.1],
+                    [Time.utc(2026, 11, 1, 17, 20), 'Low', 3.146],
+                    [Time.utc(2026, 11, 1, 22, 35), 'High', 4.711],
+                    [Time.utc(2026, 11, 2, 6, 0), 'Low', -0.243],
+                    [Time.utc(2026, 11, 2, 13, 11), 'High', 4.342],
+                    [Time.utc(2026, 11, 2, 18, 47), 'Low', 2.648],
+                    [Time.utc(2026, 11, 2, 23, 57), 'High', 4.355]
+                ])
+            end
+
+            it 'applies the level add in Engine#generate_predictions too (Newark Slough)' do
+                peaks = engine.generate_predictions('X373345f', Time.utc(2026, 11, 1, 14), Time.utc(2026, 11, 1, 16))
+                expect(peaks.map { |p| p['type'] }).to eq(['High'])
+                expect(peaks.first['height']).to be_within(0.05).of(7.381)
             end
 
             it 'stores the TCD datum offset (mean flow) of a current and predicts around it' do

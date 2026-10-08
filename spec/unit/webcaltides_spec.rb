@@ -134,6 +134,17 @@ RSpec.describe WebCalTides do
                 expect(WebCalTides.timezone_for(10.34, 107.072)).to eq("Asia/Ho_Chi_Minh")
             end
 
+            it 'falls back to the region zone, and caches it, when the lookup returns a zone TZInfo does not know' do
+                allow(Timezone).to receive(:lookup).and_return(double('Timezone', name: 'Not/A_Zone'))
+                station = build_station(location: 'Shell Point, Tampa Bay, FL', region: 'United States', lat: 27.53, lon: -82.47)
+
+                expect(WebCalTides.timezone_for(27.53, -82.47, station)).to eq('America/New_York')
+
+                persisted = JSON.parse(File.read("#{Server.settings.cache_dir}/tzs.json"))
+                expect(persisted["27.53 -82.47"]).to eq('America/New_York')
+                expect(Timezone).to have_received(:lookup).once
+            end
+
             it 'resolves zones from tzinfo-data, not the OS zoneinfo (which may lack the links)' do
                 expect(TZInfo::DataSource.get).to be_a(TZInfo::DataSources::RubyDataSource)
                 expect(TZInfo::Timezone.get('Asia/Saigon').canonical_identifier).to eq('Asia/Ho_Chi_Minh')

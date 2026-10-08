@@ -179,6 +179,49 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             end
         end
 
+        # The station cache is written on the first boot after a CACHE_VERSION or data change.  A
+        # write cut short (e.g. a redeploy killing the process) must not break every later boot.
+        it 'writes the station cache via a temp file in the same dir and a rename' do
+            Dir.mktmpdir do |dir|
+                allow(File).to receive(:rename).and_call_original
+                allow(File).to receive(:write).and_call_original
+                engine = described_class.new(logger, dir)
+                engine.stations
+                target = engine.stations_cache_file
+                expect(File).to have_received(:rename).with(a_string_starting_with("#{target}.tmp."), target)
+                expect(File).not_to have_received(:write).with(target, anything)
+                expect(Dir.children(dir).grep(/\.tmp\./)).to be_empty
+            end
+        end
+
+        it 'treats a truncated station cache as a miss, logs it, and rebuilds it' do
+            Dir.mktmpdir do |dir|
+                good = described_class.new(logger, dir)
+                expected = good.stations
+                file = good.stations_cache_file
+                full = File.read(file)
+                File.write(file, full[0, full.size / 2])
+
+                engine = described_class.new(Logger.new(log = StringIO.new), dir)
+                expect(engine.stations).to eq(expected)
+                expect(engine.station_data('X2d7f27f')).to include('ref_key', 'flood_begins')
+                expect(log.string).to match(/ERROR.*unreadable station cache #{Regexp.escape(file)}/)
+                expect(File.read(file)).to eq(full)
+            end
+        end
+
+        # A parse fills the station cache one station at a time, so a lookup that only waits while
+        # the cache is empty can see a partial cache, find no station and predict nothing.
+        it 'waits for the station load before a lookup, even when the station cache is partly filled' do
+            engine = described_class.new(logger, Dir.mktmpdir)
+            engine.stations_cache['PARTIAL'] = { 'constituents' => [] }
+            loaded = { 'name' => 'Loaded', 'constituents' => [] }
+            allow(engine).to receive(:stations) { engine.stations_cache['LATE'] = loaded; [] }
+
+            expect(engine.station_data('LATE')).to eq(loaded)
+            expect(engine).to have_received(:stations)
+        end
+
         it 'writes nodal files via a temp file in the same dir and a rename' do
             Dir.mktmpdir do |dir|
                 allow(File).to receive(:rename).and_call_original
