@@ -83,6 +83,63 @@ RSpec.describe WebCalTides do
             expect(result).to eq("America/New_York")
         end
 
+        # Google returns CLDR ids, some of which are tzdata backward links.  Debian trixie (the
+        # production image since 2026-10-06) moved those to tzdata-legacy, so TZInfo rejected them.
+        context 'with a legacy (backward) timezone id' do
+            it 'returns the canonical id for a cached alias and stores it' do
+                WebCalTides.update_tzcache("10.34 107.072", "Asia/Saigon")
+
+                expect(Timezone).not_to receive(:lookup)
+                expect(WebCalTides.timezone_for(10.34, 107.072)).to eq("Asia/Ho_Chi_Minh")
+
+                persisted = JSON.parse(File.read("#{Server.settings.cache_dir}/tzs.json"))
+                expect(persisted["10.34 107.072"]).to eq("Asia/Ho_Chi_Minh")
+            end
+
+            it 'returns the canonical id for a lookup result' do
+                allow(Timezone).to receive(:lookup).and_return(double('Timezone', name: 'America/Godthab'))
+
+                expect(WebCalTides.timezone_for(66.933, -53.667)).to eq("America/Nuuk")
+            end
+
+            it 'canonicalises each alias found in the production cache and station data' do
+                {
+                    'Asia/Saigon'          => 'Asia/Ho_Chi_Minh',
+                    'America/Godthab'      => 'America/Nuuk',
+                    'America/Buenos_Aires' => 'America/Argentina/Buenos_Aires',
+                    'America/Catamarca'    => 'America/Argentina/Catamarca',
+                    'Asia/Rangoon'         => 'Asia/Yangon',
+                    'Pacific/Enderbury'    => 'Pacific/Kanton',
+                }.each do |legacy, canonical|
+                    expect(WebCalTides.send(:canonical_timezone, legacy)).to eq(canonical), legacy
+                end
+                # Truk and Ponape are links to zones that tzdata merged (Port Moresby, Guadalcanal)
+                %w[Pacific/Truk Pacific/Ponape].each do |legacy|
+                    canonical = WebCalTides.send(:canonical_timezone, legacy)
+                    expect(canonical).not_to eq(legacy)
+                    expect(TZInfo::Timezone.get(canonical).canonical_identifier).to eq(canonical)
+                end
+            end
+
+            it 'keeps zones, ids that zone1970.tab lists, ids our fallback tables use, and UTC' do
+                %w[UTC Etc/GMT-3 America/New_York Asia/Ho_Chi_Minh Europe/Oslo Arctic/Longyearbyen Antarctica/McMurdo].each do |id|
+                    expect(WebCalTides.send(:canonical_timezone, id)).to eq(id)
+                end
+            end
+
+            it 'looks the zone up again when the cached id is unknown' do
+                WebCalTides.update_tzcache("10.34 107.072", "Not/A_Zone")
+                allow(Timezone).to receive(:lookup).and_return(double('Timezone', name: 'Asia/Ho_Chi_Minh'))
+
+                expect(WebCalTides.timezone_for(10.34, 107.072)).to eq("Asia/Ho_Chi_Minh")
+            end
+
+            it 'resolves zones from tzinfo-data, not the OS zoneinfo (which may lack the links)' do
+                expect(TZInfo::DataSource.get).to be_a(TZInfo::DataSources::RubyDataSource)
+                expect(TZInfo::Timezone.get('Asia/Saigon').canonical_identifier).to eq('Asia/Ho_Chi_Minh')
+            end
+        end
+
         it 'normalizes longitude to -180..180 range' do
             # Pre-populate with normalized key
             WebCalTides.update_tzcache("35.0 140.0", "Asia/Tokyo")

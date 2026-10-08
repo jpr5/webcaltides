@@ -341,9 +341,23 @@ module WebCalTides
         key = "#{lat} #{long}"
 
         # Thread-safe cache read (class variables for cross-request safety)
-        @@tzcache_mutex.synchronize do
+        cached = @@tzcache_mutex.synchronize do
             @@tzcache ||= load_tzcache
-            return @@tzcache[key] if @@tzcache[key]
+            @@tzcache[key]
+        end
+
+        # Entries cached before ids were canonicalised can hold a legacy alias: replace it.  An
+        # id TZInfo doesn't know at all is looked up again.
+        if cached
+            canonical = canonical_timezone(cached)
+            return cached if canonical == cached
+
+            if canonical
+                logger.info "replacing cached timezone for #{key}: #{cached} -> #{canonical}"
+                return update_tzcache(key, canonical)
+            end
+
+            logger.warn "cached timezone #{cached} for #{key} is unknown, looking it up again"
         end
 
         # External lookup (outside mutex to avoid blocking other threads)
@@ -365,16 +379,18 @@ module WebCalTides
             logger.error "timezone lookup failed for #{key}: #{e.message}"
         end
 
+        # Google returns CLDR ids, some of which are tzdata backward links (Asia/Saigon)
+        res = canonical_timezone(tz.name) if tz
+        logger.warn "timezone lookup for #{key} returned unknown zone #{tz.name}" if tz && res.nil?
+
         # Fallback chain when GeoNames returns nil (offshore locations)
-        if tz.nil?
+        if res.nil?
             res = timezone_fallback(lat, long, station)
             if res != 'UTC'
                 logger.info "timezone fallback for #{key}: #{res} (via region/longitude)"
             else
                 logger.warn "Timezone.lookup returned nil for #{key}, defaulting to UTC"
             end
-        else
-            res = tz.name
         end
 
         # Update cache thread-safely
@@ -392,6 +408,24 @@ module WebCalTides
     end
 
     private
+
+    # The id to store and hand out for a zone: a tzdata backward alias (Asia/Saigon, America/Godthab,
+    # Pacific/Truk) becomes the zone it links to (Asia/Ho_Chi_Minh, America/Nuuk, ...).  Ids that
+    # zone1970.tab lists, the ids our fallback tables use (some are links, e.g. Europe/Oslo) and UTC
+    # are kept.  Returns nil for an id TZInfo doesn't know.
+    def canonical_timezone(name)
+        zone = TZInfo::Timezone.get(name)
+        return name if zone.canonical_identifier == name || kept_timezone_ids.include?(name)
+
+        zone.canonical_identifier
+    rescue TZInfo::InvalidTimezoneIdentifier
+        nil
+    end
+
+    def kept_timezone_ids
+        @kept_timezone_ids ||= Set.new(TZInfo::Country.all.flat_map(&:zone_identifiers) + ['UTC'] +
+            [US_STATE_TIMEZONES, CANADA_REGION_TIMEZONES, REGION_KEYWORDS, LONGITUDE_TIMEZONES].flat_map(&:values))
+    end
 
     def load_tzcache
         filename = "#{settings.cache_dir}/tzs.json"
