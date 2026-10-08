@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 RSpec.describe "Thread Safety" do
+    # Station lists, lunar phases etc. go to a scratch cache, not the app's cache dir
+    around do |example|
+        with_test_cache_dir { example.run }
+    end
+
     describe "lunar_phases" do
         it "handles concurrent access without data loss" do
             # Mock the lunar client to avoid external API calls during thread safety test
@@ -29,7 +34,7 @@ RSpec.describe "Thread Safety" do
         it "initializes once even with concurrent access" do
             cache_file = WebCalTides.tide_station_cache_file
             FileUtils.mkdir_p(File.dirname(cache_file))
-            File.write(cache_file, '[]') unless File.exist?(cache_file)
+            File.write(cache_file, [build_station.to_h].to_json)
             WebCalTides.instance_variable_set(:@tide_stations, nil)
 
             threads = 5.times.map do
@@ -47,7 +52,7 @@ RSpec.describe "Thread Safety" do
         it "initializes once even with concurrent access" do
             cache_file = WebCalTides.current_station_cache_file
             FileUtils.mkdir_p(File.dirname(cache_file))
-            File.write(cache_file, '[]') unless File.exist?(cache_file)
+            File.write(cache_file, [build_station.to_h].to_json)
             WebCalTides.instance_variable_set(:@current_stations, nil)
 
             threads = 5.times.map do
@@ -95,7 +100,7 @@ RSpec.describe "Thread Safety" do
             it "initializes tide stations cache once under contention" do
                 cache_file = WebCalTides.tide_station_cache_file
                 FileUtils.mkdir_p(File.dirname(cache_file))
-                File.write(cache_file, '[]') unless File.exist?(cache_file)
+                File.write(cache_file, [build_station.to_h].to_json)
                 WebCalTides.instance_variable_set(:@tide_stations, nil)
 
                 threads = 100.times.map do
@@ -111,7 +116,7 @@ RSpec.describe "Thread Safety" do
             it "initializes current stations cache once under contention" do
                 cache_file = WebCalTides.current_station_cache_file
                 FileUtils.mkdir_p(File.dirname(cache_file))
-                File.write(cache_file, '[]') unless File.exist?(cache_file)
+                File.write(cache_file, [build_station.to_h].to_json)
                 WebCalTides.instance_variable_set(:@current_stations, nil)
 
                 threads = 100.times.map do

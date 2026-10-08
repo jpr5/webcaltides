@@ -685,6 +685,7 @@ module WebCalTides
         stations = tide_clients.values.uniq.flat_map do |c|
             list = c.tide_stations
             raise "no station list" unless list
+            raise "empty station list" if list.empty?
             if c.try(:station_list_degraded?)
                 # A fallback list (see Clients::ChsTides#tide_stations): serve it, but don't cache it
                 logger.error "!! degraded tide station list from #{c.class.name}, serving it uncached"
@@ -702,6 +703,11 @@ module WebCalTides
 
     def cache_tide_stations(at:tide_station_cache_file, stations:[])
         # stations: is used in the re-cache scenario
+        if stations.empty?
+            logger.error "!! not caching an empty tide station list at #{at}"
+            return false
+        end
+
         logger.debug "storing tide station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
 
@@ -727,6 +733,11 @@ module WebCalTides
                     stations, complete = fetch_tide_stations
                     unless complete
                         @tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY
+                        # A rebuild that got nothing doesn't replace the list we already have
+                        if stations.empty? && @tide_stations.present?
+                            logger.warn "tide station rebuild got no stations, keeping the last list (#{@tide_stations.length} stations) uncached, rebuilding after #{@tide_stations_retry_at}"
+                            return @tide_stations
+                        end
                         logger.warn "serving incomplete tide station list (#{stations.length} stations) uncached, rebuilding after #{@tide_stations_retry_at}"
                         return @tide_stations = stations
                     end
@@ -738,6 +749,8 @@ module WebCalTides
                     logger.debug "reading #{cache_file}"
                     data = JSON.parse(File.read(cache_file))
                     raise TypeError, "expected a station list, got #{data.class}" unless data.is_a?(Array)
+                    # An empty list is never cached on purpose; don't serve one for the quarter
+                    raise "empty station list" if data.empty?
 
                     logger.debug "parsing tide station list"
                     data.map { |js| Models::Station.from_hash(js) }
@@ -1163,9 +1176,30 @@ module WebCalTides
         region_map
     end
 
-    def cache_current_stations(at:current_station_cache_file, stations: [])
-        current_clients.values.uniq.each { |c| stations.concat(c.current_stations) } if stations.empty?
+    # If a provider's current station list fails, serve the others but don't cache the incomplete
+    # list for the quarter; build it again after this long.
+    CURRENT_STATIONS_RETRY = 1.hour
 
+    # Returns [stations, complete]; complete is false if any provider failed (logged).  Each
+    # provider is isolated so one upstream outage doesn't take down search for every region.
+    def fetch_current_stations
+        complete = true
+
+        stations = current_clients.values.uniq.flat_map do |c|
+            list = c.current_stations
+            raise "no station list" unless list
+            raise "empty station list" if list.empty?
+            list
+        rescue => e
+            logger.error "!! failed to get current station list from #{c.class.name}, leaving it out: #{e.class} - #{e.message}"
+            complete = false
+            []
+        end
+
+        return stations, complete
+    end
+
+    def enrich_current_stations(stations)
         # Enrich NOAA current stations with region data
         # (NOAA currents API doesn't provide state/region info, but tide stations do)
         noaa_current_stations = stations.select { |s| s.provider == 'noaa' && s.region == 'United States' }
@@ -1186,6 +1220,17 @@ module WebCalTides
             end
         end
 
+        stations
+    end
+
+    def cache_current_stations(at:current_station_cache_file, stations: [])
+        if stations.empty?
+            logger.error "!! not caching an empty current station list at #{at}"
+            return false
+        end
+
+        enrich_current_stations(stations)
+
         logger.debug "storing current station list at #{at}"
         atomic_write(at, stations.map(&:to_h).to_json)
 
@@ -1195,26 +1240,76 @@ module WebCalTides
     def current_stations
         # Double-checked locking for thread safety
         # First check is optimization - safe because array assignment is atomic in Ruby
-        return @current_stations if @current_stations
+        return @current_stations if @current_stations && !current_stations_retry_due?
 
         @@current_stations_mutex.synchronize do
-            return @current_stations if @current_stations
+            return @current_stations if @current_stations && !current_stations_retry_due?
 
             cache_file = current_station_cache_file
-            cache_current_stations(at: cache_file) unless File.exist?(cache_file)
+            stations   = nil
 
-            logger.debug "reading #{cache_file}"
-            json = File.read(cache_file)
+            # An unreadable cache file is removed and rebuilt once, rather than failing every request
+            2.times do
+                unless File.exist?(cache_file)
+                    # Other requests keep the incomplete list, if there is one, while this rebuilds it
+                    @current_stations_retry_at = Time.current.utc + CURRENT_STATIONS_RETRY if @current_stations
+                    stations, complete = fetch_current_stations
+                    unless complete
+                        @current_stations_retry_at = Time.current.utc + CURRENT_STATIONS_RETRY
+                        # A rebuild that got nothing doesn't replace the list we already have
+                        if stations.empty? && @current_stations.present?
+                            logger.warn "current station rebuild got no stations, keeping the last list (#{@current_stations.length} stations) uncached, rebuilding after #{@current_stations_retry_at}"
+                            return @current_stations
+                        end
+                        logger.warn "serving incomplete current station list (#{stations.length} stations) uncached, rebuilding after #{@current_stations_retry_at}"
+                        return @current_stations = enrich_current_stations(stations)
+                    end
 
-            logger.debug "parsing current station list"
-            data = JSON.parse(json) rescue []
-            @current_stations = data.map { |js| Models::Station.from_hash(js) }
+                    cache_current_stations(at: cache_file, stations: stations)
+                end
+
+                loaded = begin
+                    logger.debug "reading #{cache_file}"
+                    data = JSON.parse(File.read(cache_file))
+                    raise TypeError, "expected a station list, got #{data.class}" unless data.is_a?(Array)
+                    # An empty list is never cached on purpose; don't serve one for the quarter
+                    raise "empty station list" if data.empty?
+
+                    logger.debug "parsing current station list"
+                    data.map { |js| Models::Station.from_hash(js) }
+                rescue => e
+                    logger.error "!! unreadable current station cache #{cache_file}, removing it: #{e.class} - #{e.message}"
+                    File.unlink(cache_file) rescue nil
+                    nil
+                end
+
+                if loaded
+                    # The degraded list stays in place (and is retried) until the complete one is loaded
+                    @current_stations_retry_at = nil
+                    return @current_stations = loaded
+                end
+            end
+
+            # Even the rebuilt file couldn't be read back: serve what was fetched, uncached, and retry later
+            @current_stations = stations || @current_stations || []
+            @current_stations_retry_at = Time.current.utc + CURRENT_STATIONS_RETRY
+            logger.warn "serving current station list (#{@current_stations.length} stations) uncached, rebuilding after #{@current_stations_retry_at}"
+            @current_stations
         end
     end
 
+    # Incomplete in-memory list (some provider failed) that is due for another build
+    def current_stations_retry_due?
+        @current_stations_retry_at && Time.current.utc >= @current_stations_retry_at
+    end
+
     def remove_current_station(station_id)
-        @current_stations.delete_if { |s| s.id == station_id }
-        cache_current_stations(stations:@current_stations)
+        # Under the lock, so a rebuild can't swap the list between the removal and the write
+        @@current_stations_mutex.synchronize do
+            @current_stations.delete_if { |s| s.id == station_id }
+            # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
+            cache_current_stations(stations:@current_stations) unless @current_stations_retry_at
+        end
     end
 
     def current_station_for(id)

@@ -77,6 +77,49 @@ RSpec.describe 'Tide station cache and tide data cache', :aggregate_failures do
             end
         end
 
+        it 'does not cache an empty station list from a provider, and retries it later' do
+            # e.g. NOAA answering 200 with a maintenance page parses to []
+            allow(bsh).to receive(:tide_stations).and_return([])
+
+            start = Time.current.utc
+            expect(WebCalTides.tide_stations.map(&:id)).to eq(['NOAA1'])
+            expect(station_cache_files).to be_empty
+
+            allow(bsh).to receive(:tide_stations).and_return([bsh_station])
+            Timecop.freeze(start + WebCalTides::TIDE_STATIONS_RETRY + 1) do
+                expect(WebCalTides.tide_stations.map(&:id)).to contain_exactly('NOAA1', 'DE__717P')
+                expect(station_cache_files).to eq([WebCalTides.tide_station_cache_file])
+            end
+        end
+
+        it 'does not cache an empty list when every provider comes back empty' do
+            allow(noaa).to receive(:tide_stations).and_return([])
+            allow(bsh).to receive(:tide_stations).and_return([])
+
+            expect(WebCalTides.tide_stations).to eq([])
+            expect(station_cache_files).to be_empty
+        end
+
+        it 'keeps the last list it had when a retry comes back empty' do
+            allow(bsh).to receive(:tide_stations).and_raise(Errno::ECONNREFUSED)
+            start = Time.current.utc
+            WebCalTides.tide_stations
+
+            allow(noaa).to receive(:tide_stations).and_return([])
+            Timecop.freeze(start + WebCalTides::TIDE_STATIONS_RETRY + 1) do
+                expect(WebCalTides.tide_stations.map(&:id)).to eq(['NOAA1'])
+                expect(station_cache_files).to be_empty
+            end
+        end
+
+        it 'rebuilds an empty cached station list instead of serving it for the quarter' do
+            cache_file = WebCalTides.tide_station_cache_file
+            File.write(cache_file, '[]')
+
+            expect(WebCalTides.tide_stations.map(&:id)).to contain_exactly('NOAA1', 'DE__717P')
+            expect(JSON.parse(File.read(cache_file)).length).to eq(2)
+        end
+
         it 'does not persist an incomplete list when a station is removed' do
             allow(bsh).to receive(:tide_stations).and_raise(Errno::ECONNREFUSED)
             WebCalTides.tide_stations
