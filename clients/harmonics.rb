@@ -20,7 +20,16 @@ module Clients
         def tide_stations
             return [] unless File.exist?(@engine.xtide_file) || File.exist?(@engine.ticon_file)
 
-            @engine.stations.select { |s| s['type'] == 'tide' }.map { |s| Models::Station.from_hash(s.stringify_keys) }
+            # The list and its degraded flag come from one engine snapshot (see station_list_degraded?)
+            stations, @station_list_degraded = @engine.stations_snapshot
+            stations.select { |s| s['type'] == 'tide' }.map { |s| Models::Station.from_hash(s.stringify_keys) }
+        end
+
+        # True when the list the last tide_stations call returned lacks the TICON stations (see
+        # Engine#stations_degraded?), so the caller doesn't cache it.  It is taken with that list,
+        # not asked of the engine again, which may have parsed a different list since.
+        def station_list_degraded?
+            !!@station_list_degraded
         end
 
         def current_stations

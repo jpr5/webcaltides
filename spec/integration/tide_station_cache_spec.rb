@@ -264,6 +264,35 @@ RSpec.describe 'Tide station cache and tide data cache', :aggregate_failures do
 
             expect(station_cache_files).to contain_exactly(sibling, WebCalTides.tide_station_cache_file)
         end
+
+        # The list and its degraded flag came from two engine calls.  When the engine's TICON retry
+        # fell due between them, a list built without TICON was reported as complete and cached for
+        # the quarter.
+        context 'when the harmonics TICON retry falls due while the list is built' do
+            let(:harmonics) { Clients::Harmonics.new(Logger.new('/dev/null')) }
+            let(:clients)   { { harmonics: harmonics } }
+
+            it 'does not cache the list built without TICON' do
+                engine = ::Harmonics::Engine.new(Logger.new('/dev/null'), Dir.mktmpdir)
+                harmonics.instance_variable_set(:@engine, engine)
+
+                failed = 0
+                allow(File).to receive(:read).and_call_original
+                allow(File).to receive(:read).with(engine.ticon_file).and_wrap_original do |m, *args|
+                    (failed += 1) <= 1 ? raise(Errno::EIO, engine.ticon_file) : m.call(*args)
+                end
+                # The retry falls due right after the client hands back the list
+                allow(harmonics).to receive(:tide_stations).and_wrap_original do |m|
+                    list = m.call
+                    Timecop.travel(Time.now + ::Harmonics::Engine::STATIONS_RETRY + 1)
+                    list
+                end
+
+                stations = WebCalTides.tide_stations
+                expect(stations.count { |s| s.provider == 'ticon' }).to eq(0)
+                expect(station_cache_files).to be_empty
+            end
+        end
     end
 
     describe 'tide data' do

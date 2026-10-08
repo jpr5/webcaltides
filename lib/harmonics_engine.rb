@@ -9,6 +9,9 @@ module Harmonics
     class Engine
         class MissingSourceFilesError < StandardError; end
 
+        # A cache file that parses as JSON but does not hold what was written.
+        class CacheShapeError < StandardError; end
+
         XTIDE_FILE = File.expand_path('../data/latest-xtide.tcd', __dir__)
         TICON_FILE = File.expand_path('../data/latest-ticon.json', __dir__)
 
@@ -59,24 +62,65 @@ module Harmonics
         def stations
             ensure_source_files!
             # Double-checked locking for thread safety
-            return @parsed_stations if @parsed_stations
+            return @parsed_stations if @parsed_stations && !stations_retry_due?
+
+            stations_snapshot.first
+        end
+
+        # [stations, degraded] read together under the lock, so the flag belongs to that list: a
+        # second call could parse again (STATIONS_RETRY) and answer for a different list.
+        def stations_snapshot
+            ensure_source_files!
 
             (@stations_mutex ||= Mutex.new).synchronize do
-                return @parsed_stations if @parsed_stations
-
-                @parsed_stations = load_stations_from_cache || begin
-                    xtide_stations = parse_xtide_file
-                    ticon_stations = parse_ticon_file
-                    merged = xtide_stations + ticon_stations
-
-                    # Deduplicate merged stations by proximity, name, and constituents
-                    deduplicated = deduplicate_stations(merged)
-
-                    save_stations_to_cache(deduplicated)
-                    deduplicated
+                unless @parsed_stations && !stations_retry_due?
+                    if (cached = load_stations_from_cache)
+                        @stations_retry_at = nil
+                        @parsed_stations = cached
+                    else
+                        @parsed_stations = parse_stations
+                    end
                 end
+
+                [@parsed_stations, !@stations_retry_at.nil?]
             end
         end
+
+        # How long a station list built without the TICON stations (a failed
+        # TICON parse) is served before both files are parsed again.
+        STATIONS_RETRY = 1.hour
+
+        # True while the station list was built without the TICON stations: it
+        # is not in the station cache, and it is parsed again after
+        # STATIONS_RETRY.  Callers must not cache a list built from it.
+        def stations_degraded?
+            stations_snapshot.last
+        end
+
+        def stations_retry_due?
+            @stations_retry_at && Time.now >= @stations_retry_at
+        end
+
+        def parse_stations
+            xtide_stations = parse_xtide_file
+            ticon_stations = parse_ticon_file
+
+            # Deduplicate merged stations by proximity, name, and constituents
+            deduplicated = deduplicate_stations(xtide_stations + (ticon_stations || []))
+
+            if ticon_stations
+                @stations_retry_at = nil
+                save_stations_to_cache(deduplicated)
+            else
+                # The cache file name holds the checksum of the good TICON file, so
+                # a list cached now would be served without TICON until the data
+                # changed.
+                @stations_retry_at = Time.now + STATIONS_RETRY
+                @logger.error "!! station list built without TICON stations (#{deduplicated.size} stations), serving it uncached, parsing again after #{@stations_retry_at.utc}"
+            end
+            deduplicated
+        end
+        private :stations_retry_due?, :parse_stations
 
         def ensure_source_files!
             return @files_checked ||= begin
@@ -116,7 +160,9 @@ module Harmonics
         # subordinate tides store their level adds (h_level_add/l_level_add),
         # and the second parsed of a tide and a current with the same id is
         # stored under "<id>@<type>" (see cache_entry).
-        CACHE_VERSION = 4
+        # v5: the level adds and "<id>@<type>" keys came after v4 cache files
+        # had been written by the code before them, which those files lack.
+        CACHE_VERSION = 5
 
         # Engine version - increment when prediction output changes for the same
         # input data. Part of every nodal-factor cache file name and of
@@ -130,7 +176,9 @@ module Harmonics
         # of the window edges, and subordinate tide heights include the TCD
         # level add (206 stations), and the 5 tides with a current's id are
         # predicted from their own data (v3 used the current's).
-        ENGINE_VERSION = 4
+        # v5: the level adds and the 5 tides' own data came after v4 output had
+        # been cached by the code before them.
+        ENGINE_VERSION = 5
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
         #   tcd    (default) - TCD per-year equilibrium argument (V0+u) and node
@@ -154,7 +202,7 @@ module Harmonics
         end
 
         # Short string naming the engine version and nodal mode ("hA" +
-        # ENGINE_VERSION + mode, e.g. "hA4tcd"),
+        # ENGINE_VERSION + mode, e.g. "hA5tcd"),
         # for callers to put in harmonics tide/currents cache file names. It holds
         # no "_20dddd" token, so it cannot shadow a file name's datestamp.
         def self.cache_key_component(mode = nodal_mode)
@@ -334,8 +382,8 @@ module Harmonics
         end
 
         # A subordinate station's High/Low peaks in [start_time, end_time]: the
-        # reference_predictions peaks with the subordinate's time offsets and
-        # height multipliers applied.
+        # reference_predictions peaks with the subordinate's time offsets, height
+        # multipliers and level adds applied.
         def subordinate_peaks(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
             apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: step_seconds)
         end
@@ -353,7 +401,7 @@ module Harmonics
         # offsets reach over 12 hours (tides) and about 9 hours (current slacks).
         def subordinate_margin(sub_data)
             offsets = sub_data.values_at('h_time_offset', 'l_time_offset', 'flood_begins', 'ebb_begins')
-            largest = offsets.map { |o| offset_seconds(o).abs }.max || 0
+            largest = offsets.map { |o| offset_seconds(o).abs }.max
             [largest + 1.hour.to_i, 2.hours.to_i].max.seconds
         end
 
@@ -508,7 +556,7 @@ module Harmonics
         # Remove cache entries for windows that end before the cutoff date
         def prune_reference_peaks_cache(cutoff)
             @reference_peaks_cache.delete_if do |key, _|
-                # Key format: "ref_key:YYYYMM:YYYYMM"
+                # Key format: "ref_key:type:YYYYMM:YYYYMM" (type may be empty)
                 end_month = key.split(':').last
                 end_month < cutoff.strftime('%Y%m')
             end
@@ -702,19 +750,43 @@ module Harmonics
 
             @logger.debug "loading merged stations from cache: #{cache_file}"
             data = JSON.parse(File.read(cache_file))
-            raise JSON::ParserError, "expected a JSON object with 'stations', got #{data.class}" unless data.is_a?(Hash) && data['stations'].is_a?(Array)
+            check_stations_cache_shape(data)
 
-            stations = data['stations'].map { |h| h['metadata'] }
-            @stations_cache = data['stations_cache'] || {}
-            @speeds = data['speeds'] || {}
-            @constituent_definitions = data['constituent_definitions'] || {}
-            stations
-        rescue JSON::ParserError => e
-            # A corrupt file (e.g. a write cut short before writes were atomic)
-            # is a miss: remove it, and the caller parses the sources again.
+            @stations_cache = data['stations_cache']
+            @speeds = data['speeds']
+            @constituent_definitions = data['constituent_definitions']
+            data['stations'].map { |h| h['metadata'] }
+        rescue JSON::ParserError, CacheShapeError => e
+            # A corrupt file (e.g. a write cut short before writes were atomic),
+            # or one that parses but does not hold what save_stations_to_cache
+            # writes, is a miss: remove it, and the caller parses the sources again.
             @logger.error "!! unreadable station cache #{cache_file}, removing it and rebuilding: #{e.class} - #{e.message[0, 80]}"
             File.unlink(cache_file) rescue nil
             nil
+        end
+
+        # Raises CacheShapeError unless data holds what save_stations_to_cache
+        # writes: the station metadata, and a station cache entry with
+        # constituents for every station.
+        def check_stations_cache_shape(data)
+            bad = ->(what) { raise CacheShapeError, "expected #{what}" }
+            bad.("a JSON object, got #{data.class}") unless data.is_a?(Hash)
+            %w[speeds constituent_definitions stations_cache].each do |k|
+                bad.("'#{k}' to be an object, got #{data[k].class}") unless data[k].is_a?(Hash)
+            end
+            bad.("'stations' to be a non-empty array") unless data['stations'].is_a?(Array) && data['stations'].any?
+
+            cache = data['stations_cache']
+            bad_entry = cache.find { |_, v| !(v.is_a?(Hash) && v['constituents'].is_a?(Array)) }
+            bad.("station cache entry #{bad_entry.first.inspect} to have constituents") if bad_entry
+
+            data['stations'].each do |h|
+                meta = h['metadata'] if h.is_a?(Hash)
+                bad.("station metadata with an id and a type, got #{h.inspect[0, 60]}") unless meta.is_a?(Hash) && meta['id'].is_a?(String) && meta['type'].is_a?(String)
+
+                key = meta['bid'] || meta['id']
+                bad.("a station cache entry for #{key}") unless cache.key?(key) || cache.key?(typed_key(key, meta['type']))
+            end
         end
 
         def save_stations_to_cache(stations)
@@ -1119,8 +1191,9 @@ module Harmonics
                 @logger.info "loaded #{stations.length} TICON stations from JSON"
                 stations
             rescue => e
+                # nil, not [], so that #stations does not cache a list without TICON
                 @logger.error "failed to parse TICON JSON: #{e.message}"
-                []
+                nil
             end
         end
 
@@ -1171,11 +1244,22 @@ module Harmonics
         def load_nodal_cache(file)
             # Suppress per-day logging - too verbose
             return nil unless File.exist?(file)
-            JSON.parse(File.read(file))
-        rescue JSON::ParserError => e
-            # A corrupt file is a miss: the caller recomputes and rewrites it.
+            factors = JSON.parse(File.read(file))
+            check_nodal_cache_shape(factors)
+            factors
+        rescue JSON::ParserError, CacheShapeError => e
+            # A corrupt file, or one that parses but does not hold
+            # { name => { 'f', 'u', 'V0' } }, is a miss: the caller recomputes
+            # and rewrites it.
             @logger.warn "corrupt nodal cache #{file}, recomputing: #{e.message[0, 80]}"
             nil
+        end
+
+        def check_nodal_cache_shape(factors)
+            raise CacheShapeError, "expected a JSON object, got #{factors.class}" unless factors.is_a?(Hash)
+
+            bad = factors.find { |_, nf| !(nf.is_a?(Hash) && %w[f u V0].all? { |k| nf[k].is_a?(Numeric) }) }
+            raise CacheShapeError, "expected numeric f, u and V0 for #{bad.first.inspect}" if bad
         end
 
         # The tcd nodal file is shared by every station for a year, so a reader

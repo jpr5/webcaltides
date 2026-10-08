@@ -74,9 +74,12 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
         let(:t0) { Time.utc(2026, 12, 30) }
         let(:t1) { Time.utc(2027, 1, 2) }
 
-        it 'bumps the station cache to v4' do
-            expect(described_class::CACHE_VERSION).to eq(4)
-            expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v4_\h{8}_\h{8}\.json\z})
+        # v4 cache files were written by the code before the level adds and the "<id>@<type>" keys.
+        it 'bumps the station cache and engine to v5' do
+            expect(described_class::CACHE_VERSION).to eq(5)
+            expect(described_class::ENGINE_VERSION).to eq(5)
+            expect(described_class.cache_key_component('tcd')).to eq('hA5tcd')
+            expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v5_\h{8}_\h{8}\.json\z})
         end
 
         it 'writes tcd nodal files when HARMONICS_NODAL is invalid' do
@@ -84,7 +87,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                 with_mode('legcy') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                 expect(nodal).not_to be_empty
-                expect(nodal).to all(start_with('nodal_factors_v4_tcd_'))
+                expect(nodal).to all(start_with('nodal_factors_v5_tcd_'))
             end
         end
 
@@ -94,8 +97,8 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     with_mode(mode) { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                     nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                     expect(nodal).not_to be_empty
-                    expect(nodal).to all(start_with("nodal_factors_v4_#{mode}_"))
-                    expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v4_'))
+                    expect(nodal).to all(start_with("nodal_factors_v5_#{mode}_"))
+                    expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v5_'))
                 end
             end
         end
@@ -104,7 +107,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             Dir.mktmpdir do |dir|
                 with_mode('tcd') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 tcd_sum = described_class.new(logger, dir).source_files_checksum.split('_').first
-                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v4_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v4_tcd_t#{tcd_sum}_2027_0.0.json])
+                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v5_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v5_tcd_t#{tcd_sum}_2027_0.0.json])
             end
         end
 
@@ -127,12 +130,13 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             end
         end
 
-        # A prod-like dir holds unversioned nodal files and the v2 and v3 station
-        # caches written by older code (v3 holds a current's name depth as its
-        # datum offset). Poison them: they must never be read, and the output
-        # must equal a run from an empty dir.
+        # A prod-like dir holds unversioned and v4 nodal files and the v2, v3 and
+        # v4 station caches written by older code (v3 holds a current's name
+        # depth as its datum offset; v4 files written before the level adds and
+        # "<id>@<type>" keys lack them). Poison them: they must never be read,
+        # and the output must equal a run from an empty dir.
         %w[tcd legacy].each do |mode|
-            it "never reads pre-v4 cache files (#{mode})" do
+            it "never reads pre-v5 cache files (#{mode})" do
                 Dir.mktmpdir do |empty|
                     Dir.mktmpdir do |prod|
                         stale = []
@@ -142,7 +146,12 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                             File.write(f, { 'M2' => { 'f' => 50.0, 'u' => 90.0, 'V0' => 90.0 } }.to_json)
                         end
                         checksum = described_class.new(logger, prod).source_files_checksum
-                        %w[v2 v3].each do |v|
+                        [2026, 2027].each do |y|
+                            f = "#{prod}/nodal_factors_v4_#{mode}_t#{checksum.split('_').first}_#{y}_0.0.json"
+                            stale << f
+                            File.write(f, { 'M2' => { 'f' => 50.0, 'u' => 90.0, 'V0' => 90.0 } }.to_json)
+                        end
+                        %w[v2 v3 v4].each do |v|
                             f = "#{prod}/xtide_stations_#{v}_#{checksum}.json"
                             stale << f
                             File.write(f, '{"poisoned": ')
@@ -154,7 +163,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                             expect(events(described_class.new(logger, prod), 'X49eee41', t0, t1)).to eq(expected)
                         end
                         stale.each { |s| expect(File).not_to have_received(:read).with(s, any_args) }
-                        expect(Dir.children(prod)).to include(a_string_starting_with('xtide_stations_v4_'))
+                        expect(Dir.children(prod)).to include(a_string_starting_with('xtide_stations_v5_'))
                     end
                 end
             end
@@ -210,6 +219,93 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             end
         end
 
+        # A file that parses but does not hold what save_stations_to_cache wrote used to raise on
+        # every request, and was never rebuilt.
+        {
+            'an array' => ->(_) { [] },
+            'integer stations' => ->(_) { { 'stations' => [1, 2], 'stations_cache' => {}, 'speeds' => {}, 'constituent_definitions' => {} } },
+            'an array station cache' => ->(d) { d.merge('stations_cache' => []) },
+            'entries without constituents' => ->(d) { d.merge('stations_cache' => d['stations_cache'].transform_values { |v| v.except('constituents') }) },
+            'stations without metadata' => ->(d) { d.merge('stations' => d['stations'].map { |h| h.except('metadata') }) },
+            'a station with no cache entry' => ->(d) { d.merge('stations_cache' => d['stations_cache'].except('X2d7f27f')) },
+            'no speeds' => ->(d) { d.except('speeds') }
+        }.each do |shape, mangle|
+            it "treats a station cache holding #{shape} as a miss, logs it, and rebuilds it" do
+                Dir.mktmpdir do |dir|
+                    good = described_class.new(logger, dir)
+                    expected = good.stations
+                    file = good.stations_cache_file
+                    full = File.read(file)
+                    File.write(file, mangle.(JSON.parse(full)).to_json)
+
+                    engine = described_class.new(Logger.new(log = StringIO.new), dir)
+                    expect(engine.stations).to eq(expected)
+                    expect(engine.station_data('X2d7f27f')).to include('ref_key', 'flood_begins')
+                    expect(log.string).to match(/ERROR.*unreadable station cache #{Regexp.escape(file)}/)
+                    expect(File.read(file)).to eq(full)
+                end
+            end
+        end
+
+        # parse_ticon_file returned [] on any error, and that list was cached under the checksum
+        # of the good TICON file: one transient read error left every TICON station out until the
+        # data changed.
+        describe 'when the TICON file cannot be read' do
+            def fail_ticon_reads(engine, times)
+                failed = 0
+                allow(File).to receive(:read).and_call_original
+                allow(File).to receive(:read).with(engine.ticon_file).and_wrap_original do |m, *args|
+                    (failed += 1) <= times ? raise(Errno::EIO, engine.ticon_file) : m.call(*args)
+                end
+            end
+
+            it 'serves the stations without TICON uncached, marked degraded, and parses again after STATIONS_RETRY' do
+                Dir.mktmpdir do |dir|
+                    engine = described_class.new(Logger.new(log = StringIO.new), dir)
+                    fail_ticon_reads(engine, 1)
+
+                    first = engine.stations
+                    expect(first).not_to be_empty
+                    expect(first.count { |s| s['provider'] == 'ticon' }).to eq(0)
+                    expect(engine).to be_stations_degraded
+                    expect(File.exist?(engine.stations_cache_file)).to be(false)
+                    expect(log.string).to match(/ERROR.*failed to parse TICON JSON/)
+                    expect(log.string).to match(/ERROR.*station list built without TICON stations/)
+
+                    # Not parsed again before the retry is due
+                    expect(engine.stations).to equal(first)
+
+                    Timecop.travel(Time.now + described_class::STATIONS_RETRY + 1) do
+                        again = engine.stations
+                        expect(again.count { |s| s['provider'] == 'ticon' }).to be > 2000
+                        expect(engine).not_to be_stations_degraded
+                        expect(engine.station_data('T7a94f47', 'tide')).to include('constituents')
+                    end
+                    expect(File.exist?(engine.stations_cache_file)).to be(true)
+                end
+            end
+
+            it 'does not leave a station cache that a restarted engine serves without TICON' do
+                Dir.mktmpdir do |dir|
+                    failing = described_class.new(logger, dir)
+                    fail_ticon_reads(failing, 1)
+                    failing.stations
+
+                    restarted = described_class.new(logger, dir)
+                    expect(restarted.stations.count { |s| s['provider'] == 'ticon' }).to be > 2000
+                    expect(restarted).not_to be_stations_degraded
+                end
+            end
+
+            it 'tells the station list caller not to cache the list (Clients::Harmonics#station_list_degraded?)' do
+                client = Clients::Harmonics.allocate
+                client.instance_variable_set(:@engine, engine = described_class.new(logger, Dir.mktmpdir))
+                fail_ticon_reads(engine, 1)
+                expect(client.tide_stations).not_to be_empty
+                expect(client).to be_station_list_degraded
+            end
+        end
+
         # A parse fills the station cache one station at a time, so a lookup that only waits while
         # the cache is empty can see a partial cache, find no station and predict nothing.
         it 'waits for the station load before a lookup, even when the station cache is partly filled' do
@@ -220,6 +316,32 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
 
             expect(engine.station_data('LATE')).to eq(loaded)
             expect(engine).to have_received(:stations)
+        end
+
+        # Valid JSON that is not { name => { 'f', 'u', 'V0' } } used to raise TypeError on every
+        # request that predicted with it.
+        {
+            'an array' => [],
+            'a string' => 'x',
+            'a non-object entry' => { 'M2' => 1 },
+            'an entry without V0' => { 'M2' => { 'f' => 1.0, 'u' => 0.0 } }
+        }.each do |shape, content|
+            it "treats a tcd nodal file holding #{shape} as a miss, logs it, and rewrites it" do
+                Dir.mktmpdir do |empty|
+                    Dir.mktmpdir do |dir|
+                        with_mode('tcd') do
+                            fresh = described_class.new(logger, empty)
+                            expected = events(fresh, 'T7a94f47', t0, t1)
+                            engine = described_class.new(Logger.new(log = StringIO.new), dir)
+                            bad = engine.send(:tcd_nodal_cache_file, 2026, 0.0)
+                            File.write(bad, content.to_json)
+                            expect(events(engine, 'T7a94f47', t0, t1)).to eq(expected)
+                            expect(log.string).to match(/WARN.*corrupt nodal cache #{Regexp.escape(bad)}/)
+                            expect(JSON.parse(File.read(bad))).to eq(JSON.parse(File.read(fresh.send(:tcd_nodal_cache_file, 2026, 0.0))))
+                        end
+                    end
+                end
+            end
         end
 
         it 'writes nodal files via a temp file in the same dir and a rename' do
