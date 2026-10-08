@@ -9,6 +9,10 @@
 # with `git show`. If that checkout does not have the pinned commit, the files
 # come from raw.githubusercontent.com at the same commit.
 #
+# A downloaded file replaces the copy in this repo only if its SHA-256 matches
+# the pin, and it keeps the mode of that copy. Both files are always checked;
+# the exit status is non-zero if either fails.
+#
 # To move to a new schema commit: change SITE_COMMIT and both SHA-256 values in
 # the same commit as any writer change the new schema needs.
 set -euo pipefail
@@ -24,23 +28,14 @@ schema_dst="$here/schema/otc-0.2.schema.json"
 example_dst="$here/tests/fixtures/example-0.2.json"
 site_repo="${OTC_SITE_REPO:-/proj/opentideconstants}"
 
-sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
 
-fetch() { # <path in site repo> <destination>
-    local tmp
-    tmp="$(mktemp)"
-    if git -C "$site_repo" cat-file -e "$SITE_COMMIT:$1" 2>/dev/null; then
-        git -C "$site_repo" show "$SITE_COMMIT:$1" > "$tmp"
-    else
-        curl -fsSL "https://raw.githubusercontent.com/opentideconstants/opentideconstants/$SITE_COMMIT/$1" -o "$tmp"
-    fi
-    mkdir -p "$(dirname "$2")"
-    mv "$tmp" "$2"
-}
+sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
 
 check() { # <file> <expected sha256>
     local got
-    got="$(sha256 "$1")"
+    got="$(sha256 "$1")" || return 1
     if [[ "$got" != "$2" ]]; then
         echo "FAIL: $1 has SHA-256 $got, expected $2 (site commit $SITE_COMMIT)" >&2
         return 1
@@ -48,9 +43,28 @@ check() { # <file> <expected sha256>
     echo "ok: $1 matches site commit ${SITE_COMMIT:0:7}"
 }
 
+fetch() { # <path in site repo> <destination> <expected sha256>
+    local tmp="$tmpdir/$(basename "$2")"
+    if git -C "$site_repo" cat-file -e "$SITE_COMMIT:$1" 2>/dev/null; then
+        git -C "$site_repo" show "$SITE_COMMIT:$1" > "$tmp" || return 1
+    else
+        curl -fsSL "https://raw.githubusercontent.com/opentideconstants/opentideconstants/$SITE_COMMIT/$1" \
+            -o "$tmp" || return 1
+    fi
+    if ! check "$tmp" "$3" >/dev/null 2>&1; then
+        echo "FAIL: $1 at ${SITE_COMMIT:0:7} has SHA-256 $(sha256 "$tmp"), expected $3;" \
+             "$2 is not changed" >&2
+        return 1
+    fi
+    mkdir -p "$(dirname "$2")" || return 1
+    cp "$tmp" "$2" || return 1   # cp onto an existing file keeps its mode
+}
+
+status=0
 if [[ "${1:-}" != "--check" ]]; then
-    fetch "$SCHEMA_SRC" "$schema_dst"
-    fetch "$EXAMPLE_SRC" "$example_dst"
+    fetch "$SCHEMA_SRC" "$schema_dst" "$SCHEMA_SHA256" || status=1
+    fetch "$EXAMPLE_SRC" "$example_dst" "$EXAMPLE_SHA256" || status=1
 fi
-check "$schema_dst" "$SCHEMA_SHA256"
-check "$example_dst" "$EXAMPLE_SHA256"
+check "$schema_dst" "$SCHEMA_SHA256" || status=1
+check "$example_dst" "$EXAMPLE_SHA256" || status=1
+exit "$status"
