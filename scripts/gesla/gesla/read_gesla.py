@@ -35,7 +35,14 @@ from .record import GaugeRecord
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LOCK_PATH = REPO_ROOT / "data" / "gesla" / "inputs.lock.json"
 DEFAULT_VERSION = "4.1"
-METADATA_PATH = "metadata/GESLA4-1_ALL.csv"
+
+
+def metadata_path(version: str) -> str:
+    """The metadata CSV's path in the release: GESLA 4.1 -> metadata/GESLA4-1_ALL.csv."""
+    return f"metadata/GESLA{version.replace('.', '-')}_ALL.csv"
+
+
+METADATA_PATH = metadata_path(DEFAULT_VERSION)
 UNLISTED = "unlisted"
 
 
@@ -72,12 +79,17 @@ class ContributorRole:
 def load_contributor_roles(path: str | Path) -> dict[str, ContributorRole]:
     """data/gesla/contributor_roles.csv (G02): contributor, role (originator|redistributor), licence_class."""
     roles = {}
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
+            name = (row.get("contributor") or "").strip()
+            if row.get("role") is None or row.get("licence_class") is None:
+                raise ValueError(f"{path}: contributor {name!r}: the row is short (needs role and licence_class)")
             role = row["role"].strip()
             if role not in ("originator", "redistributor", UNLISTED):
-                raise ValueError(f"{path}: contributor {row['contributor']!r} has unknown role {role!r}")
-            roles[row["contributor"].strip()] = ContributorRole(role == "originator", row["licence_class"].strip())
+                raise ValueError(f"{path}: contributor {name!r} has unknown role {role!r}")
+            if name in roles:
+                raise ValueError(f"{path}: contributor {name!r} is listed twice")
+            roles[name] = ContributorRole(role == "originator", row["licence_class"].strip())
     return roles
 
 
@@ -97,7 +109,9 @@ class GeslaRelease:
         raw = manifest_path.read_bytes()
         if lock_path is not None:
             key = f"inputs/gesla/{version}/MANIFEST.json"
-            pin = json.loads(Path(lock_path).read_text())["objects"][key]
+            pin = json.loads(Path(lock_path).read_text()).get("objects", {}).get(key)
+            if pin is None:
+                raise ValueError(f"{lock_path} has no pin for {key}")
             got = sha256_bytes(raw)
             if got != pin["sha256"] or len(raw) != pin["size"]:
                 raise ShaMismatch(f"{manifest_path}: sha256 {got} size {len(raw)}, "
@@ -107,6 +121,7 @@ class GeslaRelease:
             raise ValueError(f"{manifest_path}: version {self.manifest.get('version')!r}, expected {version!r}")
         self.members: dict[str, dict] = {m["name"]: m for m in self.manifest["members"]}
         self.files: dict[str, dict] = {f["path"]: f for f in self.manifest["files"]}
+        self.metadata_path = metadata_path(version)
         self.zip_path = self.root / self.manifest["archive"]["name"]
         self._metadata: dict[str, dict[str, str]] | None = None
 
@@ -115,12 +130,15 @@ class GeslaRelease:
     def metadata(self) -> dict[str, dict[str, str]]:
         """Rows of the metadata CSV by file name, after checking the CSV against the manifest."""
         if self._metadata is None:
-            path = self.root / METADATA_PATH
-            entry = self.files[METADATA_PATH]
+            path = self.root / self.metadata_path
+            entry = self.files.get(self.metadata_path)
+            if entry is None:
+                raise ValueError(f"{self.root / 'MANIFEST.json'} has no entry for {self.metadata_path}")
             data = path.read_bytes()
             got = sha256_bytes(data)
-            if got != entry["sha256"]:
-                raise ShaMismatch(f"{path}: sha256 {got}, manifest has {entry['sha256']}")
+            if got != entry["sha256"] or len(data) != entry["size"]:
+                raise ShaMismatch(f"{path}: sha256 {got} size {len(data)}, "
+                                  f"manifest has {entry['sha256']} size {entry['size']}")
             self._metadata = parse_metadata(data)
         return self._metadata
 
@@ -142,7 +160,7 @@ class GeslaRelease:
     def record(self, name: str, roles: Mapping[str, ContributorRole]) -> GaugeRecord:
         meta = self.metadata().get(name)
         if meta is None:
-            raise KeyError(f"{name!r} has no row in {METADATA_PATH}")
+            raise KeyError(f"{name!r} has no row in {self.metadata_path}")
         return parse_record(name, self.read_member(name), meta, roles,
                             source_version=self.version, expected_sha256=self.members[name]["sha256"])
 
@@ -150,9 +168,11 @@ class GeslaRelease:
 def parse_metadata(data: bytes) -> dict[str, dict[str, str]]:
     """GESLA4-1_ALL.csv: CR line endings, and the header joins the last two names without a comma
     ("OVERALL RECORD QUALITYDOWNLOAD LINK"); the rows have the full 25 fields."""
-    text = data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    text = data.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
     rows = list(csv.reader(io.StringIO(text)))
-    header = rows[0]
+    if not rows:
+        raise ValueError("metadata CSV is empty")
+    header = [h.strip() for h in rows[0]]
     if header[-1] == "OVERALL RECORD QUALITYDOWNLOAD LINK":
         header = header[:-1] + ["OVERALL RECORD QUALITY", "DOWNLOAD LINK"]
     out = {}
@@ -197,13 +217,23 @@ def modal_interval_min(times_s: np.ndarray) -> int:
     return max(1, (step + 30) // 60)
 
 
+def _interval(name: str, times_s: np.ndarray) -> int:
+    try:
+        return modal_interval_min(times_s)
+    except ValueError as e:
+        raise ValueError(f"{name}: {e}") from e
+
+
 def parse_record(name: str, data: bytes, meta: Mapping[str, str], roles: Mapping[str, ContributorRole], *,
                  source_version: str, expected_sha256: str) -> GaugeRecord:
     """One GESLA-4 file (its raw bytes) -> GaugeRecord. expected_sha256 is the manifest's value."""
     sha = sha256_bytes(data)
     if sha != expected_sha256:
         raise ShaMismatch(f"member {name}: sha256 {sha}, manifest has {expected_sha256}")
-    head = parse_header(data)
+    try:
+        head = parse_header(data)
+    except UnicodeDecodeError as e:
+        raise ValueError(f"{name}: header is not UTF-8 ({e})") from e
     for k in ("LATITUDE", "LONGITUDE", "NULL VALUE", "GAUGE TYPE"):
         if k not in head:
             raise ValueError(f"{name}: header lacks {k}")
@@ -235,7 +265,7 @@ def parse_record(name: str, data: bytes, meta: Mapping[str, str], roles: Mapping
         lon=float(head["LONGITUDE"]),
         gauge_type=head["GAUGE TYPE"],
         sampling="instantaneous",   # GESLA declares no sampling; the time-base audit (G04) decides
-        interval_min=modal_interval_min(times_s),
+        interval_min=_interval(name, times_s),
         declared_time_base=None,
         member_sha256=sha,
         times_s=times_s,

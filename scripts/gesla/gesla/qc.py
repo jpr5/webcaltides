@@ -37,7 +37,7 @@ def identity_correction(times_s: np.ndarray, heights_m: np.ndarray) -> tuple[np.
     return times_s, heights_m
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Series:
     """A cleaned, sorted series with unique stamps: what the fit reads."""
     record_id: str

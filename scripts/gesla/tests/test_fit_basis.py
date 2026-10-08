@@ -24,8 +24,8 @@ import pytest
 
 from gesla.fit import fit_despiked, lsq, year_and_hours
 from gesla.qc import Series, clean, despike_mask, to_hourly
-from gesla.read_gesla import (ContributorRole, GeslaRelease, ShaMismatch, otc_work, parse_metadata,
-                              parse_record)
+from gesla.read_gesla import (ContributorRole, GeslaRelease, ShaMismatch, load_contributor_roles, otc_work,
+                              parse_metadata, parse_record)
 from gesla.record import GaugeRecord
 from gesla.tcd_table import TcdTable
 
@@ -86,7 +86,7 @@ def test_record_accepts_a_valid_record_and_freezes_arrays():
     assert len(r) == 10
     with pytest.raises(ValueError):
         r.heights_m[0] = 1.0
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         r.lat = 3.0  # type: ignore[misc]
 
 
@@ -144,6 +144,131 @@ def test_metadata_header_missing_comma_and_cr_lines():
     m = parse_metadata(raw)
     assert m["a-1"]["OVERALL RECORD QUALITY"] == "No obvious issues"
     assert m["a-1"]["DOWNLOAD LINK"] == "https://x/a-1"
+
+
+def test_record_copies_arrays_and_leaves_the_caller_alone():
+    base = np.arange(0, 11 * 3600, 3600, dtype=np.int64)
+    r = make_record(times_s=base[1:])
+    base[1] = 999
+    assert r.times_s[0] == 3600
+    assert base.flags.writeable and not r.times_s.flags.writeable
+    assert r.times_s.base is None or not r.times_s.base.flags.writeable
+
+
+def test_record_eq_and_hash_do_not_raise():
+    a, b = make_record(), make_record()
+    assert a == a and (a == b) is False
+    assert len({a, b}) == 2
+
+
+@pytest.mark.parametrize("over, msg", [
+    ({"record_id": None, "source": "rws", "declared_time_base": "utc_instant"}, "record_id is empty"),
+    ({"lat": "1"}, "lat"),
+    ({"lon": None}, "lon"),
+    ({"source": "rws", "record_id": "rws:X", "declared_time_base": None}, "declared_time_base"),
+])
+def test_record_rejects_more_broken_invariants_with_one_value_error(over, msg):
+    with pytest.raises(ValueError, match=msg):
+        make_record(**over)
+
+
+def test_contributor_roles_reject_duplicates_and_short_rows(tmp_path):
+    p = tmp_path / "roles.csv"
+    p.write_text("contributor,role,licence_class\nWSV,originator,A\nWSV,redistributor,B\n")
+    with pytest.raises(ValueError, match="WSV.*twice"):
+        load_contributor_roles(p)
+    p.write_text("contributor,role,licence_class\nWSV\n")
+    with pytest.raises(ValueError, match="WSV"):
+        load_contributor_roles(p)
+
+
+def test_metadata_bom_and_padded_header_names():
+    raw = "\ufeffFILE NAME , GAUGE TYPE\na-1,Coastal\n".encode("utf-8")
+    assert parse_metadata(raw)["a-1"]["GAUGE TYPE"] == "Coastal"
+    with pytest.raises(ValueError, match="empty"):
+        parse_metadata(b"")
+
+
+def test_reader_latin1_header_names_the_file():
+    data = GESLA_TEXT.encode().replace(b"SITE NAME Test", b"SITE NAME K\xf8ge")
+    with pytest.raises(ValueError, match="koege-1-dnk"):
+        parse_record("koege-1-dnk", data, GESLA_META, {}, source_version="4.1",
+                     expected_sha256=hashlib.sha256(data).hexdigest())
+
+
+def test_reader_header_only_file_names_the_file():
+    data = GESLA_TEXT.split("2020/01/01 00:00:00")[0].encode()
+    with pytest.raises(ValueError, match="empty-1"):
+        parse_record("empty-1", data, GESLA_META, {}, source_version="4.1",
+                     expected_sha256=hashlib.sha256(data).hexdigest())
+
+
+def _release(tmp_path, version="4.1", *, tamper=None):
+    """A small GESLA release on disk (zip, metadata, MANIFEST.json) and its lock file."""
+    import zipfile
+    meta_rel = f"metadata/GESLA{version.replace('.', '-')}_ALL.csv"
+    member = GESLA_TEXT.encode()
+    meta = b"FILE NAME,CONTRIBUTOR (ABBREVIATED),GAUGE TYPE,NULL VALUE\nm-1,WSV,Coastal,301.0001\n"
+    (tmp_path / "metadata").mkdir()
+    (tmp_path / meta_rel).write_bytes(meta)
+    with zipfile.ZipFile(tmp_path / "A.zip", "w") as z:
+        z.writestr("m-1", member)
+    ent = lambda b: {"sha256": hashlib.sha256(b).hexdigest(), "size": len(b)}
+    man = {"version": version, "archive": {"name": "A.zip"}, "members": [dict(name="m-1", **ent(member))],
+           "files": [dict(path=meta_rel, **ent(meta))]}
+    if tamper:
+        tamper(man)
+    raw = json.dumps(man).encode()
+    (tmp_path / "MANIFEST.json").write_bytes(raw)
+    lock = tmp_path / "lock.json"
+    lock.write_text(json.dumps({"objects": {f"inputs/gesla/{version}/MANIFEST.json": ent(raw)}}))
+    return lock
+
+
+def test_release_reads_offline_and_metadata_path_follows_version(tmp_path):
+    lock = _release(tmp_path, "4.2")
+    rel = GeslaRelease(tmp_path, version="4.2", lock_path=lock)
+    r = rel.record("m-1", {})
+    assert r.source_version == "4.2" and r.contributor == "WSV"
+
+
+def test_release_detects_tampering_offline(tmp_path):
+    lock = _release(tmp_path)
+    (tmp_path / "MANIFEST.json").write_bytes((tmp_path / "MANIFEST.json").read_bytes() + b" ")
+    with pytest.raises(ShaMismatch, match="lock pins"):
+        GeslaRelease(tmp_path, lock_path=lock)
+
+
+def test_release_detects_a_tampered_member_and_metadata(tmp_path):
+    def bad_member(man):
+        man["members"][0]["sha256"] = "f" * 64
+    lock = _release(tmp_path, tamper=bad_member)
+    rel = GeslaRelease(tmp_path, lock_path=lock)
+    with pytest.raises(ShaMismatch, match="member m-1"):
+        rel.read_member("m-1")
+
+
+def test_release_checks_metadata_size(tmp_path):
+    def bad_size(man):
+        man["files"][0]["size"] += 1
+    lock = _release(tmp_path, tamper=bad_size)
+    with pytest.raises(ShaMismatch, match="size"):
+        GeslaRelease(tmp_path, lock_path=lock).metadata()
+
+
+def test_release_missing_lock_or_manifest_entry_is_a_clear_error(tmp_path):
+    lock = _release(tmp_path)
+    lock.write_text(json.dumps({"objects": {}}))
+    with pytest.raises(ValueError, match="lock.json has no pin for inputs/gesla/4.1/MANIFEST.json"):
+        GeslaRelease(tmp_path, lock_path=lock)
+
+    def no_files(man):
+        man["files"] = []
+    sub = tmp_path / "b"
+    sub.mkdir()
+    lock = _release(sub, tamper=no_files)
+    with pytest.raises(ValueError, match="MANIFEST.json has no entry for metadata/GESLA4-1_ALL.csv"):
+        GeslaRelease(sub, lock_path=lock).metadata()
 
 
 # --- QC --------------------------------------------------------------------------------------------
@@ -344,7 +469,7 @@ def real():
     rel_root = otc_work() / "inputs" / "gesla" / "4.1"
     dump = Path(os.environ.get("OTC_TCD_TABLE", otc_work() / "tcd_table.json"))
     harcon = otc_work() / "gates" / "refs" / "noaa" / "harcon" / "harcon_8443970.json"
-    missing = [str(p) for p in (rel_root / "GESLA4.1_ALL.zip", rel_root / "MANIFEST.json", dump, harcon)
+    missing = [str(p) for p in (rel_root / "GESLA4.1_ALL.zip", rel_root / "MANIFEST.json", dump, harcon, TCD_PATH)
                if not p.exists()]
     if missing:
         pytest.skip(f"real-record inputs not in the cache: {missing}")

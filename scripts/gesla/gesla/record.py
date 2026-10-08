@@ -5,8 +5,10 @@ This is the contract between the GESLA reader (read_gesla.py) and every gauge ad
 QC, the time-base audit and the fit read only this type. The fields are frozen: a change
 needs the orchestrator and every adapter slot told (manifest §2.1).
 
-The constructor checks the invariants every consumer relies on and makes the three arrays
-read-only, so a record cannot change after it is built.
+The constructor checks the invariants every consumer relies on and stores read-only copies
+of the three arrays, so a record cannot change after it is built and the caller's arrays are
+left as they were. Records compare and hash by identity (eq=False): the arrays have no
+truth value.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ SAMPLING = frozenset({"instantaneous", "mean"})
 _SHA256 = re.compile(r"\A[0-9a-f]{64}\Z")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class GaugeRecord:
     record_id: str          # GESLA file name, or "<source>:<upstream station id>"
     source: str             # "gesla", "pegelonline", "rws", "marine-institute", "dmi", "smhi", "fmi", "uhslc-fd", "shom-refmar"
@@ -45,11 +47,11 @@ class GaugeRecord:
 
     def __post_init__(self) -> None:
         errors = []
-        if not self.record_id:
+        if not self.record_id or not isinstance(self.record_id, str):
             errors.append("record_id is empty")
         if self.source not in SOURCES:
             errors.append(f"source {self.source!r} is not one of {sorted(SOURCES)}")
-        elif self.source != "gesla" and not self.record_id.startswith(f"{self.source}:"):
+        elif self.source != "gesla" and not str(self.record_id or "").startswith(f"{self.source}:"):
             errors.append(f"record_id {self.record_id!r} must start with '{self.source}:'")
         if not self.source_version:
             errors.append("source_version is empty")
@@ -59,10 +61,10 @@ class GaugeRecord:
             errors.append("originator must be a bool")
         if not self.licence_class:
             errors.append("licence_class is empty")
-        if not (-90.0 <= self.lat <= 90.0):
-            errors.append(f"lat {self.lat} outside [-90, 90]")
-        if not (-180.0 <= self.lon <= 360.0):
-            errors.append(f"lon {self.lon} outside [-180, 360]")
+        for name, lo, hi in (("lat", -90.0, 90.0), ("lon", -180.0, 360.0)):
+            v = getattr(self, name)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not (lo <= v <= hi):
+                errors.append(f"{name} {v!r} is not a number in [{lo:g}, {hi:g}]")
         if not self.gauge_type:
             errors.append("gauge_type is empty")
         if self.sampling not in SAMPLING:
@@ -71,6 +73,8 @@ class GaugeRecord:
             errors.append(f"interval_min {self.interval_min!r} must be a positive int")
         if self.source == "gesla" and self.declared_time_base is not None:
             errors.append("declared_time_base must be None for GESLA (the audit decides)")
+        if self.source != "gesla" and not self.declared_time_base:
+            errors.append("declared_time_base is required for an adapter record (only GESLA leaves it to the audit)")
         if not _SHA256.match(self.member_sha256 or ""):
             errors.append(f"member_sha256 {self.member_sha256!r} is not a lower-case SHA-256")
         for name, dtype in (("times_s", np.int64), ("heights_m", np.float64), ("good", np.bool_)):
@@ -84,7 +88,9 @@ class GaugeRecord:
         if errors:
             raise ValueError(f"GaugeRecord {self.record_id!r}: " + "; ".join(errors))
         for name in ("times_s", "heights_m", "good"):
-            getattr(self, name).setflags(write=False)
+            arr = np.array(getattr(self, name), copy=True)
+            arr.setflags(write=False)
+            object.__setattr__(self, name, arr)
 
     def __len__(self) -> int:
         return len(self.times_s)
