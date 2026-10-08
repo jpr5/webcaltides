@@ -254,6 +254,14 @@ module WebCalTides
         tide_clients(:xtide).engine.source_files_checksum
     end
 
+    # Cache-key part for the quarterly tide and current station lists, which hold station records
+    # from the harmonics engine: the dataset (harmonics_checksum) and the engine's station record
+    # version (Harmonics::Engine::CACHE_VERSION), so a list cached by code that built those records
+    # differently is built again on deploy rather than served until the next quarter.
+    def harmonics_stations_key
+        "#{harmonics_checksum}_hs#{Harmonics::Engine::CACHE_VERSION}"
+    end
+
     # Cache-key suffix for data the harmonics engine serves: the dataset (harmonics_checksum) and
     # the engine version + HARMONICS_NODAL flag, so a change to any of them rebuilds only harmonics
     # caches.  "" for agency stations, whose names stay as they were.  It goes after the _YYYYMM
@@ -655,15 +663,15 @@ module WebCalTides
     ## Tides
     ##
 
-    # Cache quarterly / every three months, versioned by harmonics checksum and the set of tide
-    # providers (so adding a provider doesn't wait for the next quarter to show up)
+    # Cache quarterly / every three months, versioned by the harmonics dataset and station record
+    # version (harmonics_stations_key) and the set of tide providers (so adding a provider doesn't wait for the next quarter to show up)
     def tide_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
         # A client's station_list_version (if it has one) is part of it, so a change to which stations a
         # client lists rebuilds the list on deploy rather than next quarter
         providers = Digest::MD5.hexdigest(tide_clients.map { |name, c| [name, c.class.try(:station_list_version)].compact.join(":") }.sort.join(","))[0, 8]
-        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}_#{providers}.json"
+        "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_stations_key}_#{providers}.json"
     end
 
     # If a provider's station list fails, serve the others but don't cache the incomplete list for
@@ -1067,11 +1075,12 @@ module WebCalTides
     ## Currents
     ##
 
-    # Cache quarterly / every three months, versioned by harmonics checksum
+    # Cache quarterly / every three months, versioned by the harmonics dataset and station record
+    # version (harmonics_stations_key)
     def current_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}.json"
+        "#{settings.cache_dir}/current_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_stations_key}.json"
     end
 
     # Quarterly-versioned region mapping file

@@ -42,7 +42,7 @@ RSpec.describe 'Tide station cache and tide data cache', :aggregate_failures do
             without_bsh = WebCalTides.tide_station_cache_file
 
             expect(with_bsh).not_to eq(without_bsh)
-            expect(File.basename(with_bsh)).to match(/\Atide_stations_v\d+_20\d\dQ\d_cafebabe_\h{8}\.json\z/)
+            expect(File.basename(with_bsh)).to match(/\Atide_stations_v\d+_20\d\dQ\d_cafebabe_hs\d+_\h{8}\.json\z/)
         end
 
         [
