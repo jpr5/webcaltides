@@ -536,6 +536,24 @@ RSpec.describe WebCalTides do
             end
         end
 
+        context 'when the alternative reports heights in metres and the primary in feet' do
+            before do
+                allow(WebCalTides).to receive(:next_tide_events).with('PRIMARY1', around: anything).and_return([
+                    { type: 'High', time: Time.utc(2025, 6, 15, 14, 0, 0).in_time_zone('America/New_York'), height: 5.534, units: 'ft' }
+                ])
+                allow(WebCalTides).to receive(:next_tide_events).with('ALT1', around: anything).and_return([
+                    { type: 'High', time: Time.utc(2025, 6, 15, 14, 5, 0).in_time_zone('America/New_York'), height: 2.051, units: 'm' }
+                ])
+            end
+
+            it 'converts the alternative into feet before subtracting' do
+                result = WebCalTides.compute_variance(primary, [alt1])
+
+                # 2.051 m = 6.729 ft, and 6.729 - 5.534 = +1.195 ft
+                expect(result['ALT1'][:height]).to match(/\A\+1\.(19|2)ft\z/)
+            end
+        end
+
         context 'when an alternative has no events' do
             before do
                 allow(WebCalTides).to receive(:next_tide_events).with('PRIMARY1', around: anything).and_return([

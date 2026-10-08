@@ -121,6 +121,43 @@ RSpec.describe 'GET /api/stations/compare', type: :api do
         end
     end
 
+    context 'when the stations report heights in different units (NOAA feet vs TICON metres)' do
+        # San Francisco: NOAA 9414290 High 5.534 ft, TICON Tc676200 High 2.051 m (= 6.729 ft).
+        let(:sf_noaa)  { build_station(name: 'San Francisco NOAA',  id: '9414290',  provider: 'noaa') }
+        let(:sf_ticon) { build_station(name: 'San Francisco TICON', id: 'Tc676200', provider: 'ticon') }
+
+        before do
+            allow(WebCalTides).to receive(:tide_station_for).with('9414290').and_return(sf_noaa)
+            allow(WebCalTides).to receive(:tide_station_for).with('Tc676200').and_return(sf_ticon)
+
+            allow(WebCalTides).to receive(:next_tide_events).with('9414290').and_return([
+                { type: 'High', time: Time.current + 2.hours, height: 5.534, units: 'ft' }
+            ])
+            allow(WebCalTides).to receive(:next_tide_events).with('Tc676200').and_return([
+                { type: 'High', time: Time.current + 2.hours + 5.minutes, height: 2.051, units: 'm' }
+            ])
+        end
+
+        it 'converts the alternative into the primary units (feet) before subtracting' do
+            get '/api/stations/compare', type: 'tides', ids: ['9414290', 'Tc676200']
+
+            alt = JSON.parse(last_response.body)['stations'][1]
+
+            expect(alt['event_deltas'].first['units']).to eq('ft')
+            expect(alt['event_deltas'].first['raw_value']).to be_within(0.011).of(1.19)
+            expect(alt['delta']['raw_value']).to be_within(0.011).of(1.19)
+        end
+
+        it 'converts the alternative into the primary units (metres) before subtracting' do
+            get '/api/stations/compare', type: 'tides', ids: ['Tc676200', '9414290']
+
+            alt = JSON.parse(last_response.body)['stations'][1]
+
+            expect(alt['event_deltas'].first['units']).to eq('m')
+            expect(alt['event_deltas'].first['raw_value']).to be_within(0.011).of(-0.36)
+        end
+    end
+
     context 'with invalid type' do
         it 'returns error for invalid type' do
             get '/api/stations/compare', type: 'invalid', ids: ['NOAA123']

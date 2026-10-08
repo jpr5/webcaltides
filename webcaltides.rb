@@ -607,8 +607,10 @@ module WebCalTides
             time_diff_seconds = (alt_next[:time].to_time - primary_next[:time].to_time).to_i
             # Heights above different datums (NAP vs chart datum) aren't comparable either.
             height_delta = unless alt_next[:height].nil? || primary_next[:height].nil? || alt_next[:datum] != primary_next[:datum]
-                height_diff = (alt_next[:height].to_f - primary_next[:height].to_f).round(2)
-                format_height_delta(height_diff, primary_next[:units] || 'ft')
+                units       = primary_next[:units] || 'ft'
+                alt_height  = convert_depth_to_correct_units(alt_next[:height].to_f, alt_next[:units] || 'ft', units)
+                height_diff = (alt_height.to_f - primary_next[:height].to_f).round(2)
+                format_height_delta(height_diff, units)
             end
 
             deltas[alt.id] = {
