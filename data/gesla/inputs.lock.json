@@ -2,6 +2,11 @@
   "gesla_version": "4.1",
   "bucket": "opentideconstants-work",
   "objects": {
+    "inputs/gesla/4.1/MANIFEST.json": {
+      "uri": "s3://opentideconstants-work/inputs/gesla/4.1/MANIFEST.json",
+      "sha256": "ab1a7535ae7108ad72f5ed222569215a8b67ffc347dbb54395bf9d769e0708b1",
+      "size": 1129949
+    },
     "inputs/gesla/4.1/inputs.lock.json": {
       "uri": "s3://opentideconstants-work/inputs/gesla/4.1/inputs.lock.json",
       "sha256": "a42b3cfa994777c05b6f2986d353652d9d84792442c53bd0a933424291e6409c",

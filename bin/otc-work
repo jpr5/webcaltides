@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# otc-work: helper for the private OpenTideConstants work bucket (Cloudflare R2, S3 API).
+#
+#   bin/otc-work ls [PREFIX]          list objects under PREFIX (recursive)
+#   bin/otc-work get KEY [DEST]       download KEY to DEST (default $OTC_WORK/KEY), via DEST.part + rename
+#   bin/otc-work put SRC KEY          upload SRC to KEY, then check the object's size
+#   bin/otc-work head KEY             print the object's size in bytes
+#   bin/otc-work sync-down PREFIX     sync PREFIX into $OTC_WORK/PREFIX
+#
+# Credentials: locally ~/.config/opentideconstants/r2-work.env (or $OTC_WORK_ENV); in CI the Actions
+# secrets OTC_WORK_ACCESS_KEY_ID, OTC_WORK_SECRET_ACCESS_KEY, OTC_WORK_BUCKET and R2_ACCOUNT_ID.
+# $OTC_WORK (default ~/.local/share/opentideconstants/work) is only a local cache of the bucket.
+set -euo pipefail
+
+die() { echo "otc-work: $*" >&2; exit 1; }
+
+caller_cache=${OTC_WORK:-}
+env_file=${OTC_WORK_ENV:-$HOME/.config/opentideconstants/r2-work.env}
+if [[ -f $env_file ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+elif [[ -n ${OTC_WORK_ACCESS_KEY_ID:-} ]]; then
+    export AWS_ACCESS_KEY_ID=$OTC_WORK_ACCESS_KEY_ID
+    export AWS_SECRET_ACCESS_KEY=${OTC_WORK_SECRET_ACCESS_KEY:?OTC_WORK_SECRET_ACCESS_KEY is not set}
+fi
+[[ -n ${AWS_ACCESS_KEY_ID:-} ]] || die "no credentials: $env_file is missing and OTC_WORK_ACCESS_KEY_ID is not set"
+: "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID is not set}"
+export AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3:-https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com}
+export AWS_DEFAULT_REGION=auto
+unset AWS_PROFILE
+bucket=${OTC_WORK_BUCKET:-opentideconstants-work}
+cache=${caller_cache:-${OTC_WORK:-$HOME/.local/share/opentideconstants/work}}
+cache=${cache/#\~/$HOME}
+
+size_of() { stat -f %z "$1" 2>/dev/null || stat -c %s "$1"; }
+head_size() { aws s3api head-object --bucket "$bucket" --key "$1" --query ContentLength --output text; }
+
+cmd=${1:-}; shift || true
+case $cmd in
+    ls)
+        aws s3 ls --recursive "s3://$bucket/${1:-}"
+        ;;
+    get)
+        key=${1:?usage: get KEY [DEST]}
+        dest=${2:-$cache/$key}
+        mkdir -p "$(dirname "$dest")"
+        aws s3 cp --only-show-errors "s3://$bucket/$key" "$dest.part"
+        want=$(head_size "$key")
+        got=$(size_of "$dest.part")
+        [[ $got == "$want" ]] || { rm -f "$dest.part"; die "get $key: $got bytes, bucket has $want"; }
+        mv -f "$dest.part" "$dest"
+        ;;
+    put)
+        src=${1:?usage: put SRC KEY}; key=${2:?usage: put SRC KEY}
+        [[ -f $src ]] || die "put: $src is not a file"
+        aws s3 cp --only-show-errors "$src" "s3://$bucket/$key"
+        want=$(size_of "$src")
+        got=$(head_size "$key")
+        [[ $got == "$want" ]] || die "put $key: bucket has $got bytes, $src has $want"
+        ;;
+    head)
+        head_size "${1:?usage: head KEY}"
+        ;;
+    sync-down)
+        prefix=${1:?usage: sync-down PREFIX}
+        prefix=${prefix%/}
+        aws s3 sync --only-show-errors "s3://$bucket/$prefix/" "$cache/$prefix/"
+        ;;
+    *)
+        sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2
+        exit 2
+        ;;
+esac
