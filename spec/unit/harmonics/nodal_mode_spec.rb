@@ -193,10 +193,11 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
         end
     end
 
-    # Output of commit e441ec9 (before per-year TCD nodal corrections) for 2 XTide and 2 TICON
-    # stations across the 2026/2027 year boundary.  The current station X0730150_90 was
-    # regenerated when its datum offset changed from the name depth (90) to the TCD value
-    # (-0.067): every velocity moved by exactly 90.067 and peak times by under 1 microsecond.
+    # Legacy-mode output for 2 XTide and 2 TICON stations across the 2026/2027 year boundary.
+    # The tide stations are the output of commit e441ec9 (before per-year TCD nodal
+    # corrections).  The current station X0730150_90 is e441ec9 output with its datum offset
+    # corrected from the name depth (90) to the TCD value (-0.067): every velocity is
+    # 90.067 lower and peak times differ by under 1 microsecond.
     #
     # Raw hourly heights come out of libm sin/cos, which differ by an ulp or
     # two between platforms (glibc on Linux vs macOS gave deltas up to 4.4e-16),
@@ -208,7 +209,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             match(golden.map { |t, h| [t, be_within(1e-9).of(h)] })
         end
 
-        it 'reproduces e441ec9 output (peaks exactly, hourly heights to 1e-9)' do
+        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 (peaks exactly, hourly heights to 1e-9)' do
             golden = JSON.parse(File.read("#{fixtures}/legacy_e441ec9_events.json"))
             t0, t1 = golden['window'].map { |w| Time.parse("#{w} UTC") }
             Dir.mktmpdir do |dir|

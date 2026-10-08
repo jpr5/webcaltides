@@ -119,7 +119,9 @@ module Harmonics
         # cached by older code is never reused. The station cache file uses
         # CACHE_VERSION instead.
         # v4: XTide currents get flood, ebb and slack events with signed
-        # velocities (v3 cached every XTide current event as flood).
+        # velocities (v3 labelled XTide current events flood, because a name
+        # depth was added to every velocity), and subordinate stations no longer
+        # lose events within their time offset of the window edges.
         ENGINE_VERSION = 4
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
@@ -205,18 +207,10 @@ module Harmonics
             # If this is a subordinate station, we predict for the reference station
             # and then apply offsets.
             if station_data['ref_key']
-                ref_key = station_data['ref_key']
-                @logger.debug "station #{station_id} is subordinate to #{ref_key}, predicting via ref station"
+                @logger.debug "station #{station_id} is subordinate to #{station_data['ref_key']}, predicting via ref station"
 
-                # We need to predict a slightly larger window for the ref station to ensure
-                # we don't miss peaks that shift into our requested window after offsets.
-                # Max offset in XTide is usually around 12-24h but realistically 1-2h.
-                # We'll add 2 hours buffer on both sides.
-                ref_start = start_time - 2.hours
-                ref_end = end_time + 2.hours
-
-                ref_predictions = generate_predictions(ref_key, ref_start, ref_end, options)
-                return apply_subordinate_offsets(ref_predictions, station_data, start_time, end_time, step_seconds: step_seconds)
+                ref_predictions = reference_predictions(station_data, start_time, end_time, options)
+                return subordinate_peaks(ref_predictions, station_data, start_time, end_time, step_seconds: step_seconds)
             end
 
             constituents = station_data['constituents'] || []
@@ -287,6 +281,47 @@ module Harmonics
             end
 
             predictions
+        end
+
+        # Station data from the station cache ({} when unknown).
+        def station_data(station_id)
+            stations if @stations_cache.empty?
+            @stations_cache[station_id] || {}
+        end
+
+        # The reference station's predictions for a subordinate station, over
+        # [start_time, end_time] widened by subordinate_margin, so that every
+        # reference event the subordinate's time offsets move into the window
+        # is predicted.
+        def reference_predictions(sub_data, start_time, end_time, options = {})
+            margin = subordinate_margin(sub_data)
+            generate_predictions(sub_data['ref_key'], start_time - margin, end_time + margin, options)
+        end
+
+        # A subordinate station's High/Low peaks in [start_time, end_time]: the
+        # reference_predictions peaks with the subordinate's time offsets and
+        # height multipliers applied.
+        def subordinate_peaks(ref_predictions, sub_data, start_time, end_time, step_seconds: 60)
+            apply_subordinate_offsets(ref_predictions, sub_data, start_time, end_time, step_seconds: step_seconds)
+        end
+
+        # How far outside a window the reference station must be predicted for a
+        # subordinate station: its largest time offset (high, low, flood begins,
+        # ebb begins) plus 1 hour, and never less than 2 hours.  XTide time
+        # offsets reach over 12 hours (tides) and about 9 hours (current slacks).
+        def subordinate_margin(sub_data)
+            offsets = sub_data.values_at('h_time_offset', 'l_time_offset', 'flood_begins', 'ebb_begins')
+            largest = offsets.map { |o| offset_seconds(o).abs }.max || 0
+            [largest + 1.hour.to_i, 2.hours.to_i].max.seconds
+        end
+
+        # "[+-]HH:MM[:SS]" -> signed seconds; nil (or the TCD null '\N') -> 0
+        def offset_seconds(offset)
+            return 0 if offset.nil? || offset == '\N'
+
+            sign = offset.start_with?('-') ? -1 : 1
+            h, m, s = offset.delete('+-').split(':').map(&:to_i)
+            sign * (h * 3600 + m * 60 + (s || 0))
         end
 
         def detect_peaks(predictions, step_seconds: 60)
@@ -625,6 +660,9 @@ module Harmonics
                 'speeds' => @speeds,
                 'constituent_definitions' => @constituent_definitions,
                 'stations_cache' => @stations_cache,
+                # Only 'metadata' is read back (load_stations_from_cache).  The other
+                # fields are an informational copy of a few stations_cache fields;
+                # stations_cache above holds them all (e.g. flood_begins/ebb_begins).
                 'stations' => stations.map do |s|
                     cache_key = s['bid'] || s['id']
                     cache_entry = @stations_cache[cache_key]

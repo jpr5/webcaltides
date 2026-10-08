@@ -169,7 +169,8 @@ RSpec.describe Clients::Harmonics do
 
     describe '#detect_zero_crossings' do
         it 'interpolates crossing time using actual time delta between points' do
-            # Simulate peaks that are 6 hours apart (like subordinate station output)
+            # Peaks 6 hours apart, as for a subordinate station without slack
+            # offsets, which falls back to interpolating between its peaks
             # Flood at 06:00 (+2.0 kn), Ebb at 12:00 (-1.0 kn)
             # Zero crossing should be at ~10:00 (2/3 of the way, based on height ratio)
             predictions = [
@@ -242,12 +243,14 @@ RSpec.describe Clients::Harmonics do
                 client.current_data_for(station, window_start)
             end
 
+            # NOAA's list is every event in the window, so the events must match
+            # it one to one: same count, same order of types, each within 5
+            # minutes and 0.05 knots.  No extra or duplicate events.
             def expect_noaa_events(events, noaa)
-                noaa.each do |time, type, velocity|
-                    match = events.select { |e| e.type == type }.min_by { |e| (e.time.to_time - time).abs }
-                    expect(match).not_to be_nil, "no #{type} event near #{time}"
-                    expect(match.time.to_time).to be_within(5.minutes).of(time)
-                    expect(match.velocity_major).to be_within(0.05).of(velocity)
+                expect(events.map(&:type)).to eq(noaa.map { |_, type, _| type })
+                events.zip(noaa).each do |e, (time, type, velocity)|
+                    expect(e.time.to_time).to be_within(5.minutes).of(time), "#{type} at #{e.time}, NOAA #{time}"
+                    expect(e.velocity_major).to be_within(0.05).of(velocity)
                 end
             end
 
@@ -257,7 +260,6 @@ RSpec.describe Clients::Harmonics do
                     case e.type
                     when 'flood' then expect(e.velocity_major).to be > 0
                     when 'ebb'   then expect(e.velocity_major).to be < 0
-                    when 'slack' then expect(e.velocity_major).to eq(0.0)
                     end
                 end
             end
@@ -280,12 +282,177 @@ RSpec.describe Clients::Harmonics do
 
                 expect_signed_events(events)
                 expect_noaa_events(events, [
+                    [Time.utc(2026, 10, 7, 0, 0), 'ebb', -0.43],
                     [Time.utc(2026, 10, 7, 3, 2), 'slack', 0.0],
                     [Time.utc(2026, 10, 7, 8, 44), 'flood', 0.42],
                     [Time.utc(2026, 10, 7, 9, 59), 'slack', 0.0],
                     [Time.utc(2026, 10, 7, 12, 59), 'ebb', -0.43],
                     [Time.utc(2026, 10, 7, 15, 25), 'slack', 0.0]
                 ])
+            end
+
+            # A subordinate station's events are the reference station's events
+            # moved by its time offsets, which reach about 9 hours for slacks and
+            # over 2 hours for max currents at hundreds of stations.  An event
+            # moved in from beyond the window must still be there: the events
+            # for [start, end] must equal those of a window 12 hours wider on
+            # each side, clipped to [start, end].
+            def window_events(bid, from, to)
+                station = client.current_stations.find { |s| s.bid == bid }
+                allow(client).to receive(:beginning_of_window).and_return(from)
+                allow(client).to receive(:end_of_window).and_return(to)
+                client.current_data_for(station, from).map { |e| [e.type, e.time.to_time.utc.round] }
+            end
+
+            def expect_no_edge_loss(bid, from, to)
+                narrow = window_events(bid, from, to)
+                wide = window_events(bid, from - 12.hours, to + 12.hours).select { |_, t| t.between?(from, to) }
+                expect(narrow).to eq(wide)
+                narrow
+            end
+
+            it 'keeps subordinate slacks moved in from before the window start (Point Lookout, flood begins +05:08)' do
+                events = expect_no_edge_loss('X05f2f68', Time.utc(2026, 11, 1), Time.utc(2026, 11, 2))
+                expect(events).to include(['slack', Time.utc(2026, 11, 1, 1, 50, 3)])
+            end
+
+            it 'keeps subordinate slacks moved in near the window start (Tuckernuck Island, flood begins +04:08)' do
+                events = expect_no_edge_loss('X03f647c', Time.utc(2026, 10, 7, 1), Time.utc(2026, 10, 8, 1))
+                expect(events.map(&:first).tally).to eq('slack' => 4, 'flood' => 2, 'ebb' => 2)
+            end
+
+            it 'keeps subordinate max currents moved in from after the window end (max/min time -08:10)' do
+                events = expect_no_edge_loss('X485d5d6', Time.utc(2026, 10, 7), Time.utc(2026, 10, 8))
+                expect(events).to include(['flood', Time.utc(2026, 10, 7, 21, 45, 32)])
+            end
+
+            it 'keeps a subordinate max ebb moved in from after the window end (min time -08:05)' do
+                events = expect_no_edge_loss('X1cab8cf_10', Time.utc(2026, 10, 7), Time.utc(2026, 10, 8))
+                expect(events).to include(['ebb', Time.utc(2026, 10, 7, 19, 4, 21)])
+            end
+        end
+    end
+
+    describe 'XTide subordinate stations and current metadata' do
+        context 'with the real XTide data' do
+            around do |example|
+                original_xtide = ENV['XTIDE_FILE']
+                original_ticon = ENV['TICON_FILE']
+                ENV['XTIDE_FILE'] = fixture_xtide
+                ENV['TICON_FILE'] = fixture_ticon
+
+                with_test_cache_dir do
+                    example.run
+                end
+            ensure
+                ENV['XTIDE_FILE'] = original_xtide
+                ENV['TICON_FILE'] = original_ticon
+            end
+
+            let(:engine) { client.engine }
+
+            it 'keeps subordinate tide peaks moved in from before the window start (time offsets +11:36/+12:21)' do
+                from, to = Time.utc(2026, 10, 7), Time.utc(2026, 10, 8)
+                peaks = ->(a, b) { engine.generate_predictions('X0f812f0', a, b).map { |p| [p['type'], p['time'].round] } }
+                wide = peaks.(from - 12.hours, to + 12.hours).select { |_, t| t.between?(from, to) }
+
+                expect(peaks.(from, to)).to eq(wide)
+                expect(wide).to include(['Low', Time.utc(2026, 10, 7, 9, 41, 41)])
+            end
+
+            it 'stores the TCD datum offset (mean flow) of a current and predicts around it' do
+                # Glacier Bay entrance has a real mean ebb flow of 1.244 knots
+                data = engine.station_data('X0114c7a_17')
+                expect(data['datum_offset']).to eq(-1.244)
+
+                predictions = engine.generate_predictions('X0114c7a_17', Time.utc(2026, 10, 1), Time.utc(2026, 10, 30), step_seconds: 600)
+                mean = predictions.sum { |p| p['height'] } / predictions.size
+                expect(mean).to be_within(0.05).of(-1.244)
+            end
+
+            it 'gives the same subordinate events from a warm station cache as from a cold one' do
+                # Cold: parses the TCD and writes the station cache.  Warm: a new
+                # engine on the same cache dir loads the station cache instead.
+                from, to = Time.utc(2026, 10, 7), Time.utc(2026, 10, 9)
+                events = lambda do |c|
+                    allow(c).to receive(:beginning_of_window).and_return(from)
+                    allow(c).to receive(:end_of_window).and_return(to)
+                    %w[X2d7f27f X05f2f68].flat_map do |bid|
+                        station = c.current_stations.find { |s| s.bid == bid }
+                        c.current_data_for(station, from).map { |e| [bid, e.type, e.time, e.velocity_major] }
+                    end
+                end
+
+                cold = events.(client)
+                expect(File).to exist(engine.stations_cache_file)
+
+                warm_client = described_class.new(logger)
+                expect(warm_client.engine).not_to receive(:parse_xtide_file)
+                warm = events.(warm_client)
+
+                expect(warm_client.engine.station_data('X2d7f27f')).to include('flood_begins' => '-02:09:00', 'ebb_begins' => '-01:38:00')
+                expect(cold.count { |e| e[1] == 'slack' }).to be > 0
+                expect(warm).to eq(cold)
+            end
+        end
+
+        describe 'Engine#offset_seconds' do
+            let(:engine) { client.engine }
+
+            it 'parses signed [+-]HH:MM[:SS] offsets' do
+                expect(engine.offset_seconds('+02:09:00')).to eq(2 * 3600 + 9 * 60)
+                expect(engine.offset_seconds('-01:30:00')).to eq(-(3600 + 30 * 60))
+                expect(engine.offset_seconds('-08:55:00')).to eq(-(8 * 3600 + 55 * 60))
+                expect(engine.offset_seconds('-00:05')).to eq(-300)
+                expect(engine.offset_seconds('+00:00:00')).to eq(0)
+            end
+
+            it 'treats a missing or null offset as no offset' do
+                expect(engine.offset_seconds(nil)).to eq(0)
+                expect(engine.offset_seconds('\N')).to eq(0)
+            end
+        end
+
+        describe 'Engine#subordinate_margin' do
+            let(:engine) { client.engine }
+
+            it 'is the largest time offset plus 1 hour' do
+                data = { 'h_time_offset' => '+00:30:00', 'l_time_offset' => '+01:10:00',
+                         'flood_begins' => '-08:55:00', 'ebb_begins' => '+04:00:00' }
+                expect(engine.subordinate_margin(data)).to eq(9.hours + 55.minutes)
+            end
+
+            it 'is never less than 2 hours' do
+                expect(engine.subordinate_margin({ 'h_time_offset' => '+00:10:00' })).to eq(2.hours)
+                expect(engine.subordinate_margin({})).to eq(2.hours)
+            end
+        end
+
+        describe 'subordinate current without slack offsets' do
+            let(:station) { build_station(name: 'Sub', id: 'SUB', bid: 'SUB', provider: 'xtide', depth: nil) }
+            let(:peaks) do
+                [
+                    { 'type' => 'High', 'time' => Time.utc(2026, 10, 7, 6), 'height' => 2.0, 'units' => 'knots' },
+                    { 'type' => 'Low', 'time' => Time.utc(2026, 10, 7, 12), 'height' => -1.0, 'units' => 'knots' }
+                ]
+            end
+
+            before do
+                allow(client).to receive(:beginning_of_window).and_return(Time.utc(2026, 10, 7))
+                allow(client).to receive(:end_of_window).and_return(Time.utc(2026, 10, 8))
+                allow(client.engine).to receive(:station_data).with('SUB')
+                    .and_return({ 'ref_key' => 'REF', 'flood_begins' => nil, 'ebb_begins' => '+00:30:00' })
+                allow(client.engine).to receive(:reference_predictions).and_return([])
+                allow(client.engine).to receive(:subordinate_peaks).and_return(peaks)
+                allow(logger).to receive(:warn)
+            end
+
+            it 'interpolates slack between its peaks and logs a warning' do
+                events = client.current_data_for(station, Time.utc(2026, 10, 7))
+
+                expect(events.map(&:type)).to eq(%w[flood slack ebb])
+                expect(events[1].time.to_time).to be_within(1.minute).of(Time.utc(2026, 10, 7, 10))
+                expect(logger).to have_received(:warn).with(/SUB has no flood_begins\/ebb_begins offset.*flood_begins=nil/)
             end
         end
     end

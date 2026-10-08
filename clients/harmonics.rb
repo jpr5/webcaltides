@@ -36,15 +36,25 @@ module Clients
 
             # Use bid if available (e.g. for currents with different depths), fallback to id
             lookup_id = station.bid || station.id
-            predictions = @engine.generate_predictions(lookup_id, start_time, end_time)
+            station_data = @engine.station_data(lookup_id)
 
-            return [] if predictions.empty?
+            if station_data['ref_key']
+                # Subordinate station: one reference series gives both its peaks
+                # and its slacks.
+                ref_predictions = @engine.reference_predictions(station_data, start_time, end_time)
+                peaks = @engine.subordinate_peaks(ref_predictions, station_data, start_time, end_time)
+                return [] if peaks.empty?
 
-            # Detect peaks (maxima and minima of the signed velocity)
-            peaks = @engine.detect_peaks(predictions)
+                slacks = subordinate_slack_waters(lookup_id, station_data, ref_predictions, peaks, start_time, end_time)
+            else
+                predictions = @engine.generate_predictions(lookup_id, start_time, end_time)
+                return [] if predictions.empty?
 
-            # Slack water: the zero crossings of the velocity
-            slacks = slack_waters(lookup_id, predictions, start_time, end_time)
+                # Peaks are the maxima and minima of the signed velocity, and
+                # slack water is its zero crossings.
+                peaks = @engine.detect_peaks(predictions)
+                slacks = detect_zero_crossings(predictions)
+            end
 
             # Combine peaks and slacks, convert to CurrentData
             events = []
@@ -72,7 +82,6 @@ module Clients
                 )
             end
 
-            # Sort by time
             events.sort_by(&:time)
         end
 
@@ -88,36 +97,31 @@ module Clients
             end
         end
 
-        # Slack water times for a current station.  For a reference station they
-        # are the zero crossings of its predictions.  A subordinate station's
-        # predictions are only its max flood and ebb peaks, so its slacks are the
-        # reference station's zero crossings moved by the subordinate's
-        # flood-begins and ebb-begins time offsets.
-        def slack_waters(lookup_id, predictions, start_time, end_time)
-            station_data = @engine.stations_cache[lookup_id] || {}
-            ref_key = station_data['ref_key']
+        # Slack water times for a subordinate current station: the reference
+        # station's zero crossings, moved by the subordinate's flood-begins and
+        # ebb-begins time offsets.  ref_predictions must cover the window plus
+        # Engine#subordinate_margin (Engine#reference_predictions does).
+        #
+        # Without both offsets (none in the current TCD), fall back to
+        # interpolating between the subordinate's peaks, which is less accurate.
+        def subordinate_slack_waters(lookup_id, station_data, ref_predictions, peaks, start_time, end_time)
             flood_begins = station_data['flood_begins']
             ebb_begins = station_data['ebb_begins']
 
-            return detect_zero_crossings(predictions) unless ref_key && flood_begins && ebb_begins
-
-            # The same 2 hour margin generate_predictions uses for subordinate stations
-            ref_predictions = @engine.generate_predictions(ref_key, start_time - 2.hours, end_time + 2.hours)
+            unless flood_begins && ebb_begins
+                logger.warn "subordinate current #{lookup_id} has no flood_begins/ebb_begins offset " \
+                             "(flood_begins=#{flood_begins.inspect}, ebb_begins=#{ebb_begins.inspect}); " \
+                             "interpolating slack between peaks"
+                return detect_zero_crossings(peaks)
+            end
 
             detect_zero_crossings(ref_predictions).filter_map do |c|
                 offset = c['begins'] == 'flood' ? flood_begins : ebb_begins
-                time = c['time'] + offset_to_seconds(offset)
+                time = c['time'] + @engine.offset_seconds(offset)
                 next unless time >= start_time && time <= end_time
 
                 c.merge('time' => time)
             end
-        end
-
-        # "[+-]HH:MM:SS" -> seconds
-        def offset_to_seconds(offset)
-            sign = offset.start_with?('-') ? -1 : 1
-            h, m, sec = offset.delete('+-').split(':').map(&:to_i)
-            sign * (h * 3600 + m * 60 + (sec || 0))
         end
 
         # Detect zero crossings in predictions (slack water for currents)
