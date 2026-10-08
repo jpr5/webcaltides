@@ -1,0 +1,113 @@
+{
+  "format_version": "0.2",
+  "release": {
+    "datestamp": "20991231",
+    "created": "2099-12-31T00:00:00Z",
+    "doi": null,
+    "concept_doi": null,
+    "source_versions": { "gesla": "4.1", "kartverket": "20991231" }
+  },
+  "conventions": [
+    {
+      "convention_id": "otc-greenwich-schureman-v1",
+      "phase_reference": "greenwich_utc",
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "canary": { "status": "not_applicable" }
+    },
+    {
+      "convention_id": "kartverket-utc1-v1",
+      "phase_reference": "local",
+      "utc_offset_hours": 1,
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "canary": { "status": "pass", "gauges": 3 }
+    }
+  ],
+  "licences": [
+    {
+      "licence_id": "gesla-derived",
+      "spdx": "CC-BY-4.0",
+      "provider": "Example provider via GESLA",
+      "attribution": "Example attribution text."
+    },
+    {
+      "licence_id": "kartverket",
+      "spdx": "CC-BY-4.0",
+      "provider": "Kartverket",
+      "attribution": "Example attribution text."
+    }
+  ],
+  "constituents": [
+    { "constituent_table_version": "example", "name": "M2", "doodson": "255 555", "speed_deg_per_hour": 28.9841042, "nodal_formula_id": "M2" },
+    { "constituent_table_version": "example", "name": "K1", "doodson": "165 555", "speed_deg_per_hour": 15.0410686, "nodal_formula_id": "K1" },
+    { "constituent_table_version": "example", "name": "SA", "doodson": "056 555", "speed_deg_per_hour": 0.0410686 }
+  ],
+  "stations": [
+    {
+      "station_id": "OTC-EXAMPLE-0001",
+      "status": "active",
+      "name": "Example Harbour (illustrative values, not data)",
+      "country": "NOR",
+      "lat": 60.0,
+      "lon": 5.0,
+      "timezone": "Europe/Oslo",
+      "type": "reference",
+      "aliases": { "kartverket": "EXA", "gesla": ["example-file-id"] },
+      "recommended_set_id": "OTC-EXAMPLE-0001/gesla-fit",
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0001/gesla-fit",
+          "source": "gesla-fit",
+          "source_type": "gauge",
+          "quantity": "water_level",
+          "source_record_id": "example-file-id",
+          "source_version": "4.1",
+          "record_span": { "start": "2007-01-01T00:00:00Z", "end": "2026-01-01T00:00:00Z", "good_samples": 160000 },
+          "datum": { "msl_offset_m": 1.0 },
+          "convention_id": "otc-greenwich-schureman-v1",
+          "licence_id": "gesla-derived",
+          "qc_status": "accepted",
+          "qc_flags": [{ "flag": "time_base", "verdict": "utc_instant" }],
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 0.5, "phase_deg": 100.0, "amp_uncertainty_m": 0.001, "phase_uncertainty_deg": 0.1, "kept_reason": "snr" },
+            { "name": "K1", "speed_deg_per_hour": 15.0410686, "amplitude_m": 0.05, "phase_deg": 200.0 }
+          ],
+          "dropped_constituents": [{ "name": "SA", "dropped_reason": "long_period_rule" }],
+          "provenance": {
+            "build_commit": "0000000",
+            "time_base": { "verdict": "utc_instant", "correction": "none" },
+            "selection_reason": "only eligible record",
+            "decision": { "tier": "rule", "outcome": "accept" }
+          }
+        },
+        {
+          "set_id": "OTC-EXAMPLE-0001/kartverket",
+          "source": "kartverket",
+          "source_type": "official",
+          "quantity": "water_level",
+          "source_record_id": "EXA",
+          "source_version": "20991231",
+          "convention_id": "kartverket-utc1-v1",
+          "licence_id": "kartverket",
+          "qc_status": "accepted",
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 0.5, "phase_deg": 100.2 }
+          ],
+          "provenance": { "adapter_version": "example" }
+        }
+      ],
+      "validation": [
+        { "set_id": "OTC-EXAMPLE-0001/gesla-fit", "reference_source": "example", "window": "W1", "time_mae_min": 1.0, "height_mae_m": 0.01, "previous_release": null }
+      ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0002",
+      "status": "removed",
+      "removed_in": "20991231",
+      "removed_reason": "Example tombstone: the only input record contained no tide."
+    }
+  ]
+}
