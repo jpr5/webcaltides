@@ -2,7 +2,8 @@
 # §6.1 reproduction check: mean per-station time MAE (and height MAE) of a run over the
 # 19 retest stations vs the plan's R0 numbers (time within 0.2 min).
 require 'csv'
-H = File.expand_path('..', __dir__)
+require_relative 'paths'
+H = GatePaths::ROOT
 run = ARGV[0] || 'R0_repro'
 PLAN = { 'RT1' => [10.5, 7.9], 'W2' => [9.25, 6.5] }.freeze
 ok = true

@@ -5,7 +5,8 @@
 require 'csv'
 require 'json'
 require_relative 'classify'
-H = File.expand_path('..', __dir__)
+require_relative 'paths'
+H = GatePaths::ROOT
 a_run, b_run = ARGV[0], ARGV[1]
 rn = (i = ARGV.index('--rn')) ? ARGV[i + 1] : nil
 wins = ((i = ARGV.index('--windows')) ? ARGV[i + 1] : 'W1,W2,W3').split(',')

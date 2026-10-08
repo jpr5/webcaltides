@@ -3,7 +3,8 @@
 require 'json'
 require 'digest'
 require 'time'
-H = File.expand_path('..', __dir__)
+require_relative 'paths'
+H = GatePaths::ROOT
 run, wt, sha, tf, mode, srcs, wins, np, wall = ARGV
 path = "#{H}/manifest.json"
 man = File.exist?(path) ? JSON.parse(File.read(path)) : { 'harness_version' => 1, 'runs' => {} }

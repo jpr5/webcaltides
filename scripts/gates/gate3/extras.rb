@@ -1,12 +1,13 @@
 # Extras for gateB3-report: per-source means, real-regression split (reference lacks TICON constituents vs other),
 # B2 vs B3 real lists, spot stations. ruby extras.rb   (adapted from gate2/extras.rb)
 require 'csv'; require 'json'; require 'yaml'
-H = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-eval')
-GB = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b')
+require_relative '../paths'
+H = GatePaths::ROOT
+GB = GatePaths::B
 DS = JSON.parse(File.read("#{H}/builds/B3/ticon.json"))['stations'].to_h { |s| [s['id'], s] }
 ld = ->(d) { CSV.read("#{GB}/#{d}/data/stations_ab.csv", headers: true).to_h { |r| [[r['window'], r['station']], r] } }
 a = ld['gate']; b2 = ld['gate2']; b = ld['gate3']   # R1 -> R2 (B), R1 -> R2b (B2), R1 -> R2c (B3)
-WT = File.expand_path('~/.local/state/worktrees/webcaltides/harmonics-b2-fixes')
+WT = File.expand_path(ENV.fetch('WT')) # B worktree (was harmonics-b2-fixes)
 FB = YAML.safe_load_file("#{WT}/scripts/ticon_fallback_stations.yml")['stations'].map { _1['id'] }
 mean = ->(x) { x.empty? ? nil : x.sum / x.size }
 f = ->(v) { v.nil? ? '—' : format('%.2f', v) }

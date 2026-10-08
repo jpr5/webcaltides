@@ -4,7 +4,8 @@
 # confirmed_ids.json: optional ["T…", …] ids whose >30 min shift a reference confirms.
 require 'json'; require 'fileutils'; require 'set'
 require_relative 'shift'
-ROOT = File.expand_path('../..', __dir__)
+require_relative '../paths'
+ROOT = GatePaths::ROOT
 R0, RX, CONF = ARGV
 abort 'usage: compare_safety.rb <R0> <Rx> [confirmed.json]' unless R0 && RX
 D0 = "#{ROOT}/results/safety/#{R0}"; DX = "#{ROOT}/results/safety/#{RX}"

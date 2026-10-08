@@ -3,15 +3,16 @@
 # ruby gate.rb <R1 runs csv> <R2 runs csv>   e.g. R1,R1_other R2,R2_other
 # Writes gate/data/stations_ab.csv and gate/data/gate_ab.json; prints a summary.
 require 'csv'; require 'json'
-H = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-eval')
-G = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b/gate3')
-G1 = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b/gate')
-require "#{H}/tools/classify"
+require_relative '../paths'
+H = GatePaths::ROOT
+G = "#{GatePaths::B}/gate3"
+G1 = "#{GatePaths::B}/gate"
+require_relative '../classify'
 r1_runs, r2_runs = ARGV[0].split(','), ARGV[1].split(',')
 WINS = %w[W1 W2 W3]
 DS = JSON.parse(File.read("#{H}/builds/B3/ticon.json"))['stations'].to_h { |s| [s['id'], s] }
 RECS = JSON.parse(File.read("#{G1}/data/records.json"), allow_nan: true)
-FULLREF = JSON.parse(File.read(File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b/ticon_full_ref.json'))).to_h { |x| [x['id'], x] }
+FULLREF = JSON.parse(File.read("#{GatePaths::B}/ticon_full_ref.json")).to_h { |x| [x['id'], x] }
 load = lambda do |runs, w|
     runs.each_with_object({}) do |r, h|
         CSV.foreach("#{H}/results/#{r}/#{w}/stations.csv", headers: true) do |row|

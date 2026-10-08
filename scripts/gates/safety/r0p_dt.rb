@@ -1,8 +1,9 @@
 #!/usr/bin/env ruby
 # R0 vs prod ICS: |dt| (min) of same-kind events matched within +-3 h, per source, before / from 2027-02.
 require 'json'; require 'zlib'; require 'time'
-ROOT = File.expand_path('../..', __dir__); RUN = ARGV[0]
-B = '/Users/jpr5/.local/share/copilotkit/cr/webcaltides-harmonics-baseline-2026-10-06'
+require_relative '../paths'
+ROOT = GatePaths::ROOT; RUN = ARGV[0]
+B = GatePaths::BASELINE
 def ev(s) = s.split('BEGIN:VEVENT').drop(1).filter_map { |v| k = v[/^SUMMARY:(High|Low|Flood|Ebb|Slack)/, 1] or next; [Time.strptime(v[/^DTSTART[^:]*:(\d{8}T\d{6})/, 1] + 'Z', '%Y%m%dT%H%M%S%z').to_i, k] }
 pct = ->(a, p) { a.empty? ? nil : a.sort[((a.size - 1) * p).round].round(2) }
 out = Hash.new { |h, k| h[k] = [] }; feb = Time.utc(2027, 2, 1).to_i; odd = []

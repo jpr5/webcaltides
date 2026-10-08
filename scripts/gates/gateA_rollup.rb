@@ -1,7 +1,8 @@
 # Usage: ruby tools/gateA_rollup.rb -- combines compare_R0_R1.csv + compare_R0_other_R1_other.csv per window:
 # TICON mean t_mae R0 vs R1 and §6.2 class counts (TICON combined, XTide, all), minor share.
 require 'csv'
-H = File.expand_path('..', __dir__)
+require_relative 'paths'
+H = GatePaths::ROOT
 rows = CSV.read("#{H}/results/compare_R0_R1.csv", headers: true).map(&:to_h) +
        CSV.read("#{H}/results/compare_R0_other_R1_other.csv", headers: true).map(&:to_h)
 classes = %w[improved meaningless minor real]

@@ -4,12 +4,13 @@ require 'csv'
 require 'time'
 require 'digest'
 require 'fileutils'
+require_relative 'paths'
 require 'net/http'
 require 'uri'
 
 module Eval
-    ROOT = File.expand_path('..', __dir__)
-    EVID = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-testplan-evidence')
+    ROOT = GatePaths::ROOT
+    EVID = GatePaths::EVID
     REFS = "#{ROOT}/refs"
     WINDOWS = {
         'W1' => [Time.utc(2026, 11, 1), Time.utc(2027, 1, 1)],

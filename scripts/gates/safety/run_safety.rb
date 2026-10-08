@@ -4,12 +4,13 @@
 # WebCalTides.tide_calendar_for / current_calendar_for with per-run, per-worker empty cache dirs.
 # Output: results/safety/<run>/{manifest.json,ids/,ics/,violations.tsv,summary.json}
 require 'json'; require 'fileutils'; require 'digest'
-ROOT = File.expand_path('../..', __dir__)
+require_relative '../paths'
+ROOT = GatePaths::ROOT
 WT, RUN, JOBS = ARGV[0], ARGV[1], (ARGV[2] || 8).to_i
 abort "usage: run_safety.rb <worktree> <run> [jobs]" unless WT && RUN && File.exist?("#{WT}/webcaltides.rb")
 OUT = "#{ROOT}/results/safety/#{RUN}"
 FileUtils.mkdir_p(OUT)
-FETCH = '/Users/jpr5/.local/share/copilotkit/cr/webcaltides-harmonics-baseline-2026-10-06/fetch_log.json'
+FETCH = "#{GatePaths::BASELINE}/fetch_log.json"
 
 git = ->(*a) { IO.popen(['git', '-C', WT, *a], &:read).strip }
 pre_status = git.('status', '--porcelain')

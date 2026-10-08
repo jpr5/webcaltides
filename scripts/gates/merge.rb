@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 # Merge shard parts into results/<run>/<window>/{events,stations,timing}.csv (sorted, deterministic).
 require 'csv'
-H = File.expand_path('..', __dir__)
+require_relative 'paths'
+H = GatePaths::ROOT
 run, wins = ARGV
 wins.split(',').each do |w|
     dir = "#{H}/results/#{run}/#{w}"

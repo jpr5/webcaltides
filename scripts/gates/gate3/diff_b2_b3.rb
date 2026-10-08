@@ -1,7 +1,8 @@
 # Semantic diff B2 -> B3, and B3 fallback ids vs master's shipped data/ticon.json (f58c96..., = ticon-prev.json).
 require 'json'; require 'digest'; require 'yaml'
-H = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-eval')
-WT = File.expand_path('~/.local/state/worktrees/webcaltides/harmonics-b2-fixes')
+require_relative '../paths'
+H = GatePaths::ROOT
+WT = File.expand_path(ENV.fetch('WT')) # B worktree (was harmonics-b2-fixes)
 master_path = "#{WT}/data/ticon-prev.json"
 puts "master sha256=#{Digest::SHA256.file(master_path).hexdigest}"
 b2 = JSON.parse(File.read("#{H}/builds/B2/ticon.json"))['stations']

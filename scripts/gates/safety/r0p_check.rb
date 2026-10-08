@@ -4,9 +4,10 @@
 # An event matches when the same kind is within 60 s; an id matches when every event matches
 # both ways and the counts agree. Also gives per-month match rate (cache boundary at 2027-02).
 require 'json'; require 'zlib'; require 'fileutils'; require 'time'
-ROOT = File.expand_path('../..', __dir__)
+require_relative '../paths'
+ROOT = GatePaths::ROOT
 RUN = ARGV[0] or abort 'usage: r0p_check.rb <R0 run>'
-B = '/Users/jpr5/.local/share/copilotkit/cr/webcaltides-harmonics-baseline-2026-10-06'
+B = GatePaths::BASELINE
 OUT = "#{ROOT}/results/safety/r0p_#{RUN}"
 FileUtils.mkdir_p(OUT)
 

@@ -7,8 +7,9 @@ require 'time'
 require 'json'
 
 port, run, label = ARGV
-H = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-eval')
-OUT = File.expand_path("~/.local/share/copilotkit/cr/webcaltides-harmonics-b/ship-proof/#{label}")
+require_relative '../paths'
+H = GatePaths::ROOT
+OUT = "#{H}/ship-proof/#{label}"
 Dir.mkdir(File.dirname(OUT)) rescue nil
 Dir.mkdir(OUT) rescue nil
 TICON = %w[T8929e6c Tfbbf38a T189a67a]

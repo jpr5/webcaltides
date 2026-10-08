@@ -4,7 +4,8 @@
 # 2027-01-01 (new count/alternation/yb), T0a5ca11 one NaN height (always fail).
 require 'json'; require 'fileutils'; require 'time'
 require_relative 'rules'
-ROOT = File.expand_path('../..', __dir__)
+require_relative '../paths'
+ROOT = GatePaths::ROOT
 SRC, DST = ARGV
 S = "#{ROOT}/results/safety/#{SRC}"; D = "#{ROOT}/results/safety/#{DST}"
 FileUtils.rm_rf(D); FileUtils.mkdir_p("#{D}/ids")

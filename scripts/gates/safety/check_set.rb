@@ -1,8 +1,9 @@
 #!/usr/bin/env ruby
 # Recompute the 5.4 safety set from plan 2.2 sources and diff vs safety_set.json.
 require 'json'; require 'set'
-EV = '/Users/jpr5/.local/share/copilotkit/cr/webcaltides-harmonics-testplan-evidence/testplan'
-SS = '/Users/jpr5/.local/share/copilotkit/cr/webcaltides-harmonics-eval/safety_set.json'
+require_relative '../paths'
+EV = "#{GatePaths::EVID}/testplan"
+SS = "#{GatePaths::ROOT}/safety_set.json"
 H = /\A[TX][0-9a-f]{7}(_\d+)?\z/
 active = JSON.parse(File.read("#{EV}/active_harmonics.json")).map { |r| [r['type'], r['id']] }.to_set
 nxt = Set.new; seen = Set.new

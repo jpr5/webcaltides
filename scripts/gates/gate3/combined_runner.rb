@@ -5,13 +5,14 @@
 require 'bundler/setup'
 require 'logger'
 require 'active_support/all'
-H = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-eval')
-G = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b/gate3')
-require "#{H}/tools/lib"
-require "#{H}/tools/score"
+require_relative '../paths'
+H = GatePaths::ROOT
+G = "#{GatePaths::B}/gate3"
+require_relative '../lib'
+require_relative '../score'
 run, set_file = ARGV
 WINS = Eval::WINDOWS.slice('W1', 'W2', 'W3').merge('WY' => Eval::WY)
-BL = '/Users/jpr5/.local/share/copilotkit/cr/webcaltides-harmonics-baseline-2026-10-06'
+BL = GatePaths::BASELINE
 jobs = JSON.parse(File.read(set_file))
 model_for =
     if run == 'R0p'

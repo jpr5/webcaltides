@@ -1,7 +1,8 @@
 # Combined row (§6.3 rule 15) on the gated TICON active-with-ref ids: request-weighted time MAE vs R0p.
 # ruby combined_row.rb <RX>   (R2 reproduces gate/gateB-report.md row 15)
 require 'csv'; require 'json'
-G = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b/gate3')
+require_relative '../paths'
+G = "#{GatePaths::B}/gate3"
 rx = ARGV[0] || 'R2c'
 st = JSON.parse(File.read("#{G}/data/active_ticon_ref.json")).select { |s| s['gated'] }
 L = ['R0p', 'R0', rx].to_h { |r| [r, CSV.read("#{G}/data/combined/#{r}.csv", headers: true).to_h { |x| [[x['station'], x['window']], x] }] }

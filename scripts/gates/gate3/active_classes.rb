@@ -1,8 +1,9 @@
 # §6.2 classes on the 28 TICON active-with-reference ids: R1->R2 (change B) and R0p(fill R0)->R2 (combined).
 require 'csv'; require 'json'
-H = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-eval')
-G = File.expand_path('~/.local/share/copilotkit/cr/webcaltides-harmonics-b/gate3')
-require "#{H}/tools/classify"
+require_relative '../paths'
+H = GatePaths::ROOT
+G = "#{GatePaths::B}/gate3"
+require_relative '../classify'
 st = JSON.parse(File.read("#{G}/data/active_ticon_ref.json"))
 L = %w[R0p R0 R1 R2 R2b R2c].to_h { |r| [r, CSV.read("#{G}/data/combined/#{r}.csv", headers: true).to_h { |x| [[x['station'], x['window']], x] }] }
 tot_active = 19626.0
