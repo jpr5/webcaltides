@@ -34,6 +34,7 @@ module WebCalTides
     @@harmonics_mutex        = Mutex.new
     @@tzcache_mutex          = Mutex.new
     @@tide_stations_mutex    = Mutex.new
+    @@retired_tide_stations_mutex = Mutex.new
     @@current_stations_mutex = Mutex.new
     @@lunar_phases_mutex     = Mutex.new
     @@cleanup_mutex          = Mutex.new
@@ -659,7 +660,9 @@ module WebCalTides
     def tide_station_cache_file
         now = Time.current.utc
         datestamp = now.strftime("%YQ#{now.quarter}")
-        providers = Digest::MD5.hexdigest(tide_clients.keys.sort.join(","))[0, 8]
+        # A client's station_list_version (if it has one) is part of it, so a change to which stations a
+        # client lists rebuilds the list on deploy rather than next quarter
+        providers = Digest::MD5.hexdigest(tide_clients.map { |name, c| [name, c.class.try(:station_list_version)].compact.join(":") }.sort.join(","))[0, 8]
         "#{settings.cache_dir}/tide_stations_v#{Models::Station.version}_#{datestamp}_#{harmonics_checksum}_#{providers}.json"
     end
 
@@ -675,6 +678,11 @@ module WebCalTides
         stations = tide_clients.values.uniq.flat_map do |c|
             list = c.tide_stations
             raise "no station list" unless list
+            if c.try(:station_list_degraded?)
+                # A fallback list (see Clients::ChsTides#tide_stations): serve it, but don't cache it
+                logger.error "!! degraded tide station list from #{c.class.name}, serving it uncached"
+                complete = false
+            end
             list
         rescue => e
             logger.error "!! failed to get tide station list from #{c.class.name}, leaving it out: #{e.class} - #{e.message}"
@@ -763,6 +771,92 @@ module WebCalTides
             # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
             cache_tide_stations(stations:@tide_stations) unless @tide_stations_retry_at
         end
+    end
+
+    RETIRED_TIDE_STATION_SUMMARY = "Station retired by DFO – no tide predictions available"
+
+    def retired_tide_station_cache_file
+        now = Time.current.utc
+        "#{settings.cache_dir}/retired_tide_stations_v1_#{now.strftime("%YQ#{now.quarter}")}.json"
+    end
+
+    # CHS stations left out of the station list because DFO doesn't publish high/low predictions for
+    # them (see Clients::ChsTides#tide_stations).  Existing subscriptions to one get a feed saying
+    # the station is retired instead of a 404.  { id => name }, cached quarterly like the station
+    # lists.  A failed fetch, or a station list the client rejects as unusable, isn't cached: the
+    # last good list (if any) is kept and the fetch is tried again after TIDE_STATIONS_RETRY.  The
+    # in-memory list belongs to its quarter's cache file and is reloaded when the quarter changes.
+    def retired_tide_stations
+        current = -> {
+            @retired_tide_stations && @retired_tide_stations_file == retired_tide_station_cache_file &&
+                !(@retired_tide_stations_retry_at && Time.current.utc >= @retired_tide_stations_retry_at)
+        }
+        return @retired_tide_stations if current.call
+
+        @@retired_tide_stations_mutex.synchronize do
+            return @retired_tide_stations if current.call
+
+            cache_file = retired_tide_station_cache_file
+            stations   = begin
+                if File.exist?(cache_file)
+                    data = JSON.parse(File.read(cache_file))
+                    raise TypeError, "expected { id => name }, got #{data.class}" unless data.is_a?(Hash)
+                    data
+                end
+            rescue => e
+                logger.error "!! unreadable retired tide station cache #{cache_file}, rebuilding it: #{e.class} - #{e.message}"
+                nil
+            end
+
+            unless stations
+                begin
+                    stations = tide_clients(:chs).retired_stations or raise "no station list"
+                    raise TypeError, "expected { id => name }, got #{stations.class}" unless stations.is_a?(Hash)
+                    atomic_write(cache_file, stations.to_json)
+                rescue => e
+                    logger.error "!! failed to get retired CHS stations, retrying after #{TIDE_STATIONS_RETRY.inspect}: #{e.class} - #{e.message}"
+                    @retired_tide_stations_retry_at = Time.current.utc + TIDE_STATIONS_RETRY
+                    @retired_tide_stations_file     = cache_file # the last good list stands in until the retry
+                    return @retired_tide_stations ||= {}
+                end
+            end
+
+            @retired_tide_stations_retry_at = nil
+            @retired_tide_stations_file     = cache_file
+            @retired_tide_stations = stations
+        end
+    end
+
+    # Only a CHS-shaped id (24 hex digits) is looked up, so other unknown ids don't load the list
+    def retired_tide_station?(id)
+        return false unless id.is_a?(String) && id.match?(/\A\h{24}\z/)
+
+        retired_tide_stations.key?(id)
+    end
+
+    # One all-day event over the whole month of `month`, saying the station is retired.  The feed
+    # is cached per month, so this keeps the notice current whenever a subscriber syncs.
+    def retired_tide_calendar_for(id, month: Time.current.utc)
+        return nil unless retired_tide_station?(id)
+
+        name  = retired_tide_stations[id].presence || "this station"
+        first = month.utc.to_date.beginning_of_month
+
+        cal = Icalendar::Calendar.new
+        cal.x_wr_calname = "#{name.titleize} (retired)"
+
+        cal.event do |e|
+            e.summary     = RETIRED_TIDE_STATION_SUMMARY
+            e.dtstart     = Icalendar::Values::Date.new(first)
+            e.dtend       = Icalendar::Values::Date.new(first.next_month) # exclusive: through the last day
+            e.description = "Fisheries and Oceans Canada (DFO) no longer publishes tide predictions for #{name}. " \
+                            "Go to https://webcaltides.org to choose another station."
+            e.url         = "https://webcaltides.org"
+        end
+
+        logger.info "retired tide calendar for #{id} (#{name}) generated"
+
+        return cal
     end
 
     def tide_station_for(id)

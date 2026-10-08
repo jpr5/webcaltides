@@ -69,6 +69,67 @@ RSpec.describe Clients::ChsTides do
         end
     end
 
+    describe '#tide_data_for with few events' do
+        let(:station) { build_station(id: '5cebf1de3d0f4a073c4bb94e', provider: 'chs', url: 'https://www.tides.gc.ca/en/stations/00490') }
+
+        it 'handles a response with a single event' do
+            allow(client).to receive(:get_url).and_return([{ 'eventDate' => '2026-10-07T10:00:00Z', 'value' => 1.5 }].to_json)
+
+            data = client.tide_data_for(station, Time.utc(2026, 10, 7))
+
+            expect(data.length).to eq(1)
+            expect(data.first.prediction).to eq(1.5)
+            expect(data.first.type).to eq('High')
+        end
+
+        it 'handles a response with two events' do
+            allow(client).to receive(:get_url).and_return([{ 'eventDate' => '2026-10-07T10:00:00Z', 'value' => 1.5 },
+                                                           { 'eventDate' => '2026-10-07T16:00:00Z', 'value' => 0.2 }].to_json)
+
+            expect(client.tide_data_for(station, Time.utc(2026, 10, 7)).map(&:type)).to eq(%w[High Low])
+        end
+
+        it 'treats a response with no events as no data' do
+            allow(client).to receive(:get_url).and_return('[]')
+            allow(WebCalTides).to receive(:remove_tide_station)
+
+            expect(client.tide_data_for(station, Time.utc(2026, 10, 7))).to be_nil
+            expect(WebCalTides).to have_received(:remove_tide_station).with(station.id)
+        end
+    end
+
+    # A 200 whose body is not a list of events is an upstream error, not "no data": the station
+    # stays in the list and nothing is returned (so nothing is cached)
+    describe '#tide_data_for with a malformed response' do
+        let(:log)     { StringIO.new }
+        let(:client)  { described_class.new(Logger.new(log)) }
+        let(:station) { build_station(id: '5cebf1df3d0f4a073c4bbcbb', provider: 'chs', url: 'https://www.tides.gc.ca/en/stations/00490') }
+
+        before do
+            allow(WebCalTides).to receive(:remove_tide_station)
+        end
+
+        [
+            ['an HTML page',            '<html><body>Service Unavailable</body></html>'],
+            ['a JSON object',           '{"message":"Internal error","status":500}'],
+            ['an empty JSON object',    '{}'],
+            ['a list of non-objects',   '["a", 1]'],
+            ['a list of error objects', '[{"message":"err"}]'],
+            ['an event with no value',  '[{"eventDate":"2026-10-07T02:07:00Z"},{"eventDate":"2026-10-07T08:20:00Z","value":0.42}]'],
+            ['an event with a null value', '[{"eventDate":"2026-10-07T02:07:00Z","value":null},{"eventDate":"2026-10-07T08:20:00Z","value":0.42}]'],
+            ['an event with a null eventDate', '[{"eventDate":null,"value":1.71},{"eventDate":"2026-10-07T08:20:00Z","value":0.42}]']
+        ].each do |what, body|
+            it "returns nil for #{what}, logs it at error and keeps the station" do
+                stub_request(:get, %r{\Ahttps://api-iwls\.dfo-mpo\.gc\.ca/api/v1/stations/5cebf1df3d0f4a073c4bbcbb/data})
+                    .to_return(status: 200, body: body)
+
+                expect(client.tide_data_for(station, Time.utc(2026, 10, 7))).to be_nil
+                expect(WebCalTides).not_to have_received(:remove_tide_station)
+                expect(log.string).to match(/^E, .*unusable CHS tide data for station 5cebf1df3d0f4a073c4bbcbb/)
+            end
+        end
+    end
+
     describe 'TimeWindow module' do
         it 'includes TimeWindow module' do
             expect(described_class.ancestors).to include(Clients::TimeWindow)
