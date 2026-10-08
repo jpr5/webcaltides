@@ -109,14 +109,18 @@ module Harmonics
         # Cache version - increment when cache format changes to force regeneration.
         # v3: bumped with ENGINE_VERSION 3 to force a fresh parse; the station
         # cache format is unchanged from v2 (it holds no nodal factors).
-        CACHE_VERSION = 3
+        # v4: XTide current stations store the TCD datum offset (it held the
+        # name's depth), and subordinate currents store flood_begins/ebb_begins.
+        CACHE_VERSION = 4
 
         # Engine version - increment when prediction output changes for the same
         # input data. Part of every nodal-factor cache file name and of
         # cache_key_component (tide/currents JSON and ICS cache names), so output
         # cached by older code is never reused. The station cache file uses
         # CACHE_VERSION instead.
-        ENGINE_VERSION = 3
+        # v4: XTide currents get flood, ebb and slack events with signed
+        # velocities (v3 cached every XTide current event as flood).
+        ENGINE_VERSION = 4
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
         #   tcd    (default) - TCD per-year equilibrium argument (V0+u) and node
@@ -720,8 +724,14 @@ module Harmonics
                     base_hash = Digest::SHA256.hexdigest(coord_string)[0...7]
                     base_id = "X#{base_hash}"
 
+                    # Datum offset (Z0) is the constant term of the prediction. For a
+                    # current it is the mean flow, usually 0. Keep it separate from
+                    # depth: the "(depth N ft)" in a current's name is display data,
+                    # and adding it to the velocity made every current positive.
+                    datum_offset = tcd_station.datum_offset || 0.0
+
                     # Handle depth and BID for currents
-                    depth = tcd_station.datum_offset || 0.0
+                    depth = datum_offset
                     station_bid = nil
                     cache_key = base_id
 
@@ -744,6 +754,8 @@ module Harmonics
                     l_time_offset = nil
                     h_height_mult = 1.0
                     l_height_mult = 1.0
+                    flood_begins = nil
+                    ebb_begins = nil
 
                     if tcd_station.subordinate?
                         ref_station = all_tcd_stations[tcd_station.reference_station]
@@ -765,6 +777,10 @@ module Harmonics
                         l_time_offset = format_minutes_offset(tcd_station.min_time_add)
                         h_height_mult = tcd_station.max_level_multiply || 1.0
                         l_height_mult = tcd_station.min_level_multiply || 1.0
+
+                        # Currents: slack-before-flood and slack-before-ebb time offsets
+                        flood_begins = format_minutes_offset(tcd_station.flood_begins)
+                        ebb_begins = format_minutes_offset(tcd_station.ebb_begins)
                     end
 
                     if constituents.empty? && tcd_station.reference?
@@ -799,7 +815,7 @@ module Harmonics
                     @stations_cache[cache_key] = {
                         'name' => tcd_station.name,
                         'constituents' => constituents,
-                        'datum_offset' => depth,
+                        'datum_offset' => datum_offset,
                         'timezone' => tcd_station.tzfile,
                         'meridian' => meridian,
                         'units' => units,
@@ -812,6 +828,8 @@ module Harmonics
                         'h_height_mult' => h_height_mult,
                         'l_time_offset' => l_time_offset,
                         'l_height_mult' => l_height_mult,
+                        'flood_begins' => flood_begins,
+                        'ebb_begins' => ebb_begins,
                         'latitude' => tcd_station.latitude,
                         'longitude' => tcd_station.longitude
                     }

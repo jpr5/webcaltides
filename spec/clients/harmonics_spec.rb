@@ -205,6 +205,104 @@ RSpec.describe Clients::Harmonics do
         end
     end
 
+    describe '#current_data_for event types' do
+        # Bug: every XTide current event was labelled "flood".  The XTide parser
+        # stored a current station's name depth ("(depth 13 ft)") as its datum
+        # offset, so every predicted velocity was shifted positive.
+        #
+        # Expected events are NOAA's own predictions (currents_predictions,
+        # interval=MAX_SLACK) for the same stations, fetched 2026-10-07.
+        context 'with the real XTide data' do
+            around do |example|
+                original_xtide = ENV['XTIDE_FILE']
+                original_ticon = ENV['TICON_FILE']
+                ENV['XTIDE_FILE'] = fixture_xtide
+                ENV['TICON_FILE'] = fixture_ticon
+
+                with_test_cache_dir do
+                    example.run
+                end
+            ensure
+                ENV['XTIDE_FILE'] = original_xtide
+                ENV['TICON_FILE'] = original_ticon
+            end
+
+            let(:window_start) { Time.utc(2026, 10, 7) }
+            let(:window_end) { Time.utc(2026, 10, 7, 16) }
+
+            before do
+                # A 16-hour window instead of 13 months, to keep the spec fast
+                allow(client).to receive(:beginning_of_window).and_return(window_start)
+                allow(client).to receive(:end_of_window).and_return(window_end)
+            end
+
+            def events_for(bid)
+                station = client.current_stations.find { |s| s.bid == bid }
+                expect(station).not_to be_nil, "no XTide current station #{bid}"
+                client.current_data_for(station, window_start)
+            end
+
+            def expect_noaa_events(events, noaa)
+                noaa.each do |time, type, velocity|
+                    match = events.select { |e| e.type == type }.min_by { |e| (e.time.to_time - time).abs }
+                    expect(match).not_to be_nil, "no #{type} event near #{time}"
+                    expect(match.time.to_time).to be_within(5.minutes).of(time)
+                    expect(match.velocity_major).to be_within(0.05).of(velocity)
+                end
+            end
+
+            def expect_signed_events(events)
+                expect(events.map(&:type).uniq).to contain_exactly('flood', 'ebb', 'slack')
+                events.each do |e|
+                    case e.type
+                    when 'flood' then expect(e.velocity_major).to be > 0
+                    when 'ebb'   then expect(e.velocity_major).to be < 0
+                    when 'slack' then expect(e.velocity_major).to eq(0.0)
+                    end
+                end
+            end
+
+            it 'gives flood, ebb and slack at a reference station (Cape Cod Canal, NOAA COD0904)' do
+                events = events_for('X5016721_13')
+
+                expect_signed_events(events)
+                expect_noaa_events(events, [
+                    [Time.utc(2026, 10, 7, 1, 24), 'ebb', -4.29],
+                    [Time.utc(2026, 10, 7, 5, 11), 'slack', 0.0],
+                    [Time.utc(2026, 10, 7, 9, 17), 'flood', 4.21],
+                    [Time.utc(2026, 10, 7, 11, 37), 'slack', 0.0],
+                    [Time.utc(2026, 10, 7, 14, 23), 'ebb', -4.28]
+                ])
+            end
+
+            it 'gives flood, ebb and slack at a subordinate station (Wareham River, NOAA ACT2026)' do
+                events = events_for('X2d7f27f')
+
+                expect_signed_events(events)
+                expect_noaa_events(events, [
+                    [Time.utc(2026, 10, 7, 3, 2), 'slack', 0.0],
+                    [Time.utc(2026, 10, 7, 8, 44), 'flood', 0.42],
+                    [Time.utc(2026, 10, 7, 9, 59), 'slack', 0.0],
+                    [Time.utc(2026, 10, 7, 12, 59), 'ebb', -0.43],
+                    [Time.utc(2026, 10, 7, 15, 25), 'slack', 0.0]
+                ])
+            end
+        end
+    end
+
+    describe '#max_current_type' do
+        it 'labels a maximum above zero as flood and a minimum below zero as ebb' do
+            expect(client.max_current_type({ 'type' => 'High', 'height' => 1.2 })).to eq('flood')
+            expect(client.max_current_type({ 'type' => 'Low', 'height' => -0.8 })).to eq('ebb')
+        end
+
+        it 'does not label the weakest point of an ebb or flood as a max current' do
+            # Double ebb: the weakest ebb between two ebb maxima is a maximum below zero
+            expect(client.max_current_type({ 'type' => 'High', 'height' => -0.1 })).to be_nil
+            expect(client.max_current_type({ 'type' => 'Low', 'height' => 0.1 })).to be_nil
+        end
+    end
+
     describe 'TCD constituent loading bug fix' do
         # Bug: When TCD file loads, it overwrites @constituent_definitions for all constituents
         # including BASES constituents (M2, S2, etc), removing their v/u arrays

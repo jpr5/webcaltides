@@ -40,19 +40,19 @@ module Clients
 
             return [] if predictions.empty?
 
-            # Detect peaks (flood = high velocity, ebb = low velocity)
+            # Detect peaks (maxima and minima of the signed velocity)
             peaks = @engine.detect_peaks(predictions)
 
-            # Detect zero crossings for slack water
-            slacks = detect_zero_crossings(predictions)
+            # Slack water: the zero crossings of the velocity
+            slacks = slack_waters(lookup_id, predictions, start_time, end_time)
 
             # Combine peaks and slacks, convert to CurrentData
             events = []
 
             peaks.each do |p|
-                # High peak = max positive velocity = flood
-                # Low peak = max negative velocity = ebb
-                type = p['height'] > 0 ? 'flood' : 'ebb'
+                type = max_current_type(p)
+                next unless type
+
                 events << Models::CurrentData.new(
                     type: type,
                     time: p['time'].to_datetime,
@@ -74,6 +74,50 @@ module Clients
 
             # Sort by time
             events.sort_by(&:time)
+        end
+
+        # Velocity is signed: flood is positive, ebb is negative.  A maximum
+        # above zero is max flood and a minimum below zero is max ebb.  A maximum
+        # below zero (weakest ebb) or a minimum above zero (weakest flood) is not
+        # a max current, and gives nil.
+        def max_current_type(peak)
+            if peak['type'] == 'High' && peak['height'] > 0
+                'flood'
+            elsif peak['type'] == 'Low' && peak['height'] < 0
+                'ebb'
+            end
+        end
+
+        # Slack water times for a current station.  For a reference station they
+        # are the zero crossings of its predictions.  A subordinate station's
+        # predictions are only its max flood and ebb peaks, so its slacks are the
+        # reference station's zero crossings moved by the subordinate's
+        # flood-begins and ebb-begins time offsets.
+        def slack_waters(lookup_id, predictions, start_time, end_time)
+            station_data = @engine.stations_cache[lookup_id] || {}
+            ref_key = station_data['ref_key']
+            flood_begins = station_data['flood_begins']
+            ebb_begins = station_data['ebb_begins']
+
+            return detect_zero_crossings(predictions) unless ref_key && flood_begins && ebb_begins
+
+            # The same 2 hour margin generate_predictions uses for subordinate stations
+            ref_predictions = @engine.generate_predictions(ref_key, start_time - 2.hours, end_time + 2.hours)
+
+            detect_zero_crossings(ref_predictions).filter_map do |c|
+                offset = c['begins'] == 'flood' ? flood_begins : ebb_begins
+                time = c['time'] + offset_to_seconds(offset)
+                next unless time >= start_time && time <= end_time
+
+                c.merge('time' => time)
+            end
+        end
+
+        # "[+-]HH:MM:SS" -> seconds
+        def offset_to_seconds(offset)
+            sign = offset.start_with?('-') ? -1 : 1
+            h, m, sec = offset.delete('+-').split(':').map(&:to_i)
+            sign * (h * 3600 + m * 60 + (sec || 0))
         end
 
         # Detect zero crossings in predictions (slack water for currents)
@@ -101,7 +145,9 @@ module Clients
                     crossings << {
                         'time' => crossing_time,
                         'height' => 0.0,
-                        'units' => curr['units']
+                        'units' => curr['units'],
+                        # Negative to positive is the slack before flood
+                        'begins' => prev['height'] < 0 ? 'flood' : 'ebb'
                     }
                 end
             end

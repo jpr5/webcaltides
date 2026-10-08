@@ -74,9 +74,9 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
         let(:t0) { Time.utc(2026, 12, 30) }
         let(:t1) { Time.utc(2027, 1, 2) }
 
-        it 'bumps the station cache to v3' do
-            expect(described_class::CACHE_VERSION).to eq(3)
-            expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v3_\h{8}_\h{8}\.json\z})
+        it 'bumps the station cache to v4' do
+            expect(described_class::CACHE_VERSION).to eq(4)
+            expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v4_\h{8}_\h{8}\.json\z})
         end
 
         it 'writes tcd nodal files when HARMONICS_NODAL is invalid' do
@@ -84,7 +84,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                 with_mode('legcy') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                 expect(nodal).not_to be_empty
-                expect(nodal).to all(start_with('nodal_factors_v3_tcd_'))
+                expect(nodal).to all(start_with('nodal_factors_v4_tcd_'))
             end
         end
 
@@ -94,8 +94,8 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     with_mode(mode) { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                     nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                     expect(nodal).not_to be_empty
-                    expect(nodal).to all(start_with("nodal_factors_v3_#{mode}_"))
-                    expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v3_'))
+                    expect(nodal).to all(start_with("nodal_factors_v4_#{mode}_"))
+                    expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v4_'))
                 end
             end
         end
@@ -104,7 +104,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             Dir.mktmpdir do |dir|
                 with_mode('tcd') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 tcd_sum = described_class.new(logger, dir).source_files_checksum.split('_').first
-                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v3_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v3_tcd_t#{tcd_sum}_2027_0.0.json])
+                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v4_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v4_tcd_t#{tcd_sum}_2027_0.0.json])
             end
         end
 
@@ -127,11 +127,12 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             end
         end
 
-        # A prod-like dir holds unversioned nodal files and the v2 station cache
-        # written by older code. Poison them: they must never be read, and the
-        # output must equal a run from an empty dir.
+        # A prod-like dir holds unversioned nodal files and the v2 and v3 station
+        # caches written by older code (v3 holds a current's name depth as its
+        # datum offset). Poison them: they must never be read, and the output
+        # must equal a run from an empty dir.
         %w[tcd legacy].each do |mode|
-            it "never reads pre-v3 cache files (#{mode})" do
+            it "never reads pre-v4 cache files (#{mode})" do
                 Dir.mktmpdir do |empty|
                     Dir.mktmpdir do |prod|
                         stale = []
@@ -141,9 +142,11 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                             File.write(f, { 'M2' => { 'f' => 50.0, 'u' => 90.0, 'V0' => 90.0 } }.to_json)
                         end
                         checksum = described_class.new(logger, prod).source_files_checksum
-                        f = "#{prod}/xtide_stations_v2_#{checksum}.json"
-                        stale << f
-                        File.write(f, '{"poisoned": ')
+                        %w[v2 v3].each do |v|
+                            f = "#{prod}/xtide_stations_#{v}_#{checksum}.json"
+                            stale << f
+                            File.write(f, '{"poisoned": ')
+                        end
                         allow(File).to receive(:read).and_call_original
 
                         with_mode(mode) do
@@ -151,7 +154,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                             expect(events(described_class.new(logger, prod), 'X49eee41', t0, t1)).to eq(expected)
                         end
                         stale.each { |s| expect(File).not_to have_received(:read).with(s, any_args) }
-                        expect(Dir.children(prod)).to include(a_string_starting_with('xtide_stations_v3_'))
+                        expect(Dir.children(prod)).to include(a_string_starting_with('xtide_stations_v4_'))
                     end
                 end
             end
@@ -191,7 +194,9 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
     end
 
     # Output of commit e441ec9 (before per-year TCD nodal corrections) for 2 XTide and 2 TICON
-    # stations across the 2026/2027 year boundary.
+    # stations across the 2026/2027 year boundary.  The current station X0730150_90 was
+    # regenerated when its datum offset changed from the name depth (90) to the TCD value
+    # (-0.067): every velocity moved by exactly 90.067 and peak times by under 1 microsecond.
     #
     # Raw hourly heights come out of libm sin/cos, which differ by an ulp or
     # two between platforms (glibc on Linux vs macOS gave deltas up to 4.4e-16),
