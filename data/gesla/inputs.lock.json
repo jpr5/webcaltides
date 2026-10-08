@@ -1,0 +1,11 @@
+{
+  "gesla_version": "4.1",
+  "bucket": "opentideconstants-work",
+  "objects": {
+    "inputs/gesla/4.1/inputs.lock.json": {
+      "uri": "s3://opentideconstants-work/inputs/gesla/4.1/inputs.lock.json",
+      "sha256": "a42b3cfa994777c05b6f2986d353652d9d84792442c53bd0a933424291e6409c",
+      "size": 3082055
+    }
+  }
+}
