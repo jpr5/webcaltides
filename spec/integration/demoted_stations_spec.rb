@@ -19,6 +19,7 @@ RSpec.describe 'Demoted stations', type: :request do
         @client = Clients::Harmonics.new(Logger.new('/dev/null'))
         @client.instance_variable_set(:@engine, Harmonics::Engine.new(Logger.new('/dev/null'), @dir))
         @harmonics_stations = @client.tide_stations
+        @harmonics_currents = @client.current_stations
     end
 
     after(:all) { FileUtils.rm_rf(@dir) }
@@ -62,8 +63,11 @@ RSpec.describe 'Demoted stations', type: :request do
             expect(WebCalTides::DEMOTED_STATIONS).not_to be_empty
             WebCalTides::DEMOTED_STATIONS.each do |id, entry|
                 expect(entry).to be_a(Hash), "#{id}: #{entry.inspect}"
+                expect(entry[:type]).to be_in(%i[tide current]), "#{id}: #{entry.inspect}"
                 expect(entry.values_at(:better, :warning, :evidence)).to all(be_a(String).and(be_present)), "#{id}: #{entry.inspect}"
-                expect(@harmonics_stations.map(&:id)).to include(entry[:better])
+                # The better station is in the shipped list of the entry's own type
+                shipped = entry[:type] == :current ? @harmonics_currents : @harmonics_stations
+                expect(shipped.map(&:id)).to include(entry[:better]), "#{id}: #{entry.inspect}"
             end
         end
 
@@ -134,6 +138,13 @@ RSpec.describe 'Demoted stations', type: :request do
 
             expect($LOG).to have_received(:error).with(/!! better station C0000002 for demoted station T6e11ade is not in the tide station list/).once
             expect($LOG).to have_received(:error).with(/!! better station Tdce40e9 for demoted station C0000001 is not in the current station list/).once
+        end
+
+        it 'fails clearly on an entry whose :type is not :tide or :current' do
+            stub_const('WebCalTides::DEMOTED_STATIONS', { 'T6e11ade' => entry('Tdce40e9', :tides) })
+            expect { WebCalTides.check_demoted_stations }.to raise_error(KeyError, /:tides/)
+            expect { WebCalTides.demotion_warning(@harmonics_stations.find { |s| s.id == 'T6e11ade' }) }
+                .to raise_error(ArgumentError, /:type must be :tide or :current, not :tides/)
         end
 
         it 'still cleans the cache when the check fails, and logs where it failed' do
@@ -248,10 +259,15 @@ RSpec.describe 'Demoted stations', type: :request do
         end
 
         it 'does not serve a feed cached before the demotion' do
-            stale = "#{cache_dir}/tides_v#{Models::TideData.version}_T6e11ade_202611" \
-                    "#{WebCalTides.harmonics_cache_key(WebCalTides.tide_station_for('T6e11ade'))}_imperial_0_0.ics"
+            # The file the route reads for this request when the station is not demoted
+            allow(WebCalTides).to receive(:demotion_cache_key).and_return('')
+            stale = Server.ics_cache_file(type: 'tides', id: 'T6e11ade', station: WebCalTides.tide_station_for('T6e11ade'),
+                                          date: Time.current.utc, units: 'imperial', no_solar: true, add_lunar: false)
             File.write(stale, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:stale\r\nEND:VCALENDAR\r\n")
+            get '/tides/T6e11ade.ics?solar=0'
+            expect(last_response.body).to include('PRODID:stale') # the name matches what the route reads
 
+            allow(WebCalTides).to receive(:demotion_cache_key).and_call_original
             get '/tides/T6e11ade.ics?solar=0'
             expect(last_response.status).to eq(200)
             expect(last_response.body).not_to include('PRODID:stale')
@@ -333,6 +349,25 @@ RSpec.describe 'Demoted stations', type: :request do
             expect(WebCalTides.demotion_warning(demoted)).to end_with('Use Tdce40e9 instead.')
         end
 
+        # A build that read the list before a removal must not be kept after it.  The removal runs
+        # while the build is between reading the list and storing the table.
+        it 'does not keep a table built across a removal from the list' do
+            removed = false
+            allow(list).to receive(:each).and_wrap_original do |m, *args, &block|
+                result = m.call(*args, &block)
+                unless removed
+                    removed = true
+                    WebCalTides.remove_tide_station('Tdce40e9')
+                end
+                result
+            end
+
+            WebCalTides.demotion_warning(demoted)
+            expect(removed).to be(true)
+            expect(list.map(&:id)).not_to include('Tdce40e9')
+            expect(WebCalTides.demotion_warning(demoted)).to end_with('Use Tdce40e9 instead.')
+        end
+
         it 'logs a missing better station once per list' do
             list.reject! { |s| s.id == 'Tdce40e9' }
             3.times { WebCalTides.demotion_warning(demoted) }
@@ -347,6 +382,63 @@ RSpec.describe 'Demoted stations', type: :request do
             expect(WebCalTides).not_to receive(:current_stations)
             expect(WebCalTides.demotion_warning(demoted)).to include('Tdce40e9')
             expect(WebCalTides.demotion_cache_key(demoted)).to start_with('_demoted')
+        end
+    end
+
+    # The first current-station entry, stubbed: the source picker, the in-place removal and the
+    # tables kept per type
+    describe 'a demoted current station' do
+        let(:good) do
+            build_station(name: 'Test Narrows Current', id: 'NC00001', bid: 'NC00001_10', public_id: 'NC00001_10',
+                          provider: 'noaa', lat: 47.27, lon: -122.55, depth: 10)
+        end
+        let(:bad) do
+            build_station(name: 'Test Narrows Current', id: 'XC00001', bid: 'XC00001_10', public_id: 'XC00001_10',
+                          provider: 'xtide', lat: 47.27, lon: -122.55, depth: 10)
+        end
+        let(:currents) { [good, bad] }
+
+        around do |example|
+            saved = %i[@current_stations @current_stations_retry_at @demotion_better_stations].to_h { |v| [v, WebCalTides.instance_variable_get(v)] }
+            example.run
+        ensure
+            saved.each { |v, value| WebCalTides.instance_variable_set(v, value) }
+        end
+
+        before do
+            stub_const('WebCalTides::DEMOTED_STATIONS', WebCalTides::DEMOTED_STATIONS.merge(
+                'XC00001' => { type: :current, better: 'NC00001', warning: 'Times here may be early', evidence: 'test' }
+            ))
+            WebCalTides.instance_variable_set(:@current_stations, currents)
+            WebCalTides.instance_variable_set(:@current_stations_retry_at, nil)
+            WebCalTides.instance_variable_set(:@demotion_better_stations, nil)
+            allow(WebCalTides).to receive(:current_stations).and_return(currents)
+            allow(WebCalTides).to receive(:cache_current_stations)
+            allow($LOG).to receive(:error)
+        end
+
+        it 'marks the demoted current in the source picker, naming the better current' do
+            post '/', { searchtext: 'narrows', units: 'metric' }
+            card    = last_response.body.split('class="station-card ').drop(1).find { |c| c.include?('data-station-type="currents"') }
+            sources = JSON.parse(CGI.unescapeHTML(card[/sources: (\[.*?\]),\s*webcalBase/m, 1]))
+
+            expect(sources.map { |s| s['id'] }).to eq(%w[NC00001_10 XC00001_10])
+            expect(sources.first['warning']).to be_nil
+            expect(sources.last['warning']).to eq('Times here may be early.  Use Test Narrows Current (NC00001) instead.')
+        end
+
+        it 'stops naming the better current once it is removed from the list in place' do
+            expect(WebCalTides.demotion_warning(bad)).to include('Test Narrows Current (NC00001)')
+            WebCalTides.remove_current_station('NC00001')
+
+            expect(WebCalTides.demotion_warning(bad)).to end_with('Use NC00001 instead.')
+        end
+
+        it "looks for a tide entry's better station among tide entries only" do
+            demoted = @harmonics_stations.find { |s| s.id == 'T6e11ade' }
+            expect(WebCalTides.demotion_warning(demoted)).to include('Vigo, ESP (Tdce40e9)')
+            expect(WebCalTides.demotion_warning(bad)).to include('(NC00001)')
+            expect($LOG).not_to have_received(:error)
         end
     end
 

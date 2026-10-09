@@ -22,6 +22,17 @@ class Server < ::Sinatra::Base
     set :views,         settings.root + '/views'
     set :static,        true
 
+    # The cache file for a feed: per month, dataset and engine (harmonics stations), demotion
+    # warning (demoted stations), units and solar/lunar options
+    def self.ics_cache_file(type:, id:, station:, date:, units:, no_solar:, add_lunar:)
+        stamp   = date.utc.strftime("%Y%m")
+        version = type == "currents" ? Models::CurrentData.version : Models::TideData.version
+        hkey    = WebCalTides.harmonics_cache_key(station) # "" unless harmonics-served
+        # A demoted station's feed carries its warning, so a feed cached without it is not served
+        dkey    = WebCalTides.demotion_cache_key(station) # "" unless demoted
+        "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}#{hkey}#{dkey}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
+    end
+
     # Warm caches in background thread to prevent blocking server startup
     # Loads harmonics engine cache, tide stations cache, and current stations cache
     def self.warm_caches
@@ -451,13 +462,9 @@ class Server < ::Sinatra::Base
             halt ics
         end
 
-        stamp      = date.utc.strftime("%Y%m")
-        version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
         station    = type == "currents" ? WebCalTides.current_station_for(id) : WebCalTides.tide_station_for(id)
-        hkey       = WebCalTides.harmonics_cache_key(station) # "" unless harmonics-served
-        # A demoted station's feed carries its warning, so a feed cached without it is not served
-        dkey       = WebCalTides.demotion_cache_key(station) # "" unless demoted
-        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}#{hkey}#{dkey}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
+        cached_ics = Server.ics_cache_file(type: type, id: id, station: station, date: date, units: units,
+                                           no_solar: no_solar, add_lunar: add_lunar)
 
         # Cleanup old cache files if month has changed (thread-safe)
         WebCalTides.cleanup_if_month_changed
@@ -499,7 +506,7 @@ class Server < ::Sinatra::Base
             ical
         end
 
-        $LOG.info "serving demoted station #{id}: #{WebCalTides.demotion_warning(station)}" if dkey.present?
+        $LOG.info "serving demoted station #{id}: #{WebCalTides.demotion_warning(station)}" if WebCalTides.demoted_station?(station)
 
         content_type 'text/calendar', charset: 'utf-8'
         body ics
