@@ -2,7 +2,7 @@
 
 require 'tmpdir'
 
-# The strict engine mode (OTC SDK prediction spec, revision 11, sections 4 and 6.1).
+# The strict engine mode (OTC SDK prediction spec, revision 14, sections 4 and 6.1).
 # The synthetic cases use small made-up astronomical tables (2000-2030), so that each
 # rule can be pinned exactly; the TCD cases use the shipped tables.
 RSpec.describe Harmonics::Engine, 'strict mode' do
@@ -21,6 +21,10 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
                          'f' => years.map { |y| by_year.dig(y, 1) || 1.0 } }]
             end
         )
+    end
+
+    def raw_table(constituents)
+        Harmonics::Strict::AstroTable.from_h('first_year' => 2000, 'last_year' => 2030, 'constituents' => constituents)
     end
 
     def tide(name, amp, phase)
@@ -64,6 +68,57 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(code_of { engine.extremes_strict([tide('S12', 1, 0)], t2025 + 1, t2025, astro: astro) }).to eq('invalid_argument')
             expect(engine.extremes_strict([tide('S12', 1, 0)], t2025, t2025, astro: astro)).to eq([])
         end
+
+        it 'raises time_out_of_range when only the last grid point is in the next year' do
+            # stop + 3600 s is exactly 2031-01-01T00:00Z, a grid point outside the table.
+            expect(code_of { engine.extremes_strict([tide('S12', 1, 0)], Time.utc(2030, 12, 31, 12), Time.utc(2030, 12, 31, 23), astro: astro) }).to eq('time_out_of_range')
+            # Heights before stop never evaluate 2031.
+            expect(engine.predict_strict([tide('S12', 1, 0)], [Time.utc(2030, 12, 31, 23, 59, 59)], astro: astro).size).to eq(1)
+        end
+
+        it 'raises unsupported_constituent for a row with no speed' do
+            nospeed = raw_table('S12' => { 'speed_deg_per_hour' => nil, 'v0u_deg' => [0.0] * 31, 'f' => [1.0] * 31 })
+            expect(code_of { engine.predict_strict([tide('S12', 1, 0)], [t2025], astro: nospeed) }).to eq('unsupported_constituent')
+        end
+
+        it 'raises invalid_argument for a nil or non-finite V0+u or f in a table row' do
+            [[nil, 1.0], [Float::NAN, 1.0], [0.0, nil], [0.0, Float::INFINITY], ['1.0', 1.0]].each do |v0u, f|
+                code = code_of do
+                    rows = raw_table('S12' => { 'speed_deg_per_hour' => 30.0, 'v0u_deg' => [0.0] * 25 + [v0u] + [0.0] * 5, 'f' => [1.0] * 25 + [f] + [1.0] * 5 })
+                    engine.predict_strict([tide('S12', 1, 0)], [t2025], astro: rows)
+                end
+                expect(code).to eq('invalid_argument'), "v0u #{v0u.inspect}, f #{f.inspect}"
+            end
+        end
+
+        it 'raises invalid_argument for a non-numeric, nil or non-finite amplitude or phase' do
+            [nil, '1.0', Float::NAN, Float::INFINITY].each do |bad|
+                expect(code_of { engine.predict_strict([tide('S12', bad, 0)], [t2025], astro: astro) }).to eq('invalid_argument'), "amplitude #{bad.inspect}"
+                expect(code_of { engine.extremes_strict([tide('S12', 1, bad)], t2025, t2025 + 3600, astro: astro) }).to eq('invalid_argument'), "phase #{bad.inspect}"
+            end
+            expect(code_of { engine.predict_strict([{ 'name' => 'S12', 'phase_deg' => 0 }], [t2025], astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'raises invalid_argument for an empty constituent list or a duplicate name' do
+            expect(code_of { engine.predict_strict([], [t2025], astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.extremes_strict([tide('S12', 1, 0), tide('S12', 1, 0)], t2025, t2025 + 3600, astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'raises invalid_argument for a bad datum term' do
+            [nil, '2.0', Float::NAN].each do |bad|
+                expect(code_of { engine.predict_strict([tide('S12', 1, 0)], [t2025], datum_term: bad, astro: astro) }).to eq('invalid_argument'), bad.inspect
+                expect(code_of { engine.extremes_strict([tide('S12', 1, 0)], t2025, t2025 + 3600, datum_term: bad, astro: astro) }).to eq('invalid_argument'), bad.inspect
+            end
+        end
+
+        it 'raises invalid_argument for a time that is not a Time or a finite number' do
+            [nil, '2025-06-01', Float::NAN].each do |bad|
+                expect(code_of { engine.predict_strict([tide('S12', 1, 0)], [bad], astro: astro) }).to eq('invalid_argument'), bad.inspect
+                expect(code_of { engine.extremes_strict([tide('S12', 1, 0)], bad, t2025, astro: astro) }).to eq('invalid_argument'), bad.inspect
+                expect(code_of { engine.extremes_strict([tide('S12', 1, 0)], t2025, bad, astro: astro) }).to eq('invalid_argument'), bad.inspect
+            end
+            expect(engine.predict_strict([tide('S12', 1, 0)], [t2025.to_i], astro: astro)).to eq(engine.predict_strict([tide('S12', 1, 0)], [t2025], astro: astro))
+        end
     end
 
     describe 'heights' do
@@ -91,7 +146,7 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             end
         end
 
-        it 'reports a high, a low and a high inside one step, in order' do
+        it 'reports four extremes inside one step (high, low, high, low), in order' do
             ev = engine.extremes_strict([tide('F', 1.0, 60.0)], t2025, t2025 + 360, astro: table('F' => [7200.0]))
             expect(ev.map { |e| [e['type'], e['time'] - t2025] }).to eq([['high', 30], ['low', 120], ['high', 210], ['low', 300]])
         end
@@ -122,8 +177,9 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
 
         it 'inserts a high at New Year when the jump hides it on both sides (missed event)' do
             # Old table: rising at T, high 10 min after it. New table: falling at T.
-            ev = engine.extremes_strict([tide('D1', 1.0, 0.0)], new_year - 6 * 3600, new_year + 6 * 3600, astro: diurnal(357.5, 2.5))
-            expect(events(ev)).to eq([['2021-01-01T00:00:00Z', 'high', Math.cos(2.5 * Math::PI / 180).round(9)]])
+            # The new year's f differs, so the inserted height shows which table it used.
+            ev = engine.extremes_strict([tide('D1', 1.0, 0.0)], new_year - 6 * 3600, new_year + 6 * 3600, astro: diurnal(357.5, 2.5, 1.0, 1.2))
+            expect(events(ev)).to eq([['2021-01-01T00:00:00Z', 'high', (1.2 * Math.cos(2.5 * Math::PI / 180)).round(9)]])
         end
 
         it 'keeps one high when each table puts it on its own side of New Year (doubled event)' do
@@ -132,6 +188,19 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(events(higher_new)).to eq([['2021-01-01T00:08:00Z', 'high', 1.01]])
             equal = engine.extremes_strict([tide('D1', 1.0, 0.0)], new_year - 6 * 3600, new_year + 6 * 3600, astro: diurnal(2.5, 358.0))
             expect(events(equal)).to eq([['2020-12-31T23:50:00Z', 'high', 1.0]])
+        end
+
+        # A semidiurnal crest at 00:30 with a tiny wiggle whose extremes are 0.95 s
+        # apart.  Near the crest the wiggle makes one odd cluster of about a dozen
+        # roots; on each side it makes high-low pairs closer than 1 s on a
+        # rising or falling tide (even clusters).  Only the crest is an extremum.
+        it 'reports one high for a crest made of sub-second roots, and nothing for the pairs beside it' do
+            crest = Time.utc(2025, 6, 1, 0, 30)
+            astro = table('S12' => [30.0], 'W' => [360.0 / 1.9 * 3600])
+            ev = engine.extremes_strict([tide('S12', 1.0, 15.0), tide('W', 3.8e-7, 0.0)], crest - 3600, crest + 3600, astro: astro)
+            expect(ev.map { |e| e['type'] }).to eq(['high'])
+            expect((ev.first['time'] - crest).abs).to be <= 10
+            expect(ev.first['height']).to be_within(1e-6).of(1.0)
         end
     end
 
@@ -182,6 +251,34 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(flipped['direction_deg']).not_to be_within(1e-6).of(r['direction_deg'])
         end
 
+        it 'gives 0.0, never 360.0, for a current at azimuth 180 flowing north' do
+            b = bin('S12', 0.0, 0.0, 'azimuth_deg' => 180.0, 'mean_major_ms' => -1.0)
+            expect(engine.currents_strict(b, [t2025], astro: astro).first['direction_deg']).to eq(0.0)
+        end
+
+        it 'accepts only +1 or -1 as the minor-axis sign, +1 by default' do
+            b = bin('S12', 1.0, 0.0)
+            [0, 2, -1.5, nil, '1'].each do |bad|
+                expect(code_of { engine.currents_strict(b, [t2025], minor_sign: bad, astro: astro) }).to eq('invalid_argument'), bad.inspect
+            end
+            expect(engine.currents_strict(b, [t2025], astro: astro)).to eq(engine.currents_strict(b, [t2025], minor_sign: 1, astro: astro))
+        end
+
+        it 'raises invalid_argument for a missing azimuth, an explicit null mean, or a bad current constant' do
+            no_azimuth = bin('S12', 1.0, 0.0).reject { |k, _| k == 'azimuth_deg' }
+            expect(code_of { engine.currents_strict(no_azimuth, [t2025], astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.current_events_strict(no_azimuth, t2025, t2025 + 3600, astro: astro) }).to eq('invalid_argument')
+            %w[mean_major_ms mean_minor_ms].each do |k|
+                expect(code_of { engine.currents_strict(bin('S12', 1.0, 0.0, k => nil), [t2025], astro: astro) }).to eq('invalid_argument'), k
+            end
+            expect(code_of { engine.current_events_strict(bin('S12', 1.0, 0.0, 'mean_major_ms' => nil), t2025, t2025 + 3600, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.currents_strict(bin('S12', Float::NAN, 0.0), [t2025], astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.current_events_strict(bin('S12', 1.0, nil), t2025, t2025 + 3600, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.currents_strict(bin('S12', 1.0, 0.0, 'constituents' => []), [t2025], astro: astro) }).to eq('invalid_argument')
+            # An absent mean counts as 0.
+            expect(engine.currents_strict(bin('S12', 1.0, 0.0), [t2025], astro: astro)).to eq(engine.currents_strict(bin('S12', 1.0, 0.0, 'mean_major_ms' => 0.0), [t2025], astro: astro))
+        end
+
         it 'gives a null direction at zero speed' do
             r = engine.currents_strict(bin('S12', 0.0, 0.0), [t2025], astro: astro).first
             expect([r['speed_ms'], r['direction_deg']]).to eq([0.0, nil])
@@ -194,6 +291,28 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
                 [[20, 'max_flood', 1.0, 0.0], [80, 'slack_before_ebb', 0.0, nil], [140, 'max_ebb', -1.0, 180.0],
                  [200, 'slack_before_flood', 0.0, nil], [260, 'max_flood', 1.0, 0.0], [320, 'slack_before_ebb', 0.0, nil]]
             )
+        end
+
+        it 'reports one max flood for a maximum made of sub-second roots' do
+            crest = Time.utc(2025, 6, 1, 0, 30)
+            astro = table('S12' => [30.0], 'W' => [360.0 / 1.9 * 3600])
+            b = bin('S12', 1.0, 15.0)
+            b['constituents'] << { 'name' => 'W', 'major_amplitude_ms' => 3.8e-7, 'major_phase_deg' => 0.0, 'minor_amplitude_ms' => 0.0, 'minor_phase_deg' => 0.0 }
+            ev = engine.current_events_strict(b, crest - 3600, crest + 3600, astro: astro)
+            expect(ev.map { |e| e['type'] }).to eq(['max_flood'])
+            expect((ev.first['time'] - crest).abs).to be <= 10
+        end
+
+        it 'reports one slack for a zero crossing made of sub-second roots' do
+            # A falling current at 03:30 with a wiggle that crosses zero every 0.95 s
+            # near the crossing: one odd cluster, and even clusters beside it.
+            slack = Time.utc(2025, 6, 1, 3, 30)
+            astro = table('S12' => [30.0], 'W' => [360.0 / 1.9 * 3600])
+            b = bin('S12', 1.0, 15.0)
+            b['constituents'] << { 'name' => 'W', 'major_amplitude_ms' => 0.0087, 'major_phase_deg' => 0.0, 'minor_amplitude_ms' => 0.0, 'minor_phase_deg' => 0.0 }
+            ev = engine.current_events_strict(b, slack - 1800, slack + 1800, astro: astro).select { |e| e['type'].start_with?('slack') }
+            expect(ev.map { |e| e['type'] }).to eq(['slack_before_ebb'])
+            expect((ev.first['time'] - slack).abs).to be <= 60
         end
 
         it 'does not report a weak ebb (a minimum above zero) and has no slack then' do
@@ -223,6 +342,27 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
 
             it 'keeps the earlier of a doubled slack' do
                 expect(events(slacks(92.5, 88.0), 'velocity_ms')).to eq([['2020-12-31T23:50:00Z', 'slack_before_ebb', 0.0]])
+            end
+
+            def maxima(v2020, v2021, f2020, f2021, extra = {})
+                astro = table('D1' => [15.0, { 2020 => [v2020, f2020], 2021 => [v2021, f2021] }])
+                ev = engine.current_events_strict(bin('D1', 1.0, 0.0, extra), new_year - 3 * 3600, new_year + 3 * 3600, astro: astro)
+                events(ev.reject { |e| e['type'].start_with?('slack') }, 'velocity_ms')
+            end
+
+            it 'inserts a max flood missed on both sides, with the new year W' do
+                expect(maxima(357.5, 2.5, 1.0, 1.2)).to eq([['2021-01-01T00:00:00Z', 'max_flood', (1.2 * Math.cos(2.5 * Math::PI / 180)).round(9)]])
+            end
+
+            it 'keeps the least W of a doubled max ebb' do
+                # Old table: minimum 10 min before T. New table: minimum 8 min after T, lower.
+                expect(maxima(182.5, 178.0, 1.0, 1.01)).to eq([['2021-01-01T00:08:00Z', 'max_ebb', -1.01]])
+            end
+
+            it 'keeps the greatest W of a doubled maximum, by sign and not by size' do
+                # With a mean of -0.9: the old maximum is +0.1 (a flood), the new one
+                # -0.2 (weaker than slack).  The signed rule keeps the flood.
+                expect(maxima(2.5, 358.0, 1.0, 0.7, 'mean_major_ms' => -0.9)).to eq([['2020-12-31T23:50:00Z', 'max_flood', 0.1]])
             end
         end
     end
@@ -291,6 +431,45 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(sub_h).to be_within(1e-12).of(ref_h + 0.15)
         end
 
+        it 'adds the offset to the unrounded reference root and rounds once' do
+            # The reference highs are at 45.4 s after each grid point, the lows at 225.4 s.
+            fast = table('F' => [3600.0])
+            ref_f = [tide('F', 1.0, 45.4)]
+            got = engine.subordinate_extremes_strict(ref_f, 0.0, { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 0.005, 'time_offset_low_min' => 0.005 },
+                                                     t2025, t2025 + 360, astro: fast)
+            expect(got.map { |e| [e['time'] - t2025, e['type']] }).to eq([[46, 'high'], [226, 'low']])
+        end
+
+        it 'keeps the reference order of two shifted events that round to the same second' do
+            fast = table('F' => [3600.0])
+            got = engine.subordinate_extremes_strict([tide('F', 1.0, 45.4)], 0.0, { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 3, 'time_offset_low_min' => 0 },
+                                                     t2025, t2025 + 360, astro: fast)
+            expect(got.map { |e| [e['time'] - t2025, e['type']] }).to eq([[225, 'high'], [225, 'low']])
+        end
+
+        it 'finds a reference event more than an hour outside the window that an offset moves into it' do
+            # The first reference low is 06:30 + ..., moved by -400 min; the window starts
+            # 10 min before the shifted event, which only the padding of 400 + 60 min reaches.
+            offsets = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 0, 'time_offset_low_min' => -400 }
+            lows = ref_events.select { |e| e['type'] == 'low' && e['time'] > t0 + 400 * 60 + 2 * 3600 }
+            target = lows.first['time'] - 400 * 60
+            got = engine.subordinate_extremes_strict(ref, 2.0, offsets, target - 600, target + 600, astro: astro)
+            expect(got.map { |e| [e['time'], e['type']] }).to eq([[target, 'low']])
+        end
+
+        it 'raises datum_unavailable for a null chart datum term and invalid_argument for bad offsets' do
+            ok = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 37, 'time_offset_low_min' => 37, 'height_offset_high' => 0.9, 'height_offset_low' => 0.9 }
+            expect(code_of { engine.subordinate_extremes_strict(ref, nil, ok, t0, t1, astro: astro) }).to eq('datum_unavailable')
+            expect(code_of { engine.subordinate_folded_strict(ref, nil, ok, astro: astro) }).to eq('datum_unavailable')
+            expect(code_of { engine.subordinate_extremes_strict(ref, Float::NAN, ok, t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_extremes_strict(ref, 2.0, ok.merge('time_offset_high_min' => '37'), t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_extremes_strict(ref, 2.0, ok.merge('height_offset_low' => Float::NAN), t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_folded_strict(ref, 2.0, ok.merge('time_offset_low_min' => '37'), astro: astro) }).to eq('invalid_argument')
+            %w[X r].push(nil).each do |type|
+                expect(code_of { engine.subordinate_extremes_strict(ref, 2.0, ok.merge('height_adjusted_type' => type), t0, t1, astro: astro) }).to eq('invalid_argument'), type.inspect
+            end
+        end
+
         it 'refuses to fold differing offsets or a ratio that is not positive' do
             differ = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 37, 'time_offset_low_min' => 20, 'height_offset_high' => 0.9, 'height_offset_low' => 0.9 }
             expect { engine.subordinate_folded_strict(ref, 2.0, differ, astro: astro) }.to raise_error(Harmonics::Strict::Error, /extremes_only: high and low water offsets differ/)
@@ -325,13 +504,50 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(got['events'].map { |e| [e['time'], e['type'], e['velocity_ms'], e['direction_deg']] }).to eq(expected)
             expect(expected.size).to be >= 8
         end
+
+        it 'shifts max ebb by its own adjustment, scales it by ebb_amp_ratio and gives the ebb direction' do
+            got = engine.subordinate_current_events_strict(ref, offset.merge('time_adj_max_ebb_min' => -20), t0, t1, astro: astro)
+            expect(got['omitted_event_types']).to eq([])
+            ebbs = engine.current_events_strict(ref, t0 - 86_400, t1 + 86_400, astro: astro).select { |e| e['type'] == 'max_ebb' }
+                         .map { |e| [e['time'] - 20 * 60, 'max_ebb', e['velocity_ms'] * 0.7, 190.0] }.select { |t, *| t >= t0 && t < t1 }
+            expect(got['events'].select { |e| e['type'] == 'max_ebb' }.map { |e| [e['time'], e['type'], e['velocity_ms'], e['direction_deg']] }).to eq(ebbs)
+            expect(ebbs.size).to be >= 3
+        end
+
+        it 'lists omitted types in the fixed order' do
+            all_null = offset.merge('time_adj_max_flood_min' => nil, 'time_adj_max_ebb_min' => nil, 'time_adj_slack_before_flood_min' => nil, 'time_adj_slack_before_ebb_min' => nil)
+            got = engine.subordinate_current_events_strict(ref, all_null, t0, t1, astro: astro)
+            expect(got).to eq('events' => [], 'omitted_event_types' => %w[max_flood max_ebb slack_before_flood slack_before_ebb])
+            ratios = engine.subordinate_current_events_strict(ref, offset.merge('time_adj_max_ebb_min' => 5, 'ebb_amp_ratio' => nil, 'flood_amp_ratio' => nil), t0, t1, astro: astro)
+            expect(ratios['omitted_event_types']).to eq(%w[max_flood max_ebb])
+        end
+
+        it 'adds the adjustment to the unrounded reference root and rounds once' do
+            fast = table('F' => [5400.0])
+            # 1.5 deg/s, phase 30.6: max flood 20.4 s after each grid point.
+            got = engine.subordinate_current_events_strict(bin('F', 1.0, 30.6), offset.merge('time_adj_max_flood_min' => 0.005), t2025, t2025 + 60, astro: fast)
+            expect(got['events'].select { |e| e['type'] == 'max_flood' }.map { |e| [e['time'] - t2025, e['type']] }).to eq([[21, 'max_flood']])
+        end
+
+        it 'finds a reference event more than an hour outside the window that an adjustment moves into it' do
+            far = offset.merge('time_adj_max_flood_min' => -400)
+            flood = engine.current_events_strict(ref, t0 + 8 * 3600, t1, astro: astro).find { |e| e['type'] == 'max_flood' }
+            target = flood['time'] - 400 * 60
+            got = engine.subordinate_current_events_strict(ref, far, target - 600, target + 600, astro: astro)
+            expect(got['events'].map { |e| [e['time'], e['type']] }).to eq([[target, 'max_flood']])
+        end
+
+        it 'raises invalid_argument for a String adjustment or ratio' do
+            expect(code_of { engine.subordinate_current_events_strict(ref, offset.merge('time_adj_max_flood_min' => '30'), t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_current_events_strict(ref, offset.merge('flood_amp_ratio' => '0.8'), t0, t1, astro: astro) }).to eq('invalid_argument')
+        end
     end
 
     describe 'with the shipped TCD' do
         let(:m2) { tide('M2', 1.0, 100.0) }
         let(:t) { Time.utc(2026, 10, 9, 12) }
 
-        it 'raises for an unknown constituent and for 2101, where the default path returns a number' do
+        it 'raises for an unknown constituent and for 2101' do
             expect(code_of { engine.predict_strict([m2, tide('XX9', 0.5, 10.0)], [t]) }).to eq('unsupported_constituent')
             expect(code_of { engine.predict_strict([m2], [Time.utc(2101, 6, 1)]) }).to eq('time_out_of_range')
         end
@@ -402,7 +618,7 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             end
 
             # Richardson Hammock, St. Joseph Bay: a high and a low 15 minutes
-            # apart, which the default 15-minute search reports as one event.
+            # apart, both of which the default 15-minute search misses.
             it 'finds both extremes of a close pair' do
                 consts, z0 = otc('X11dcf24')
                 ev = @engine.extremes_strict(consts, Time.utc(2026, 10, 9, 23), Time.utc(2026, 10, 10, 1), datum_term: z0)

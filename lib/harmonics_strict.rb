@@ -4,7 +4,7 @@ require 'tcd'
 
 module Harmonics
     # The strict prediction mode that makes the OpenTideConstants SDK reference
-    # vectors (OTC SDK prediction spec, revision 11: section 4 for the rules,
+    # vectors (OTC SDK prediction spec, revision 14: section 4 for the rules,
     # section 6.1 for this mode).  It takes an OTC set's constants directly and
     # applies every rule exactly as the SDKs do:
     #
@@ -14,8 +14,12 @@ module Harmonics
     # - speed, V0+u and f come from the astronomical table (the TCD by default),
     #   never from the set's own speed_deg_per_hour;
     # - meridian 0, with t in hours since 1 January 00:00 UTC of the year;
-    # - a constituent with no table row, or a year outside the table, raises
-    #   Strict::Error and is never skipped or predicted in legacy mode;
+    # - a constituent with no table row, or any evaluated instant (grid padding
+    #   included) in a year outside the table, raises Strict::Error and is never
+    #   skipped or predicted in legacy mode;
+    # - every input is checked where it enters: a missing key, a nil, a String
+    #   or a non-finite number raises invalid_argument, never a NaN or an empty
+    #   result;
     # - extremes, current maxima and slacks come from the specified search
     #   (6-minute grid, root-free subdivision to 0.703125 s, bisection to 0.01 s,
     #   New Year reconciliation, close-root filter, rounding to whole seconds).
@@ -25,8 +29,8 @@ module Harmonics
     # end of this file) are the entry points.
     module Strict
         # A refusal.  code is the SDK error code (spec section 5.4):
-        # unsupported_constituent, time_out_of_range, extremes_only or
-        # invalid_argument.
+        # unsupported_constituent, time_out_of_range, extremes_only,
+        # datum_unavailable or invalid_argument.
         class Error < StandardError
             attr_reader :code
 
@@ -46,10 +50,60 @@ module Harmonics
         SUBORDINATE_PAD_MIN_S = 7200
         CURRENT_EVENT_TYPES = %w[max_flood max_ebb slack_before_flood slack_before_ebb].freeze
 
+        # ---- input checks ----
+
+        def self.invalid(message)
+            raise Error.new('invalid_argument', message)
+        end
+
+        # A finite real number (Integer, Float or Rational), never nil or a String.
+        def self.number(x, what)
+            invalid("#{what} must be a finite number, got #{x.inspect}") unless x.is_a?(Numeric) && x.real? && x.finite?
+            x
+        end
+
+        def self.hash_arg(h, what)
+            invalid("#{what} must be a Hash, got #{h.class}") unless h.is_a?(Hash)
+            h
+        end
+
+        def self.array_arg(a, what)
+            invalid("#{what} must be an Array, got #{a.class}") unless a.is_a?(Array)
+            a
+        end
+
+        # A required number.
+        def self.required(h, key, what)
+            invalid("#{what} has no #{key}") unless h.key?(key)
+            number(h[key], "#{what} #{key}")
+        end
+
+        # An optional number: absent gives default; an explicit null is an error.
+        def self.optional(h, key, what, default = nil)
+            return default unless h.key?(key)
+
+            number(h[key], "#{what} #{key}")
+        end
+
+        # A required key whose value may be null (a current offset).
+        def self.nullable(h, key, what)
+            invalid("#{what} has no #{key}") unless h.key?(key)
+            h[key].nil? ? nil : number(h[key], "#{what} #{key}")
+        end
+
+        # Seconds since the epoch, exactly, from a Time or a finite number.
+        def self.seconds(time, what = 'time')
+            return time.to_r if time.is_a?(Time)
+
+            number(time, what).to_r
+        end
+
         # Per-year astronomical values: for each constituent its speed (degrees
         # per hour), V0+u (degrees, at 1 January 00:00 UTC) and f, for
         # first_year..last_year.  The same shape as an OTC release's
-        # astro_tables entry (spec section 3.3).
+        # astro_tables entry (spec section 3.3).  A row with no speed is an
+        # unsupported constituent; a value that is not a finite number is an
+        # invalid table, raised when it is used.
         class AstroTable
             Row = Struct.new(:name, :speed, :v0u, :f)
 
@@ -69,13 +123,26 @@ module Harmonics
             # last_year and constituents => { name => { speed_deg_per_hour,
             # v0u_deg, f } }.
             def self.from_h(table)
-                rows = table.fetch('constituents').to_h do |name, r|
-                    [name, Row.new(name, r.fetch('speed_deg_per_hour'), r.fetch('v0u_deg'), r.fetch('f'))]
+                Strict.hash_arg(table, 'astronomical table')
+                rows = Strict.hash_arg(table['constituents'], 'astronomical table constituents').to_h do |name, r|
+                    Strict.hash_arg(r, "astronomical table row #{name}")
+                    [name, Row.new(name, r['speed_deg_per_hour'], r['v0u_deg'], r['f'])]
                 end
-                new(table.fetch('first_year'), table.fetch('last_year'), rows)
+                new(table['first_year'], table['last_year'], rows)
             end
 
             def initialize(first_year, last_year, rows)
+                unless first_year.is_a?(Integer) && last_year.is_a?(Integer) && first_year <= last_year
+                    Strict.invalid("astronomical table years #{first_year.inspect}-#{last_year.inspect} are not a range of years")
+                end
+
+                n = last_year - first_year + 1
+                rows.each_value do |row|
+                    Strict.number(row.speed, "speed of #{row.name}") unless row.speed.nil?
+                    unless row.v0u.is_a?(Array) && row.f.is_a?(Array) && row.v0u.size == n && row.f.size == n
+                        Strict.invalid("astronomical table row #{row.name} must have #{n} V0+u and f values")
+                    end
+                end
                 @first_year = first_year
                 @last_year = last_year
                 @rows = rows
@@ -83,7 +150,8 @@ module Harmonics
 
             def row(name)
                 row = @rows[name]
-                raise Error.new('unsupported_constituent', "no astronomical table row for constituent #{name}") unless row&.speed
+                raise Error.new('unsupported_constituent', "no astronomical table row for constituent #{name}") unless row
+                raise Error.new('unsupported_constituent', "constituent #{name} has no speed in the astronomical table") if row.speed.nil?
 
                 row
             end
@@ -98,16 +166,13 @@ module Harmonics
             def values(row, year)
                 check_year(year)
                 i = year - @first_year
-                v0u = row.v0u[i]
-                f = row.f[i]
-                raise Error.new('unsupported_constituent', "no V0+u or f for constituent #{row.name} in #{year}") if v0u.nil? || f.nil?
-
-                [v0u, f]
+                [Strict.number(row.v0u[i], "V0+u of #{row.name} in #{year}"), Strict.number(row.f[i], "f of #{row.name} in #{year}")]
             end
         end
 
-        # One harmonic sum, terms in file order: [[name, amplitude, phase], ...].
-        # Every name is checked against the table when the sum is built.
+        # One harmonic sum, terms in file order: [[name, amplitude, phase], ...],
+        # already checked.  Every name is looked up in the table when the sum is
+        # built.
         class Sum
             attr_reader :table
 
@@ -155,15 +220,24 @@ module Harmonics
             end
         end
 
-        module_function
-
-        # Degrees to radians after reducing to [0, 360) with floor (section 4.4).
-        def rad(x)
-            (x - 360.0 * (x / 360.0).floor) * Math::PI / 180.0
+        # The signed "more extreme" rule of section 4.6 steps 6a and 6 (and 4.7):
+        # for a maximum (a high, or a maximum of W) the greater value, for a
+        # minimum the lesser.  Strict, so the earlier candidate wins a tie.
+        MORE_EXTREME = lambda do |x, y|
+            x[:kind] == :down ? x[:value] > y[:value] : x[:value] < y[:value]
         end
 
+        module_function
+
+        # [0, 360) by the section 4.4 rule: x - 360*floor(x/360), and a result
+        # of 360.0 after rounding (from a tiny negative x) becomes 0.0.
         def reduce_deg(x)
-            x - 360.0 * (x / 360.0).floor
+            r = x - 360.0 * (x / 360.0).floor
+            r == 360.0 ? 0.0 : r
+        end
+
+        def rad(x)
+            reduce_deg(x) * Math::PI / 180.0
         end
 
         def year_start(year)
@@ -174,24 +248,46 @@ module Harmonics
             Time.at(t).utc.year
         end
 
-        # Seconds since the epoch, exactly (a Time or a number).
-        def seconds(time)
-            time.to_r
-        end
-
         def sign(x)
             x.positive? ? 1 : (x.negative? ? -1 : 0)
         end
 
-        def tide_sum(table, constituents)
-            Sum.new(table, constituents.map { |c| [c.fetch('name'), c.fetch('amplitude_m'), c.fetch('phase_deg')] })
+        # Checked [[name, amplitude, phase], ...] from a list of hashes: not
+        # empty, every name a String used once, every value a finite number.
+        def terms(constituents, what, amp_key, phase_key)
+            array_arg(constituents, "#{what} constituents")
+            invalid("#{what} has no constituents") if constituents.empty?
+            names = {}
+            constituents.map do |c|
+                hash_arg(c, "#{what} constituent")
+                name = c['name']
+                invalid("#{what} constituent name must be a non-empty String, got #{name.inspect}") unless name.is_a?(String) && !name.empty?
+                invalid("#{what} has constituent #{name} twice") if names[name]
+
+                names[name] = true
+                [name, required(c, amp_key, "#{what} constituent #{name}"), required(c, phase_key, "#{what} constituent #{name}")]
+            end
         end
 
-        # Raises invalid_argument for start > stop; true for an empty window.
-        def empty_window?(start, stop)
-            raise Error.new('invalid_argument', "start #{start} is after stop #{stop}") if start > stop
+        def tide_sum(table, constituents)
+            Sum.new(table, terms(constituents, 'the set', 'amplitude_m', 'phase_deg'))
+        end
 
-            start == stop
+        def times_arg(times)
+            array_arg(times, 'times').map { |t| seconds(t) }
+        end
+
+        # [start, stop] in exact seconds; raises invalid_argument for start > stop.
+        def window(start, stop)
+            start = seconds(start, 'start')
+            stop = seconds(stop, 'stop')
+            invalid("start #{start.to_f} is after stop #{stop.to_f}") if start > stop
+
+            [start, stop]
+        end
+
+        def datum_term_arg(datum_term, what = 'datum_term')
+            number(datum_term, what).to_f
         end
 
         # ---- heights (section 4.4) ----
@@ -200,8 +296,9 @@ module Harmonics
         # instant.
         def heights(table, constituents, times, datum_term = 0.0)
             sum = tide_sum(table, constituents)
-            times.map do |time|
-                t = seconds(time).to_f
+            datum_term = datum_term_arg(datum_term)
+            times_arg(times).map do |time|
+                t = time.to_f
                 sum.value(t, year_of(t)) + datum_term
             end
         end
@@ -209,9 +306,12 @@ module Harmonics
         # ---- the search (section 4.6 steps 1 to 5) ----
 
         # [g0, gn]: the padded 6-minute grid of [start, stop), in whole seconds.
-        def grid(start, stop)
+        # Every grid point must be in a table year (section 4.3).
+        def grid(table, start, stop)
             g0 = (start / STEP_S).floor * STEP_S - PAD_S
             gn = g0 + ((stop + PAD_S - g0) / STEP_S).ceil * STEP_S
+            table.check_year(year_of(g0))
+            table.check_year(year_of(gn))
             [g0, gn]
         end
 
@@ -330,101 +430,106 @@ module Harmonics
         end
 
         # Rounds to whole seconds and keeps start <= time < stop (step 7).
+        # Each candidate keeps its unrounded r for the offset methods.
         def report(cands, start, stop)
             cands.sort_by { |c| c[:r] }.filter_map do |c|
                 time = (c[:r] + 0.5).floor
                 next unless time >= start && time < stop
 
-                c.merge(time: Time.at(time).utc)
+                c.merge(time: time)
             end
         end
 
         # ---- extremes (section 4.6) ----
 
-        def extremes(table, constituents, start, stop, datum_term = 0.0)
-            start = seconds(start)
-            stop = seconds(stop)
+        # Reported candidates { r:, time:, kind:, value: } of [start, stop).
+        def extreme_candidates(table, constituents, start, stop, datum_term)
             sum = tide_sum(table, constituents)
-            return [] if empty_window?(start, stop)
+            datum_term = datum_term_arg(datum_term)
+            start, stop = window(start, stop)
+            return [] if start == stop
 
-            g0, gn = grid(start, stop)
+            g0, gn = grid(table, start, stop)
             dh = ->(t, y) { sum.derivative(t, y) }
             value = ->(t, y) { sum.value(t, y) + datum_term }
             cands = crossings(dh, ->(y) { sum.bound2(y) }, g0, gn)
             cands.each { |c| c[:value] = value.call(c[:r], c[:year]) }
+            reconcile_new_years!(cands, g0, gn, dh, value) { |l, r| !MORE_EXTREME.call(r, l) }
+            report(filter_extrema(cands, &MORE_EXTREME), start, stop)
+        end
 
-            higher = lambda do |x, y|
-                x[:kind] == :down ? x[:value] > y[:value] : x[:value] < y[:value]
-            end
-            reconcile_new_years!(cands, g0, gn, dh, value) { |l, r| !higher.call(r, l) }
-            report(filter_extrema(cands, &higher), start, stop).map do |c|
-                { 'time' => c[:time], 'type' => c[:kind] == :down ? 'high' : 'low', 'height' => c[:value] }
+        def extremes(table, constituents, start, stop, datum_term = 0.0)
+            extreme_candidates(table, constituents, start, stop, datum_term).map do |c|
+                { 'time' => Time.at(c[:time]).utc, 'type' => c[:kind] == :down ? 'high' : 'low', 'height' => c[:value] }
             end
         end
 
         # ---- currents (section 4.7) ----
 
-        def current_sums(table, bin)
-            consts = bin.fetch('constituents')
-            major = Sum.new(table, consts.map { |c| [c.fetch('name'), c.fetch('major_amplitude_ms'), c.fetch('major_phase_deg')] })
-            minor = Sum.new(table, consts.map { |c| [c.fetch('name'), c.fetch('minor_amplitude_ms'), c.fetch('minor_phase_deg')] })
-            [major, minor]
-        end
-
-        # +1 when the azimuth is the flood direction, else -1.
-        def flood_sign(bin)
-            flood = bin['mean_flood_dir_deg']
-            return 1 if flood.nil?
-
-            Math.cos((bin.fetch('azimuth_deg') - flood) * Math::PI / 180.0) >= 0 ? 1 : -1
+        # The checked bin: [major sum, minor sum, sigma, mean major, mean minor,
+        # azimuth, flood direction, ebb direction].
+        def current_bin(table, bin)
+            hash_arg(bin, 'current bin')
+            consts = bin['constituents']
+            major = Sum.new(table, terms(consts, 'the current bin', 'major_amplitude_ms', 'major_phase_deg'))
+            minor = Sum.new(table, terms(consts, 'the current bin', 'minor_amplitude_ms', 'minor_phase_deg'))
+            azimuth = required(bin, 'azimuth_deg', 'the current bin')
+            flood = optional(bin, 'mean_flood_dir_deg', 'the current bin')
+            ebb = optional(bin, 'mean_ebb_dir_deg', 'the current bin')
+            {
+                major: major, minor: minor,
+                sigma: flood.nil? || Math.cos((azimuth - flood) * Math::PI / 180.0) >= 0 ? 1 : -1,
+                mean_major: optional(bin, 'mean_major_ms', 'the current bin', 0.0).to_f,
+                mean_minor: optional(bin, 'mean_minor_ms', 'the current bin', 0.0).to_f,
+                azimuth: azimuth.to_f, flood_dir: flood, ebb_dir: ebb
+            }
         end
 
         def currents(table, bin, times, minor_sign = 1)
-            major, minor = current_sums(table, bin)
-            sigma = flood_sign(bin)
-            mean_major = bin['mean_major_ms'] || 0.0
-            mean_minor = bin['mean_minor_ms'] || 0.0
-            theta = bin.fetch('azimuth_deg') * Math::PI / 180.0
-            theta_minor = (bin.fetch('azimuth_deg') + minor_sign * 90.0) * Math::PI / 180.0
+            b = current_bin(table, bin)
+            invalid("minor_sign must be +1 or -1, got #{minor_sign.inspect}") unless minor_sign.is_a?(Numeric) && [1, -1].include?(minor_sign)
+            times = times_arg(times)
+            theta = b[:azimuth] * Math::PI / 180.0
+            theta_minor = (b[:azimuth] + minor_sign * 90.0) * Math::PI / 180.0
             times.map do |time|
-                t = seconds(time).to_f
+                t = time.to_f
                 year = year_of(t)
-                u = mean_major + major.value(t, year)
-                v = mean_minor + minor.value(t, year)
+                u = b[:mean_major] + b[:major].value(t, year)
+                v = b[:mean_minor] + b[:minor].value(t, year)
                 e = u * Math.sin(theta) + v * Math.sin(theta_minor)
                 n = u * Math.cos(theta) + v * Math.cos(theta_minor)
                 speed = Math.hypot(e, n)
                 {
-                    'velocity_major_ms' => sigma * u,
-                    'velocity_minor_ms' => sigma * v,
+                    'velocity_major_ms' => b[:sigma] * u,
+                    'velocity_minor_ms' => b[:sigma] * v,
                     'speed_ms' => speed,
                     'direction_deg' => speed < SPEED_NULL_MS ? nil : reduce_deg(Math.atan2(e, n) * 180.0 / Math::PI)
                 }
             end
         end
 
-        def current_events(table, bin, start, stop)
-            start = seconds(start)
-            stop = seconds(stop)
-            major, = current_sums(table, bin)
-            return [] if empty_window?(start, stop)
+        # Reported candidates { r:, time:, type:, value:, direction: } of [start, stop).
+        def current_event_candidates(table, bin, start, stop)
+            b = current_bin(table, bin)
+            start, stop = window(start, stop)
+            return [] if start == stop
 
-            sigma = flood_sign(bin)
-            mean_major = bin['mean_major_ms'] || 0.0
+            sigma = b[:sigma]
+            major = b[:major]
+            mean_major = b[:mean_major]
             w = ->(t, y) { sigma * (mean_major + major.value(t, y)) }
             dw = ->(t, y) { sigma * major.derivative(t, y) }
-            g0, gn = grid(start, stop)
+            g0, gn = grid(table, start, stop)
 
-            # Maxima (:down of W') and minima (:up of W'); more extreme is larger |W|.
+            # Maxima (:down of W') and minima (:up of W'), by the signed rule.
             peaks = crossings(dw, ->(y) { major.bound2(y) }, g0, gn)
             peaks.each { |c| c[:value] = w.call(c[:r], c[:year]) }
-            larger = ->(x, y) { x[:value].abs > y[:value].abs }
-            reconcile_new_years!(peaks, g0, gn, dw, w) { |l, r| !larger.call(r, l) }
-            peaks = filter_extrema(peaks, &larger).filter_map do |c|
+            reconcile_new_years!(peaks, g0, gn, dw, w) { |l, r| !MORE_EXTREME.call(r, l) }
+            peaks = filter_extrema(peaks, &MORE_EXTREME).filter_map do |c|
                 if c[:kind] == :down && c[:value].positive?
-                    c.merge(type: 'max_flood', direction: bin['mean_flood_dir_deg'])
+                    c.merge(type: 'max_flood', direction: b[:flood_dir])
                 elsif c[:kind] == :up && c[:value].negative?
-                    c.merge(type: 'max_ebb', direction: bin['mean_ebb_dir_deg'])
+                    c.merge(type: 'max_ebb', direction: b[:ebb_dir])
                 end
             end
 
@@ -435,12 +540,16 @@ module Harmonics
                 c.merge(type: c[:kind] == :up ? 'slack_before_flood' : 'slack_before_ebb', value: 0.0, direction: nil)
             end
 
-            report(peaks + slacks, start, stop).map do |c|
-                { 'time' => c[:time], 'type' => c[:type], 'velocity_ms' => c[:value], 'direction_deg' => c[:direction] }
+            report(peaks + slacks, start, stop)
+        end
+
+        def current_events(table, bin, start, stop)
+            current_event_candidates(table, bin, start, stop).map do |c|
+                { 'time' => Time.at(c[:time]).utc, 'type' => c[:type], 'velocity_ms' => c[:value], 'direction_deg' => c[:direction] }
             end
         end
 
-        # ---- subordinate tide stations (sections 4.8 and 4.8a) ----
+        # ---- the offset methods (sections 4.8 and 4.9) ----
 
         # A number as written (a decimal string for a float), so that minutes
         # convert to seconds exactly.
@@ -448,41 +557,60 @@ module Harmonics
             x.is_a?(Float) ? Rational(x.to_s) : x.to_r
         end
 
+        # An event time: the unrounded reference root plus the offset, rounded
+        # once with floor(t + 0.5) (sections 4.8 step 3, 4.9 step 3).
+        def shifted_time(r, offset_min)
+            (r.to_r + exact(offset_min) * 60 + Rational(1, 2)).floor
+        end
+
+        # Ordered by time; events that round to the same second keep the order
+        # of their reference events.
+        def by_time(events)
+            events.each_with_index.sort_by { |(time, _), i| [time, i] }.map { |(_, e), _| e }
+        end
+
+        def chart_datum_term_arg(term)
+            raise Error.new('datum_unavailable', 'the reference has no chart datum term (msl_offset_m - named[chart_datum])') if term.nil?
+
+            datum_term_arg(term, 'chart_datum_term')
+        end
+
         # The offsets with the absent-offset rule applied: an absent time offset
         # is 0, an absent height offset is the identity.
         def tide_offsets(offsets)
-            type = offsets.fetch('height_adjusted_type')
-            raise Error.new('invalid_argument', "height_adjusted_type #{type.inspect} is not R or A") unless %w[R A].include?(type)
+            hash_arg(offsets, 'subordinate_offsets')
+            type = offsets['height_adjusted_type']
+            invalid("height_adjusted_type #{type.inspect} is not R or A") unless %w[R A].include?(type)
 
             identity = type == 'R' ? 1 : 0
+            what = 'subordinate_offsets'
             {
                 type: type,
-                time_high: offsets['time_offset_high_min'] || 0,
-                time_low: offsets['time_offset_low_min'] || 0,
-                height_high: offsets['height_offset_high'] || identity,
-                height_low: offsets['height_offset_low'] || identity
+                time_high: optional(offsets, 'time_offset_high_min', what, 0),
+                time_low: optional(offsets, 'time_offset_low_min', what, 0),
+                height_high: optional(offsets, 'height_offset_high', what, identity),
+                height_low: optional(offsets, 'height_offset_low', what, identity)
             }
         end
 
         def subordinate_extremes(table, ref_constituents, chart_datum_term, offsets, start, stop)
-            start = seconds(start)
-            stop = seconds(stop)
             o = tide_offsets(offsets)
+            datum_term = chart_datum_term_arg(chart_datum_term)
             tide_sum(table, ref_constituents)
-            return [] if empty_window?(start, stop)
+            start, stop = window(start, stop)
+            return [] if start == stop
 
             pad = [[exact(o[:time_high]).abs, exact(o[:time_low]).abs].max * 60 + 3600, SUBORDINATE_PAD_MIN_S].max
-            ref = extremes(table, ref_constituents, start - pad, stop + pad, chart_datum_term)
-            events = ref.filter_map do |e|
-                high = e['type'] == 'high'
-                time = e['time'].to_r + exact(high ? o[:time_high] : o[:time_low]) * 60
+            ref = extreme_candidates(table, ref_constituents, start - pad, stop + pad, datum_term)
+            by_time(ref.filter_map do |c|
+                high = c[:kind] == :down
+                time = shifted_time(c[:r], high ? o[:time_high] : o[:time_low])
                 next unless time >= start && time < stop
 
                 k = high ? o[:height_high] : o[:height_low]
-                height = o[:type] == 'R' ? e['height'] * k : e['height'] + k
-                [time, { 'time' => Time.at(time).utc, 'type' => e['type'], 'height' => height }]
-            end
-            events.each_with_index.sort_by { |(time, _), i| [time, i] }.map { |(_, e), _| e }
+                height = o[:type] == 'R' ? c[:value] * k : c[:value] + k
+                [time, { 'time' => Time.at(time).utc, 'type' => high ? 'high' : 'low', 'height' => height }]
+            end)
         end
 
         # The folded constants of a subordinate tide station with equal high and
@@ -490,6 +618,8 @@ module Harmonics
         # Raises extremes_only when the station has no exact curve.
         def fold(table, ref_constituents, chart_datum_term, offsets)
             o = tide_offsets(offsets)
+            c_ref = chart_datum_term_arg(chart_datum_term)
+            tide_sum(table, ref_constituents)
             unless o[:time_high] == o[:time_low] && o[:height_high] == o[:height_low]
                 raise Error.new('extremes_only', 'high and low water offsets differ, so the station has no exact curve')
             end
@@ -500,17 +630,15 @@ module Harmonics
             m, add = o[:type] == 'R' ? [k.to_f, 0.0] : [1.0, k.to_f]
             dh = o[:time_high].to_f / 60.0
             consts = ref_constituents.map do |c|
-                speed = table.row(c.fetch('name')).speed
+                speed = table.row(c['name']).speed
                 {
-                    'name' => c.fetch('name'),
-                    'amplitude_m' => m * c.fetch('amplitude_m'),
-                    'phase_deg' => reduce_deg(c.fetch('phase_deg') + speed * dh)
+                    'name' => c['name'],
+                    'amplitude_m' => m * c['amplitude_m'],
+                    'phase_deg' => reduce_deg(c['phase_deg'] + speed * dh)
                 }
             end
-            { 'constituents' => consts, 'datum_term' => m * chart_datum_term + add, 'method' => 'folded_offsets' }
+            { 'constituents' => consts, 'datum_term' => m * c_ref + add, 'method' => 'folded_offsets' }
         end
-
-        # ---- subordinate current stations (section 4.9) ----
 
         CURRENT_OFFSET_KEYS = {
             'max_flood' => %w[time_adj_max_flood_min flood_amp_ratio],
@@ -520,39 +648,40 @@ module Harmonics
         }.freeze
 
         def subordinate_current_events(table, ref_bin, offset, start, stop)
-            start = seconds(start)
-            stop = seconds(stop)
-            current_sums(table, ref_bin)
-            kept = CURRENT_OFFSET_KEYS.reject { |_, (adj, ratio)| offset[adj].nil? || (ratio && offset[ratio].nil?) }
-            omitted = CURRENT_EVENT_TYPES - kept.keys
-            return { 'events' => [], 'omitted_event_types' => omitted } if empty_window?(start, stop)
+            hash_arg(offset, 'current_offset')
+            what = 'current_offset'
+            values = CURRENT_OFFSET_KEYS.to_h do |type, (adj, ratio)|
+                [type, [nullable(offset, adj, what), ratio && nullable(offset, ratio, what)]]
+            end
+            directions = { 'max_flood' => optional(offset, 'mean_flood_dir_deg', what), 'max_ebb' => optional(offset, 'mean_ebb_dir_deg', what) }
+            current_bin(table, ref_bin)
+            start, stop = window(start, stop)
 
-            largest = kept.values.map { |adj, _| exact(offset[adj]).abs }.max || 0
+            kept = values.reject { |type, (adj, ratio)| adj.nil? || (CURRENT_OFFSET_KEYS[type][1] && ratio.nil?) }
+            omitted = CURRENT_EVENT_TYPES - kept.keys
+            return { 'events' => [], 'omitted_event_types' => omitted } if start == stop
+
+            largest = kept.values.map { |adj, _| exact(adj).abs }.max || 0
             pad = [largest * 60 + 3600, SUBORDINATE_PAD_MIN_S].max
-            ref = current_events(table, ref_bin, start - pad, stop + pad)
-            events = ref.filter_map do |e|
-                adj, ratio = kept[e['type']]
+            ref = current_event_candidates(table, ref_bin, start - pad, stop + pad)
+            events = ref.filter_map do |c|
+                adj, ratio = kept[c[:type]]
                 next unless adj
 
-                time = e['time'].to_r + exact(offset[adj]) * 60
+                time = shifted_time(c[:r], adj)
                 next unless time >= start && time < stop
 
-                direction = case e['type']
-                            when 'max_flood' then offset['mean_flood_dir_deg']
-                            when 'max_ebb' then offset['mean_ebb_dir_deg']
-                            end
-                velocity = ratio ? e['velocity_ms'] * offset[ratio] : e['velocity_ms']
-                [time, { 'time' => Time.at(time).utc, 'type' => e['type'], 'velocity_ms' => velocity, 'direction_deg' => direction }]
+                velocity = ratio ? c[:value] * ratio : c[:value]
+                [time, { 'time' => Time.at(time).utc, 'type' => c[:type], 'velocity_ms' => velocity, 'direction_deg' => directions[c[:type]] }]
             end
-            sorted = events.each_with_index.sort_by { |(time, _), i| [time, i] }.map { |(_, e), _| e }
-            { 'events' => sorted, 'omitted_event_types' => omitted }
+            { 'events' => by_time(events), 'omitted_event_types' => omitted }
         end
     end
 
     # Strict entry points (spec section 6.1).  Each takes OTC-shaped hashes with
     # string keys and, by default, the TCD's astronomical table; pass astro: an
-    # AstroTable for another.  Times are Time objects (UTC instants); event
-    # times are whole seconds.
+    # AstroTable for another.  Times are Time objects or numbers of seconds
+    # since the epoch (UTC instants); event times are whole seconds.
     class Engine
         # The TCD's per-year tables, read once.  Reading them does not parse the
         # stations.
@@ -573,7 +702,9 @@ module Harmonics
 
         # A current bin (OTC current_bin) at each instant: velocity_major_ms
         # (flood positive), velocity_minor_ms, speed_ms and direction_deg (null
-        # below 1e-9 m/s).  minor_sign is the minor-axis sign s (spec Q-P4).
+        # below 1e-9 m/s).  minor_sign is the minor-axis sign s, +1 or -1; +1
+        # (the minor axis 90 degrees clockwise of the major) is the measured
+        # value (spec section 4.7, Q-P4).
         def currents_strict(bin, times, minor_sign: 1, astro: strict_astro_table)
             Strict.currents(astro, bin, times, minor_sign)
         end
@@ -586,7 +717,8 @@ module Harmonics
 
         # A subordinate tide station's extremes by NOAA's method, above its chart
         # datum.  chart_datum_term is the reference's msl_offset_m minus
-        # named[chart_datum]; offsets is the station's subordinate_offsets.
+        # named[chart_datum] (nil raises datum_unavailable); offsets is the
+        # station's subordinate_offsets.
         def subordinate_extremes_strict(ref_constituents, chart_datum_term, offsets, start, stop, astro: strict_astro_table)
             Strict.subordinate_extremes(astro, ref_constituents, chart_datum_term, offsets, start, stop)
         end
