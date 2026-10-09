@@ -13,9 +13,11 @@ RSpec.describe Harmonics::Engine, 'default output golden' do
     GOLDEN_FIXTURE = File.expand_path('../../fixtures/harmonics/default_golden.json', __dir__)
 
     # Tide references (TICON, XTide), tide subordinates, current references and
-    # current subordinates, plus two stations with close extremes.
+    # current subordinates, plus two stations with close extremes and two
+    # subordinate tides with a level add (Newark Slough X373345f, +2.6/+0.1 ft;
+    # Ano Nuevo Island X8e55f8e, -0.7/-0.1 ft), so that dropping the add fails.
     GOLDEN_STATIONS = {
-        'tide' => %w[T0009262 X3d9cbc0 X000dc3f X7ea97a3 X11dcf24 X3539388],
+        'tide' => %w[T0009262 X3d9cbc0 X000dc3f X7ea97a3 X11dcf24 X3539388 X373345f X8e55f8e],
         'current' => %w[X0031733_10 X52d69cd_14 X000c846_14 X8399992_15]
     }.freeze
 
