@@ -459,6 +459,32 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
         end
     end
 
+    # The 120-minute floor on the offset methods' padding (sections 4.8 and 4.9)
+    # sets the reference grid, so it decides time_out_of_range at the ends of
+    # the table (section 4.6 step 1).  With zero offsets the padding is the
+    # floor, 7200 s: the reference window reaches 2031 (or 1999), where the
+    # formula alone (offset + 3600 s) would not.
+    describe 'offset padding floor at the ends of the table' do
+        let(:astro) { table('S12' => [30.0]) }
+        let(:ref_tide) { [tide('S12', 1.0, 15.0)] }
+        let(:ref_bin) { bin('S12', 1.0, 15.0) }
+        let(:tide_offsets) { { 'height_adjusted_type' => 'R' } }
+        let(:current_offset) do
+            { 'time_adj_max_flood_min' => 0, 'time_adj_max_ebb_min' => 0, 'time_adj_slack_before_flood_min' => 0,
+              'time_adj_slack_before_ebb_min' => 0, 'flood_amp_ratio' => 1, 'ebb_amp_ratio' => 1 }
+        end
+
+        [[Time.utc(2030, 12, 31, 20), Time.utc(2030, 12, 31, 21), 'end'],
+         [Time.utc(2000, 1, 1, 2, 30), Time.utc(2000, 1, 1, 3), 'start']].each do |from, to, edge|
+            it "raises time_out_of_range near the #{edge} of the table for both offset methods" do
+                expect(code_of { engine.subordinate_extremes_strict(ref_tide, 0.0, tide_offsets, from, to, astro: astro) }).to eq('time_out_of_range')
+                expect(code_of { engine.subordinate_current_events_strict(ref_bin, current_offset, from, to, astro: astro) }).to eq('time_out_of_range')
+                # The reference itself, with only its 1-hour grid padding, stays inside the table.
+                expect(code_of { engine.extremes_strict(ref_tide, from, to, astro: astro) }).to be_nil
+            end
+        end
+    end
+
     describe 'subordinate tide stations' do
         let(:astro) { table('S12' => [30.0], 'D1' => [15.0]) }
         let(:ref) { [tide('S12', 1.0, 15.0), tide('D1', 0.3, 40.0)] }
