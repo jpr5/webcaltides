@@ -215,6 +215,82 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
         end
     end
 
+    describe 'New Year reconciliation, more cases' do
+        let(:new_year) { Time.utc(2021) }
+
+        def diurnal(v2020, v2021, f2020 = 1.0, f2021 = 1.0)
+            table('D1' => [15.0, { 2020 => [v2020, f2020], 2021 => [v2021, f2021] }])
+        end
+
+        it 'inserts a missed high when L and R both exist and are 3600 s or more apart' do
+            # The lows 12 h either side are L and R, about 23.7 h apart: a missed high, not a doubled low.
+            ev = engine.extremes_strict([tide('D1', 1.0, 0.0)], new_year - 13 * 3600, new_year + 13 * 3600, astro: diurnal(357.5, 2.5, 1.0, 1.2))
+            expect(events(ev)).to eq([['2020-12-31T12:10:00Z', 'low', -1.0], ['2021-01-01T00:00:00Z', 'high', (1.2 * Math.cos(2.5 * Math::PI / 180)).round(9)],
+                                      ['2021-01-01T11:50:00Z', 'low', -1.2]])
+        end
+
+        it 'keeps the greater of a doubled high by sign when both heights are negative' do
+            # Datum term -5: the old high is -4.0, the new one -3.99.  The signed rule keeps -3.99.
+            ev = engine.extremes_strict([tide('D1', 1.0, 0.0)], new_year - 6 * 3600, new_year + 6 * 3600, datum_term: -5.0, astro: diurnal(2.5, 358.0, 1.0, 1.01))
+            expect(events(ev)).to eq([['2021-01-01T00:08:00Z', 'high', -3.99]])
+        end
+    end
+
+    # The root-free test (section 4.6 step 3) at its boundary, with hand-computed
+    # numbers: S just below the threshold must be searched, S just above it is
+    # root-free.  Each term is far larger than the 1e-13 step around it.
+    describe 'root-free test boundary' do
+        let(:eps) { 2.0**-52 }
+        let(:origin) { Time.utc(2025).to_i.to_f }
+        # A part of 0.5 h whose ends are 1000 h and 1000.5 h after 1 January.
+        let(:a) { origin + 1000 * 3600 }
+        let(:b) { origin + 1000 * 3600 + 1800 }
+        let(:bound) { [0.5, 1000.0, 1000.0] } # M < 1, so max(1, M) = 1 differs from M
+
+        def threshold(m, e1, e0, hours, delta_max)
+            m * hours * (1 + 1e-9) + 2 * (4 * eps * (e1 * delta_max + e0)) + 1e-12 * [1.0, m].max
+        end
+
+        def searched?(s)
+            out = []
+            f = ->(t, _y) { (a + 900.0) - t }
+            Harmonics::Strict.subdivide(f, bound, 2025, a, b, s / 2, -s / 2, Harmonics::Strict::MIN_LEAF_DEPTH, out)
+            !out.empty?
+        end
+
+        it 'uses Delta_max = max(|Delta_a|, |Delta_b|) in hours, all terms of E, and the relative and absolute terms' do
+            t = threshold(0.5, 1000.0, 1000.0, 0.5, 1000.5)
+            expect(searched?(t - 1e-13)).to be(true)
+            expect(searched?(t + 1e-13)).to be(false)
+        end
+
+        it 'gives the same threshold through root_free?' do
+            t = threshold(0.5, 1000.0, 1000.0, 0.5, 1000.5)
+            expect(Harmonics::Strict.root_free?(t - 1e-13, bound, 0.5, 1000.5)).to be(false)
+            expect(Harmonics::Strict.root_free?(t + 1e-13, bound, 0.5, 1000.5)).to be(true)
+            # M above 1: the absolute term is 1e-12 * M.
+            t2 = threshold(4.0, 1000.0, 1000.0, 0.5, 1000.5)
+            expect(Harmonics::Strict.root_free?(t2 - 1e-13, [4.0, 1000.0, 1000.0], 0.5, 1000.5)).to be(false)
+            expect(Harmonics::Strict.root_free?(t2 + 1e-13, [4.0, 1000.0, 1000.0], 0.5, 1000.5)).to be(true)
+        end
+
+        it 'builds [M, e1, e0] for the derivative and slack searches from F, A and omega_hat' do
+            astro = table('S12' => [30.0, { 2025 => [0.0, 0.9] }], 'D1' => [15.0, { 2025 => [0.0, 1.1] }])
+            sum = Harmonics::Strict.tide_sum(astro, [tide('S12', 2.0, 0.0), tide('D1', 0.5, 0.0)])
+            w1 = 30.0 * Math::PI / 180
+            w2 = 15.0 * Math::PI / 180
+            fa = [0.9 * 2.0, 1.1 * 0.5]
+            d = sum.search_bound(2025, 1)
+            expect(d[0]).to be_within(1e-15).of(fa[0] * w1**2 + fa[1] * w2**2)
+            expect(d[1]).to be_within(1e-15).of(fa[0] * w1**2 + fa[1] * w2**2)
+            expect(d[2]).to be_within(1e-15).of((fa[0] * w1 + fa[1] * w2) * 2 * Math::PI)
+            z = sum.search_bound(2025, 0)
+            expect(z[0]).to be_within(1e-15).of(fa[0] * w1 + fa[1] * w2)
+            expect(z[1]).to be_within(1e-15).of(fa[0] * w1 + fa[1] * w2)
+            expect(z[2]).to be_within(1e-15).of((fa[0] + fa[1]) * 2 * Math::PI)
+        end
+    end
+
     describe 'close-root filter' do
         def cand(r, kind, value = 0.0)
             { r: r, kind: kind, value: value }
@@ -324,6 +400,11 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             ev = engine.current_events_strict(b, slack - 1800, slack + 1800, astro: astro).select { |e| e['type'].start_with?('slack') }
             expect(ev.map { |e| e['type'] }).to eq(['slack_before_ebb'])
             expect((ev.first['time'] - slack).abs).to be <= 60
+        end
+
+        it 'does not report a weak flood (a maximum below zero) and has no slack then' do
+            ev = engine.current_events_strict(bin('S12', 0.3, 0.0, 'mean_major_ms' => -0.5), t2025, t2025 + 86_400, astro: astro)
+            expect(ev.map { |e| e['type'] }.uniq).to eq(['max_ebb'])
         end
 
         it 'does not report a weak ebb (a minimum above zero) and has no slack then' do
@@ -481,6 +562,44 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             end
         end
 
+        it 'does not fold equal time offsets with different height ratios' do
+            o = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 37, 'time_offset_low_min' => 37, 'height_offset_high' => 0.9, 'height_offset_low' => 0.8 }
+            expect { engine.subordinate_folded_strict(ref, 2.0, o, astro: astro) }.to raise_error(Harmonics::Strict::Error, /extremes_only/)
+        end
+
+        # The reference high is at r = 45.39825439453125 s after the grid point.
+        # These decimal offsets put r + offset + 1/2 exactly on, or a hair below, a
+        # whole second, so reading the Float as binary, or adding in floats, rounds
+        # to the other second.
+        it 'adds the decimal offset exactly, in rational arithmetic' do
+            fast = table('F' => [3600.0])
+            highs = lambda do |minutes|
+                o = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => minutes, 'time_offset_low_min' => minutes }
+                engine.subordinate_extremes_strict([tide('F', 1.0, 45.4)], 0.0, o, t2025, t2025 + 100, astro: fast)
+                      .select { |e| e['type'] == 'high' }.map { |e| e['time'] - t2025 }
+            end
+            expect(highs.call(0.0683624267578125)).to eq([50])  # exactly 50.5 - 1/2 before rounding
+            expect(highs.call(0.0183624267078125)).to eq([46])  # 3e-8 s below 47 - 1/2
+        end
+
+        it 'reports an event at start and not one at exactly stop' do
+            fast = table('F' => [3600.0])
+            o = { 'height_adjusted_type' => 'R' }
+            # Highs at 45 s after each grid point.
+            expect(engine.subordinate_extremes_strict([tide('F', 1.0, 45.0)], 0.0, o, t2025, t2025 + 45, astro: fast)).to eq([])
+            expect(engine.subordinate_extremes_strict([tide('F', 1.0, 45.0)], 0.0, o, t2025 + 45, t2025 + 46, astro: fast).map { |e| e['type'] }).to eq(['high'])
+        end
+
+        it 'pads the reference window by the offset plus an hour, which a fractional offset needs' do
+            # Offset 400.005 min = 24000.3 s.  The reference high at 45.398 s moves to
+            # 24045.698 s and rounds to 24046 s.  A padding of the offset alone starts the
+            # reference window at 45.7 s, after the reference high's rounded time (45 s).
+            fast = table('F' => [3600.0])
+            o = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 400.005, 'time_offset_low_min' => 400.005 }
+            got = engine.subordinate_extremes_strict([tide('F', 1.0, 45.4)], 0.0, o, t2025 + 24_046, t2025 + 24_047, astro: fast)
+            expect(got.map { |e| [e['time'] - t2025, e['type']] }).to eq([[24_046, 'high']])
+        end
+
         it 'refuses to fold differing offsets (extremes_only) or a ratio of 0 or less (invalid_argument)' do
             differ = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 37, 'time_offset_low_min' => 20, 'height_offset_high' => 0.9, 'height_offset_low' => 0.9 }
             expect { engine.subordinate_folded_strict(ref, 2.0, differ, astro: astro) }.to raise_error(Harmonics::Strict::Error, /extremes_only: high and low water offsets differ/)
@@ -540,6 +659,26 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(got).to eq('events' => [], 'omitted_event_types' => %w[max_flood max_ebb slack_before_flood slack_before_ebb])
             ratios = engine.subordinate_current_events_strict(ref, offset.merge('time_adj_max_ebb_min' => 5, 'ebb_amp_ratio' => nil, 'flood_amp_ratio' => nil), t0, t1, astro: astro)
             expect(ratios['omitted_event_types']).to eq(%w[max_flood max_ebb])
+        end
+
+        let(:zero_offset) do
+            { 'time_adj_max_flood_min' => 0, 'time_adj_max_ebb_min' => 0, 'time_adj_slack_before_flood_min' => 0,
+              'time_adj_slack_before_ebb_min' => 0, 'flood_amp_ratio' => 1, 'ebb_amp_ratio' => 1 }
+        end
+
+        it 'reports an event at start and not one at exactly stop' do
+            fast = table('F' => [5400.0])
+            # Max flood at 20.4 s after the grid point, reported at 20 s.
+            expect(engine.subordinate_current_events_strict(bin('F', 1.0, 30.6), zero_offset, t2025, t2025 + 20, astro: fast)['events']).to eq([])
+            got = engine.subordinate_current_events_strict(bin('F', 1.0, 30.6), zero_offset, t2025 + 20, t2025 + 21, astro: fast)['events']
+            expect(got.map { |e| e['type'] }).to eq(['max_flood'])
+        end
+
+        it 'pads the reference window by the adjustment plus an hour, which a fractional adjustment needs' do
+            fast = table('F' => [5400.0])
+            far = zero_offset.transform_values { |v| v == 1 ? 1 : 400.005 }
+            got = engine.subordinate_current_events_strict(bin('F', 1.0, 30.6), far, t2025 + 24_021, t2025 + 24_022, astro: fast)['events']
+            expect(got.map { |e| [e['time'] - t2025, e['type']] }).to eq([[24_021, 'max_flood']])
         end
 
         it 'adds the adjustment to the unrounded reference root and rounds once' do
