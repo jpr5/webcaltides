@@ -1,0 +1,14 @@
+$ sh docs/nodal-cleanroom/evidence/green_strict.sh
+# cwd: repo root; sha256 lib/nodal_schureman.rb=c4177b3dc6d88b21bcc6b6d7f931916a3ada213e92dca459e84faab50b42f675 spec/unit/nodal_schureman_spec.rb=04c5eec78dbcc481ff14706d444c2f2c8798f1d55aa027f3eb58d43600b4cf4c spec/fixtures/harmonics/nodal_oracle.json=236929d0c62da30b6b2cbed0d7322a466afd3e77ef4889b595bab0bdd04f7367
+Failure/Error: expect(dvu).to be <= tolerance_v0u, "V0+u: |d|=#{dvu}"
+V0+u: |d|=1.1337419891788159e-09
+Failure/Error: expect(dvu).to be <= tolerance_v0u, "V0+u: |d|=#{dvu}"
+V0+u: |d|=1.973376129171811e-09
+Failure/Error: expect(dvu).to be <= tolerance_v0u, "V0+u: |d|=#{dvu}"
+V0+u: |d|=1.0420535545563325e-09
+783 examples, 3 failures
+NodalSchureman oracle points Q1   1600-03-15 H=12 m=+9.5
+NodalSchureman oracle points N2   2300-07-02 H=12 m=-5.0
+NodalSchureman oracle points NU2  2300-07-02 H=12 m=-5.0
+rspec exit=1
+script exit=0

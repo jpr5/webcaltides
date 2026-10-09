@@ -1,0 +1,15 @@
+$ sh docs/nodal-cleanroom/evidence/mutation_th_float.sh
+# cwd: repo root; sha256 lib/nodal_schureman.rb=c4177b3dc6d88b21bcc6b6d7f931916a3ada213e92dca459e84faab50b42f675 spec/unit/nodal_schureman_spec.rb=04c5eec78dbcc481ff14706d444c2f2c8798f1d55aa027f3eb58d43600b4cf4c spec/fixtures/harmonics/nodal_oracle.json=236929d0c62da30b6b2cbed0d7322a466afd3e77ef4889b595bab0bdd04f7367
+--- mutant diff ---
+125c125
+<         th = ((d - d.floor) * 360).to_f     # hour angle of the mean sun, exact from the instant
+---
+>         df = d.to_f; th = (df - df.floor) * 360.0   # MUTANT: plain Float T_h
+--- rspec on mutant ---
+V0+u: |d|=7.088829079293646e-09
+V0+u: |d|=7.388052836176939e-09
+V0+u: |d|=7.388052836176939e-09
+783 examples, 28 failures
+rspec exit=1
+MUTANT KILLED
+script exit=0

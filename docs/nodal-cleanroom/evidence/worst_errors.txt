@@ -1,0 +1,13 @@
+$ ruby docs/nodal-cleanroom/evidence/worst_errors.rb
+# cwd: repo root; sha256 lib/nodal_schureman.rb=c4177b3dc6d88b21bcc6b6d7f931916a3ada213e92dca459e84faab50b42f675 spec/unit/nodal_schureman_spec.rb=04c5eec78dbcc481ff14706d444c2f2c8798f1d55aa027f3eb58d43600b4cf4c spec/fixtures/harmonics/nodal_oracle.json=236929d0c62da30b6b2cbed0d7322a466afd3e77ef4889b595bab0bdd04f7367
+worst f  4.907e-14 at ["M1", 2300, 1, 1, 0, 0.0]
+worst vu 1.973e-09 at ["N2", 2300, 7, 2, 12, -5.0]
+worst u  8.413e-12 at ["M1", 2300, 12, 31, 12, 0.0]
+largest |V0_raw| in oracle: 7.0185e+06 (2^23 = 8.3886e+06); ulp there = 2^-30 = 9.313e-10
+worst V0+u residual in ulps of 2^-30: 2.12
+points over 1e-9 in any field: 3 of 780
+  ["Q1", 1600, 3, 15, 12, 9.5]  df=6.66e-16 dV0+u=1.134e-09 du=5.12e-13
+  ["N2", 2300, 7, 2, 12, -5.0]  df=9.99e-16 dV0+u=1.973e-09 du=2.27e-13
+  ["NU2", 2300, 7, 2, 12, -5.0]  df=9.99e-16 dV0+u=1.042e-09 du=2.27e-13
+points over 4e-9 in V0+u: 0
+script exit=0
