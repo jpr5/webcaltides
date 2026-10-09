@@ -42,7 +42,14 @@ RSpec.describe Harmonics::Engine, 'default output golden' do
         end.to_h
     end
 
-    it 'matches the checked-in output (peaks exactly, heights to 1e-9)' do
+    # Peak times come from a parabola through three samples and peak heights are
+    # rounded to 3 decimals, so the last bits of libm (which differ between macOS
+    # and Linux) can move a time by nanoseconds or flip a rounding.  Peaks are
+    # compared to 1 ms and to one rounding unit; types, units and counts exactly.
+    PEAK_TIME_S = 0.001
+    PEAK_HEIGHT = 0.0011
+
+    it 'matches the checked-in output (peak types exactly, times to 1 ms, heights to 1e-9)' do
         got = Dir.mktmpdir { |dir| output(described_class.new(Logger.new('/dev/null'), dir)) }
         if ENV['GOLDEN_WRITE']
             File.write(GOLDEN_FIXTURE, JSON.pretty_generate(got) + "\n")
@@ -52,7 +59,12 @@ RSpec.describe Harmonics::Engine, 'default output golden' do
         golden = JSON.parse(File.read(GOLDEN_FIXTURE))
         expect(got.keys).to eq(golden.keys)
         golden.each do |key, g|
-            expect(got[key]['peaks']).to eq(g['peaks']), "peaks differ for #{key}"
+            expect(got[key]['peaks'].size).to eq(g['peaks'].size), "peak count differs for #{key}"
+            got[key]['peaks'].zip(g['peaks']).each do |(t, type, h, u), (gt, gtype, gh, gu)|
+                expect([type, u]).to eq([gtype, gu]), "peak type or units differ for #{key} at #{gt}"
+                expect(Time.parse("#{t} UTC")).to be_within(PEAK_TIME_S).of(Time.parse("#{gt} UTC")), "peak time differs for #{key} at #{gt}"
+                expect(h).to be_within(PEAK_HEIGHT).of(gh), "peak height differs for #{key} at #{gt}"
+            end
             expect(got[key]['series'].size).to eq(g['series'].size), "series size differs for #{key}"
             got[key]['series'].zip(g['series']).each do |(t, h, u), (gt, gh, gu)|
                 expect([t, u]).to eq([gt, gu]), "series time or units differ for #{key}"
