@@ -613,8 +613,28 @@ module WebCalTides
         )
     end
 
+    # A station is demoted when DEMOTED_STATIONS has its id with its type, so a tide entry never
+    # demotes a current station with the same id (XTide has some), and the reverse
     def demoted_station?(station)
-        !station.nil? && DEMOTED_STATIONS.key?(station.id)
+        return false if station.nil?
+
+        entry = DEMOTED_STATIONS[station.id] or return false
+        demotion_type(station.id, entry) == station_type(station)
+    end
+
+    # :current for a current station, :tide for a tide station.  Every current station has a bid
+    # (its id with the depth bin, or the id when there is no bin) and no tide station has one, as
+    # the views and the feed route already assume.
+    def station_type(station)
+        station.bid ? :current : :tide
+    end
+
+    # The entry's :type, which must be :tide or :current
+    def demotion_type(id, entry)
+        type = entry[:type]
+        return type if type.in?(%i[tide current])
+
+        raise ArgumentError, "DEMOTED_STATIONS[#{id.inspect}] :type must be :tide or :current, not #{type.inspect}"
     end
 
     # "<warning>.  Use <better station> instead." for a demoted station, nil for any other
@@ -670,8 +690,9 @@ module WebCalTides
     # Cache-key part for a demoted station's feed: a digest of the warning it carries, so a feed
     # cached before the demotion, or before its warning or better station changed, is not served.
     # "" for any other station.
-    def demotion_cache_key(station)
-        warning = demotion_warning(station) or return ""
+    def demotion_cache_key(station, warning = demotion_warning(station))
+        return "" unless warning
+
         "_demoted#{Digest::MD5.hexdigest(warning)[0, 8]}"
     end
 
@@ -679,8 +700,8 @@ module WebCalTides
     # X-WR-CALDESC, which Apple and Google Calendar show for a subscribed calendar) and of each
     # event's description.  Call it before solar and lunar events are added, which keep their own
     # descriptions.
-    def add_demotion_warning(calendar, station)
-        warning = demotion_warning(station) or return calendar
+    def add_demotion_warning(calendar, station, warning = demotion_warning(station))
+        return calendar unless warning
 
         # A calendar's DESCRIPTION and X-WR-CALDESC hold a list of values, an event's one value
         prepend = ->(desc) { [warning, *Array(desc).map(&:to_s).reject(&:blank?)].join("\n\n") }
@@ -697,7 +718,8 @@ module WebCalTides
     # Logs an error for every DEMOTED_STATIONS id, and every :better id, that is not a station id
     # in the station list of the entry's type as loaded at startup: its demotion does nothing, or
     # its warning names a station that is not there, while that list is served.  Called at
-    # startup, once the station lists are loaded.  Returns the ids.
+    # startup, once the station lists are loaded.  Also logs an entry whose id is in the other
+    # type's list too, where only the station of the entry's type is demoted.  Returns the ids.
     def check_demoted_stations
         lists = %i[tide current].to_h { |type| [type, demotion_station_list(type)] }
         ids   = lists.transform_values { |list| list.map(&:id).to_set }
@@ -708,6 +730,12 @@ module WebCalTides
 
         lost = DEMOTED_STATIONS.reject { |_, entry| ids.fetch(entry[:type]).include?(entry[:better]) }
         lost.each { |id, entry| logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in #{where.(entry[:type])}, so its warning names a missing station while that list is served" }
+
+        both = DEMOTED_STATIONS.select { |id, entry| ids.fetch(entry[:type] == :tide ? :current : :tide).include?(id) }
+        both.each do |id, entry|
+            other = entry[:type] == :tide ? :current : :tide
+            logger.error "!! demoted station #{id} (#{entry[:type]}) has the same id as a station in #{where.(other)}; only the #{entry[:type]} station is demoted"
+        end
 
         missing.keys + lost.values.map { |entry| entry[:better] }
     end

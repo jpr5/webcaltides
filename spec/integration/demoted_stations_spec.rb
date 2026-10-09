@@ -71,6 +71,12 @@ RSpec.describe 'Demoted stations', type: :request do
             end
         end
 
+        # demoted_station? reads a station's type from its bid, as the views and the feed route do
+        it 'has a bid on every shipped current station and on no shipped tide station' do
+            expect(@harmonics_stations.count(&:bid)).to eq(0)
+            expect(@harmonics_currents.count { |s| s.bid.nil? }).to eq(0)
+        end
+
         it 'has both Vigo stations in the shipped TICON data' do
             vigo = @harmonics_stations.select { |s| s.name == 'Vigo, ESP' }.map(&:id)
             expect(vigo).to contain_exactly('T6e11ade', 'Tdce40e9')
@@ -138,6 +144,31 @@ RSpec.describe 'Demoted stations', type: :request do
 
             expect($LOG).to have_received(:error).with(/!! better station C0000002 for demoted station T6e11ade is not in the tide station list/).once
             expect($LOG).to have_received(:error).with(/!! better station Tdce40e9 for demoted station C0000001 is not in the current station list/).once
+        end
+
+        # X3063639 is an XTide tide station and an XTide current station in the shipped data
+        it 'demotes only the station of the entry\'s type, and logs an id that is in both lists' do
+            stub_const('WebCalTides::DEMOTED_STATIONS', { 'X3063639' => entry('X5cf316b') })
+            allow(WebCalTides).to receive(:current_stations).and_return(@harmonics_currents)
+            tide    = @harmonics_stations.find { |s| s.id == 'X3063639' }
+            current = @harmonics_currents.find { |s| s.id == 'X3063639' }
+            expect(current.bid).to eq('X3063639_17')
+
+            expect(WebCalTides.demoted_station?(tide)).to be(true)
+            expect(WebCalTides.demoted_station?(current)).to be(false)
+            expect(WebCalTides.demotion_warning(current)).to be_nil
+
+            warm_caches
+            expect($LOG).to have_received(:error).with(/!! demoted station X3063639 \(tide\) has the same id as a station in the current station list/).once
+        end
+
+        it 'demotes only the current station for a current entry with that id' do
+            stub_const('WebCalTides::DEMOTED_STATIONS', { 'X3063639' => entry('X3063639', :current) })
+            tide    = @harmonics_stations.find { |s| s.id == 'X3063639' }
+            current = @harmonics_currents.find { |s| s.id == 'X3063639' }
+
+            expect(WebCalTides.demoted_station?(current)).to be(true)
+            expect(WebCalTides.demoted_station?(tide)).to be(false)
         end
 
         it 'fails clearly on an entry whose :type is not :tide or :current' do
@@ -286,9 +317,17 @@ RSpec.describe 'Demoted stations', type: :request do
             expect(others.map { |e| e.description.to_s }).to all(satisfy { |d| !d.include?('1 h early') })
         end
 
-        it 'serves Tdce40e9 without the warning' do
+        it 'works out the warning once per request, for the cache name and the calendar' do
+            expect(WebCalTides).to receive(:demotion_warning).once.and_call_original
+            cal = feed('T6e11ade')
+            expect(text(cal.description)).to include('about 1 h early')
+            expect(Dir["#{cache_dir}/*T6e11ade*_demoted*.ics"].length).to eq(1)
+        end
+
+        it 'serves Tdce40e9 without the warning, and does not log it as demoted' do
             feed('Tdce40e9')
             expect(last_response.body).not_to include('1 h early')
+            expect($LOG).not_to have_received(:info).with(/serving demoted station/)
         end
 
         it 'puts the warning in an existing X-WR-CALDESC, once' do
@@ -444,7 +483,7 @@ RSpec.describe 'Demoted stations', type: :request do
 
     describe 'grouping' do
         it 'never makes a demoted station the primary, even over a lower-ranked provider' do
-            stub_const('WebCalTides::DEMOTED_STATIONS', { 'X0000001' => {} })
+            stub_const('WebCalTides::DEMOTED_STATIONS', { 'X0000001' => { type: :tide } })
             demoted = build_station(id: 'X0000001', public_id: 'X0000001', provider: 'xtide')
             ticon   = build_station(id: 'T0000002', public_id: 'T0000002', provider: 'ticon')
 
@@ -455,7 +494,7 @@ RSpec.describe 'Demoted stations', type: :request do
         end
 
         it 'moves a group of demoted current stations after the others, which keep their order' do
-            stub_const('WebCalTides::DEMOTED_STATIONS', { 'C_BAD' => {} })
+            stub_const('WebCalTides::DEMOTED_STATIONS', { 'C_BAD' => { type: :current } })
             current = ->(id, bid, lat, depth) {
                 build_station(id: id, bid: bid, public_id: bid, provider: 'xtide', lat: lat, lon: -70.0, depth: depth)
             }
