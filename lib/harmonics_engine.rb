@@ -1561,3 +1561,5 @@ module Harmonics
         def atan2d(y, x) Math.atan2(y, x) * 180.0 / Math::PI end
     end
 end
+
+require_relative 'harmonics_strict'
