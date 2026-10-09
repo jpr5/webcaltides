@@ -93,19 +93,22 @@ module Harmonics
         end
 
         # The keys the format 1.0 schema (SHA-256 e27d5f6b...) lists for its
-        # closed objects (additionalProperties false).  A key it does not list
-        # is refused; the listed keys the strict mode does not read are
-        # accepted.  subordinate_offsets also accepts datum, which the live
-        # schema does not list yet: spec revision 20 (section 3.3 item 8) adds
-        # it for the subordinate's own levels, which reach the strict mode as
-        # the datum_shift keyword.
+        # closed objects (additionalProperties false), generated from the live
+        # schema's $defs (constituent, current_constituent, current_bin,
+        # current_offset, subordinate_offsets, astro_table, astro_table_row).
+        # A key it does not list is refused (spec section 6.1); the listed keys
+        # the strict mode does not read are accepted.  subordinate_offsets also
+        # accepts datum, which the live schema does not list yet: spec revision
+        # 20 (section 3.3 item 8) adds it for the subordinate's own levels,
+        # which reach the strict mode as the datum_shift keyword.
         SCHEMA_KEYS = {
+            'constituent' => %w[name source_name doodson speed_deg_per_hour amplitude_m phase_deg amp_uncertainty_m phase_uncertainty_deg kept_reason],
+            'current_constituent' => %w[name source_name speed_deg_per_hour major_amplitude_ms major_phase_deg minor_amplitude_ms minor_phase_deg],
             'current_bin' => %w[bin depth_m depth_type azimuth_deg mean_flood_dir_deg mean_ebb_dir_deg mean_major_ms mean_minor_ms constituents],
-            'current_offset' => %w[bin depth_m depth_type reference_station_id reference_bin mean_flood_dir_deg mean_ebb_dir_deg
-                                   time_adj_max_flood_min time_adj_slack_before_ebb_min time_adj_max_ebb_min time_adj_slack_before_flood_min
-                                   flood_amp_ratio ebb_amp_ratio licence_id],
-            'subordinate_offsets' => %w[reference_station_id time_offset_high_min time_offset_low_min height_offset_high height_offset_low
-                                        height_adjusted_type licence_id datum]
+            'current_offset' => %w[bin depth_m depth_type reference_station_id reference_bin mean_flood_dir_deg mean_ebb_dir_deg time_adj_max_flood_min time_adj_slack_before_ebb_min time_adj_max_ebb_min time_adj_slack_before_flood_min flood_amp_ratio ebb_amp_ratio licence_id],
+            'subordinate_offsets' => %w[reference_station_id time_offset_high_min time_offset_low_min height_offset_high height_offset_low height_adjusted_type licence_id datum],
+            'astro_table' => %w[astro_table_id v0_model tables_sha256 generator first_year last_year constituents],
+            'astro_table_row' => %w[speed_deg_per_hour v0u_deg f]
         }.freeze
 
         def self.closed_hash(h, what)
@@ -171,9 +174,9 @@ module Harmonics
             # last_year and constituents => { name => { speed_deg_per_hour,
             # v0u_deg, f } }.
             def self.from_h(table)
-                Strict.hash_arg(table, 'astronomical table')
+                Strict.closed_hash(table, 'astro_table')
                 rows = Strict.hash_arg(table['constituents'], 'astronomical table constituents').to_h do |name, r|
-                    Strict.hash_arg(r, "astronomical table row #{name}")
+                    Strict.closed_hash(r, 'astro_table_row')
                     [name, Row.new(name, r['speed_deg_per_hour'], r['v0u_deg'], r['f'])]
                 end
                 new(table['first_year'], table['last_year'], rows)
@@ -325,12 +328,12 @@ module Harmonics
 
         # Checked [[name, amplitude, phase], ...] from a list of hashes: not
         # empty, every name a String used once, every value a finite number.
-        def terms(constituents, what, amp_key, phase_key)
+        def terms(constituents, what, schema, amp_key, phase_key)
             array_arg(constituents, "#{what} constituents")
             invalid("#{what} has no constituents") if constituents.empty?
             names = {}
             constituents.map do |c|
-                hash_arg(c, "#{what} constituent")
+                closed_hash(c, schema)
                 name = c['name']
                 invalid("#{what} constituent name must be a non-empty String, got #{name.inspect}") unless name.is_a?(String) && !name.empty?
                 invalid("#{what} has constituent #{name} twice") if names[name]
@@ -341,7 +344,7 @@ module Harmonics
         end
 
         def tide_sum(table, constituents)
-            Sum.new(table, terms(constituents, 'the set', 'amplitude_m', 'phase_deg'))
+            Sum.new(table, terms(constituents, 'the set', 'constituent', 'amplitude_m', 'phase_deg'))
         end
 
         def times_arg(times)
@@ -561,8 +564,8 @@ module Harmonics
         def current_bin(table, bin)
             closed_hash(bin, 'current_bin')
             consts = bin['constituents']
-            major = Sum.new(table, terms(consts, 'the current bin', 'major_amplitude_ms', 'major_phase_deg'))
-            minor = Sum.new(table, terms(consts, 'the current bin', 'minor_amplitude_ms', 'minor_phase_deg'))
+            major = Sum.new(table, terms(consts, 'the current bin', 'current_constituent', 'major_amplitude_ms', 'major_phase_deg'))
+            minor = Sum.new(table, terms(consts, 'the current bin', 'current_constituent', 'minor_amplitude_ms', 'minor_phase_deg'))
             azimuth = required(bin, 'azimuth_deg', 'the current bin', :deg)
             flood = optional(bin, 'mean_flood_dir_deg', 'the current bin', nil, :deg)
             ebb = optional(bin, 'mean_ebb_dir_deg', 'the current bin', nil, :deg)

@@ -764,6 +764,38 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             end
         end
 
+        # Spec section 6.1: constituents, current constituents and astro_tables
+        # entries and rows are closed in the schema too.
+        it 'refuses an unknown constituent key, and accepts every key the schema lists' do
+            c = tide('S12', 1.0, 15.0)
+            listed = c.merge('source_name' => 'M2', 'doodson' => '255 555', 'speed_deg_per_hour' => 30.0, 'amp_uncertainty_m' => 0.01,
+                             'phase_uncertainty_deg' => 0.5, 'kept_reason' => 'x')
+            expect(engine.predict_strict([listed], [t0], astro: astro).size).to eq(1)
+            bad = c.merge('amplitude' => 5)
+            expect(code_of { engine.predict_strict([bad], [t0], astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.extremes_strict([bad], t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_extremes_strict([bad], 2.0, full_tide_offsets, t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_folded_strict([bad], 2.0, full_tide_offsets, astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'refuses an unknown current constituent key, and accepts every key the schema lists' do
+            listed = full_bin.merge('constituents' => [full_bin['constituents'].first.merge('source_name' => 'M2', 'speed_deg_per_hour' => 30.0)])
+            expect(engine.currents_strict(listed, [t0], astro: astro).size).to eq(1)
+            bad = full_bin.merge('constituents' => [full_bin['constituents'].first.merge('major_amplitude' => 5)])
+            expect(code_of { engine.currents_strict(bad, [t0], astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.current_events_strict(bad, t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_current_events_strict(bad, full_offset, t0, t1, astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'refuses an unknown astro_tables entry or row key, and accepts every key the schema lists' do
+            row = { 'speed_deg_per_hour' => 30.0, 'v0u_deg' => [0.0] * 31, 'f' => [1.0] * 31 }
+            entry = { 'astro_table_id' => 'test', 'v0_model' => 'schureman_tcd', 'tables_sha256' => '0' * 64, 'generator' => 'test',
+                      'first_year' => 2000, 'last_year' => 2030, 'constituents' => { 'S12' => row } }
+            expect(engine.predict_strict([tide('S12', 1.0, 15.0)], [t0], astro: Harmonics::Strict::AstroTable.from_h(entry)).size).to eq(1)
+            expect(code_of { Harmonics::Strict::AstroTable.from_h(entry.merge('firstyear' => 2000)) }).to eq('invalid_argument')
+            expect(code_of { Harmonics::Strict::AstroTable.from_h(entry.merge('constituents' => { 'S12' => row.merge('speed' => 30.0) })) }).to eq('invalid_argument')
+        end
+
         it 'refuses a height ratio of 0 or less for the event method' do
             [0, -0.5].each do |k|
                 %w[height_offset_high height_offset_low].each do |key|
