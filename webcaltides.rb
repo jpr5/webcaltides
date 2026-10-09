@@ -123,6 +123,7 @@ module WebCalTides
         # (-61.6 to -58.1, 115 events).  T6e11ade minus the IEO TICON-3 row (gesla.noaa, 42.238,
         # 351.270; 1943-2015): M2 -61.7, S2 -62.7, K1 -62.8, O1 -63.4 min.
         'T6e11ade' => {
+            type:     :tide,
             better:   'Tdce40e9',
             warning:  'Times at this station may be about 1 h early',
             evidence: 'Built from the UHSLC Vigo record (1943-1990), whose timestamps are 1 h early (-60.0 min ' \
@@ -621,24 +622,36 @@ module WebCalTides
         return nil unless demoted_station?(station)
 
         entry  = DEMOTED_STATIONS[station.id]
-        better = demotion_better_stations[entry[:better]]
+        better = demotion_better_stations(entry[:type])[entry[:better]]
         name   = better ? "#{better.name} (#{entry[:better]})" : entry[:better]
 
         "#{entry[:warning]}.  Use #{name} instead."
     end
 
-    # { id => station } for the DEMOTED_STATIONS :better ids, by station id as demoted_station?
-    # matches.  Built once per pair of station lists, and again when either list is rebuilt.
-    def demotion_better_stations
-        lists = [tide_stations, current_stations]
-        key   = lists.map(&:object_id)
-        built = @demotion_better_stations
-        return built[1] if built && built[0] == key
+    # The station list a DEMOTED_STATIONS entry's ids are in (:type is :tide or :current)
+    def demotion_station_list(type)
+        type == :current ? current_stations : tide_stations
+    end
 
-        wanted = DEMOTED_STATIONS.values.map { |entry| entry[:better] }.to_set
-        found  = {}
-        lists.each { |list| list.each { |s| found[s.id] ||= s if wanted.include?(s.id) } }
-        @demotion_better_stations = [key, found]
+    # { id => station } for the :better ids of the DEMOTED_STATIONS entries of one type, found in
+    # the list of that type only, by station id as demoted_station? matches.  Built once per list,
+    # again when the list is replaced, and after remove_tide_station or remove_current_station
+    # changes it in place.  A :better id that is not in the list is logged once per build.
+    def demotion_better_stations(type)
+        list  = demotion_station_list(type)
+        built = (@demotion_better_stations ||= {})[type]
+        return built[1] if built && built[0].equal?(list)
+
+        entries = DEMOTED_STATIONS.select { |_, entry| entry[:type] == type }
+        wanted  = entries.values.map { |entry| entry[:better] }.to_set
+        found   = {}
+        list.each { |s| found[s.id] ||= s if wanted.include?(s.id) }
+        entries.each do |id, entry|
+            next if found.key?(entry[:better])
+            logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in the #{type} station list (#{list.length} stations), so its warning names a missing station"
+        end
+
+        @demotion_better_stations[type] = [list, found]
         found
     end
 
@@ -670,17 +683,21 @@ module WebCalTides
     end
 
     # Logs an error for every DEMOTED_STATIONS id, and every :better id, that is not a station id
-    # in the loaded station lists: its demotion does nothing, or its warning names a station that
-    # is not there.  Called at startup, once the station lists are loaded.  Returns the ids.
+    # in the station list of the entry's type as loaded at startup: its demotion does nothing, or
+    # its warning names a station that is not there, while that list is served.  Called at
+    # startup, once the station lists are loaded.  Returns the ids.
     def check_demoted_stations
-        loaded  = (tide_stations + current_stations).map(&:id).to_set
-        missing = DEMOTED_STATIONS.keys.reject { |id| loaded.include?(id) }
-        missing.each { |id| logger.error "!! demoted station #{id} is not in the loaded stations, so its demotion does nothing" }
+        lists = %i[tide current].to_h { |type| [type, demotion_station_list(type)] }
+        ids   = lists.transform_values { |list| list.map(&:id).to_set }
+        where = ->(type) { "the #{type} station list loaded at startup (#{lists[type].length} stations)" }
 
-        lost = DEMOTED_STATIONS.reject { |_, entry| loaded.include?(entry[:better]) }
-        lost.each { |id, entry| logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in the loaded stations, so its warning names a missing station" }
+        missing = DEMOTED_STATIONS.reject { |id, entry| ids[entry[:type]].include?(id) }
+        missing.each { |id, entry| logger.error "!! demoted station #{id} is not in #{where.(entry[:type])}, so its demotion does nothing while that list is served" }
 
-        missing + lost.values.map { |entry| entry[:better] }
+        lost = DEMOTED_STATIONS.reject { |_, entry| ids[entry[:type]].include?(entry[:better]) }
+        lost.each { |id, entry| logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in #{where.(entry[:type])}, so its warning names a missing station while that list is served" }
+
+        missing.keys + lost.values.map { |entry| entry[:better] }
     end
 
     # Computes time and height deltas between primary and each alternative
@@ -889,6 +906,8 @@ module WebCalTides
         # Under the lock, so a rebuild can't swap the list between the removal and the write
         @@tide_stations_mutex.synchronize do
             @tide_stations.delete_if { |s| s.id == station_id }
+            # The list changed in place, so the table of better stations is built again
+            @demotion_better_stations&.delete(:tide)
             # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
             cache_tide_stations(stations:@tide_stations) unless @tide_stations_retry_at
         end
@@ -1408,6 +1427,8 @@ module WebCalTides
         # Under the lock, so a rebuild can't swap the list between the removal and the write
         @@current_stations_mutex.synchronize do
             @current_stations.delete_if { |s| s.id == station_id }
+            # The list changed in place, so the table of better stations is built again
+            @demotion_better_stations&.delete(:current)
             # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
             cache_current_stations(stations:@current_stations) unless @current_stations_retry_at
         end

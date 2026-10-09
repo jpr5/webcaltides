@@ -58,6 +58,7 @@ class Server < ::Sinatra::Base
                     WebCalTides.check_demoted_stations
                 rescue => e
                     $LOG.error "demoted station check failed: #{e.class} - #{e.message}"
+                    $LOG.error e.backtrace.first(5).join("\n") if e.backtrace
                 end
 
                 # Step 4: Clean old cache files
@@ -498,7 +499,7 @@ class Server < ::Sinatra::Base
             ical
         end
 
-        $LOG.warn "serving demoted station #{id}: #{WebCalTides.demotion_warning(station)}" if dkey.present?
+        $LOG.info "serving demoted station #{id}: #{WebCalTides.demotion_warning(station)}" if dkey.present?
 
         content_type 'text/calendar', charset: 'utf-8'
         body ics
