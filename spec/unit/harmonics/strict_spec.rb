@@ -543,6 +543,68 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
         end
     end
 
+    # An explicit null is accepted exactly where the format 1.0 schema allows null
+    # (otc-1.0.schema.json, SHA-256 e27d5f6b...): in current_offset, the four time
+    # adjustments and the two amplitude ratios, where null drops that event type.
+    # Everywhere else the schema types the field as a number, so null is refused;
+    # leaving the key out keeps its documented default.
+    describe 'explicit nulls, field by field against the schema' do
+        let(:astro) { table('S12' => [30.0]) }
+        let(:t0) { Time.utc(2025, 6, 1) }
+        let(:t1) { Time.utc(2025, 6, 2) }
+        let(:ref) { [tide('S12', 1.0, 15.0)] }
+        let(:tide_offsets) do
+            { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 10, 'time_offset_low_min' => 10, 'height_offset_high' => 0.9, 'height_offset_low' => 0.9 }
+        end
+        let(:current_offset) do
+            { 'time_adj_max_flood_min' => 30, 'time_adj_max_ebb_min' => 20, 'time_adj_slack_before_flood_min' => -15,
+              'time_adj_slack_before_ebb_min' => 45, 'flood_amp_ratio' => 0.8, 'ebb_amp_ratio' => 0.7,
+              'mean_flood_dir_deg' => 12.0, 'mean_ebb_dir_deg' => 190.0 }
+        end
+
+        %w[mean_major_ms mean_minor_ms mean_flood_dir_deg mean_ebb_dir_deg azimuth_deg].each do |key|
+            it "refuses null current_bin #{key} (schema: number)" do
+                b = bin('S12', 1.0, 0.0, 'mean_flood_dir_deg' => 0.0, 'mean_ebb_dir_deg' => 180.0).merge(key => nil)
+                expect(code_of { engine.currents_strict(b, [t0], astro: astro) }).to eq('invalid_argument')
+                expect(code_of { engine.current_events_strict(b, t0, t1, astro: astro) }).to eq('invalid_argument')
+            end
+        end
+
+        %w[time_offset_high_min time_offset_low_min height_offset_high height_offset_low].each do |key|
+            it "refuses null subordinate_offsets #{key} (schema: number)" do
+                o = tide_offsets.merge(key => nil)
+                expect(code_of { engine.subordinate_extremes_strict(ref, 2.0, o, t0, t1, astro: astro) }).to eq('invalid_argument')
+                expect(code_of { engine.subordinate_folded_strict(ref, 2.0, o, astro: astro) }).to eq('invalid_argument')
+            end
+        end
+
+        %w[mean_flood_dir_deg mean_ebb_dir_deg].each do |key|
+            it "refuses null current_offset #{key} (schema: number)" do
+                expect(code_of { engine.subordinate_current_events_strict(bin('S12', 1.0, 15.0), current_offset.merge(key => nil), t0, t1, astro: astro) }).to eq('invalid_argument')
+            end
+        end
+
+        {
+            'time_adj_max_flood_min' => 'max_flood', 'time_adj_max_ebb_min' => 'max_ebb',
+            'time_adj_slack_before_flood_min' => 'slack_before_flood', 'time_adj_slack_before_ebb_min' => 'slack_before_ebb',
+            'flood_amp_ratio' => 'max_flood', 'ebb_amp_ratio' => 'max_ebb'
+        }.each do |key, type|
+            it "accepts null current_offset #{key} (schema: number or null) and drops #{type}" do
+                got = engine.subordinate_current_events_strict(bin('S12', 1.0, 15.0), current_offset.merge(key => nil), t0, t1, astro: astro)
+                expect(got['omitted_event_types']).to eq([type])
+                expect(got['events'].map { |e| e['type'] }).not_to include(type)
+                expect(got['events']).not_to be_empty
+            end
+        end
+
+        it 'keeps the defaults when the keys are absent' do
+            expect(engine.subordinate_extremes_strict(ref, 2.0, { 'height_adjusted_type' => 'R' }, t0, t1, astro: astro).size).to be >= 3
+            no_dirs = current_offset.reject { |k, _| k.end_with?('_dir_deg') }
+            events = engine.subordinate_current_events_strict(bin('S12', 1.0, 15.0), no_dirs, t0, t1, astro: astro)['events']
+            expect(events.map { |e| e['direction_deg'] }.uniq).to eq([nil])
+        end
+    end
+
     describe 'with the shipped TCD' do
         let(:m2) { tide('M2', 1.0, 100.0) }
         let(:t) { Time.utc(2026, 10, 9, 12) }
