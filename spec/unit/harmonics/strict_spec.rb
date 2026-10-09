@@ -2,7 +2,7 @@
 
 require 'tmpdir'
 
-# The strict engine mode (OTC SDK prediction spec, revision 19, sections 4 and 6.1).
+# The strict engine mode (OTC SDK prediction spec, revision 20, sections 4 and 6.1).
 # The synthetic cases use small made-up astronomical tables (2000-2030), so that each
 # rule can be pinned exactly; the TCD cases use the shipped tables.
 RSpec.describe Harmonics::Engine, 'strict mode' do
@@ -713,7 +713,7 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(engine.currents_strict(full_bin, [t0], astro: astro).size).to eq(1)
             expect(engine.subordinate_current_events_strict(full_bin, full_offset, t0, t1, astro: astro)['events']).not_to be_empty
             expect(engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, full_tide_offsets, t0, t1, astro: astro)).not_to be_empty
-            # datum: added to subordinate_offsets by spec revision 19, not read here.
+            # datum: added to subordinate_offsets by spec revision 20, not read here.
             with_datum = full_tide_offsets.merge('datum' => { 'named' => { 'mllw' => 0.0 }, 'chart_datum' => 'mllw' })
             expect(engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, with_datum, t0, t1, astro: astro)).not_to be_empty
         end
@@ -768,7 +768,7 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
 
     describe 'with the shipped TCD' do
         # M2 alone: |h'(a)| + |h'(b)| equals M*(b - a) to first order at a root,
-        # so the root-free test needs a margin for rounding (spec revision 19).
+        # so the root-free test needs a margin for rounding (spec revision 20).
         # The counts are checked against a brute-force 5 s sign scan of the same
         # function.
         describe 'a single-constituent set (M2 alone, 30 days)' do
@@ -811,6 +811,48 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
                 expect(slacks.size).to be >= 115
                 match(events.reject { |e| e['type'].start_with?('slack') }, peaks, { down: 'max_flood', up: 'max_ebb' })
                 match(events.select { |e| e['type'].start_with?('slack') }, slacks, { down: 'slack_before_ebb', up: 'slack_before_flood' })
+            end
+        end
+
+        # Large amplitudes late in the year: rounding in the phase argument
+        # omega*Delta gives an evaluation error that grows with the amplitude and
+        # with Delta (hours since 1 January), so the margin includes the bound
+        # E of spec revision 20.  These cases dropped events before it.
+        describe 'large amplitudes late in the year (spec revision 20)' do
+            def scan_window(f, from, to)
+                times = (from.to_i..to.to_i).step(5).to_a
+                values = times.map { |t| f.call(t.to_f, Harmonics::Strict.year_of(t)) }
+                (1...times.size).filter_map do |i|
+                    if values[i - 1].positive? && values[i] <= 0 then [times[i], :down]
+                    elsif values[i - 1].negative? && values[i] >= 0 then [times[i], :up]
+                    end
+                end
+            end
+
+            def match_scan(events, expected, types, label)
+                expect(events.map { |e| e['type'] }).to eq(expected.map { |_, kind| types.fetch(kind) }), label
+                events.zip(expected).each { |e, (t, _)| expect((e['time'].to_i - t).abs).to be <= 5, label }
+            end
+
+            [
+                ['M2', 5.0, Time.utc(2099, 12, 20), Time.utc(2099, 12, 25)],
+                ['M2', 7.5, Time.utc(2099, 12, 20), Time.utc(2099, 12, 25)],
+                ['M2', 5.0, Time.utc(2025, 12, 22), Time.utc(2025, 12, 26)],
+                ['M2', 7.5, Time.utc(2025, 12, 22), Time.utc(2025, 12, 26)],
+                ['K1', 40.0, Time.utc(2025, 12, 22), Time.utc(2025, 12, 26)]
+            ].each do |name, amp, from, to|
+                label = "#{name} #{amp} m from #{from.strftime('%Y-%m-%d')} to #{to.strftime('%Y-%m-%d')}"
+
+                it "finds every extremum, max flood, max ebb and slack for #{label}" do
+                    c = tide(name, amp, 37.0)
+                    sum = Harmonics::Strict.tide_sum(engine.strict_astro_table, [c])
+                    deriv = scan_window(->(t, y) { sum.derivative(t, y) }, from, to)
+                    zeros = scan_window(->(t, y) { sum.value(t, y) }, from, to)
+                    match_scan(engine.extremes_strict([c], from, to), deriv, { down: 'high', up: 'low' }, "extremes, #{label}")
+                    events = engine.current_events_strict(bin(name, amp, 37.0), from, to)
+                    match_scan(events.reject { |e| e['type'].start_with?('slack') }, deriv, { down: 'max_flood', up: 'max_ebb' }, "peaks, #{label}")
+                    match_scan(events.select { |e| e['type'].start_with?('slack') }, zeros, { down: 'slack_before_ebb', up: 'slack_before_flood' }, "slacks, #{label}")
+                end
             end
         end
 

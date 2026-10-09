@@ -4,7 +4,7 @@ require 'tcd'
 
 module Harmonics
     # The strict prediction mode that makes the OpenTideConstants SDK reference
-    # vectors (OTC SDK prediction spec, revision 19: section 4 for the rules,
+    # vectors (OTC SDK prediction spec, revision 20: section 4 for the rules,
     # section 6.1 for this mode).  It takes an OTC set's constants directly and
     # applies every rule exactly as the SDKs do:
     #
@@ -51,6 +51,7 @@ module Harmonics
         SUBORDINATE_PAD_MIN_S = 7200
         ROOT_FREE_REL = 1e-9        # root-free test margin (section 4.6 step 3)
         ROOT_FREE_ABS = 1e-12
+        EPS = 2.0**-52              # the evaluation error bound E (section 4.6 step 3)
         CURRENT_EVENT_TYPES = %w[max_flood max_ebb slack_before_flood slack_before_ebb].freeze
 
         # ---- input checks ----
@@ -95,7 +96,7 @@ module Harmonics
         # closed objects (additionalProperties false).  A key it does not list
         # is refused; the listed keys the strict mode does not read are
         # accepted.  subordinate_offsets also accepts datum, which the live
-        # schema does not list yet: spec revision 19 (section 3.3 item 8) adds
+        # schema does not list yet: spec revision 20 (section 3.3 item 8) adds
         # it for the subordinate's own levels, which reach the strict mode as
         # the datum_shift keyword.
         SCHEMA_KEYS = {
@@ -110,7 +111,7 @@ module Harmonics
         def self.closed_hash(h, what)
             hash_arg(h, what)
             unknown = h.keys - SCHEMA_KEYS.fetch(what)
-            invalid("#{what} has keys the schema does not allow: #{unknown.join(', ')}") unless unknown.empty?
+            invalid("#{what} has keys the schema does not allow: #{unknown.map(&:inspect).join(', ')}") unless unknown.empty?
             h
         end
 
@@ -265,6 +266,26 @@ module Harmonics
             def bound1(year)
                 coeffs(year).sum(0.0) { |_, _, fh, _, wh| fh.abs * wh }
             end
+
+            # The root-free test's numbers for a search on the derivative
+            # (order 1: extremes, current maxima) or on the sum itself (order 0:
+            # slacks), for a year: [M, e1, e0], where M bounds the searched
+            # function's derivative and the evaluation error bound of spec
+            # revision 20 is E = 4*eps*(e1*Delta_max + e0).  For the derivative,
+            # e1 = sum F*A*omega_hat**2 and e0 = sum F*A*omega_hat*2*pi; for the
+            # sum, e1 = sum F*A*omega_hat and e0 = sum F*A*2*pi.  (omega_hat*Delta
+            # is the phase term omega*Delta in radians.)
+            def search_bound(year, order)
+                @search_bounds ||= {}
+                @search_bounds[[year, order]] ||= begin
+                    c = coeffs(year)
+                    if order == 1
+                        [bound2(year), c.sum(0.0) { |*, fh, _, wh| fh.abs * wh * wh }, c.sum(0.0) { |*, fh, _, wh| fh.abs * wh * 2 * Math::PI }]
+                    else
+                        [bound1(year), c.sum(0.0) { |*, fh, _, wh| fh.abs * wh }, c.sum(0.0) { |*, fh, _, _| fh.abs * 2 * Math::PI }]
+                    end
+                end
+            end
         end
 
         # The signed "more extreme" rule of section 4.6 steps 6a and 6 (and 4.7):
@@ -371,7 +392,8 @@ module Harmonics
         end
 
         # Sign changes of f over the grid.  f.call(t, year) is the function,
-        # bound.call(year) bounds |f'| per hour.  Each grid step uses the year of
+        # bound.call(year) gives [M, e1, e0] (Sum#search_bound): M bounds |f'|
+        # per hour, and e1, e0 give the evaluation error bound.  Each grid step uses the year of
         # its left end, at both ends and inside.  Returns candidates
         # { r:, kind:, year: } in time order; kind :down is f going from > 0 to
         # <= 0, :up from < 0 to >= 0.
@@ -393,18 +415,26 @@ module Harmonics
         end
 
         # Root-free test, then split to the minimum leaf (step 3).  The bound is
-        # exactly tight for a single constituent, so the test has a margin for
-        # rounding (spec revision 19): root-free only if
-        # S > M*(b - a)*(1 + 1e-9) + 1e-12*max(1, M), with b - a in hours.  The
-        # absolute term is not scaled by the width: the rounding it covers comes
-        # from the phase argument, and at a 0.703125 s leaf a scaled term is
-        # smaller than the rounding measured for M2 alone.
-        def root_free?(s, m, hours)
-            s > m * hours * (1 + ROOT_FREE_REL) + ROOT_FREE_ABS * [1.0, m].max
+        # exactly tight for a single constituent, and each evaluation carries a
+        # rounding error from the phase argument omega*Delta that grows with
+        # the amplitude and with Delta.  So a part is root-free only if
+        # (spec revision 20)
+        #   S > M*(b - a)*(1 + 1e-9) + 2*E + 1e-12*max(1, M),
+        #   E = 4*eps*(e1*Delta_max + e0), eps = 2**-52,
+        # with b - a in hours and Delta_max = max(|Delta_a|, |Delta_b|) in hours
+        # since 1 January 00:00 UTC of the step's year: the Delta that Sum#value
+        # and Sum#derivative feed to the phase argument (omega in degrees per
+        # hour times Delta in hours).
+        def root_free?(s, bound, hours, delta_max)
+            m, e1, e0 = bound
+            e = 4 * EPS * (e1 * delta_max + e0)
+            s > m * hours * (1 + ROOT_FREE_REL) + 2 * e + ROOT_FREE_ABS * [1.0, m].max
         end
 
         def subdivide(f, m, year, a, b, fa, fb, depth, out)
-            return if root_free?(fa.abs + fb.abs, m, (b - a) / 3600.0)
+            origin = year_start(year)
+            delta_max = [(a - origin).abs, (b - origin).abs].max / 3600.0
+            return if root_free?(fa.abs + fb.abs, m, (b - a) / 3600.0, delta_max)
 
             if depth == MIN_LEAF_DEPTH
                 bracket(f, year, a, b, fa, fb, out)
@@ -509,7 +539,7 @@ module Harmonics
             g0, gn = grid(table, start, stop)
             dh = ->(t, y) { sum.derivative(t, y) }
             value = ->(t, y) { sum.value(t, y) + datum_term }
-            cands = crossings(dh, ->(y) { sum.bound2(y) }, g0, gn)
+            cands = crossings(dh, ->(y) { sum.search_bound(y, 1) }, g0, gn)
             cands.each { |c| c[:value] = value.call(c[:r], c[:year]) }
             reconcile_new_years!(cands, g0, gn, dh, value) { |l, r| !MORE_EXTREME.call(r, l) }
             report(filter_extrema(cands, &MORE_EXTREME), start, stop)
@@ -579,7 +609,7 @@ module Harmonics
             g0, gn = grid(table, start, stop)
 
             # Maxima (:down of W') and minima (:up of W'), by the signed rule.
-            peaks = crossings(dw, ->(y) { major.bound2(y) }, g0, gn)
+            peaks = crossings(dw, ->(y) { major.search_bound(y, 1) }, g0, gn)
             peaks.each { |c| c[:value] = w.call(c[:r], c[:year]) }
             reconcile_new_years!(peaks, g0, gn, dw, w) { |l, r| !MORE_EXTREME.call(r, l) }
             peaks = filter_extrema(peaks, &MORE_EXTREME).filter_map do |c|
@@ -591,7 +621,7 @@ module Harmonics
             end
 
             # Slacks: zeros of W, :up before flood and :down before ebb.
-            slacks = crossings(w, ->(y) { major.bound1(y) }, g0, gn)
+            slacks = crossings(w, ->(y) { major.search_bound(y, 0) }, g0, gn)
             reconcile_new_years!(slacks, g0, gn, w, ->(_t, _y) { 0.0 }) { true }
             slacks = filter_slacks(slacks).map do |c|
                 c.merge(type: c[:kind] == :up ? 'slack_before_flood' : 'slack_before_ebb', value: 0.0, direction: nil)
