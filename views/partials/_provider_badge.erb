@@ -347,6 +347,7 @@ class="relative flex-shrink-0">
                         <span x-show="currentSelected !== source.id" class="w-4"></span>
                         <span class="text-sm" :class="idx === 0 ? 'text-white font-medium' : 'text-slate-300'" x-text="source.provider === 'xtide' ? 'XTide' : source.provider.toUpperCase()"></span>
                         <span x-show="idx === 0" class="text-slate-500 text-xs">(primary)</span>
+                        <span x-show="source.warning" class="text-amber-400 text-xs" :title="source.warning">⚠ may be wrong</span>
                     </div>
                     <div class="text-xs text-slate-500" x-show="compareData && compareData.stations && idx > 0">
                         <template x-if="compareData && compareData.stations">

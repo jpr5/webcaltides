@@ -52,6 +52,9 @@ class Server < ::Sinatra::Base
                 elapsed = (Time.now - start).round(2)
                 $LOG.info "current stations cache warmed in #{elapsed}s"
 
+                # A demoted station that is not in the lists (e.g. its id changed with the data)
+                WebCalTides.check_demoted_stations
+
                 # Step 4: Clean old cache files
                 $LOG.info "cleaning old cache files"
                 start = Time.now
@@ -446,7 +449,9 @@ class Server < ::Sinatra::Base
         version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
         station    = type == "currents" ? WebCalTides.current_station_for(id) : WebCalTides.tide_station_for(id)
         hkey       = WebCalTides.harmonics_cache_key(station) # "" unless harmonics-served
-        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}#{hkey}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
+        # A demoted station's feed carries a warning, so a feed cached before its demotion is not served
+        dkey       = WebCalTides.demoted_station?(station) ? "_demoted" : ""
+        cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}#{hkey}#{dkey}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
 
         # Cleanup old cache files if month has changed (thread-safe)
         WebCalTides.cleanup_if_month_changed
@@ -462,6 +467,9 @@ class Server < ::Sinatra::Base
                        when "currents" then WebCalTides.current_calendar_for(id, around: date)            or halt 404
                        else halt 404
                        end
+
+            # Before solar and lunar events, which are not the station's
+            WebCalTides.add_demotion_warning(calendar, station)
 
             # Add solar events if requested
             WebCalTides.solar_calendar_for(calendar, around:date) unless no_solar

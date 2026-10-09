@@ -105,17 +105,30 @@ module WebCalTides
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi rws xtide ticon].freeze
 
-    # Stations whose predictions are known to be wrong, with the evidence.  A demoted station is
-    # never the primary of a group, and search lists its group after the others; it stays in the
-    # results and its feed still works, so existing subscriptions are not broken.
+    # Stations whose predictions are known to be wrong.  A demoted station is never the primary of
+    # a group, and search lists its group after the others.  It stays in the results and its feed
+    # still works, but its card, its entry in the source picker and its feed say what is wrong and
+    # name the better station (:better).  check_demoted_stations warns at startup about an id that
+    # is not in the loaded stations (TICON ids come from coordinates, so a data update can change
+    # them).
     DEMOTED_STATIONS = {
         # Vigo, ESP (Oct 2026): TICON's T6e11ade (42.233, -8.733) and Tdce40e9 (42.238, -8.730) are
-        # 0.6 km apart, so search shows two cards.  T6e11ade comes from the UHSLC Vigo record
-        # (1943-1990; TICON-3 labels it gesla.ispra), whose timestamps are 1 h early: its phases are
-        # behind Tdce40e9's by M2 60.3, S2 62.3, K1 58.1 and O1 60.8 min.  Tdce40e9 comes from the
-        # IEO record and agrees with IEO's observations.
-        'T6e11ade' => 'Vigo, ESP: built from the UHSLC Vigo record (1943-1990), whose timestamps are 1 h early; ' \
-                      'its phases are about 60 min behind Tdce40e9 (IEO): M2 -60.3, S2 -62.3, K1 -58.1, O1 -60.8 min'
+        # 0.6 km apart, so search shows two cards.  T6e11ade has the TICON-3 constants of the UHSLC
+        # Vigo record (vigo-208a-esp-uhslc_rq, 1943-1990; TICON-3 labels it gesla.ispra), whose
+        # timestamps are 1 h early: against the IEO Vigo observations (vigo-vigo-esp-ieo) the record
+        # lags -60.0 min in 99% of 570 months.  Tdce40e9 has the TICON-3 constants of the CMEMS
+        # VigoTG record (gesla.usgs row at 42.243, 351.274; 1992-2021), placed at the IEO gauge's
+        # position by scripts/build_ticon_dataset.rb.  T6e11ade minus Tdce40e9: phases M2 -60.3,
+        # S2 -62.3, K1 -58.1, O1 -60.8 min; high and low waters over November 2026 median -60.5 min
+        # (-61.6 to -58.1, 115 events).  T6e11ade minus the IEO TICON-3 row (gesla.noaa, 42.238,
+        # 351.270; 1943-2015): M2 -61.7, S2 -62.7, K1 -62.8, O1 -63.4 min.
+        'T6e11ade' => {
+            better:   'Tdce40e9',
+            warning:  'Times at this station may be about 1 h early',
+            evidence: 'Built from the UHSLC Vigo record (1943-1990), whose timestamps are 1 h early (-60.0 min ' \
+                      'against IEO Vigo in 99% of 570 months).  Its high and low waters come a median 60.5 min ' \
+                      'before those of Tdce40e9 (CMEMS VigoTG, 1992-2021) in November 2026.'
+        }.freeze
     }.freeze
 
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
@@ -600,7 +613,42 @@ module WebCalTides
     end
 
     def demoted_station?(station)
-        DEMOTED_STATIONS.key?(station.id)
+        !station.nil? && DEMOTED_STATIONS.key?(station.id)
+    end
+
+    # "<warning>.  Use <better station> instead." for a demoted station, nil for any other
+    def demotion_warning(station)
+        return nil unless demoted_station?(station)
+
+        entry  = DEMOTED_STATIONS[station.id]
+        better = tide_stations.find { |s| s.id == entry[:better] } ||
+                 current_stations.find { |s| s.id == entry[:better] || s.bid == entry[:better] }
+        name   = better ? "#{better.name} (#{entry[:better]})" : entry[:better]
+
+        "#{entry[:warning]}.  Use #{name} instead."
+    end
+
+    # Puts the demotion warning at the start of the calendar's description and of each event's
+    # description, so subscribers see it in their calendar.  Call it before solar and lunar events
+    # are added, which keep their own descriptions.
+    def add_demotion_warning(calendar, station)
+        warning = demotion_warning(station) or return calendar
+
+        prepend = ->(desc) { [warning, desc.to_s.presence].compact.join("\n\n") }
+        calendar.description = prepend.(calendar.description)
+        calendar.events.each { |e| e.description = prepend.(e.description) }
+        logger.warn "serving demoted station #{station.id}: #{warning}"
+
+        calendar
+    end
+
+    # Warns about every DEMOTED_STATIONS id that is not in the loaded station lists, where its
+    # demotion does nothing.  Called once the caches are warm at startup.
+    def check_demoted_stations
+        loaded  = (tide_stations + current_stations).flat_map { |s| [s.id, s.bid] }.compact.to_set
+        missing = DEMOTED_STATIONS.keys.reject { |id| loaded.include?(id) }
+        missing.each { |id| logger.warn "!! demoted station #{id} is not in the loaded stations, so its demotion does nothing" }
+        missing
     end
 
     # Computes time and height deltas between primary and each alternative
