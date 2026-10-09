@@ -105,6 +105,19 @@ module WebCalTides
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi rws xtide ticon].freeze
 
+    # Stations whose predictions are known to be wrong, with the evidence.  A demoted station is
+    # never the primary of a group, and search lists its group after the others; it stays in the
+    # results and its feed still works, so existing subscriptions are not broken.
+    DEMOTED_STATIONS = {
+        # Vigo, ESP (Oct 2026): TICON's T6e11ade (42.233, -8.733) and Tdce40e9 (42.238, -8.730) are
+        # 0.6 km apart, so search shows two cards.  T6e11ade comes from the UHSLC Vigo record
+        # (1943-1990; TICON-3 labels it gesla.ispra), whose timestamps are 1 h early: its phases are
+        # behind Tdce40e9's by M2 60.3, S2 62.3, K1 58.1 and O1 60.8 min.  Tdce40e9 comes from the
+        # IEO record and agrees with IEO's observations.
+        'T6e11ade' => 'Vigo, ESP: built from the UHSLC Vigo record (1943-1990), whose timestamps are 1 h early; ' \
+                      'its phases are about 60 min behind Tdce40e9 (IEO): M2 -60.3, S2 -62.3, K1 -58.1, O1 -60.8 min'
+    }.freeze
+
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
         # Pacific
@@ -576,7 +589,7 @@ module WebCalTides
     def select_primary_and_alternatives(group)
         sorted = group.sort_by do |station|
             provider = (station.provider || 'unknown').downcase
-            PROVIDER_HIERARCHY.index(provider) || 999
+            [demoted_station?(station) ? 1 : 0, PROVIDER_HIERARCHY.index(provider) || 999]
         end
 
         StationGroup.new(
@@ -584,6 +597,10 @@ module WebCalTides
             alternatives: sorted[1..] || [],
             deltas: {}  # Populated lazily via compute_variance
         )
+    end
+
+    def demoted_station?(station)
+        DEMOTED_STATIONS.key?(station.id)
     end
 
     # Computes time and height deltas between primary and each alternative
@@ -649,6 +666,8 @@ module WebCalTides
     # Set compute_deltas: false for faster initial search results
     def group_search_results(stations, compute_deltas: false, match_depth: false, around: Time.current.utc)
         groups = group_stations_by_proximity(stations, match_depth: match_depth)
+        # Demoted stations after the others, in their order (see DEMOTED_STATIONS)
+        groups = groups.partition { |group| !demoted_station?(group.primary) }.flatten(1)
 
         if compute_deltas
             groups.each do |group|
