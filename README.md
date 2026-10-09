@@ -75,7 +75,11 @@ Use GitHub for issues, patches welcome.
 
 ## LICENSE
 
-Free as in beer, IFF you give me visible credit!  Mmm, beer..
+Elastic License 2.0 with an Additional Use Grant: use, modify and host it for
+yourself or inside your organization, but don't sell it or offer it to others
+as a hosted service.  See [LICENSE](LICENSE) for the terms and
+[LICENSING.md](LICENSING.md) for a plain-English summary and the third-party
+data it carries.
 
 ## CREDITS
 
