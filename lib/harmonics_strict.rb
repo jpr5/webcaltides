@@ -4,7 +4,7 @@ require 'tcd'
 
 module Harmonics
     # The strict prediction mode that makes the OpenTideConstants SDK reference
-    # vectors (OTC SDK prediction spec, revision 14: section 4 for the rules,
+    # vectors (OTC SDK prediction spec, revision 19: section 4 for the rules,
     # section 6.1 for this mode).  It takes an OTC set's constants directly and
     # applies every rule exactly as the SDKs do:
     #
@@ -49,6 +49,8 @@ module Harmonics
         NEW_YEAR_S = 3600           # New Year reconciliation threshold (step 6a)
         SPEED_NULL_MS = 1e-9        # direction is null below this speed
         SUBORDINATE_PAD_MIN_S = 7200
+        ROOT_FREE_REL = 1e-9        # root-free test margin (section 4.6 step 3)
+        ROOT_FREE_ABS = 1e-12
         CURRENT_EVENT_TYPES = %w[max_flood max_ebb slack_before_flood slack_before_ebb].freeze
 
         # ---- input checks ----
@@ -86,6 +88,29 @@ module Harmonics
 
         def self.hash_arg(h, what)
             invalid("#{what} must be a Hash, got #{h.class}") unless h.is_a?(Hash)
+            h
+        end
+
+        # The keys the format 1.0 schema (SHA-256 e27d5f6b...) lists for its
+        # closed objects (additionalProperties false).  A key it does not list
+        # is refused; the listed keys the strict mode does not read are
+        # accepted.  subordinate_offsets also accepts datum, which the live
+        # schema does not list yet: spec revision 19 (section 3.3 item 8) adds
+        # it for the subordinate's own levels, which reach the strict mode as
+        # the datum_shift keyword.
+        SCHEMA_KEYS = {
+            'current_bin' => %w[bin depth_m depth_type azimuth_deg mean_flood_dir_deg mean_ebb_dir_deg mean_major_ms mean_minor_ms constituents],
+            'current_offset' => %w[bin depth_m depth_type reference_station_id reference_bin mean_flood_dir_deg mean_ebb_dir_deg
+                                   time_adj_max_flood_min time_adj_slack_before_ebb_min time_adj_max_ebb_min time_adj_slack_before_flood_min
+                                   flood_amp_ratio ebb_amp_ratio licence_id],
+            'subordinate_offsets' => %w[reference_station_id time_offset_high_min time_offset_low_min height_offset_high height_offset_low
+                                        height_adjusted_type licence_id datum]
+        }.freeze
+
+        def self.closed_hash(h, what)
+            hash_arg(h, what)
+            unknown = h.keys - SCHEMA_KEYS.fetch(what)
+            invalid("#{what} has keys the schema does not allow: #{unknown.join(', ')}") unless unknown.empty?
             h
         end
 
@@ -367,9 +392,19 @@ module Harmonics
             out
         end
 
-        # Root-free test, then split to the minimum leaf (step 3).
+        # Root-free test, then split to the minimum leaf (step 3).  The bound is
+        # exactly tight for a single constituent, so the test has a margin for
+        # rounding (spec revision 19): root-free only if
+        # S > M*(b - a)*(1 + 1e-9) + 1e-12*max(1, M), with b - a in hours.  The
+        # absolute term is not scaled by the width: the rounding it covers comes
+        # from the phase argument, and at a 0.703125 s leaf a scaled term is
+        # smaller than the rounding measured for M2 alone.
+        def root_free?(s, m, hours)
+            s > m * hours * (1 + ROOT_FREE_REL) + ROOT_FREE_ABS * [1.0, m].max
+        end
+
         def subdivide(f, m, year, a, b, fa, fb, depth, out)
-            return if fa.abs + fb.abs > m * ((b - a) / 3600.0)
+            return if root_free?(fa.abs + fb.abs, m, (b - a) / 3600.0)
 
             if depth == MIN_LEAF_DEPTH
                 bracket(f, year, a, b, fa, fb, out)
@@ -491,7 +526,7 @@ module Harmonics
         # The checked bin: [major sum, minor sum, sigma, mean major, mean minor,
         # azimuth, flood direction, ebb direction].
         def current_bin(table, bin)
-            hash_arg(bin, 'current bin')
+            closed_hash(bin, 'current_bin')
             consts = bin['constituents']
             major = Sum.new(table, terms(consts, 'the current bin', 'major_amplitude_ms', 'major_phase_deg'))
             minor = Sum.new(table, terms(consts, 'the current bin', 'minor_amplitude_ms', 'minor_phase_deg'))
@@ -600,7 +635,7 @@ module Harmonics
         # The offsets with the absent-offset rule applied: an absent time offset
         # is 0, an absent height offset is the identity.
         def tide_offsets(offsets)
-            hash_arg(offsets, 'subordinate_offsets')
+            closed_hash(offsets, 'subordinate_offsets')
             type = offsets['height_adjusted_type']
             invalid("height_adjusted_type #{type.inspect} is not R or A") unless %w[R A].include?(type)
 
@@ -615,10 +650,22 @@ module Harmonics
             }
         end
 
-        def subordinate_extremes(table, ref_constituents, chart_datum_term, offsets, start, stop)
+        # An R height ratio of 0 or less is invalid_argument in both offset
+        # paths (section 4.8 step 3); it is checked after the reference.
+        def positive_ratios(o)
+            return unless o[:type] == 'R'
+
+            [[:height_high, 'height_offset_high'], [:height_low, 'height_offset_low']].each do |k, key|
+                invalid("subordinate_offsets #{key} #{o[k]} is not a positive ratio") unless o[k].positive?
+            end
+        end
+
+        def subordinate_extremes(table, ref_constituents, chart_datum_term, offsets, start, stop, datum_shift = 0.0)
             o = tide_offsets(offsets)
-            datum_term = chart_datum_term_arg(chart_datum_term)
             tide_sum(table, ref_constituents)
+            datum_term = chart_datum_term_arg(chart_datum_term)
+            shift = datum_term_arg(datum_shift, 'datum_shift')
+            positive_ratios(o)
             start, stop = window(start, stop)
             return [] if start == stop
 
@@ -630,25 +677,26 @@ module Harmonics
                 next unless time >= start && time < stop
 
                 k = high ? o[:height_high] : o[:height_low]
-                height = o[:type] == 'R' ? c[:value] * k : c[:value] + k
+                height = (o[:type] == 'R' ? c[:value] * k : c[:value] + k) + shift
                 [time, { 'time' => Time.at(time).utc, 'type' => high ? 'high' : 'low', 'height' => height }]
             end)
         end
 
         # The folded constants of a subordinate tide station with equal high and
         # low offsets (section 4.8a): { 'constituents', 'datum_term', 'method' }.
-        # Raises extremes_only when the station has no exact curve.
-        def fold(table, ref_constituents, chart_datum_term, offsets)
+        # Raises extremes_only when the offsets differ, so the station has no
+        # exact curve.
+        def fold(table, ref_constituents, chart_datum_term, offsets, datum_shift = 0.0)
             o = tide_offsets(offsets)
-            c_ref = chart_datum_term_arg(chart_datum_term)
             tide_sum(table, ref_constituents)
+            c_ref = chart_datum_term_arg(chart_datum_term)
+            shift = datum_term_arg(datum_shift, 'datum_shift')
+            positive_ratios(o)
             unless o[:time_high] == o[:time_low] && o[:height_high] == o[:height_low]
                 raise Error.new('extremes_only', 'high and low water offsets differ, so the station has no exact curve')
             end
 
             k = o[:height_high]
-            raise Error.new('extremes_only', 'the height ratio is not positive') if o[:type] == 'R' && k <= 0
-
             m, add = o[:type] == 'R' ? [k.to_f, 0.0] : [1.0, k.to_f]
             dh = o[:time_high].to_f / 60.0
             consts = ref_constituents.map do |c|
@@ -659,7 +707,7 @@ module Harmonics
                     'phase_deg' => reduce_deg(c['phase_deg'] + speed * dh)
                 }
             end
-            { 'constituents' => consts, 'datum_term' => m * c_ref + add, 'method' => 'folded_offsets' }
+            { 'constituents' => consts, 'datum_term' => m * c_ref + add + shift, 'method' => 'folded_offsets' }
         end
 
         CURRENT_OFFSET_KEYS = {
@@ -670,7 +718,7 @@ module Harmonics
         }.freeze
 
         def subordinate_current_events(table, ref_bin, offset, start, stop)
-            hash_arg(offset, 'current_offset')
+            closed_hash(offset, 'current_offset')
             what = 'current_offset'
             values = CURRENT_OFFSET_KEYS.to_h do |type, (adj, ratio)|
                 [type, [nullable(offset, adj, what), ratio && nullable(offset, ratio, what, :min0)]]
@@ -741,16 +789,19 @@ module Harmonics
         # A subordinate tide station's extremes by NOAA's method, above its chart
         # datum.  chart_datum_term is the reference's msl_offset_m minus
         # named[chart_datum] (nil raises datum_unavailable); offsets is the
-        # station's subordinate_offsets.
-        def subordinate_extremes_strict(ref_constituents, chart_datum_term, offsets, start, stop, astro: strict_astro_table)
-            Strict.subordinate_extremes(astro, ref_constituents, chart_datum_term, offsets, start, stop)
+        # station's subordinate_offsets.  datum_shift moves the heights to
+        # another of the subordinate's datums (section 4.8 step 5): pass
+        # named[chart_datum] - named[key] of subordinate_offsets.datum.
+        def subordinate_extremes_strict(ref_constituents, chart_datum_term, offsets, start, stop, datum_shift: 0.0, astro: strict_astro_table)
+            Strict.subordinate_extremes(astro, ref_constituents, chart_datum_term, offsets, start, stop, datum_shift)
         end
 
         # The folded constants of a subordinate tide station with equal offsets:
         # { 'constituents', 'datum_term', 'method' }.  Pass them to
         # predict_strict and extremes_strict.  Raises extremes_only otherwise.
-        def subordinate_folded_strict(ref_constituents, chart_datum_term, offsets, astro: strict_astro_table)
-            Strict.fold(astro, ref_constituents, chart_datum_term, offsets)
+        # datum_shift is added to the datum term, as for subordinate_extremes_strict.
+        def subordinate_folded_strict(ref_constituents, chart_datum_term, offsets, datum_shift: 0.0, astro: strict_astro_table)
+            Strict.fold(astro, ref_constituents, chart_datum_term, offsets, datum_shift)
         end
 
         # A subordinate current bin's events: { 'events', 'omitted_event_types' }.

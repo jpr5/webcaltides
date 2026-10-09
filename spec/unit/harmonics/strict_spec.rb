@@ -2,7 +2,7 @@
 
 require 'tmpdir'
 
-# The strict engine mode (OTC SDK prediction spec, revision 14, sections 4 and 6.1).
+# The strict engine mode (OTC SDK prediction spec, revision 19, sections 4 and 6.1).
 # The synthetic cases use small made-up astronomical tables (2000-2030), so that each
 # rule can be pinned exactly; the TCD cases use the shipped tables.
 RSpec.describe Harmonics::Engine, 'strict mode' do
@@ -470,11 +470,20 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             end
         end
 
-        it 'refuses to fold differing offsets or a ratio that is not positive' do
+        it 'refuses to fold differing offsets (extremes_only) or a ratio of 0 or less (invalid_argument)' do
             differ = { 'height_adjusted_type' => 'R', 'time_offset_high_min' => 37, 'time_offset_low_min' => 20, 'height_offset_high' => 0.9, 'height_offset_low' => 0.9 }
             expect { engine.subordinate_folded_strict(ref, 2.0, differ, astro: astro) }.to raise_error(Harmonics::Strict::Error, /extremes_only: high and low water offsets differ/)
+            [0, -0.5].each do |k|
+                equal = { 'height_adjusted_type' => 'R', 'height_offset_high' => k, 'height_offset_low' => k }
+                expect(code_of { engine.subordinate_folded_strict(ref, 2.0, equal, astro: astro) }).to eq('invalid_argument'), k.inspect
+                # The ratio guard comes before the equal-offsets test.
+                expect(code_of { engine.subordinate_folded_strict(ref, 2.0, differ.merge('height_offset_low' => k), astro: astro) }).to eq('invalid_argument'), k.inspect
+            end
+            # The reference is checked first: a bad reference set wins over a bad ratio.
             zero = { 'height_adjusted_type' => 'R', 'height_offset_high' => 0, 'height_offset_low' => 0 }
-            expect { engine.subordinate_folded_strict(ref, 2.0, zero, astro: astro) }.to raise_error(Harmonics::Strict::Error, /extremes_only: the height ratio is not positive/)
+            expect(code_of { engine.subordinate_folded_strict([tide('XX9', 1.0, 0.0)], 2.0, zero, astro: astro) }).to eq('unsupported_constituent')
+            expect(code_of { engine.subordinate_extremes_strict([tide('XX9', 1.0, 0.0)], 2.0, zero, t0, t1, astro: astro) }).to eq('unsupported_constituent')
+            expect(code_of { engine.subordinate_extremes_strict(ref, nil, zero, t0, t1, astro: astro) }).to eq('datum_unavailable')
         end
     end
 
@@ -677,7 +686,134 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
         end
     end
 
+    # Unknown keys: current_bin, current_offset and subordinate_offsets have
+    # additionalProperties false in the format 1.0 schema, so a key the schema
+    # does not list is refused.  The keys it lists but the strict mode does not
+    # read (bin, depth_m, depth_type, reference ids, licence_id) are accepted.
+    describe 'unknown keys' do
+        let(:astro) { table('S12' => [30.0]) }
+        let(:t0) { Time.utc(2025, 6, 1) }
+        let(:t1) { Time.utc(2025, 6, 2) }
+        let(:full_bin) do
+            bin('S12', 1.0, 15.0).merge('bin' => 1, 'depth_m' => nil, 'depth_type' => 'surface', 'mean_flood_dir_deg' => 0.0,
+                                        'mean_ebb_dir_deg' => 180.0, 'mean_major_ms' => 0.0, 'mean_minor_ms' => 0.0)
+        end
+        let(:full_offset) do
+            { 'bin' => 1, 'depth_m' => 3.0, 'depth_type' => 'surface', 'reference_station_id' => 'OTC-REF', 'reference_bin' => 1, 'licence_id' => 'x',
+              'time_adj_max_flood_min' => 30, 'time_adj_max_ebb_min' => 20, 'time_adj_slack_before_flood_min' => -15,
+              'time_adj_slack_before_ebb_min' => 45, 'flood_amp_ratio' => 0.8, 'ebb_amp_ratio' => 0.7,
+              'mean_flood_dir_deg' => 12.0, 'mean_ebb_dir_deg' => 190.0 }
+        end
+        let(:full_tide_offsets) do
+            { 'reference_station_id' => 'OTC-REF', 'licence_id' => 'x', 'height_adjusted_type' => 'R', 'time_offset_high_min' => 10,
+              'time_offset_low_min' => 10, 'height_offset_high' => 0.9, 'height_offset_low' => 0.9 }
+        end
+
+        it 'accepts every key the schema lists' do
+            expect(engine.currents_strict(full_bin, [t0], astro: astro).size).to eq(1)
+            expect(engine.subordinate_current_events_strict(full_bin, full_offset, t0, t1, astro: astro)['events']).not_to be_empty
+            expect(engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, full_tide_offsets, t0, t1, astro: astro)).not_to be_empty
+            # datum: added to subordinate_offsets by spec revision 19, not read here.
+            with_datum = full_tide_offsets.merge('datum' => { 'named' => { 'mllw' => 0.0 }, 'chart_datum' => 'mllw' })
+            expect(engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, with_datum, t0, t1, astro: astro)).not_to be_empty
+        end
+
+        it 'refuses an unknown current_bin key' do
+            b = full_bin.merge('mean_major' => 0.5)
+            expect(code_of { engine.currents_strict(b, [t0], astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.current_events_strict(b, t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_current_events_strict(b, full_offset, t0, t1, astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'refuses an unknown current_offset key' do
+            expect(code_of { engine.subordinate_current_events_strict(full_bin, full_offset.merge('time_adj_max_flood' => 30), t0, t1, astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'refuses an unknown subordinate_offsets key' do
+            o = full_tide_offsets.merge('time_offset_high' => 10)
+            expect(code_of { engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, o, t0, t1, astro: astro) }).to eq('invalid_argument')
+            expect(code_of { engine.subordinate_folded_strict([tide('S12', 1.0, 15.0)], 2.0, o, astro: astro) }).to eq('invalid_argument')
+        end
+
+        it 'moves subordinate heights to another datum by datum_shift (section 4.8 step 5)' do
+            ref_c = [tide('S12', 1.0, 15.0)]
+            chart = engine.subordinate_extremes_strict(ref_c, 2.0, full_tide_offsets, t0, t1, astro: astro)
+            shifted = engine.subordinate_extremes_strict(ref_c, 2.0, full_tide_offsets, t0, t1, datum_shift: 0.35, astro: astro)
+            expect(shifted.map { |e| [e['time'], e['type']] }).to eq(chart.map { |e| [e['time'], e['type']] })
+            shifted.zip(chart).each { |s, c| expect(s['height']).to be_within(1e-12).of(c['height'] + 0.35) }
+
+            folded = engine.subordinate_folded_strict(ref_c, 2.0, full_tide_offsets, astro: astro)
+            folded_shift = engine.subordinate_folded_strict(ref_c, 2.0, full_tide_offsets, datum_shift: -0.2, astro: astro)
+            expect(folded_shift['datum_term']).to be_within(1e-12).of(folded['datum_term'] - 0.2)
+            expect(folded_shift['constituents']).to eq(folded['constituents'])
+
+            [nil, '0.35', Float::NAN].each do |bad|
+                expect(code_of { engine.subordinate_extremes_strict(ref_c, 2.0, full_tide_offsets, t0, t1, datum_shift: bad, astro: astro) }).to eq('invalid_argument'), bad.inspect
+                expect(code_of { engine.subordinate_folded_strict(ref_c, 2.0, full_tide_offsets, datum_shift: bad, astro: astro) }).to eq('invalid_argument'), bad.inspect
+            end
+        end
+
+        it 'refuses a height ratio of 0 or less for the event method' do
+            [0, -0.5].each do |k|
+                %w[height_offset_high height_offset_low].each do |key|
+                    o = full_tide_offsets.merge(key => k)
+                    expect(code_of { engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, o, t0, t1, astro: astro) }).to eq('invalid_argument'), "#{key} #{k}"
+                end
+            end
+            # An additive offset may be 0 or negative.
+            a = full_tide_offsets.merge('height_adjusted_type' => 'A', 'height_offset_high' => 0, 'height_offset_low' => -0.5)
+            expect(engine.subordinate_extremes_strict([tide('S12', 1.0, 15.0)], 2.0, a, t0, t1, astro: astro)).not_to be_empty
+        end
+    end
+
     describe 'with the shipped TCD' do
+        # M2 alone: |h'(a)| + |h'(b)| equals M*(b - a) to first order at a root,
+        # so the root-free test needs a margin for rounding (spec revision 19).
+        # The counts are checked against a brute-force 5 s sign scan of the same
+        # function.
+        describe 'a single-constituent set (M2 alone, 30 days)' do
+            let(:t0) { Time.utc(2026, 10, 1) }
+            let(:t1) { Time.utc(2026, 10, 31) }
+            let(:m2_bin) { bin('M2', 1.0, 100.0) }
+
+            def scan(f)
+                year = 2026
+                times = (t0.to_i..t1.to_i).step(5).to_a
+                values = times.map { |t| f.call(t.to_f, year) }
+                (1...times.size).filter_map do |i|
+                    if values[i - 1].positive? && values[i] <= 0 then [times[i], :down]
+                    elsif values[i - 1].negative? && values[i] >= 0 then [times[i], :up]
+                    end
+                end
+            end
+
+            def match(events, expected, types)
+                expect(events.size).to eq(expected.size)
+                events.zip(expected).each do |e, (t, kind)|
+                    expect(e['type']).to eq(types.fetch(kind))
+                    expect((e['time'].to_i - t).abs).to be <= 5
+                end
+            end
+
+            it 'finds every extremum' do
+                sum = Harmonics::Strict.tide_sum(engine.strict_astro_table, [tide('M2', 1.0, 100.0)])
+                expected = scan(->(t, y) { sum.derivative(t, y) })
+                expect(expected.size).to be >= 115
+                match(engine.extremes_strict([tide('M2', 1.0, 100.0)], t0, t1), expected, { down: 'high', up: 'low' })
+            end
+
+            it 'finds every max flood, max ebb and slack' do
+                sum = Harmonics::Strict.tide_sum(engine.strict_astro_table, [tide('M2', 1.0, 100.0)])
+                events = engine.current_events_strict(m2_bin, t0, t1)
+                peaks = scan(->(t, y) { sum.derivative(t, y) })
+                slacks = scan(->(t, y) { sum.value(t, y) })
+                expect(peaks.size).to be >= 115
+                expect(slacks.size).to be >= 115
+                match(events.reject { |e| e['type'].start_with?('slack') }, peaks, { down: 'max_flood', up: 'max_ebb' })
+                match(events.select { |e| e['type'].start_with?('slack') }, slacks, { down: 'slack_before_ebb', up: 'slack_before_flood' })
+            end
+        end
+
         let(:m2) { tide('M2', 1.0, 100.0) }
         let(:t) { Time.utc(2026, 10, 9, 12) }
 
