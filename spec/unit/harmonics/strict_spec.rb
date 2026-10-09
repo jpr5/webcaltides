@@ -81,6 +81,17 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
             expect(code_of { engine.predict_strict([tide('S12', 1, 0)], [t2025], astro: nospeed) }).to eq('unsupported_constituent')
         end
 
+        # A negative speed made the slack bound M negative, so every step passed
+        # the root-free test and the slacks disappeared without an error.
+        it 'raises invalid_argument for a negative speed in a table row' do
+            negative = -> { raw_table('S12' => { 'speed_deg_per_hour' => -28.9841042, 'v0u_deg' => [0.0] * 31, 'f' => [1.0] * 31 }) }
+            expect(code_of { engine.predict_strict([tide('S12', 1, 0)], [t2025], astro: negative.call) }).to eq('invalid_argument')
+            expect(code_of { engine.extremes_strict([tide('S12', 1, 0)], t2025, t2025 + 2 * 86_400, astro: negative.call) }).to eq('invalid_argument')
+            expect(code_of { engine.current_events_strict(bin('S12', 1.0, 0.0), t2025, t2025 + 2 * 86_400, astro: negative.call) }).to eq('invalid_argument')
+            zero = raw_table('S12' => { 'speed_deg_per_hour' => 0.0, 'v0u_deg' => [0.0] * 31, 'f' => [1.0] * 31 })
+            expect(engine.predict_strict([tide('S12', 1, 0)], [t2025], astro: zero)).to eq([1.0])
+        end
+
         it 'raises invalid_argument for a nil or non-finite V0+u or f in a table row' do
             [[nil, 1.0], [Float::NAN, 1.0], [0.0, nil], [0.0, Float::INFINITY], ['1.0', 1.0]].each do |v0u, f|
                 code = code_of do

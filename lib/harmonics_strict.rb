@@ -186,7 +186,10 @@ module Harmonics
 
                 n = last_year - first_year + 1
                 rows.each_value do |row|
-                    Strict.number(row.speed, "speed of #{row.name}") unless row.speed.nil?
+                    # A speed is at least 0, as the format 1.0 schema requires of
+                    # every speed_deg_per_hour; a negative speed would make the
+                    # root-free bounds negative and drop events silently.
+                    Strict.non_negative(Strict.number(row.speed, "speed of #{row.name}"), "speed of #{row.name}") unless row.speed.nil?
                     unless row.v0u.is_a?(Array) && row.f.is_a?(Array) && row.v0u.size == n && row.f.size == n
                         Strict.invalid("astronomical table row #{row.name} must have #{n} V0+u and f values")
                     end
