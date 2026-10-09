@@ -14,8 +14,6 @@ RSpec.describe 'Demoted stations', type: :request do
         Server
     end
 
-    TICON_JSON = File.expand_path('../../data/ticon.json', __dir__)
-
     before(:all) do
         @dir    = Dir.mktmpdir
         @client = Clients::Harmonics.new(Logger.new('/dev/null'))
@@ -44,10 +42,20 @@ RSpec.describe 'Demoted stations', type: :request do
     end
 
     describe 'the list' do
-        it 'names only stations in the shipped data/ticon.json' do
-            shipped = JSON.parse(File.read(TICON_JSON))['stations'].map { |s| s['id'] }
-            expect(WebCalTides::DEMOTED_STATIONS.keys - shipped).to be_empty
-            expect(WebCalTides::DEMOTED_STATIONS.keys - @harmonics_stations.map(&:id)).to be_empty
+        # TICON ids (T + 7 hex digits) that are not in the shipped data/ticon.json.  Other ids (XTide,
+        # an agency, a current station) are not in that file; the startup check covers them.
+        def unshipped_ticon_ids(ids)
+            shipped = JSON.parse(File.read(File.expand_path('../../data/ticon.json', __dir__)))['stations'].map { |s| s['id'] }.to_set
+            ids.select { |id| id.match?(/\AT\h{7}\z/) && !shipped.include?(id) }
+        end
+
+        it 'names only TICON stations that are in the shipped data/ticon.json, as demoted or better' do
+            ids = WebCalTides::DEMOTED_STATIONS.flat_map { |id, entry| [id, entry[:better]] }
+            expect(unshipped_ticon_ids(ids)).to be_empty
+        end
+
+        it 'accepts XTide, agency and current-station ids, and rejects a TICON id that is not shipped' do
+            expect(unshipped_ticon_ids(%w[T6e11ade Xe1d6ce3 8443970 ACT1234_10 Tdeadbee])).to eq(['Tdeadbee'])
         end
 
         it 'gives a better station, a warning and the evidence for every entry' do
@@ -65,15 +73,61 @@ RSpec.describe 'Demoted stations', type: :request do
         end
     end
 
+    # Server.warm_caches, as at boot, on the shipped data
     describe 'startup check' do
-        it 'warns about a demoted id that is not in the loaded stations' do
-            stub_const('WebCalTides::DEMOTED_STATIONS', { 'T6e11ade' => {}, 'Tgone000' => {} })
-            allow(WebCalTides.logger).to receive(:warn)
+        let(:current) do
+            build_station(name: 'Test Current', id: 'C0000001', bid: 'C0000001_10', public_id: 'C0000001_10',
+                          provider: 'xtide', depth: 10)
+        end
 
-            WebCalTides.check_demoted_stations
+        before do
+            allow(WebCalTides).to receive(:get_harmonics_client).and_return(@client)
+            allow(WebCalTides).to receive(:current_stations).and_return([current])
+            allow(WebCalTides).to receive(:cleanup_old_cache_files)
+            allow($LOG).to receive(:error)
+            allow($LOG).to receive(:warn)
+        end
 
-            expect(WebCalTides.logger).to have_received(:warn).with(/Tgone000/).once
-            expect(WebCalTides.logger).not_to have_received(:warn).with(/T6e11ade/)
+        def warm_caches
+            Server.warm_caches.join
+        end
+
+        def entry(better)
+            { better: better, warning: 'w', evidence: 'e' }
+        end
+
+        it 'logs an error for each demoted or better id that is not loaded, and none for the shipped list' do
+            stub_const('WebCalTides::DEMOTED_STATIONS', {
+                'T6e11ade' => entry('Tdce40e9'), 'Tgone000' => entry('Tdce40e9'), 'Tdce40e9' => entry('Tlost000')
+            })
+            warm_caches
+
+            expect($LOG).to have_received(:error).with(/!! demoted station Tgone000 /).once
+            expect($LOG).to have_received(:error).with(/!! .*Tlost000/).once
+            expect($LOG).not_to have_received(:error).with(/T6e11ade/)
+            expect(WebCalTides).to have_received(:cleanup_old_cache_files)
+        end
+
+        it 'logs nothing for the shipped list' do
+            warm_caches
+            expect($LOG).not_to have_received(:error)
+        end
+
+        it 'matches a current station by its id, as demotion does, not by the id of one of its bins' do
+            stub_const('WebCalTides::DEMOTED_STATIONS', { 'C0000001' => entry('Tdce40e9'), 'C0000001_10' => entry('Tdce40e9') })
+            warm_caches
+
+            expect(WebCalTides.demoted_station?(current)).to be(true)
+            expect($LOG).to have_received(:error).with(/!! demoted station C0000001_10 /).once
+            expect($LOG).not_to have_received(:error).with(/!! demoted station C0000001 /)
+        end
+
+        it 'still cleans the cache when the check fails' do
+            allow(WebCalTides).to receive(:check_demoted_stations).and_raise(RuntimeError, 'boom')
+            warm_caches
+
+            expect(WebCalTides).to have_received(:cleanup_old_cache_files)
+            expect($LOG).to have_received(:error).with(/demoted station check failed: RuntimeError - boom/)
         end
     end
 
@@ -92,8 +146,19 @@ RSpec.describe 'Demoted stations', type: :request do
             by_id = cards.to_h { |c| [c[/data-station-id="([^"]+)"/, 1], c] }
 
             expect(by_id['T6e11ade']).to include('demotion-warning', 'about 1 h early', 'Tdce40e9')
-            expect(by_id['Tdce40e9']).not_to include('demotion-warning')
-            expect(by_id['T0000001']).not_to include('demotion-warning')
+            expect(by_id['Tdce40e9']).not_to include('1 h early')
+            expect(by_id['T0000001']).not_to include('1 h early')
+        end
+
+        # The warning follows the source picked in the card (Alpine's currentSource), so it shows when
+        # the demoted station is picked as an alternative
+        it 'binds the card warning to the selected source' do
+            post '/', { searchtext: 'vigo', units: 'metric' }
+            card = last_response.body.split('class="station-card ').drop(1).find { |c| c.include?('data-station-id="Tdce40e9"') }
+            warning = card[/<p[^>]*demotion-warning[^>]*>.*?<\/p>/m]
+
+            expect(warning).to include('x-show="currentSource?.warning"', 'x-text="currentSource?.warning"')
+            expect(warning).to include('style="display: none"')
         end
 
         it 'marks the demoted source in the source picker' do
@@ -114,27 +179,58 @@ RSpec.describe 'Demoted stations', type: :request do
     end
 
     describe 'feed' do
+        # Each example has its own cache, so none reads a feed another one wrote
+        let(:cache_dir) { Dir.mktmpdir }
+        after { FileUtils.rm_rf(cache_dir) }
+
+        # A calendar's DESCRIPTION is a list of values
+        def text(desc)
+            Array(desc).map(&:to_s).join("\n\n")
+        end
+
+        def feed(id)
+            get "/tides/#{id}.ics?solar=0"
+            expect(last_response.status).to eq(200)
+            Icalendar::Calendar.parse(last_response.body).first
+        end
+
         before do
             Timecop.freeze(Time.utc(2026, 11, 15, 12))
-            allow(Server.settings).to receive(:cache_dir).and_return(@dir)
+            allow(Server.settings).to receive(:cache_dir).and_return(cache_dir)
+            allow($LOG).to receive(:warn)
             allow(WebCalTides).to receive(:cleanup_if_month_changed)
             allow(WebCalTides).to receive(:tide_clients).and_wrap_original do |m, *args|
                 args.first.to_s.in?(%w[xtide ticon]) ? @client : m.call(*args)
             end
         end
 
-        it 'serves T6e11ade with the warning on the calendar and on every tide event' do
-            get '/tides/T6e11ade.ics?solar=0'
-            expect(last_response.status).to eq(200)
-
-            cal = Icalendar::Calendar.parse(last_response.body).first
+        it 'serves T6e11ade with the warning on the calendar (DESCRIPTION and X-WR-CALDESC) and on every tide event' do
+            cal = feed('T6e11ade')
             expect(cal.events).not_to be_empty
-            expect(cal.description.to_s).to include('about 1 h early', 'Tdce40e9')
+            expect(text(cal.description)).to include('about 1 h early', 'Tdce40e9', 'NOT FOR NAVIGATION')
+            expect(text(cal.description)).not_to include('["')
+            expect(cal.x_wr_caldesc.map(&:to_s)).to contain_exactly(include('about 1 h early', 'Tdce40e9'))
             expect(cal.events.map { |e| e.description.to_s }).to all(include('about 1 h early'))
         end
 
+        it 'logs each time it serves the feed, from the cache too' do
+            2.times { feed('T6e11ade') }
+            expect(Dir["#{cache_dir}/*T6e11ade*.ics"].length).to eq(1)
+            expect($LOG).to have_received(:warn).with(/serving demoted station T6e11ade/).twice
+        end
+
+        it 'serves the new warning, not a cached feed, when the entry changes' do
+            feed('T6e11ade')
+            stub_const('WebCalTides::DEMOTED_STATIONS', {
+                'T6e11ade' => WebCalTides::DEMOTED_STATIONS['T6e11ade'].merge(warning: 'Times here are under review')
+            })
+            cal = feed('T6e11ade')
+            expect(text(cal.description)).to include('Times here are under review')
+            expect(text(cal.description)).not_to include('about 1 h early')
+        end
+
         it 'does not serve a feed cached before the demotion' do
-            stale = "#{@dir}/tides_v#{Models::TideData.version}_T6e11ade_202611" \
+            stale = "#{cache_dir}/tides_v#{Models::TideData.version}_T6e11ade_202611" \
                     "#{WebCalTides.harmonics_cache_key(WebCalTides.tide_station_for('T6e11ade'))}_imperial_0_0.ics"
             File.write(stale, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:stale\r\nEND:VCALENDAR\r\n")
 
@@ -145,9 +241,33 @@ RSpec.describe 'Demoted stations', type: :request do
         end
 
         it 'serves Tdce40e9 without the warning' do
-            get '/tides/Tdce40e9.ics?solar=0'
-            expect(last_response.status).to eq(200)
+            feed('Tdce40e9')
             expect(last_response.body).not_to include('1 h early')
+        end
+
+        it 'puts the warning in an existing X-WR-CALDESC, once' do
+            cal = Icalendar::Calendar.new
+            cal.description = 'Source credit'
+            cal.append_custom_property('X-WR-CALDESC', 'Source credit')
+            cal.event { |e| e.summary = 'High Tide' }
+
+            WebCalTides.add_demotion_warning(cal, WebCalTides.tide_station_for('T6e11ade'))
+
+            expect(cal.custom_property('X-WR-CALDESC').map(&:to_s)).to eq([text(cal.description)])
+            expect(cal.to_ical.scan(/^X-WR-CALDESC/).length).to eq(1)
+            expect(text(cal.description)).to eq("Times at this station may be about 1 h early.  Use Vigo, ESP (Tdce40e9) instead.\n\nSource credit")
+        end
+    end
+
+    describe 'warning' do
+        it 'finds the better station without searching the station lists on each call' do
+            stations = WebCalTides.tide_stations
+            demoted  = stations.find { |s| s.id == 'T6e11ade' }
+            WebCalTides.demotion_warning(demoted)
+            allow(stations).to receive(:find).and_call_original
+
+            3.times { expect(WebCalTides.demotion_warning(demoted)).to include('Vigo, ESP (Tdce40e9)') }
+            expect(stations).not_to have_received(:find)
         end
     end
 

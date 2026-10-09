@@ -52,8 +52,13 @@ class Server < ::Sinatra::Base
                 elapsed = (Time.now - start).round(2)
                 $LOG.info "current stations cache warmed in #{elapsed}s"
 
-                # A demoted station that is not in the lists (e.g. its id changed with the data)
-                WebCalTides.check_demoted_stations
+                # A demoted or better station that is not in the lists (e.g. its id changed with the
+                # data).  A failure here doesn't stop the cache cleanup below.
+                begin
+                    WebCalTides.check_demoted_stations
+                rescue => e
+                    $LOG.error "demoted station check failed: #{e.class} - #{e.message}"
+                end
 
                 # Step 4: Clean old cache files
                 $LOG.info "cleaning old cache files"
@@ -449,8 +454,8 @@ class Server < ::Sinatra::Base
         version    = type == "currents" ? Models::CurrentData.version : Models::TideData.version
         station    = type == "currents" ? WebCalTides.current_station_for(id) : WebCalTides.tide_station_for(id)
         hkey       = WebCalTides.harmonics_cache_key(station) # "" unless harmonics-served
-        # A demoted station's feed carries a warning, so a feed cached before its demotion is not served
-        dkey       = WebCalTides.demoted_station?(station) ? "_demoted" : ""
+        # A demoted station's feed carries its warning, so a feed cached without it is not served
+        dkey       = WebCalTides.demotion_cache_key(station) # "" unless demoted
         cached_ics = "#{settings.cache_dir}/#{type}_v#{version}_#{id}_#{stamp}#{hkey}#{dkey}_#{units}_#{no_solar ?"0":"1"}_#{add_lunar ?"1":"0"}.ics"
 
         # Cleanup old cache files if month has changed (thread-safe)
@@ -492,6 +497,8 @@ class Server < ::Sinatra::Base
 
             ical
         end
+
+        $LOG.warn "serving demoted station #{id}: #{WebCalTides.demotion_warning(station)}" if dkey.present?
 
         content_type 'text/calendar', charset: 'utf-8'
         body ics

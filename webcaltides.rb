@@ -621,34 +621,66 @@ module WebCalTides
         return nil unless demoted_station?(station)
 
         entry  = DEMOTED_STATIONS[station.id]
-        better = tide_stations.find { |s| s.id == entry[:better] } ||
-                 current_stations.find { |s| s.id == entry[:better] || s.bid == entry[:better] }
+        better = demotion_better_stations[entry[:better]]
         name   = better ? "#{better.name} (#{entry[:better]})" : entry[:better]
 
         "#{entry[:warning]}.  Use #{name} instead."
     end
 
-    # Puts the demotion warning at the start of the calendar's description and of each event's
-    # description, so subscribers see it in their calendar.  Call it before solar and lunar events
-    # are added, which keep their own descriptions.
+    # { id => station } for the DEMOTED_STATIONS :better ids, by station id as demoted_station?
+    # matches.  Built once per pair of station lists, and again when either list is rebuilt.
+    def demotion_better_stations
+        lists = [tide_stations, current_stations]
+        key   = lists.map(&:object_id)
+        built = @demotion_better_stations
+        return built[1] if built && built[0] == key
+
+        wanted = DEMOTED_STATIONS.values.map { |entry| entry[:better] }.to_set
+        found  = {}
+        lists.each { |list| list.each { |s| found[s.id] ||= s if wanted.include?(s.id) } }
+        @demotion_better_stations = [key, found]
+        found
+    end
+
+    # Cache-key part for a demoted station's feed: a digest of the warning it carries, so a feed
+    # cached before the demotion, or before its warning or better station changed, is not served.
+    # "" for any other station.
+    def demotion_cache_key(station)
+        warning = demotion_warning(station) or return ""
+        "_demoted#{Digest::MD5.hexdigest(warning)[0, 8]}"
+    end
+
+    # Puts the demotion warning at the start of the calendar's description (DESCRIPTION, and
+    # X-WR-CALDESC, which Apple and Google Calendar show for a subscribed calendar) and of each
+    # event's description.  Call it before solar and lunar events are added, which keep their own
+    # descriptions.
     def add_demotion_warning(calendar, station)
         warning = demotion_warning(station) or return calendar
 
-        prepend = ->(desc) { [warning, desc.to_s.presence].compact.join("\n\n") }
+        # A calendar's DESCRIPTION and X-WR-CALDESC hold a list of values, an event's one value
+        prepend = ->(desc) { [warning, *Array(desc).map(&:to_s).reject(&:blank?)].join("\n\n") }
         calendar.description = prepend.(calendar.description)
+        # Stored under "x-wr-caldesc" when appended, "x_wr_caldesc" when parsed
+        keys    = %w[x-wr-caldesc x_wr_caldesc]
+        caldesc = prepend.(keys.flat_map { |k| calendar.custom_properties.delete(k) || [] })
+        calendar.append_custom_property('X-WR-CALDESC', caldesc)
         calendar.events.each { |e| e.description = prepend.(e.description) }
-        logger.warn "serving demoted station #{station.id}: #{warning}"
 
         calendar
     end
 
-    # Warns about every DEMOTED_STATIONS id that is not in the loaded station lists, where its
-    # demotion does nothing.  Called once the caches are warm at startup.
+    # Logs an error for every DEMOTED_STATIONS id, and every :better id, that is not a station id
+    # in the loaded station lists: its demotion does nothing, or its warning names a station that
+    # is not there.  Called at startup, once the station lists are loaded.  Returns the ids.
     def check_demoted_stations
-        loaded  = (tide_stations + current_stations).flat_map { |s| [s.id, s.bid] }.compact.to_set
+        loaded  = (tide_stations + current_stations).map(&:id).to_set
         missing = DEMOTED_STATIONS.keys.reject { |id| loaded.include?(id) }
-        missing.each { |id| logger.warn "!! demoted station #{id} is not in the loaded stations, so its demotion does nothing" }
-        missing
+        missing.each { |id| logger.error "!! demoted station #{id} is not in the loaded stations, so its demotion does nothing" }
+
+        lost = DEMOTED_STATIONS.reject { |_, entry| loaded.include?(entry[:better]) }
+        lost.each { |id, entry| logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in the loaded stations, so its warning names a missing station" }
+
+        missing + lost.values.map { |entry| entry[:better] }
     end
 
     # Computes time and height deltas between primary and each alternative
