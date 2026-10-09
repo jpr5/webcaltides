@@ -369,12 +369,23 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
     # so they are compared within 1e-9. That is far below the 3-decimal
     # precision of any published height and far below the smallest gap between
     # tcd output and this fixture (5e-4), so it still pins legacy output.
+    #
+    # Since the legacy corrections come from NodalSchureman (which matches the
+    # old code's V0+u, u and f to 1e-9 degrees; see nodal_oracle_spec.rb), peak
+    # times move by floating-point noise of up to ~1.3 microseconds. Peak times
+    # are compared within 10 microseconds; type, height and units exactly.
     describe 'legacy mode' do
         def match_hourly(golden)
             match(golden.map { |t, h| [t, be_within(1e-9).of(h)] })
         end
 
-        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 (peaks exactly, hourly heights to 1e-9)' do
+        def match_peaks(golden)
+            match(golden.map do |t, type, h, units|
+                [satisfy("within 1e-5 s of #{t}") { |got| (Time.parse("#{got} UTC") - Time.parse("#{t} UTC")).abs <= 1e-5 }, type, h, units]
+            end)
+        end
+
+        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 (peaks to 1e-5 s, hourly heights to 1e-9)' do
             golden = JSON.parse(File.read("#{fixtures}/legacy_e441ec9_events.json"))
             t0, t1 = golden['window'].map { |w| Time.parse("#{w} UTC") }
             Dir.mktmpdir do |dir|
@@ -382,7 +393,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     engine = described_class.new(logger, dir)
                     golden['stations'].each do |id, g|
                         hourly = engine.generate_predictions(id, Time.utc(2026, 12, 31, 12), Time.utc(2027, 1, 1, 12), step_seconds: 3600)
-                        expect(events(engine, id, t0, t1)).to eq(g['peaks']), "peaks differ for #{id}"
+                        expect(events(engine, id, t0, t1)).to match_peaks(g['peaks']), "peaks differ for #{id}"
                         expect(hourly.map { |p| [fmt[p['time']], p['height']] }).to match_hourly(g['hourly']), "heights differ for #{id}"
                     end
                 end

@@ -1,0 +1,18 @@
+webcaltides
+Copyright (c) Jordan Ritter. Licensed under the Elastic License 2.0 with an
+Additional Use Grant; see LICENSE.
+
+lib/nodal_schureman.rb (NodalSchureman)
+Copyright (c) 2026 Jordan Ritter. MIT License; the terms are in the file's
+header.
+
+NodalSchureman computes node factors (f) and equilibrium arguments (V0 + u)
+for 13 tidal constituents. It is an independent implementation, written from
+P. Schureman, "Manual of Harmonic Analysis and Prediction of Tides", U.S. Coast
+and Geodetic Survey Special Publication No. 98 (public domain), via a written
+functional specification. It was made in a clean-room process: one party wrote
+the specification and a test oracle, and a separate party, who did not read
+the earlier webcaltides code or any GPL tide code (libcongen, congen or XTide),
+wrote the implementation from the specification and SP98 alone. It is not
+derived from any other program's source code. See
+docs/nodal-cleanroom/PROVENANCE.md.

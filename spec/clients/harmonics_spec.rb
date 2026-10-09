@@ -608,9 +608,9 @@ RSpec.describe Clients::Harmonics do
     end
 
     describe 'TCD constituent loading bug fix' do
-        # Bug: When TCD file loads, it overwrites @constituent_definitions for all constituents
-        # including BASES constituents (M2, S2, etc), removing their v/u arrays
-        # This causes NoMethodError when calculating nodal factors
+        # Bug: loading the TCD file overwrote @constituent_definitions, which the
+        # engine's own nodal calculation then failed on with NoMethodError.  The
+        # calculation (NodalSchureman) no longer reads @constituent_definitions.
         context 'when harmonics data files exist' do
             around do |example|
                 original_xtide = ENV['XTIDE_FILE']
@@ -628,8 +628,8 @@ RSpec.describe Clients::Harmonics do
 
             it 'can calculate nodal factors after loading TCD data' do
                 # This test reproduces the production bug:
-                # 1. Load TCD file (overwrites BASES constituent definitions)
-                # 2. Try to calculate nodal factors (fails because v/u are nil)
+                # 1. Load TCD file (overwrites the constituent definitions)
+                # 2. Try to calculate nodal factors (failed on the overwritten definitions)
 
                 # Load stations to trigger TCD parsing
                 stations = client.tide_stations
