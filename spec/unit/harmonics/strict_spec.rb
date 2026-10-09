@@ -605,6 +605,78 @@ RSpec.describe Harmonics::Engine, 'strict mode' do
         end
     end
 
+    # The format 1.0 schema's ranges (otc-1.0.schema.json, SHA-256 e27d5f6b...):
+    # amplitudes and amplitude ratios have minimum 0; phases and directions
+    # (direction_deg) are in [0, 360).  The strict mode refuses what the schema
+    # refuses, and accepts the bounds it allows.
+    describe 'schema ranges, field by field' do
+        let(:astro) { table('S12' => [30.0]) }
+        let(:t0) { Time.utc(2025, 6, 1) }
+        let(:t1) { Time.utc(2025, 6, 2) }
+        let(:base_bin) { bin('S12', 1.0, 15.0, 'mean_flood_dir_deg' => 0.0, 'mean_ebb_dir_deg' => 180.0) }
+        let(:current_offset) do
+            { 'time_adj_max_flood_min' => 30, 'time_adj_max_ebb_min' => 20, 'time_adj_slack_before_flood_min' => -15,
+              'time_adj_slack_before_ebb_min' => 45, 'flood_amp_ratio' => 0.8, 'ebb_amp_ratio' => 0.7,
+              'mean_flood_dir_deg' => 12.0, 'mean_ebb_dir_deg' => 190.0 }
+        end
+
+        def with_constituent(key, value)
+            b = base_bin.dup
+            b['constituents'] = [b['constituents'].first.merge(key => value)]
+            b
+        end
+
+        { 'amplitude_m' => [[-0.1], [0.0]], 'phase_deg' => [[-1.0, 360.0], [0.0, 359.999]] }.each do |key, (bad, good)|
+            it "refuses set constituent #{key} #{bad.join(' or ')} and accepts #{good.join(' and ')}" do
+                c = tide('S12', 1.0, 15.0)
+                bad.each do |v|
+                    expect(code_of { engine.predict_strict([c.merge(key => v)], [t0], astro: astro) }).to eq('invalid_argument'), v.inspect
+                    expect(code_of { engine.subordinate_extremes_strict([c.merge(key => v)], 2.0, { 'height_adjusted_type' => 'R' }, t0, t1, astro: astro) }).to eq('invalid_argument'), v.inspect
+                end
+                good.each { |v| expect(engine.predict_strict([c.merge(key => v)], [t0], astro: astro).size).to eq(1) }
+            end
+        end
+
+        { 'major_amplitude_ms' => [[-0.1], [0.0]], 'minor_amplitude_ms' => [[-0.1], [0.0]],
+          'major_phase_deg' => [[-1.0, 360.0], [0.0, 359.999]], 'minor_phase_deg' => [[-1.0, 360.0], [0.0, 359.999]] }.each do |key, (bad, good)|
+            it "refuses current constituent #{key} #{bad.join(' or ')} and accepts #{good.join(' and ')}" do
+                bad.each do |v|
+                    expect(code_of { engine.currents_strict(with_constituent(key, v), [t0], astro: astro) }).to eq('invalid_argument'), v.inspect
+                    expect(code_of { engine.current_events_strict(with_constituent(key, v), t0, t1, astro: astro) }).to eq('invalid_argument'), v.inspect
+                end
+                good.each { |v| expect(engine.currents_strict(with_constituent(key, v), [t0], astro: astro).size).to eq(1) }
+            end
+        end
+
+        %w[azimuth_deg mean_flood_dir_deg mean_ebb_dir_deg].each do |key|
+            it "refuses current_bin #{key} -1 or 360 and accepts 0 and 359.999" do
+                [-1.0, 360.0].each do |v|
+                    expect(code_of { engine.currents_strict(base_bin.merge(key => v), [t0], astro: astro) }).to eq('invalid_argument'), v.inspect
+                    expect(code_of { engine.current_events_strict(base_bin.merge(key => v), t0, t1, astro: astro) }).to eq('invalid_argument'), v.inspect
+                end
+                [0.0, 359.999].each { |v| expect(engine.currents_strict(base_bin.merge(key => v), [t0], astro: astro).size).to eq(1) }
+            end
+        end
+
+        %w[mean_flood_dir_deg mean_ebb_dir_deg].each do |key|
+            it "refuses current_offset #{key} -1 or 360 and accepts 0 and 359.999" do
+                [-1.0, 360.0].each do |v|
+                    expect(code_of { engine.subordinate_current_events_strict(base_bin, current_offset.merge(key => v), t0, t1, astro: astro) }).to eq('invalid_argument'), v.inspect
+                end
+                [0.0, 359.999].each do |v|
+                    expect(engine.subordinate_current_events_strict(base_bin, current_offset.merge(key => v), t0, t1, astro: astro)['events']).not_to be_empty
+                end
+            end
+        end
+
+        %w[flood_amp_ratio ebb_amp_ratio].each do |key|
+            it "refuses current_offset #{key} -0.1 and accepts 0" do
+                expect(code_of { engine.subordinate_current_events_strict(base_bin, current_offset.merge(key => -0.1), t0, t1, astro: astro) }).to eq('invalid_argument')
+                expect(engine.subordinate_current_events_strict(base_bin, current_offset.merge(key => 0), t0, t1, astro: astro)['omitted_event_types']).to eq([])
+            end
+        end
+    end
+
     describe 'with the shipped TCD' do
         let(:m2) { tide('M2', 1.0, 100.0) }
         let(:t) { Time.utc(2026, 10, 9, 12) }

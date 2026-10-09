@@ -17,9 +17,10 @@ module Harmonics
     # - a constituent with no table row, or any evaluated instant (grid padding
     #   included) in a year outside the table, raises Strict::Error and is never
     #   skipped or predicted in legacy mode;
-    # - every input is checked where it enters: a missing key, a nil, a String
-    #   or a non-finite number raises invalid_argument, never a NaN or an empty
-    #   result;
+    # - every input is checked where it enters: a missing key, a nil, a String,
+    #   a non-finite number or a value outside the format 1.0 schema's range
+    #   (amplitudes and ratios at least 0, phases and directions in [0, 360))
+    #   raises invalid_argument, never a NaN or an empty result;
     # - extremes, current maxima and slacks come from the specified search
     #   (6-minute grid, root-free subdivision to 0.703125 s, bisection to 0.01 s,
     #   New Year reconciliation, close-root filter, rounding to whole seconds).
@@ -62,6 +63,27 @@ module Harmonics
             x
         end
 
+        # The schema's ranges: minimum 0 (amplitudes, ratios), and [0, 360)
+        # (phases and directions, the schema's direction_deg).
+        def self.non_negative(x, what)
+            invalid("#{what} must be at least 0, got #{x.inspect}") if x.negative?
+            x
+        end
+
+        def self.degrees(x, what)
+            invalid("#{what} must be in [0, 360), got #{x.inspect}") unless x >= 0 && x < 360
+            x
+        end
+
+        # A number in a schema range (:min0 or :deg), or the number as is.
+        def self.ranged(x, what, range)
+            case range
+            when :min0 then non_negative(x, what)
+            when :deg then degrees(x, what)
+            else x
+            end
+        end
+
         def self.hash_arg(h, what)
             invalid("#{what} must be a Hash, got #{h.class}") unless h.is_a?(Hash)
             h
@@ -72,23 +94,23 @@ module Harmonics
             a
         end
 
-        # A required number.
-        def self.required(h, key, what)
+        # A required number, in the schema range if one is given.
+        def self.required(h, key, what, range = nil)
             invalid("#{what} has no #{key}") unless h.key?(key)
-            number(h[key], "#{what} #{key}")
+            ranged(number(h[key], "#{what} #{key}"), "#{what} #{key}", range)
         end
 
         # An optional number: absent gives default; an explicit null is an error.
-        def self.optional(h, key, what, default = nil)
+        def self.optional(h, key, what, default = nil, range = nil)
             return default unless h.key?(key)
 
-            number(h[key], "#{what} #{key}")
+            ranged(number(h[key], "#{what} #{key}"), "#{what} #{key}", range)
         end
 
         # A required key whose value may be null (a current offset).
-        def self.nullable(h, key, what)
+        def self.nullable(h, key, what, range = nil)
             invalid("#{what} has no #{key}") unless h.key?(key)
-            h[key].nil? ? nil : number(h[key], "#{what} #{key}")
+            h[key].nil? ? nil : ranged(number(h[key], "#{what} #{key}"), "#{what} #{key}", range)
         end
 
         # Seconds since the epoch, exactly, from a Time or a finite number.
@@ -265,7 +287,7 @@ module Harmonics
                 invalid("#{what} has constituent #{name} twice") if names[name]
 
                 names[name] = true
-                [name, required(c, amp_key, "#{what} constituent #{name}"), required(c, phase_key, "#{what} constituent #{name}")]
+                [name, required(c, amp_key, "#{what} constituent #{name}", :min0), required(c, phase_key, "#{what} constituent #{name}", :deg)]
             end
         end
 
@@ -473,9 +495,9 @@ module Harmonics
             consts = bin['constituents']
             major = Sum.new(table, terms(consts, 'the current bin', 'major_amplitude_ms', 'major_phase_deg'))
             minor = Sum.new(table, terms(consts, 'the current bin', 'minor_amplitude_ms', 'minor_phase_deg'))
-            azimuth = required(bin, 'azimuth_deg', 'the current bin')
-            flood = optional(bin, 'mean_flood_dir_deg', 'the current bin')
-            ebb = optional(bin, 'mean_ebb_dir_deg', 'the current bin')
+            azimuth = required(bin, 'azimuth_deg', 'the current bin', :deg)
+            flood = optional(bin, 'mean_flood_dir_deg', 'the current bin', nil, :deg)
+            ebb = optional(bin, 'mean_ebb_dir_deg', 'the current bin', nil, :deg)
             {
                 major: major, minor: minor,
                 sigma: flood.nil? || Math.cos((azimuth - flood) * Math::PI / 180.0) >= 0 ? 1 : -1,
@@ -651,9 +673,10 @@ module Harmonics
             hash_arg(offset, 'current_offset')
             what = 'current_offset'
             values = CURRENT_OFFSET_KEYS.to_h do |type, (adj, ratio)|
-                [type, [nullable(offset, adj, what), ratio && nullable(offset, ratio, what)]]
+                [type, [nullable(offset, adj, what), ratio && nullable(offset, ratio, what, :min0)]]
             end
-            directions = { 'max_flood' => optional(offset, 'mean_flood_dir_deg', what), 'max_ebb' => optional(offset, 'mean_ebb_dir_deg', what) }
+            directions = { 'max_flood' => optional(offset, 'mean_flood_dir_deg', what, nil, :deg),
+                            'max_ebb' => optional(offset, 'mean_ebb_dir_deg', what, nil, :deg) }
             current_bin(table, ref_bin)
             start, stop = window(start, stop)
 
