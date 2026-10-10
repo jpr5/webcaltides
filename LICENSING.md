@@ -12,6 +12,12 @@ webcaltides is licensed under the [Elastic License 2.0](https://www.elastic.co/l
 
 - **Sell webcaltides, or offer it to third parties as a hosted or managed service.** You can't take webcaltides and sell it, or run it as a service for other people or organizations.
 
+## Clean-room code (MIT exception)
+
+The Elastic License 2.0 above covers every file except one:
+
+- `lib/nodal_schureman.rb` is licensed under the MIT License (Copyright (c) 2026 Jordan Ritter; full text in [LICENSES/MIT-nodal_schureman.txt](LICENSES/MIT-nodal_schureman.txt)), not under the Elastic License 2.0 above. It is an independent implementation, written from a written functional specification and from SP98 (public domain). Its implementer read only the specification, the test oracle, three pages of SP98 and general Ruby documentation, and received the coordinator's messages, which summarised the reviewers' requests and contained no code. The implementer read no webcaltides file, no reviewer's report and no GPL tide code. A mistaken listing of a shared scratch directory showed file names only. It replaces engine code that was derived from libcongen (GPLv3). The functional specification is held by the copyright holder and is available on request. It is identified by its SHA-256, `4457ec58c3fce39c67971a2351898e2655bb5fbf49cc88dec65f17e5a0b1ad9b`, and is not in this repository by design. See [NOTICE](NOTICE) and [docs/nodal-cleanroom/PROVENANCE.md](docs/nodal-cleanroom/PROVENANCE.md).
+
 ## Third-party data
 
 Some files in this repository are not covered by the licence above. They keep their own terms:

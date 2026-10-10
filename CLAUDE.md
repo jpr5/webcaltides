@@ -17,7 +17,8 @@ webcaltides/
 │   ├── harmonics.rb    # XTide/TICON harmonics engine wrapper
 │   └── lunar.rb        # Lunar phase calculations
 ├── lib/
-│   └── harmonics_engine.rb  # XTide harmonics calculation engine
+│   ├── harmonics_engine.rb  # XTide harmonics calculation engine
+│   └── nodal_schureman.rb   # SP98 nodal corrections, clean-room (docs/nodal-cleanroom/)
 ├── models/             # Data structures (Station, TideData, CurrentData)
 ├── views/              # ERB templates
 ├── public/             # Static assets

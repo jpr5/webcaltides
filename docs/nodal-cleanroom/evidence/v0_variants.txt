@@ -1,0 +1,23 @@
+$ ruby docs/nodal-cleanroom/evidence/v0_variants.rb
+# cwd: repo root; sha256 lib/nodal_schureman.rb=c4177b3dc6d88b21bcc6b6d7f931916a3ada213e92dca459e84faab50b42f675 spec/unit/nodal_schureman_spec.rb=04c5eec78dbcc481ff14706d444c2f2c8798f1d55aa027f3eb58d43600b4cf4c spec/fixtures/harmonics/nodal_oracle.json=236929d0c62da30b6b2cbed0d7322a466afd3e77ef4889b595bab0bdd04f7367
+1  exact    worst df=4.91e-14 du=8.41e-12 dV0+u=1.853e-09 | points failing 1e-9 on all fields: 11 | failing (f,u 1e-9; V0+u 4e-9): 0
+             ["Q1", 1650, 7, 2, 12, -5.0] dV0+u=1.146e-09
+             ["N2", 2101, 3, 15, 12, 9.5] dV0+u=1.128e-09
+             ["Q1", 2200, 7, 2, 12, -5.0] dV0+u=1.034e-09
+             ["N2", 2300, 7, 2, 12, 0.0] dV0+u=1.104e-09
+             ["N2", 2300, 3, 15, 12, 9.5] dV0+u=1.183e-09
+             ["NU2", 2400, 12, 31, 12, 0.0] dV0+u=1.329e-09
+             ["N2", 2400, 7, 2, 12, -5.0] dV0+u=1.117e-09
+             ["M2", 2400, 3, 15, 12, 9.5] dV0+u=1.013e-09
+             ["N2", 2400, 3, 15, 12, 9.5] dV0+u=1.711e-09
+             ["NU2", 2400, 3, 15, 12, 9.5] dV0+u=1.853e-09
+             ["Q1", 2400, 3, 15, 12, 9.5] dV0+u=1.060e-09
+2a dbl-mul  worst df=4.91e-14 du=8.41e-12 dV0+u=1.863e-09 | points failing 1e-9 on all fields: 1 | failing (f,u 1e-9; V0+u 4e-9): 0
+             ["N2", 2300, 7, 2, 12, -5.0] dV0+u=1.863e-09
+2b dbl-div  worst df=4.91e-14 du=8.41e-12 dV0+u=1.863e-09 | points failing 1e-9 on all fields: 1 | failing (f,u 1e-9; V0+u 4e-9): 0
+             ["N2", 2300, 7, 2, 12, -5.0] dV0+u=1.863e-09
+3  shipped  worst df=4.91e-14 du=8.41e-12 dV0+u=1.973e-09 | points failing 1e-9 on all fields: 3 | failing (f,u 1e-9; V0+u 4e-9): 0
+             ["Q1", 1600, 3, 15, 12, 9.5] dV0+u=1.134e-09
+             ["N2", 2300, 7, 2, 12, -5.0] dV0+u=1.973e-09
+             ["NU2", 2300, 7, 2, 12, -5.0] dV0+u=1.042e-09
+script exit=0

@@ -1,0 +1,9 @@
+$ sh docs/nodal-cleanroom/evidence/red_stub.sh
+# cwd: repo root; sha256 lib/nodal_schureman.rb=c4177b3dc6d88b21bcc6b6d7f931916a3ada213e92dca459e84faab50b42f675 spec/unit/nodal_schureman_spec.rb=04c5eec78dbcc481ff14706d444c2f2c8798f1d55aa027f3eb58d43600b4cf4c spec/fixtures/harmonics/nodal_oracle.json=236929d0c62da30b6b2cbed0d7322a466afd3e77ef4889b595bab0bdd04f7367
+rspec ./spec/unit/nodal_schureman_spec.rb:52 # NodalSchureman covers exactly the 13 spec constituents
+rspec './spec/unit/nodal_schureman_spec.rb[1:4:1]' # NodalSchureman oracle points K1   1600-07-02 H=12 m=+0.0
+rspec './spec/unit/nodal_schureman_spec.rb[1:4:2]' # NodalSchureman oracle points K2   1600-07-02 H=12 m=+0.0
+...
+783 examples, 781 failures
+rspec exit=1
+script exit=0
