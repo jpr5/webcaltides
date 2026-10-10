@@ -608,9 +608,9 @@ RSpec.describe Clients::Harmonics do
     end
 
     describe 'TCD constituent loading bug fix' do
-        # Bug: When TCD file loads, it overwrites @constituent_definitions for all constituents
-        # including BASES constituents (M2, S2, etc), removing their v/u arrays
-        # This causes NoMethodError when calculating nodal factors
+        # Bug: loading the TCD file overwrote @constituent_definitions, which the
+        # engine's own nodal calculation then failed on with NoMethodError.  The
+        # calculation (NodalSchureman) no longer reads @constituent_definitions.
         context 'when harmonics data files exist' do
             around do |example|
                 original_xtide = ENV['XTIDE_FILE']
@@ -628,17 +628,22 @@ RSpec.describe Clients::Harmonics do
 
             it 'can calculate nodal factors after loading TCD data' do
                 # This test reproduces the production bug:
-                # 1. Load TCD file (overwrites BASES constituent definitions)
-                # 2. Try to calculate nodal factors (fails because v/u are nil)
+                # 1. Load TCD file (overwrites the constituent definitions)
+                # 2. Try to calculate nodal factors (failed on the overwritten definitions)
 
                 # Load stations to trigger TCD parsing
                 stations = client.tide_stations
                 expect(stations).not_to be_empty
 
-                # Try to get nodal factors - this should not raise NoMethodError
+                # Computed nodal factors after the TCD load must not raise. 2101 is
+                # outside the TCD table, so this reaches NodalSchureman even in
+                # the default tcd mode (2026 would use the TCD tables instead).
+                expect(NodalSchureman).to receive(:compute).and_call_original
+                factors = nil
                 expect {
-                    client.engine.send(:get_nodal_factors, 2026, 2, 3, 0.0, 12)
+                    factors = client.engine.send(:get_nodal_factors, 2101, 2, 3, 0.0, 12)
                 }.not_to raise_error
+                expect(factors.keys).to match_array(NodalSchureman::CONSTITUENTS)
             end
 
             it 'generates peaks for XTide station without errors' do

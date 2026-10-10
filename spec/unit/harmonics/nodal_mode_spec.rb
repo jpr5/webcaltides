@@ -74,12 +74,13 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
         let(:t0) { Time.utc(2026, 12, 30) }
         let(:t1) { Time.utc(2027, 1, 2) }
 
-        # v4 cache files were written by the code before the level adds and the "<id>@<type>" keys.
-        it 'bumps the station cache and engine to v5' do
-            expect(described_class::CACHE_VERSION).to eq(5)
-            expect(described_class::ENGINE_VERSION).to eq(5)
-            expect(described_class.cache_key_component('tcd')).to eq('hA5tcd')
-            expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v5_\h{8}_\h{8}\.json\z})
+        # v4 cache files were written by the code before the level adds and the "<id>@<type>" keys;
+        # v5 station, nodal and prediction caches by the libcongen-derived nodal code.
+        it 'has the station cache and the engine at v6' do
+            expect(described_class::CACHE_VERSION).to eq(6)
+            expect(described_class::ENGINE_VERSION).to eq(6)
+            expect(described_class.cache_key_component('tcd')).to eq('hA6tcd')
+            expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v6_\h{8}_\h{8}\.json\z})
         end
 
         it 'writes tcd nodal files when HARMONICS_NODAL is invalid' do
@@ -87,7 +88,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                 with_mode('legcy') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                 expect(nodal).not_to be_empty
-                expect(nodal).to all(start_with('nodal_factors_v5_tcd_'))
+                expect(nodal).to all(start_with('nodal_factors_v6_tcd_'))
             end
         end
 
@@ -97,8 +98,8 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     with_mode(mode) { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                     nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                     expect(nodal).not_to be_empty
-                    expect(nodal).to all(start_with("nodal_factors_v5_#{mode}_"))
-                    expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v5_'))
+                    expect(nodal).to all(start_with("nodal_factors_v6_#{mode}_"))
+                    expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v6_'))
                 end
             end
         end
@@ -107,7 +108,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             Dir.mktmpdir do |dir|
                 with_mode('tcd') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 tcd_sum = described_class.new(logger, dir).source_files_checksum.split('_').first
-                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v5_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v5_tcd_t#{tcd_sum}_2027_0.0.json])
+                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v6_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v6_tcd_t#{tcd_sum}_2027_0.0.json])
             end
         end
 
@@ -130,13 +131,14 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             end
         end
 
-        # A prod-like dir holds unversioned and v4 nodal files and the v2, v3 and
-        # v4 station caches written by older code (v3 holds a current's name
+        # A prod-like dir holds unversioned and v4 nodal files and the v2 to v5
+        # station caches written by older code (v3 holds a current's name
         # depth as its datum offset; v4 files written before the level adds and
-        # "<id>@<type>" keys lack them). Poison them: they must never be read,
-        # and the output must equal a run from an empty dir.
+        # "<id>@<type>" keys lack them; v5 files hold the GPL-derived BASES
+        # fields). Poison them: they must never be read, and the output must
+        # equal a run from an empty dir.
         %w[tcd legacy].each do |mode|
-            it "never reads pre-v5 cache files (#{mode})" do
+            it "never reads pre-v6 station caches or pre-v5 nodal files (#{mode})" do
                 Dir.mktmpdir do |empty|
                     Dir.mktmpdir do |prod|
                         stale = []
@@ -151,7 +153,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                             stale << f
                             File.write(f, { 'M2' => { 'f' => 50.0, 'u' => 90.0, 'V0' => 90.0 } }.to_json)
                         end
-                        %w[v2 v3 v4].each do |v|
+                        %w[v2 v3 v4 v5].each do |v|
                             f = "#{prod}/xtide_stations_#{v}_#{checksum}.json"
                             stale << f
                             File.write(f, '{"poisoned": ')
@@ -163,7 +165,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                             expect(events(described_class.new(logger, prod), 'X49eee41', t0, t1)).to eq(expected)
                         end
                         stale.each { |s| expect(File).not_to have_received(:read).with(s, any_args) }
-                        expect(Dir.children(prod)).to include(a_string_starting_with('xtide_stations_v5_'))
+                        expect(Dir.children(prod)).to include(a_string_starting_with('xtide_stations_v6_'))
                     end
                 end
             end
@@ -369,12 +371,26 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
     # so they are compared within 1e-9. That is far below the 3-decimal
     # precision of any published height and far below the smallest gap between
     # tcd output and this fixture (5e-4), so it still pins legacy output.
+    #
+    # Since the legacy corrections come from NodalSchureman (which matches the
+    # old code's f and u to 1e-9 and V0+u to 4e-9 degrees for the oracle's
+    # meridian shifts, all binary fractions of an hour; see
+    # nodal_oracle_spec.rb), peak times move by floating-point rounding. The
+    # largest measured move over these 4 stations is 1.249 microseconds (hourly
+    # heights: 2.1e-11), so peak times are compared within 2.5 microseconds;
+    # type, height and units exactly.
     describe 'legacy mode' do
         def match_hourly(golden)
             match(golden.map { |t, h| [t, be_within(1e-9).of(h)] })
         end
 
-        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 (peaks exactly, hourly heights to 1e-9)' do
+        def match_peaks(golden)
+            match(golden.map do |t, type, h, units|
+                [satisfy("within 2.5e-6 s of #{t}") { |got| (Time.parse("#{got} UTC") - Time.parse("#{t} UTC")).abs <= 2.5e-6 }, type, h, units]
+            end)
+        end
+
+        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 (peaks to 2.5e-6 s, hourly heights to 1e-9)' do
             golden = JSON.parse(File.read("#{fixtures}/legacy_e441ec9_events.json"))
             t0, t1 = golden['window'].map { |w| Time.parse("#{w} UTC") }
             Dir.mktmpdir do |dir|
@@ -382,7 +398,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     engine = described_class.new(logger, dir)
                     golden['stations'].each do |id, g|
                         hourly = engine.generate_predictions(id, Time.utc(2026, 12, 31, 12), Time.utc(2027, 1, 1, 12), step_seconds: 3600)
-                        expect(events(engine, id, t0, t1)).to eq(g['peaks']), "peaks differ for #{id}"
+                        expect(events(engine, id, t0, t1)).to match_peaks(g['peaks']), "peaks differ for #{id}"
                         expect(hourly.map { |p| [fmt[p['time']], p['height']] }).to match_hourly(g['hourly']), "heights differ for #{id}"
                     end
                 end

@@ -4,6 +4,7 @@ require 'date'
 require 'active_support/all'
 require 'digest'
 require 'tcd'
+require_relative 'nodal_schureman'
 
 module Harmonics
     class Engine
@@ -19,33 +20,6 @@ module Harmonics
         NOAA_STATION_TYPES_FILE = File.expand_path('../data/noaa_station_types.json', __dir__)
 
         attr_reader :speeds, :stations_cache, :xtide_file, :ticon_file, :logger, :nodal_mode
-
-        # Astronomical constants from SP 98 Table 1 (via libcongen)
-        # These are fixed for the 1900 epoch to match the harmonic data
-        OBLIQUITY = 23.0 + 27.0/60.0 + 8.26/3600.0 # omega (degrees)
-        LUNAR_INCLINATION = 5.0 + 8.0/60.0 + 43.3546/3600.0 # i (degrees)
-        DAYS_PER_JULIAN_CENTURY = 36525.0
-        SECONDS_PER_JULIAN_CENTURY = 3155760000.0
-        TABLE_1_EPOCH = Time.find_zone('UTC').local(1899, 12, 31, 12, 0, 0)
-
-        # Base constituents for compound calculations (from libcongen)
-        # Order matching libcongen.cc: O1, K1, P1, M2, S2, N2, L2, K2, Q1, nu2, S1, M1-DUTCH, lambda2
-        BASES_ORDER = ['O1', 'K1', 'P1', 'M2', 'S2', 'N2', 'L2', 'K2', 'Q1', 'NU2', 'S1', 'M1', 'LDA2']
-        BASES = {
-            'O1' => { 'type' => 'Basic', 'v' => [1, -2, 1, 0, 0, 90], 'u' => [2, -1, 0, 0, 0, 0, 0], 'f_formula' => 75 },
-            'K1' => { 'type' => 'Basic', 'v' => [1, 0, 1, 0, 0, -90], 'u' => [0, 0, -1, 0, 0, 0, 0], 'f_formula' => 227 },
-            'P1' => { 'type' => 'Basic', 'v' => [1, 0, -1, 0, 0, 90], 'u' => [0, 0, 0, 0, 0, 0, 0], 'f_formula' => 1 },
-            'M2' => { 'type' => 'Basic', 'v' => [2, -2, 2, 0, 0, 0], 'u' => [2, -2, 0, 0, 0, 0, 0], 'f_formula' => 78 },
-            'S2' => { 'type' => 'Basic', 'v' => [2, 0, 0, 0, 0, 0], 'u' => [0, 0, 0, 0, 0, 0, 0], 'f_formula' => 1 },
-            'N2' => { 'type' => 'Basic', 'v' => [2, -3, 2, 1, 0, 0], 'u' => [2, -2, 0, 0, 0, 0, 0], 'f_formula' => 78 },
-            'L2' => { 'type' => 'Basic', 'v' => [2, -1, 2, -1, 0, 180], 'u' => [2, -2, 0, 0, 0, -1, 0], 'f_formula' => 215 },
-            'K2' => { 'type' => 'Basic', 'v' => [2, 0, 2, 0, 0, 0], 'u' => [0, 0, 0, -1, 0, 0, 0], 'f_formula' => 235 },
-            'Q1' => { 'type' => 'Basic', 'v' => [1, -3, 1, 1, 0, 90], 'u' => [2, -1, 0, 0, 0, 0, 0], 'f_formula' => 75 },
-            'NU2' => { 'type' => 'Basic', 'v' => [2, -3, 4, -1, 0, 0], 'u' => [2, -2, 0, 0, 0, 0, 0], 'f_formula' => 78 },
-            'S1' => { 'type' => 'Basic', 'v' => [1, 0, 0, 0, 0, 0], 'u' => [0, 0, 0, 0, 0, 0, 0], 'f_formula' => 1 },
-            'M1' => { 'type' => 'Basic', 'v' => [1, -1, 1, 1, 0, -90], 'u' => [0, -1, 0, 0, 0, 0, -1], 'f_formula' => 206 },
-            'LDA2' => { 'type' => 'Basic', 'v' => [2, -1, 0, 1, 0, 180], 'u' => [2, -2, 0, 0, 0, 0, 0], 'f_formula' => 78 }
-        }
 
         def initialize(logger, cache_dir = nil)
             @logger = logger
@@ -175,7 +149,11 @@ module Harmonics
         # stored under "<id>@<type>" (see cache_entry).
         # v5: the level adds and "<id>@<type>" keys came after v4 cache files
         # had been written by the code before them, which those files lack.
-        CACHE_VERSION = 5
+        # v6: v5 files were written by the GPL-derived nodal code, which stored
+        # its own table fields ('v', 'u', 'f_formula') in constituent_definitions;
+        # they are rebuilt, not kept (constituent_definitions now holds only
+        # each constituent's type and speed).
+        CACHE_VERSION = 6
 
         # Engine version - increment when prediction output changes for the same
         # input data. Part of every nodal-factor cache file name and of
@@ -191,13 +169,21 @@ module Harmonics
         # predicted from their own data (v3 used the current's).
         # v5: the level adds and the 5 tides' own data came after v4 output had
         # been cached by the code before them.
-        ENGINE_VERSION = 5
+        # v6: the computed nodal corrections (legacy mode, and years outside the
+        # TCD table) come from NodalSchureman, not the GPL-derived code it replaced,
+        # so nothing that code computed or cached is served. Output differs only
+        # by floating-point rounding (peak times by microseconds). For valid
+        # inputs, tcd output for years inside the table is unchanged; a nodal
+        # hour outside 0..24 (or not an Integer) or a date that does not exist
+        # now raises ArgumentError in every mode.
+        ENGINE_VERSION = 6
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
         #   tcd    (default) - TCD per-year equilibrium argument (V0+u) and node
         #                      factor (f) for every constituent, as XTide does.
-        #   legacy - engine computes V0/u/f for the 13 BASES only; every other
-        #            constituent runs with V0=0, u=0, f=1 (pre-version-3 output).
+        #   legacy - engine computes V0/u/f (NodalSchureman, from SP98) for the 13
+        #            constituents it covers; every other constituent runs with
+        #            V0=0, u=0, f=1 (pre-version-3 output).
         NODAL_MODES = %w[tcd legacy].freeze
         DEFAULT_NODAL_MODE = 'tcd'
 
@@ -215,7 +201,7 @@ module Harmonics
         end
 
         # Short string naming the engine version and nodal mode ("hA" +
-        # ENGINE_VERSION + mode, e.g. "hA5tcd"),
+        # ENGINE_VERSION + mode, e.g. "hA6tcd"),
         # for callers to put in harmonics tide/currents cache file names. It holds
         # no "_20dddd" token, so it cannot shadow a file name's datestamp.
         def self.cache_key_component(mode = nodal_mode)
@@ -330,8 +316,8 @@ module Harmonics
                 # Formula: V = V0 + speed * t + u - phase
                 # meridian_offset is east-positive hours (e.g. -5 for EST). t is
                 # measured from Jan 1 00:00 UTC + meridian_offset hours, the instant
-                # V0 is computed for (calculate_nodal_factors; calculate_tcd_nodal_factors
-                # shifts V0 to match).
+                # V0 is computed for (calculate_nodal_factors via NodalSchureman;
+                # calculate_tcd_nodal_factors shifts V0 to match).
                 t -= meridian_offset
 
                 constituents.each do |c|
@@ -340,7 +326,7 @@ module Harmonics
                     next unless speed
 
                     # tcd mode covers every constituent in the TCD (in-range years);
-                    # legacy mode covers only the 13 BASES; anything else runs
+                    # legacy mode covers only NodalSchureman's 13; anything else runs
                     # with f=1, u=0, V0=0.
                     nf = nodal[name] || { 'f' => 1.0, 'u' => 0.0, 'V0' => 0.0 }
                     # arg = (speed * t + (V0 + u) - phase)
@@ -894,24 +880,10 @@ module Harmonics
                     const_names << const.name
                     @speeds[const.name] = const.speed
 
-                    # If constituent exists in BASES, copy v/u arrays from there
-                    # Otherwise create a basic definition with just speed and f_formula
-                    if BASES[const.name]
-                        # Copy the full definition from BASES (includes v, u, f_formula)
-                        @constituent_definitions[const.name] = BASES[const.name].dup
-                        # Override speed with TCD value in case it's more precise
-                        @constituent_definitions[const.name]['speed'] = const.speed
-                    else
-                        # For non-BASES constituents, create basic definition
-                        # Legacy nodal mode computes no factors for these; tcd mode
-                        # takes them from the TCD per-year tables instead.
-                        f_formula = map_constituent_to_formula(const.name)
-                        @constituent_definitions[const.name] = {
-                            'type' => 'Basic',
-                            'speed' => const.speed,
-                            'f_formula' => f_formula
-                        }
-                    end
+                    # Only the speed is kept: nodal corrections come from the TCD
+                    # per-year tables (tcd mode) or NodalSchureman (legacy mode and
+                    # years outside the TCD table).
+                    @constituent_definitions[const.name] = { 'type' => 'Basic', 'speed' => const.speed }
                 end
 
                 # Store all stations first for reference lookups
@@ -1099,25 +1071,6 @@ module Harmonics
 
         # Helper methods for TCD parsing
 
-        # Map constituent name to SP 98 formula number
-        def map_constituent_to_formula(name)
-            # Use existing BASES mapping if available
-            return BASES[name]['f_formula'] if BASES[name]
-
-            # Default formulas for common constituents not in BASES
-            formula_map = {
-                'SA' => 1, '2SM' => 78, 'MSF' => 78, 'MF' => 74, 'MM' => 73,
-                '2Q1' => 75, 'SIGMA1' => 75, 'RHO1' => 75, 'M11' => 76,
-                'M12' => 78, 'CHI1' => 75, 'PI1' => 1, 'PHI1' => 75,
-                'THETA1' => 75, 'J1' => 76, 'OO1' => 77, '2MK3' => 149,
-                'M3' => 149, 'MK3' => 149, 'MN4' => 78, 'MS4' => 78,
-                'MK4' => 78, 'SN4' => 78, 'S4' => 1, 'SK4' => 78,
-                '2MN6' => 78, 'M6' => 78, '2MS6' => 78, '2MK6' => 78,
-                '2SM6' => 78, 'MSK6' => 78
-            }
-            formula_map[name] || 1  # Default to formula 1
-        end
-
         # Convert TCD zone_offset (HHMM integer) to "HH:MM:SS" string
         def format_zone_offset(hhmm_int)
             return "00:00:00" if hhmm_int.nil? || hhmm_int.zero?
@@ -1254,8 +1207,10 @@ module Harmonics
         # Returns { name => { 'f', 'u', 'V0' } } for the given UTC day.
         # tcd mode: one table per year (TCD values do not vary within a year).
         # legacy mode (and tcd mode for a year outside the TCD table): per-day
-        # engine calculation (the 13 BASES only).
+        # engine calculation by NodalSchureman (its 13 constituents only).
         def get_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
+            check_nodal_instant(year, month, day, nodal_hour)
+
             if @nodal_mode == 'tcd' && tcd_nodal_year?(year)
                 key = "tcd_#{year}_#{meridian_offset}"
                 return @nodal_factors_cache[key] ||= load_nodal_cache(tcd_nodal_cache_file(year, meridian_offset)) || begin
@@ -1271,6 +1226,25 @@ module Harmonics
                 save_nodal_cache(nodal_cache_file(year, month, day, meridian_offset, nodal_hour), factors)
                 factors
             end
+        end
+
+        # A bad caller value (e.g. scripts/predict.rb --nodal-hour 30, or a date
+        # that does not exist) raises ArgumentError in every nodal mode, before
+        # any cache is read. NodalSchureman itself computes for any hour and
+        # raises Date::Error for a bad date. The removed Time#local-based code
+        # raised for an hour outside 0..24, truncated a fractional hour (12.7
+        # became 12), parsed an integer String hour ("12" became 12), raised
+        # for a non-integer String ("12.7"), and treated nil as hour 0. For
+        # dates, it rolled a day past the end of a month
+        # (up to day 31) into the next month (2026-02-30 became 2026-03-02),
+        # but raised for month 13, day 0 or day 32.
+        def check_nodal_instant(year, month, day, nodal_hour)
+            unless nodal_hour.is_a?(Integer) && (0..24).cover?(nodal_hour)
+                raise ArgumentError, "nodal hour must be an Integer in 0..24, got #{nodal_hour.inspect}"
+            end
+            return if Date.valid_date?(year, month, day, Date::GREGORIAN)
+
+            raise ArgumentError, "no such date: #{year}-#{month}-#{day}"
         end
 
         # Versioned prefix for nodal cache files: engine version + nodal mode.
@@ -1373,6 +1347,11 @@ module Harmonics
             end
         end
 
+        # V0 (at Jan 1 00:00 UTC + meridian_offset hours), and u and f (at
+        # year-month-day nodal_hour:00 UTC + meridian_offset hours), for the 13
+        # constituents NodalSchureman covers, in degrees. NodalSchureman reduces
+        # V0 and u modulo 360 (the removed code did not); only V0 + u modulo 360
+        # reaches a prediction.
         def calculate_nodal_factors(year, month = 7, day = 2, meridian_offset = 0.0, nodal_hour = 12)
             # Only log once per month to reduce verbosity
             month_key = "#{year}-#{month}_#{meridian_offset}_#{nodal_hour}"
@@ -1381,31 +1360,8 @@ module Harmonics
                 @logged_nodal_months[month_key] = true
             end
 
-            # Use noon of the specific day as the representative epoch
-            # Nodal factors are traditionally calculated for Local Standard Time midnight or noon.
-            t_mid = Time.find_zone('UTC').local(year, month, day, nodal_hour, 0, 0) + meridian_offset.hours
-            t_start = Time.find_zone('UTC').local(year, 1, 1, 0, 0, 0) + meridian_offset.hours
-
-            # Fundamental arguments at start of year (for V0) and mid-day (for u and f)
-            arg_start = astronomical_arguments(t_start)
-            arg_mid = astronomical_arguments(t_mid)
-
-            factors = {}
-
-            # Pre-populate bases to ensure they are available for compound constituents
-            BASES.each do |name, d|
-                factors[name] = calculate_basic_factors(d, arg_start, arg_mid)
-            end
-
-            @constituent_definitions.each do |name, d|
-                if d['type'] == 'Basic' && d['v'] && d['u']
-                    # Only calculate factors for Basic constituents that have v/u arrays
-                    factors[name] = calculate_basic_factors(d, arg_start, arg_mid)
-                elsif d['type'] == 'Compound'
-                    factors[name] = calculate_compound_factors(d, factors)
-                end
-            end
-            factors
+            NodalSchureman.compute(year, month: month, day: day, hour: nodal_hour, shift_hours: meridian_offset)
+                          .transform_values { |r| { 'f' => r[:f], 'u' => r[:u], 'V0' => r[:v0] } }
         end
 
         def parse_meridian(m)
@@ -1417,147 +1373,5 @@ module Harmonics
             # If a meridian IS present, we apply it.
             (parts[0] + (parts[1] || 0.0)/60.0 + (parts[2] || 0.0)/3600.0) * sign
         end
-
-        def astronomical_arguments(t)
-            # T = Julian centuries since 1899-12-31 12:00 UTC
-            cap_t = (t - TABLE_1_EPOCH) / SECONDS_PER_JULIAN_CENTURY
-            t2 = cap_t * cap_t
-            t3 = t2 * cap_t
-
-            # Exact high-precision SP 98 Table 1 formulas (matching libcongen.cc)
-            s  = (270.0 + 26.0/60.0 + 14.72/3600.0) +
-                 (1336.0 * 360.0 + 1108411.2/3600.0) * cap_t +
-                 (9.09/3600.0) * t2 +
-                 (0.0068/3600.0) * t3
-
-            h  = (279.0 + 41.0/60.0 + 48.04/3600.0) +
-                 (129602768.13/3600.0) * cap_t +
-                 (1.089/3600.0) * t2
-
-            p  = (334.0 + 19.0/60.0 + 40.87/3600.0) +
-                 (11.0 * 360.0 + 392515.94/3600.0) * cap_t -
-                 (37.24/3600.0) * t2 -
-                 (0.045/3600.0) * t3
-
-            p1 = (281.0 + 13.0/60.0 + 15.0/3600.0) +
-                 (6189.03/3600.0) * cap_t +
-                 (1.63/3600.0) * t2 +
-                 (0.012/3600.0) * t3
-
-            n  = (259.0 + 10.0/60.0 + 57.12/3600.0) -
-                 (5.0 * 360.0 + 482912.63/3600.0) * cap_t +
-                 (7.58/3600.0) * t2 +
-                 (0.008/3600.0) * t3
-
-            # tau (hour angle of mean sun)
-            d = (t - TABLE_1_EPOCH) / 86400.0
-            tau = (d * 360.0) % 360.0
-
-            { 's' => s, 'h' => h, 'p' => p, 'p1' => p1, 'N' => n, 'tau' => tau }
-        end
-
-        def calculate_basic_factors(d, arg_start, arg_mid)
-            v_coeffs = d['v'] # [T, s, h, p, p1, c]
-            u_coeffs = d['u'] # [xi, nu, nu', 2nu'', Q, R, Qu]
-            f_formula = d['f_formula']
-
-            # V0 at start of year
-            # V = T*tau + s*s + h*h + p*p + p1*p1 + c
-            # Note: tau in definitions is the coefficient of T (hour angle)
-            v0 = v_coeffs[0] * arg_start['tau'] +
-                 v_coeffs[1] * arg_start['s'] +
-                 v_coeffs[2] * arg_start['h'] +
-                 v_coeffs[3] * arg_start['p'] +
-                 v_coeffs[4] * arg_start['p1'] +
-                 v_coeffs[5]
-
-            # u and f at mid-year
-            # Need derived arguments: I, xi, nu, etc.
-            n = arg_mid['N']
-            p = arg_mid['p']
-
-            # Derived arguments from N (degrees)
-            cos_i = cosd(OBLIQUITY) * cosd(LUNAR_INCLINATION) - sind(OBLIQUITY) * sind(LUNAR_INCLINATION) * cosd(n)
-            cap_i = acosd(cos_i)
-            sin_i = sind(cap_i)
-
-            sin_nu = sind(LUNAR_INCLINATION) * sind(n) / sin_i
-            nu = asind(sin_nu)
-
-            sin_omega = sind(OBLIQUITY) * sind(n) / sin_i
-            cos_omega = cosd(n) * cosd(nu) + sind(n) * sind(nu) * cosd(OBLIQUITY)
-            xi = n - atan2d(sin_omega, cos_omega)
-
-            nu_prime = atan2d(sind(2 * cap_i) * sind(nu), sind(2 * cap_i) * cosd(nu) + 0.3347)
-            two_nu_double_prime = atan2d(sin_i * sin_i * sind(2 * nu), sin_i * sin_i * cosd(2 * nu) + 0.0727)
-
-            big_p = p - xi
-            q = atan2d(0.483 * sind(big_p), cosd(big_p))
-            qu = big_p - q
-            qa = 1.0 / Math.sqrt(2.31 + 1.435 * cosd(2 * big_p))
-
-            # R and Ra for L2
-            cot_i_2 = 1.0 / Math.tan(cap_i / 2.0 * Math::PI / 180.0)
-            r_arg = atan2d(sind(2 * big_p), (cot_i_2 * cot_i_2 / 6.0) - cosd(2 * big_p))
-            tan_i_2 = Math.tan(cap_i / 2.0 * Math::PI / 180.0)
-            ra = 1.0 / Math.sqrt(1.0 - 12.0 * tan_i_2 * tan_i_2 * cosd(2 * big_p) + 36.0 * tan_i_2**4)
-
-            # u terms vector
-            u_terms = [xi, nu, nu_prime, two_nu_double_prime, q, r_arg, qu]
-            u = 0.0
-            u_coeffs.each_with_index { |c, i| u += c * u_terms[i] if i < u_terms.length }
-
-            # Node factor f
-            f = case f_formula
-                when 1   then 1.0
-                when 73  then (2.0/3.0 - sind(cap_i)**2) / 0.5021
-                when 74  then sind(cap_i)**2 / 0.1578
-                when 75  then sind(cap_i) * cosd(cap_i/2.0)**2 / 0.38
-                when 76  then sind(2.0 * cap_i) / 0.7214
-                when 77  then sind(cap_i) * sind(cap_i/2.0)**2 / 0.0164
-                when 78  then cosd(cap_i/2.0)**4 / 0.9154
-                when 79  then sind(cap_i)**2 / 0.1565
-                when 144 then (1.0 - 10.0 * sind(cap_i/2.0)**2 + 15.0 * sind(cap_i/2.0)**4) * cosd(cap_i/2.0)**2 / 0.5873
-                when 149 then cosd(cap_i/2.0)**6 / 0.8758
-                when 206 then (sind(cap_i) * cosd(cap_i/2.0)**2 / 0.38) / qa
-                when 215 then (cosd(cap_i/2.0)**4 / 0.9154) / ra
-                when 227 then Math.sqrt(0.8965 * sind(2.0 * cap_i)**2 + 0.6001 * sind(2.0 * cap_i) * cosd(nu) + 0.1006)
-                when 235 then Math.sqrt(19.0444 * sind(cap_i)**4 + 2.7702 * sind(cap_i)**2 * cosd(2.0 * nu) + 0.0981)
-                else 1.0
-                end
-
-            { 'f' => f, 'u' => u, 'V0' => v0 }
-        end
-
-        def calculate_compound_factors(d, factors_so_far)
-            coeffs = d['coefficients']
-            # Compound constituents use the 13 bases
-
-            f = 1.0
-            u = 0.0
-            v0 = 0.0
-
-            coeffs.each_with_index do |c, i|
-                next if c == 0.0 || i >= BASES_ORDER.length
-                base_name = BASES_ORDER[i]
-                base_f = factors_so_far[base_name]
-
-                if base_f
-                    f *= (base_f['f'] ** c.abs)
-                    u += c * base_f['u']
-                    v0 += c * base_f['V0']
-                end
-            end
-
-            { 'f' => f, 'u' => u, 'V0' => v0 }
-        end
-
-        # Trig helpers in degrees
-        def sind(deg) Math.sin(deg * Math::PI / 180.0) end
-        def cosd(deg) Math.cos(deg * Math::PI / 180.0) end
-        def tand(deg) Math.tan(deg * Math::PI / 180.0) end
-        def asind(x)  Math.asin(x) * 180.0 / Math::PI end
-        def acosd(x)  Math.acos(x) * 180.0 / Math::PI end
-        def atan2d(y, x) Math.atan2(y, x) * 180.0 / Math::PI end
     end
 end
