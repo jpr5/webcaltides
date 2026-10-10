@@ -306,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     card_id = "tide_#{r.id}"
                     # Build sources array for all cards (needed for dynamic URLs)
                     sources_json = ([r] + alternatives).map { |s|
-                        { id: s.id, provider: s.provider.upcase, publicId: s.public_id, url: s.url }
+                        { id: s.id, provider: s.provider.upcase, publicId: s.public_id, url: s.url, warning: WebCalTides.demotion_warning(s) }
                     }.to_json
                     # Static map URL (Google Maps, Geoapify, or nil for placeholder)
                     map_url = static_map_url(lat: r.lat, lon: r.lon, accent_color: '0x0ea5e9')
@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     # Build sources array for all cards (needed for dynamic URLs)
                     # Include depth, publicId, and url for current stations to support depth selector
                     sources_json = ([r] + alternatives).map { |s|
-                        { id: s.bid, provider: s.provider.upcase, depth: s.depth&.to_i, publicId: s.bid, url: s.url }
+                        { id: s.bid, provider: s.provider.upcase, depth: s.depth&.to_i, publicId: s.bid, url: s.url, warning: WebCalTides.demotion_warning(s) }
                     }.to_json
                     # Compute unique depths and check if we need a depth selector
                     all_sources = [r] + alternatives

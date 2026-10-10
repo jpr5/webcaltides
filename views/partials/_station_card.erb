@@ -51,6 +51,10 @@
             <h3 class="text-lg md:text-xl font-semibold text-white leading-tight mb-3">
                 <%= Rack::Utils.escape_html(station.name) %>
             </h3>
+            <%# A station known to be wrong (WebCalTides::DEMOTED_STATIONS): shown for the primary, and
+                for whichever source is selected in the picker %>
+            <% demotion_warning = WebCalTides.demotion_warning(station) %>
+            <p class="demotion-warning -mt-2 mb-3 text-amber-400 text-xs" x-show="currentSource?.warning"<%= ' style="display: none"' unless demotion_warning %>>⚠ <span x-text="currentSource?.warning"><%= Rack::Utils.escape_html(demotion_warning.to_s) %></span></p>
 
             <!-- Map, Details, and Source selectors row -->
             <div class="flex gap-3">

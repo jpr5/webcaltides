@@ -105,6 +105,33 @@ module WebCalTides
     # - Currents: TICON has no coverage in US waters; XTide is the only harmonic option
     PROVIDER_HIERARCHY = %w[noaa chs bsh kartverket linz imi rws xtide ticon].freeze
 
+    # Stations whose predictions are known to be wrong.  A demoted station is never the primary of
+    # a group, and search lists its group after the others.  It stays in the results and its feed
+    # still works, but its card, its entry in the source picker and its feed say what is wrong and
+    # name the better station (:better).  check_demoted_stations warns at startup about an id that
+    # is not in the loaded stations (TICON ids come from coordinates, so a data update can change
+    # them).
+    DEMOTED_STATIONS = {
+        # Vigo, ESP (Oct 2026): TICON's T6e11ade (42.233, -8.733) and Tdce40e9 (42.238, -8.730) are
+        # 0.6 km apart, so search shows two cards.  T6e11ade has the TICON-3 constants of the UHSLC
+        # Vigo record (vigo-208a-esp-uhslc_rq, 1943-1990; TICON-3 labels it gesla.ispra), whose
+        # timestamps are 1 h early: against the IEO Vigo observations (vigo-vigo-esp-ieo) the record
+        # lags -60.0 min in 99% of 570 months.  Tdce40e9 has the TICON-3 constants of the CMEMS
+        # VigoTG record (gesla.usgs row at 42.243, 351.274; 1992-2021), placed at the IEO gauge's
+        # position by scripts/build_ticon_dataset.rb.  T6e11ade minus Tdce40e9: phases M2 -60.3,
+        # S2 -62.3, K1 -58.1, O1 -60.8 min; high and low waters over November 2026 median -60.5 min
+        # (-61.6 to -58.1, 115 events).  T6e11ade minus the IEO TICON-3 row (gesla.noaa, 42.238,
+        # 351.270; 1943-2015): M2 -61.7, S2 -62.7, K1 -62.8, O1 -63.4 min.
+        'T6e11ade' => {
+            type:     :tide,
+            better:   'Tdce40e9',
+            warning:  'Times at this station may be about 1 h early',
+            evidence: 'Built from the UHSLC Vigo record (1943-1990), whose timestamps are 1 h early (-60.0 min ' \
+                      'against IEO Vigo in 99% of 570 months).  Its high and low waters come a median 60.5 min ' \
+                      'before those of Tdce40e9 (CMEMS VigoTG, 1992-2021) in November 2026.'
+        }.freeze
+    }.freeze
+
     # Timezone fallback mappings for offshore stations where GeoNames returns nil
     US_STATE_TIMEZONES = {
         # Pacific
@@ -576,7 +603,7 @@ module WebCalTides
     def select_primary_and_alternatives(group)
         sorted = group.sort_by do |station|
             provider = (station.provider || 'unknown').downcase
-            PROVIDER_HIERARCHY.index(provider) || 999
+            [demoted_station?(station) ? 1 : 0, PROVIDER_HIERARCHY.index(provider) || 999]
         end
 
         StationGroup.new(
@@ -584,6 +611,133 @@ module WebCalTides
             alternatives: sorted[1..] || [],
             deltas: {}  # Populated lazily via compute_variance
         )
+    end
+
+    # A station is demoted when DEMOTED_STATIONS has its id with its type, so a tide entry never
+    # demotes a current station with the same id (XTide has some), and the reverse
+    def demoted_station?(station)
+        return false if station.nil?
+
+        entry = DEMOTED_STATIONS[station.id] or return false
+        demotion_type(station.id, entry) == station_type(station)
+    end
+
+    # :current for a current station, :tide for a tide station.  Every current station has a bid
+    # (its id with the depth bin, or the id when there is no bin) and no tide station has one, as
+    # the views and the feed route already assume.
+    def station_type(station)
+        station.bid ? :current : :tide
+    end
+
+    # The entry's :type, which must be :tide or :current
+    def demotion_type(id, entry)
+        type = entry[:type]
+        return type if type.in?(%i[tide current])
+
+        raise ArgumentError, "DEMOTED_STATIONS[#{id.inspect}] :type must be :tide or :current, not #{type.inspect}"
+    end
+
+    # "<warning>.  Use <better station> instead." for a demoted station, nil for any other
+    def demotion_warning(station)
+        return nil unless demoted_station?(station)
+
+        entry  = DEMOTED_STATIONS[station.id]
+        better = demotion_better_stations(entry[:type])[entry[:better]]
+        name   = better ? "#{better.name} (#{entry[:better]})" : entry[:better]
+
+        "#{entry[:warning]}.  Use #{name} instead."
+    end
+
+    # The station list a DEMOTED_STATIONS entry's ids are in (:type is :tide or :current)
+    def demotion_station_list(type)
+        case type
+        when :tide    then tide_stations
+        when :current then current_stations
+        else raise ArgumentError, "DEMOTED_STATIONS :type must be :tide or :current, not #{type.inspect}"
+        end
+    end
+
+    # Bumped by remove_tide_station and remove_current_station, which change a list in place
+    def demotion_list_version(type)
+        (@demotion_list_versions ||= Hash.new(0))[type]
+    end
+
+    # { id => station } for the :better ids of the DEMOTED_STATIONS entries of one type, found in
+    # the list of that type only, by station id as demoted_station? matches.  Built once per list,
+    # again when the list is replaced, and after remove_tide_station or remove_current_station
+    # changes it in place: a table is kept with the list's version from before the build, so one
+    # built across a removal is not used after it.  A :better id that is not in the list is logged
+    # once per build.
+    def demotion_better_stations(type)
+        version = demotion_list_version(type)
+        list    = demotion_station_list(type)
+        built   = (@demotion_better_stations ||= {})[type]
+        return built[2] if built && built[0].equal?(list) && built[1] == version
+
+        entries = DEMOTED_STATIONS.select { |_, entry| entry[:type] == type }
+        wanted  = entries.values.map { |entry| entry[:better] }.to_set
+        found   = {}
+        list.each { |s| found[s.id] ||= s if wanted.include?(s.id) }
+        entries.each do |id, entry|
+            next if found.key?(entry[:better])
+            logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in the #{type} station list (#{list.length} stations), so its warning names a missing station"
+        end
+
+        @demotion_better_stations[type] = [list, version, found]
+        found
+    end
+
+    # Cache-key part for a demoted station's feed: a digest of the warning it carries, so a feed
+    # cached before the demotion, or before its warning or better station changed, is not served.
+    # "" for any other station.
+    def demotion_cache_key(station, warning = demotion_warning(station))
+        return "" unless warning
+
+        "_demoted#{Digest::MD5.hexdigest(warning)[0, 8]}"
+    end
+
+    # Puts the demotion warning at the start of the calendar's description (DESCRIPTION, and
+    # X-WR-CALDESC, which Apple and Google Calendar show for a subscribed calendar) and of each
+    # event's description.  Call it before solar and lunar events are added, which keep their own
+    # descriptions.
+    def add_demotion_warning(calendar, station, warning = demotion_warning(station))
+        return calendar unless warning
+
+        # A calendar's DESCRIPTION and X-WR-CALDESC hold a list of values, an event's one value
+        prepend = ->(desc) { [warning, *Array(desc).map(&:to_s).reject(&:blank?)].join("\n\n") }
+        calendar.description = prepend.(calendar.description)
+        # Stored under "x-wr-caldesc" when appended, "x_wr_caldesc" when parsed
+        keys    = %w[x-wr-caldesc x_wr_caldesc]
+        caldesc = prepend.(keys.flat_map { |k| calendar.custom_properties.delete(k) || [] })
+        calendar.append_custom_property('X-WR-CALDESC', caldesc)
+        calendar.events.each { |e| e.description = prepend.(e.description) }
+
+        calendar
+    end
+
+    # Logs an error for every DEMOTED_STATIONS id, and every :better id, that is not a station id
+    # in the station list of the entry's type as loaded at startup: its demotion does nothing, or
+    # its warning names a station that is not there, while that list is served.  Called at
+    # startup, once the station lists are loaded.  Also logs an entry whose id is in the other
+    # type's list too, where only the station of the entry's type is demoted.  Returns the ids.
+    def check_demoted_stations
+        lists = %i[tide current].to_h { |type| [type, demotion_station_list(type)] }
+        ids   = lists.transform_values { |list| list.map(&:id).to_set }
+        where = ->(type) { "the #{type} station list loaded at startup (#{lists[type].length} stations)" }
+
+        missing = DEMOTED_STATIONS.reject { |id, entry| ids.fetch(entry[:type]).include?(id) }
+        missing.each { |id, entry| logger.error "!! demoted station #{id} is not in #{where.(entry[:type])}, so its demotion does nothing while that list is served" }
+
+        lost = DEMOTED_STATIONS.reject { |_, entry| ids.fetch(entry[:type]).include?(entry[:better]) }
+        lost.each { |id, entry| logger.error "!! better station #{entry[:better]} for demoted station #{id} is not in #{where.(entry[:type])}, so its warning names a missing station while that list is served" }
+
+        both = DEMOTED_STATIONS.select { |id, entry| ids.fetch(entry[:type] == :tide ? :current : :tide).include?(id) }
+        both.each do |id, entry|
+            other = entry[:type] == :tide ? :current : :tide
+            logger.error "!! demoted station #{id} (#{entry[:type]}) has the same id as a station in #{where.(other)}; only the #{entry[:type]} station is demoted"
+        end
+
+        missing.keys + lost.values.map { |entry| entry[:better] }
     end
 
     # Computes time and height deltas between primary and each alternative
@@ -649,6 +803,8 @@ module WebCalTides
     # Set compute_deltas: false for faster initial search results
     def group_search_results(stations, compute_deltas: false, match_depth: false, around: Time.current.utc)
         groups = group_stations_by_proximity(stations, match_depth: match_depth)
+        # Demoted stations after the others, in their order (see DEMOTED_STATIONS)
+        groups = groups.partition { |group| !demoted_station?(group.primary) }.flatten(1)
 
         if compute_deltas
             groups.each do |group|
@@ -790,6 +946,8 @@ module WebCalTides
         # Under the lock, so a rebuild can't swap the list between the removal and the write
         @@tide_stations_mutex.synchronize do
             @tide_stations.delete_if { |s| s.id == station_id }
+            # The list changed in place, so a table of better stations built from it is not used again
+            (@demotion_list_versions ||= Hash.new(0))[:tide] += 1
             # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
             cache_tide_stations(stations:@tide_stations) unless @tide_stations_retry_at
         end
@@ -1309,6 +1467,8 @@ module WebCalTides
         # Under the lock, so a rebuild can't swap the list between the removal and the write
         @@current_stations_mutex.synchronize do
             @current_stations.delete_if { |s| s.id == station_id }
+            # The list changed in place, so a table of better stations built from it is not used again
+            (@demotion_list_versions ||= Hash.new(0))[:current] += 1
             # An incomplete list is never cached; it's rebuilt (with this station) on the next retry
             cache_current_stations(stations:@current_stations) unless @current_stations_retry_at
         end
