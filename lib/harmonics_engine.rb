@@ -1375,3 +1375,5 @@ module Harmonics
         end
     end
 end
+
+require_relative 'harmonics_strict'
