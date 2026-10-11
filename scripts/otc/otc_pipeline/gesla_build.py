@@ -105,17 +105,23 @@ def audit_dump(audit_dir: Path, dump) -> dict:
     before MA2 and MB2 were added). Anything else, a manifest without it, or a file that is no longer the one the
     audit hashed, stops the build: the audit, the fits and the agency sets read one table. The second case is exact: the audit's dump is of
     the XTide TCD the OTC TCD is made from (astro_tables.SOURCE_TCD_SHA256), the build's of the OTC TCD, and the rows
-    the audit's lacks are exactly the OTC additions (astro_tables.OTC_ADDED)."""
+    the audit's lacks are exactly the OTC additions (astro_tables.OTC_ADDED). The dump is read from its pinned copy
+    in the audit dir (pinned_audit_dump) when there is one, else from the path the manifest records."""
     m = json.loads((Path(audit_dir) / "timebase_manifest.json").read_text())
     rec = (m.get("inputs") or {}).get("tcd_table")
     if not rec or not rec.get("path") or not rec.get("sha256"):
         raise SystemExit(f"{audit_dir}: the audit manifest names no TCD dump (inputs.tcd_table)")
     if rec["sha256"] == dump.sha256:
         return {"path": rec["path"], "sha256": rec["sha256"], "relation": "same"}
-    path = Path(rec["path"])
-    if not path.is_file() or _sha256(path) != rec["sha256"]:
+    path, pinned = Path(rec["path"]), pinned_audit_dump(audit_dir, rec["sha256"])
+    if pinned.exists():
+        if _sha256(pinned) != rec["sha256"]:
+            raise SystemExit(f"{pinned}: the pinned copy of the audit's TCD dump is not the dump it read ({rec['sha256']})")
+        path = pinned
+    elif not path.is_file() or _sha256(path) != rec["sha256"]:
         raise SystemExit(f"{audit_dir}: the audit read the TCD dump {path} ({rec['sha256']}), another than the build's "
-                         f"{dump.path} ({dump.sha256}), and that file is not there as the audit hashed it")
+                         f"{dump.path} ({dump.sha256}), and that file is not there as the audit hashed it (pin the "
+                         f"audit's exact dump as {pinned.name} in the audit dir)")
     data, mine = json.loads(path.read_bytes()), json.loads(Path(dump.path).read_bytes())
     other = sorted(n for n, c in data["constituents"].items() if mine["constituents"].get(n) != c)
     not_read = sorted(set(mine["constituents"]) - set(data["constituents"]))
@@ -131,7 +137,15 @@ def audit_dump(audit_dir: Path, dump) -> dict:
     if why:
         raise SystemExit(f"{audit_dir}: the audit read the TCD dump {path} ({rec['sha256']}), another table than the "
                          f"build's {dump.path} ({dump.sha256}): " + "; ".join(why))
-    return {"path": rec["path"], "sha256": rec["sha256"], "relation": "rows of the build's", "rows_not_read": not_read}
+    return {"path": _path(path), "recorded_path": rec["path"], "sha256": rec["sha256"],
+            "relation": "rows of the build's", "rows_not_read": not_read}
+
+
+def pinned_audit_dump(audit_dir: Path, sha256: str) -> Path:
+    """Where the audit's exact TCD dump is pinned: `tcd_table.<sha256>.json` in the audit dir. The audits record the
+    shared $OTC_WORK/tcd_table.json, which a later dump would overwrite; audit_dump reads the pinned copy first (it
+    must hash to what the audit recorded)."""
+    return Path(audit_dir) / f"tcd_table.{sha256}.json"
 
 
 def check_reviewed_withhold(verdicts_dir: Path, final: gs.Audit, withhold_path: Path | None = None) -> dict:

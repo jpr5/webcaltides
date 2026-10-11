@@ -269,8 +269,8 @@ def test_an_audit_on_the_rows_of_the_build_dump_is_recorded(fakes):
     (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
         {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
     *_, prov = _build(fakes)
-    assert prov["audit"]["tcd_dump"] == {"path": str(old), "sha256": _sha(old), "relation": "rows of the build's",
-                                         "rows_not_read": ["MA2", "MB2"]}
+    assert prov["audit"]["tcd_dump"] == {"path": str(old.resolve()), "recorded_path": str(old), "sha256": _sha(old),
+                                         "relation": "rows of the build's", "rows_not_read": ["MA2", "MB2"]}
     assert prov["verdicts"]["tcd_dump"]["relation"] == "same"
     _dump(old, {"M2": 28.9841042}, years=(1900, 2000), tcd=at.SOURCE_TCD_SHA256)
     (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
@@ -331,6 +331,27 @@ def test_an_audit_dump_is_the_xtide_tcd_minus_exactly_the_otc_additions(fakes):
         {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
     *_, prov = _build(fakes)
     assert prov["audit"]["tcd_dump"]["rows_not_read"] == ["MA2", "MB2"]
+
+
+def test_the_audit_dump_pinned_in_the_audit_dir_is_read_when_the_shared_one_changed(fakes):
+    # INT-2 A2: the audits record the shared $OTC_WORK/tcd_table.json; a regenerated file stopped every later build
+    p = fakes.paths
+    _dump(p["tcd_path"], {"M2": 28.9841042, "MA2": 28.9430356, "MB2": 29.0251729})
+    old = _dump(p["tcd_path"].parent / "old.json", {"M2": 28.9841042}, tcd=at.SOURCE_TCD_SHA256)
+    sha = _sha(old)
+    (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": str(old), "sha256": sha}}}))
+    pin = gb.pinned_audit_dump(p["audit_dir"], sha)
+    pin.write_bytes(old.read_bytes())
+    old.write_text(json.dumps(json.loads(old.read_text()), sort_keys=True, indent=1))    # regenerated: other bytes
+    *_, prov = _build(fakes)
+    assert prov["audit"]["tcd_dump"]["path"] == str(pin.resolve()) and prov["audit"]["tcd_dump"]["recorded_path"] == str(old)
+    pin.write_text(pin.read_text() + " ")
+    with pytest.raises(SystemExit, match="pinned copy of the audit's TCD dump is not the dump it read"):
+        _build(fakes)
+    pin.unlink()
+    with pytest.raises(SystemExit, match="not there as the audit hashed it"):
+        _build(fakes)
 
 
 def test_build_records_the_identity_of_every_input(fakes):
