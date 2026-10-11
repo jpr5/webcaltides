@@ -236,10 +236,13 @@ def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(tab
 def test_a_disputed_record_is_flagged(table):
     row = tb_row("disputed", comparator_kind="b", time_base_code="disputed:comparators_disagree",
                  time_base_reason="declared utc_instant kept; evidence disagrees: lag +32.6 min fits no class")
-    (st,) = build(table, [doc(table, row=row)])["stations"]
-    cs = st["constant_sets"][0]
+    d = doc(table, row=row)
+    cs = gesla_sets.source_set(d, licence_id="gesla-derived").constant_set
     assert cs["time_base"]["code"] == "disputed" and cs["qc_status"] == "flagged"
     assert [f["flag"] for f in cs["qc_flags"]] == ["time_base"]
+    # owner rule: a disputed time base is not carried, so the build refuses the set
+    with pytest.raises(ValueError, match=r"no record is publishable .*'time_base_disputed': 1"):
+        build(table, [d])
 
 
 # --- advisories --------------------------------------------------------------------------------------------

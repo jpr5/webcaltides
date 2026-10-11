@@ -477,13 +477,18 @@ def test_the_station_takes_name_and_position_from_its_recommended_set(table):
         assert (st["name"], st["lat"]) == (name, lat)
 
 
-def test_when_every_set_is_disputed_a_disputed_set_is_recommended(table):
-    # B6
+def test_a_disputed_set_is_never_published_as_recommended_or_alternate(table):
+    # owner rule: disputed -> not carried (TB-SIB gate C, section 4)
     disputed = tb_row("disputed", comparator_kind="b", time_base_code="disputed:comparators_disagree",
                       time_base_reason="declared utc_instant kept; evidence disagrees")
-    release = built(table, two(table, rows=(disputed, disputed)), (100, 9000))
+    with pytest.raises(ValueError, match=r"no record is publishable .*'time_base_disputed': 2"):
+        built(table, two(table, rows=(disputed, disputed)), (100, 9000))
+    # the disputed set has more epoch hours, so it would rank first on every other step
+    release = built(table, two(table, rows=(None, disputed)), (100, 9000))
     (st,) = release["stations"]
-    assert st["recommended_set_id"].endswith("r1-nor-test") and validate_release(release) == []
+    assert [cs["source_record_id"] for cs in st["constant_sets"]] == ["r0-nor-test"]
+    assert st["recommended_set_id"].endswith("r0-nor-test") and st["aliases"]["gesla"] == ["r0-nor-test"]
+    assert validate_release(release) == []
 
 
 def test_a_time_base_suspect_is_flagged_and_not_recommended_over_a_clean_set(table):

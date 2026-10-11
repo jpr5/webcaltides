@@ -242,6 +242,11 @@ def _flag(cs: dict, reason: str, **values: float) -> None:
 EOT20_WHOLE_HOUR = "eot20_whole_hour"
 
 
+def _time_base_disputed(cs: Mapping, disputed_reasons: Mapping[str, str]) -> bool:
+    """The audit disputes this set's time base: its own time_base code, or the audit's disputed reasons."""
+    return (cs.get("time_base") or {}).get("code") == "disputed" or cs["source_record_id"] in disputed_reasons
+
+
 def disputed_reasons_of(audit_rows: Mapping[str, Mapping]) -> dict[str, str]:
     """record -> the audit's reasons for a disputed time base (TB-SIB, space-separated, the code's own reason
     first): the `disputed_reason` column, or the part of time_base_code after "disputed:"; only disputed rows."""
@@ -343,10 +348,12 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
     sets and get a sibling_disagreement flag; `tombstones` (StationMap.tombstones()), written as removed
     stations, each merged into a station of this release; `station_map_inputs` (StationMap.inputs),
     whose fit-run pin must equal `fit_run_results_sha256`, the SHA-256 of this build's results.jsonl.
-    A station whose every set carries a clock-offset sibling flag (clock_offset_h), or is disputed by the
-    audit for a whole-hour EOT20 lag ("eot20_whole_hour" among `disputed_reasons[record]`, TB-SIB; see
-    disputed_reasons_of), is not published: its records are refused (clock_offset_unresolved or
-    eot20_whole_hour_unresolved) until the time-base audit corrects them.
+    A set whose time base the audit disputes (time_base code "disputed", or the record in
+    `disputed_reasons`, TB-SIB; see disputed_reasons_of) is never published, as the recommended set or as an
+    alternate: it is refused (eot20_whole_hour_unresolved for a whole-hour EOT20 lag, "eot20_whole_hour"
+    among its reasons, else time_base_disputed). A station whose every set is disputed or carries a
+    clock-offset sibling flag (clock_offset_h) is not published: its flagged records are refused too
+    (clock_offset_unresolved) until the time-base audit corrects them.
     `sampling_s` (record -> sampling interval, default data/gesla/4.1/inventory.csv interval_s) decides
     the sub-hourly rank step.
     `contributor_roles` (contributor -> originator | redistributor, default data/gesla/contributor_roles.csv)
@@ -420,20 +427,34 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         # TB-SIB: a record the audit disputes for a whole-hour EOT20 lag of 3 h or more is unresolved too
         whole = [EOT20_WHOLE_HOUR in (disputed_reasons.get(c.cs["source_record_id"]) or "").split()
                  for c, _ in by_station[sid]]
-        if all(f is not None or w for f, w in zip(offsets, whole)):
-            for (c, _), f, w in zip(by_station[sid], offsets, whole):
-                rid = c.cs["source_record_id"]
-                report.published.remove(rid)
-                if w:
-                    report.refused.append(refusal(rid, "eot20_whole_hour_unresolved",
-                                                  f"{rid}: station {sid}: every set is unresolved; this one is disputed "
-                                                  f"by the time-base audit for a whole-hour EOT20 lag ({EOT20_WHOLE_HOUR}); "
-                                                  "withheld until the audit corrects it", _good(c.cs)))
-                    continue
+        # owner rule: a disputed time base is not carried, as the recommended set or as an alternate
+        disp = [_time_base_disputed(c.cs, disputed_reasons) for c, _ in by_station[sid]]
+        withheld = all(f is not None or w or d for f, w, d in zip(offsets, whole, disp))
+        keep = []
+        for (c, h), f, w, d in zip(by_station[sid], offsets, whole, disp):
+            rid = c.cs["source_record_id"]
+            if not (withheld or d):
+                keep.append((c, h))
+                continue
+            report.published.remove(rid)
+            if w:
+                report.refused.append(refusal(rid, "eot20_whole_hour_unresolved",
+                                              f"{rid}: station {sid}: this set is disputed by the time-base audit for "
+                                              f"a whole-hour EOT20 lag ({EOT20_WHOLE_HOUR}); "
+                                              "withheld until the audit corrects it", _good(c.cs)))
+            elif f is not None and withheld:
                 report.refused.append(refusal(rid, "clock_offset_unresolved",
-                                              f"{rid}: station {sid}: every set is flagged for a clock offset "
+                                              f"{rid}: station {sid}: every set is flagged for a clock offset or disputed "
                                               f"({f['clock_offset_h']:+.2f} h against {', '.join(list(f.get('against', []))[:3])}); "
                                               "withheld until the time-base audit corrects it", _good(c.cs)))
+            else:
+                why = disputed_reasons.get(rid) or "no reason given"
+                report.refused.append(refusal(rid, "time_base_disputed",
+                                              f"{rid}: station {sid}: the time-base audit disputes this set's time base "
+                                              f"({why}); a disputed time base is not published", _good(c.cs)))
+        if keep:
+            by_station[sid] = keep
+        else:
             del by_station[sid]
     for sid, cands in sorted(by_station.items()):
         win, how = recommend([c for c, _ in cands])
