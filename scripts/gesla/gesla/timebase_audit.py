@@ -113,7 +113,7 @@ import os
 import statistics
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -1447,14 +1447,20 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                     agency_refs, skipped = tag.load_noaa_refs(refs.noaa_harcon_dir.parent)
                     for s in skipped[:10]:
                         log(f"agency constants: skipped {s}")
-                ag_crashes, ac = apply_agency(rows, inv, sibling, weak, dec, transforms,
-                                              weak_speeds(TcdTable.load(table_path)), ex, ostat_of, declared or {},
-                                              tag.RefIndex(agency_refs), log)
+                sp_ = weak_speeds(TcdTable.load(table_path))
+                bound = bound_fits(rows, inv, sibling, dec)
+                lags = tag.open_lags(agency_refs, agency_sites(bound, rows, inv, weak, transforms), sp_)
+                log("agency constants: open-water lag of the references: " + ", ".join(
+                    f"{k} {v}" for k, v in sorted(Counter(
+                        "unknown, confirmed" if x["lag"] is None and x["confirmed"] else "unknown" if x["lag"] is None
+                        else "lags > 60 min" if x["lag"] > 60 else "open or near it" for x in lags.values()).items())))
+                ag_crashes, ac = apply_agency(rows, inv, sibling, weak, dec, transforms, sp_, ex, ostat_of,
+                                              declared or {}, tag.RefIndex(agency_refs), log, lags=lags)
                 sib_crashes = sib_crashes + ag_crashes
                 sib_counts["agency"] = ac
-                sib_counts["two_source"] = apply_two_source(rows, inv, sibling, weak, dec, transforms,
-                                                            weak_speeds(TcdTable.load(table_path)),
-                                                            tag.RefIndex(agency_refs), log)
+                sib_counts["two_source"] = apply_two_source(rows, inv, sibling, weak, dec, transforms, sp_,
+                                                            tag.RefIndex(agency_refs), log, lags=lags)
+                sib_counts["regional"] = apply_regional(rows, inv, sibling, weak, dec, transforms, sp_, log)
     for f in allf:
         annotate(rows[f], dec[f])
     final_counts(providers, rows, inv)
@@ -1658,8 +1664,10 @@ AGENCY_DISPUTED = "disputed:agency_constants_offset"
 
 def apply_agency(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
                  dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float], ex,
-                 ostat_of, declared: Mapping[str, int], index: "tag.RefIndex", log) -> tuple[list[str], dict]:
-    """The agency constants (timebase_agency) on pass 1, into the verdicts, after apply_sibling.
+                 ostat_of, declared: Mapping[str, int], index: "tag.RefIndex", log,
+                 lags: Mapping[str, Mapping] | None = None) -> tuple[list[str], dict]:
+    """The agency constants (timebase_agency) on pass 1, into the verdicts, after apply_sibling. lags: the references'
+    open-water lags (timebase_agency.open_lags; None: every reference taken as open water).
 
     Pass 1 binds as in apply_sibling: a record's constants are used only when its fit's time base is the one it
     publishes now. A record a strong comparator verified (official, harcon, sibling series) is not judged. A lead or
@@ -1683,7 +1691,7 @@ def apply_agency(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: 
             continue
         counts["bound"] += 1
         consts = {k: (float(v[0]), float(v[1])) for k, v in r["main"].items()}
-        sh = tag.shift(consts, index.near(inv[f].lat, inv[f].lon), sp)
+        sh = tag.shift(consts, index.near(inv[f].lat, inv[f].lon), sp, lags)
         if sh is None:
             continue
         counts["with_reference"] += 1
@@ -1754,69 +1762,162 @@ def apply_agency(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: 
 TWO_SOURCE_DISPUTED = "disputed:two_source_offset"
 
 
-def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
-                     dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float],
-                     index: "tag.RefIndex", log) -> dict:
-    """The two-source dispute rule (timebase_agency.two_sources; FIX-LST-2), after apply_agency. Dispute only, per
-    record: a record that publishes its declared base (unverified or disputed; a verified or corrected one is not
-    judged here), fitted on the base it publishes, whose EOT20, other contributors'
-    sets within TS_SITE_KM and agency shift put it off by the same sign (two of them at least) is disputed
-    (TWO_SOURCE_DISPUTED; a record already disputed keeps its code, the evidence is added to its reason). The
-    references are judged as they stand before this step, so one record's dispute never makes another's."""
-    counts = {"bound": 0, "with_two_sources": 0, "disputed": 0, "already_disputed": 0}
+def bound_fits(rows: Mapping[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig,
+               dec: Mapping[str, int]) -> dict[str, dict]:
+    """Every fitted record of the inventory whose pass-1 fit is on the base it publishes now (a record without a row
+    publishes its declared base): file id -> constants."""
     bound: dict[str, dict] = {}
     for f, r in cfg.fits.items():
-        # every fitted record of the inventory is a possible reference (an --only run audits a few, but their
-        # neighbours' sets still exist); one without a row publishes its declared base
         if r.get("outcome") != "fitted" or not r.get("main") or f not in inv:
             continue
         pub = _published_now(rows[f], dec[f]) if f in rows else declared_correction(int(dec.get(f, 0)))
         if r.get("time_base") == pub.label:
             bound[f] = {k: (float(v[0]), float(v[1])) for k, v in r["main"].items()}
+    return bound
+
+
+def agency_sites(bound: Mapping[str, dict], rows: Mapping[str, AuditRow], inv: Mapping[str, RecordInfo],
+                 weak: WeakConfig, transforms: Mapping[str, tuple[str, int]]) -> list[dict]:
+    """The bound records as timebase_agency.open_lags sites (EOT20 at their cell; disputed: residue now)."""
+    return [{"id": f, "lat": inv[f].lat, "lon": inv[f].lon, "consts": c, "eot": weak.inputs.eot(transforms.get(f, (f,))[0]),
+             "disputed": f in rows and rows[f].status == "residue"} for f, c in sorted(bound.items())]
+
+
+class _Near:
+    """A true-radius search over records (FIX-LST-3 L1: the 1/30-degree grid missed east-west neighbours above ~36 deg)."""
+
+    def __init__(self, ids: Sequence[str], inv: Mapping[str, RecordInfo]):
+        self.ids = list(ids)
+        self.lat = np.array([inv[f].lat for f in self.ids]) if self.ids else np.zeros(0)
+        self.lon = np.array([inv[f].lon for f in self.ids]) if self.ids else np.zeros(0)
+
+    def within(self, lat: float, lon: float, km: float) -> list[tuple[str, float]]:
+        if not self.ids:
+            return []
+        dlon = np.abs((self.lon - lon + 180.0) % 360.0 - 180.0)
+        cos = max(math.cos(math.radians(min(abs(lat) + 0.5, 90.0))), 1e-6)
+        m = np.nonzero((np.abs(self.lat - lat) * KM_PER_DEG <= km + 0.1) & (dlon * KM_PER_DEG * cos <= km + 0.1))[0]
+        got = [(self.ids[j], tag.haversine_km(lat, lon, self.lat[j], self.lon[j])) for j in m]
+        return sorted([(g, d) for g, d in got if d <= km], key=lambda x: (x[1], x[0]))
+
+
+def _noaa_id_of(file_id: str) -> str | None:
+    """The NOAA station number in a record id (7 digits as the site code: settlement_point-9710441-usa-noaa)."""
+    parts = file_id.split("-")
+    return parts[-3] if len(parts) >= 4 and len(parts[-3]) == 7 and parts[-3].isdigit() else None
+
+
+def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
+                     dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float],
+                     index: "tag.RefIndex", log, lags: Mapping[str, Mapping] | None = None,
+                     judge: Iterable[str] | None = None, dry: bool = False) -> dict:
+    """The two-source dispute rule (timebase_agency.two_sources; FIX-LST-2/3), after apply_agency. Dispute only, per
+    record: a record that publishes its declared base (unverified or disputed; a verified or corrected one is not
+    judged here), fitted on the base it publishes, whose EOT20 (E), other contributors' sets (S) and agency shift (H)
+    put it off by the same sign (two of them at least) is disputed (TWO_SOURCE_DISPUTED; a record already disputed
+    keeps its code, the evidence is added to its reason).
+    S: sets within TS_SITE_KM in the same water; for a LEAD of AG_LEAD_MIN or more also a set a comparator verified
+    within TS_LEAD_SET_KM (residual AG_LEAD_RESID_MIN; judged over open water through the set's own EOT20 lag, or in
+    the same water), and a set across a structure within TS_LOCK_KM (timebase_agency.lock_pair). Independence: a set
+    that is an H reference (its NOAA number) or at an H reference's site (within TS_SAME_SITE_KM, M2 ratio
+    AG_WATER_RATIO against the reference's constants) is the same source and is dropped from S.
+    A shift under AG_LEAD_MIN needs an agreeing source with a uniform, undamped shift (timebase_agency.uniform).
+    The references are judged as they stand before this step, so one record's dispute never makes another's.
+    judge / dry (calibration): judge exactly these records, whatever their status; dry: change no row, return the
+    hits in counts["hits"]."""
+    counts = {"bound": 0, "with_two_sources": 0, "disputed": 0, "already_disputed": 0, "not_uniform": 0,
+              "sets_same_site_dropped": 0}
+    judge = None if judge is None else set(judge)
+    bound = bound_fits(rows, inv, cfg, dec)
     offset = {f for f, row in rows.items()
               if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)}
-    cell: dict[tuple[int, int], list[str]] = defaultdict(list)
-    for f in bound:
-        cell[(math.floor(inv[f].lat * 30), math.floor(inv[f].lon * 30))].append(f)
+    near = _Near(sorted(bound), inv)
+    refs_by = {f"{r.src}:{r.id}": r for r in index.refs}
+    eot_cache: dict[str, float | None] = {}
+
+    def eot_lag_of(g: str) -> float | None:
+        if g not in eot_cache:
+            e = weak.inputs.eot(transforms.get(g, (g,))[0])
+            x = None
+            if e and e.get("dist_km") is not None and float(e["dist_km"]) <= tw_E_MAX_KM:
+                x = tag.pair(bound[g], {k: tuple(e[k]) for k in tag.tw.CORE if k in e}, sp, ratio=tag.TS_EOT_RATIO,
+                             resid=tag.TS_EOT_RESID_MIN)
+            eot_cache[g] = None if x is None else x["tau"]
+        return eot_cache[g]
+
     hits = []
     for f in sorted(bound):
         row = rows.get(f)
-        if row is None or row.status == "used":
+        if judge is not None:
+            if f not in judge:
+                continue
+        elif row is None or row.status == "used":
             continue                     # verified or corrected stays as it is: this rule only withholds the declared base
         counts["bound"] += 1
         a, info = bound[f], inv[f]
         src: dict[str, float] = {}
         ev: dict = {}
+        det: dict[str, list] = defaultdict(list)
         e = weak.inputs.eot(transforms.get(f, (f,))[0])
         if e and e.get("dist_km") is not None and float(e["dist_km"]) <= tw_E_MAX_KM:
-            x = tag.joint_shift(a, {k: tuple(e[k]) for k in tag.tw.CORE if k in e}, sp, ratio=tag.TS_EOT_RATIO,
-                                resid=tag.TS_EOT_RESID_MIN)
+            x = tag.pair(a, {k: tuple(e[k]) for k in tag.tw.CORE if k in e}, sp, ratio=tag.TS_EOT_RATIO,
+                         resid=tag.TS_EOT_RESID_MIN)
             if x is not None:
-                src["E"], ev["E"] = x[0], {"tau": round(x[0], 1), "how": x[1], "dist_km": e["dist_km"]}
+                src["E"], ev["E"] = x["tau"], {"tau": round(x["tau"], 1), "how": x["how"], "dist_km": e["dist_km"]}
+                det["E"].append(x)
+        sh = tag.shift(a, index.near(info.lat, info.lon), sp, lags) if len(index) else None
+        h_refs = [refs_by[q["ref"]] for q in sh["refs"]] if sh is not None and not sh["mixed"] else []
+        if h_refs:
+            src["H"], ev["H"] = sh["tau"], {"tau": round(sh["tau"], 1), "refs": [q["ref"] for q in sh["refs"][:4]]}
+            det["H"] += sh["refs"]
         sets = []
-        ci, cj = math.floor(info.lat * 30), math.floor(info.lon * 30)
-        for di in (-1, 0, 1):
-            for dj in (-1, 0, 1):
-                for g in cell.get((ci + di, cj + dj), ()):
-                    if g == f or g in offset or inv[g].contributor == info.contributor:
-                        continue
-                    km = tag.haversine_km(info.lat, info.lon, inv[g].lat, inv[g].lon)
-                    if km > tag.TS_SITE_KM:
-                        continue
-                    x = tag.joint_shift(a, bound[g], sp, ratio=tag.TS_SET_RATIO, resid=tag.TS_SET_RESID_MIN)
-                    if x is not None:
-                        sets.append({"set": g, "km": round(km, 2), "tau": round(x[0], 1), "how": x[1]})
+        for g, km in near.within(info.lat, info.lon, max(tag.TS_SITE_KM, tag.TS_LEAD_SET_KM)):
+            if g == f or g in offset or inv[g].contributor == info.contributor:
+                continue
+            x, kind = None, ""
+            if km <= tag.TS_SITE_KM:
+                x, kind = tag.pair(a, bound[g], sp, ratio=tag.TS_SET_RATIO, resid=tag.TS_SET_RESID_MIN), "same water"
+            if x is None and km <= tag.TS_LOCK_KM:
+                x, kind = tag.lock_pair(a, bound[g], sp, ratio=tag.TS_SET_RATIO, resid=tag.TS_SET_RESID_MIN), "structure"
+                if x is not None and x["tau"] > -tag.AG_LEAD_MIN:
+                    x = None
+            if x is None and rows.get(g) is not None and rows[g].status == "used" and rows[g].correction.usable:
+                y = tag.pair(a, bound[g], sp, ratio=tag.AG_RATIO, resid=tag.AG_LEAD_RESID_MIN)
+                if y is not None:
+                    same = (tag.AG_WATER_RATIO[0] <= y["ratio"] <= tag.AG_WATER_RATIO[1]
+                            and y["resid"] <= tag.AG_WATER_RESID_MIN)
+                    lg = eot_lag_of(g)
+                    if same or lg is not None:
+                        eff = y["tau"] + (0.0 if same else max(lg, 0.0))
+                        if eff <= -tag.AG_LEAD_MIN:
+                            x, kind = {**y, "tau": eff}, "verified set over open water"
+            if x is None:
+                continue
+            nid = _noaa_id_of(g)
+            if any(r.src == "noaa" and r.id == nid for r in h_refs) or any(
+                    tag.haversine_km(inv[g].lat, inv[g].lon, r.lat, r.lon) <= tag.TS_SAME_SITE_KM
+                    and tag.joint_lag(bound[g], r.consts, sp, ratio=tag.AG_WATER_RATIO) is not None
+                    for r in h_refs):
+                counts["sets_same_site_dropped"] += 1
+                continue
+            sets.append({"set": g, "km": round(km, 2), "tau": round(x["tau"], 1), "how": x["how"], "kind": kind})
+            det["S"].append(x)
         if sets:
             src["S"] = statistics.median(s_["tau"] for s_ in sets)
             ev["S"] = {"tau": round(src["S"], 1), "sets": sorted(sets, key=lambda s_: (s_["km"], s_["set"]))[:6]}
-        sh = tag.shift(a, index.near(info.lat, info.lon), sp) if len(index) else None
-        if sh is not None and not sh["mixed"]:
-            src["H"], ev["H"] = sh["tau"], {"tau": round(sh["tau"], 1), "refs": [q["ref"] for q in sh["refs"][:4]]}
         got = tag.two_sources(src)
         if got is None:
             continue
+        sign, agree = got
+        if min(abs(src[k]) for k in agree) < tag.AG_LEAD_MIN or sign > 0:
+            if not any(tag.uniform(x) for k in agree for x in det[k]):
+                counts["not_uniform"] += 1
+                continue
         counts["with_two_sources"] += 1
         hits.append((f, got, ev))
+    if dry:
+        counts["hits"] = hits
+        return counts
     names = {"E": "EOT20", "S": "other contributors' sets", "H": "agency constants"}
     for f, (sign, agree), ev in hits:
         row = rows[f]
@@ -1832,6 +1933,90 @@ def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], c
             counts["disputed"] += 1
         _sib_dispute(row, TWO_SOURCE_DISPUTED, why)
     log("two sources: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    return counts
+
+
+REGIONAL_DISPUTED = "disputed:eot20_regional_offset"
+
+
+def apply_regional(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
+                   dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float],
+                   log, judge: Iterable[str] | None = None, dry: bool = False) -> dict:
+    """EOT20 confirmed by the sea's other gauges (timebase_agency.regional_offset / control_ok; FIX-LST-3), after
+    apply_two_source. Dispute only, per record: a Coastal record that publishes its declared base, fitted on it, whose
+    EOT20 bands both put it off by RB_MIN or more, the same way, while a gauge of another provider family within
+    RB_CONTROL_KM agrees with EOT20, is disputed (REGIONAL_DISPUTED; an already disputed record keeps its code).
+    judge / dry: as apply_two_source."""
+    counts = {"judged": 0, "offset_by_eot20": 0, "disputed": 0, "already_disputed": 0, "no_control": 0}
+    judge = None if judge is None else set(judge)
+    bound = bound_fits(rows, inv, cfg, dec)
+    gt = {f: (cfg.fits[f].get("gauge_type") or "") for f in bound}
+    offset = {f for f, row in rows.items()
+              if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)}
+    near = _Near(sorted(f for f in bound if gt[f] == tsib.COASTAL), inv)
+    bl: dict[str, dict | None] = {}
+
+    def bands(g: str):
+        if g not in bl:
+            bl[g] = tag.band_lags(bound[g], weak.inputs.eot(transforms.get(g, (g,))[0]), sp)
+        return bl[g]
+
+    hits = []
+    for f in sorted(bound):
+        row = rows.get(f)
+        if gt[f] != tsib.COASTAL or (f not in judge if judge is not None else (row is None or row.status == "used")):
+            continue
+        counts["judged"] += 1
+        if not tag.microtidal(bound[f], weak.inputs.eot(transforms.get(f, (f,))[0])):
+            continue
+        off = tag.regional_offset(bands(f))
+        if off is None:
+            continue
+        counts["offset_by_eot20"] += 1
+        fam = tsib.family_of(f)
+        nb = near.within(inv[f].lat, inv[f].lon, tag.RB_CONTROL_KM)
+        veto = []
+        for g, km in nb:
+            if g == f:
+                continue
+            o = tag.regional_offset(bands(g))
+            if o is None or (o > 0) != (off > 0):
+                continue
+            if rows.get(g) is not None and rows[g].status == "used" and rows[g].comparator_kind in ("b", "c", "a"):
+                veto.append(f"{g} (verified, EOT20 {o:+.0f})")
+            elif km <= tag.RB_SITE_KM and tsib.family_of(g) != fam and abs(o - off) <= tag.RB_SAME_MIN:
+                veto.append(f"{g} ({km:.1f} km, EOT20 {o:+.0f})")
+        if veto:
+            counts["vetoed"] = counts.get("vetoed", 0) + 1
+            continue
+        ctl = []
+        for g, km in nb:
+            if g == f or g in offset or tsib.family_of(g) == fam or (rows.get(g) and rows[g].status == "residue"):
+                continue
+            c = tag.control_ok(bands(g))
+            if c is not None:
+                ctl.append((g, round(km, 1), round(c, 1)))
+        if not ctl:
+            counts["no_control"] += 1
+            continue
+        hits.append((f, off, ctl))
+    if dry:
+        counts["hits"] = hits
+        return counts
+    for f, off, ctl in hits:
+        row = rows[f]
+        b = bl[f]
+        why = (f"EOT20 puts the record {abs(off):.0f} min {'late' if off > 0 else 'early'} in both bands (semidiurnal "
+               f"{b['semi']['tau']:+.1f}, diurnal {b['diurnal']['tau']:+.1f} min), and {len(ctl)} gauge(s) of other "
+               f"providers in the same sea agree with EOT20 ({', '.join(f'{g} {km:g} km {c:+.1f}' for g, km, c in ctl[:3])});"
+               f" disputed, never corrected on it")
+        row.agency = {**(row.agency or {}), "regional": {"offset_min": round(off, 1), "semi": round(b["semi"]["tau"], 1),
+                                                          "diurnal": round(b["diurnal"]["tau"], 1),
+                                                          "controls": [list(x) for x in ctl[:6]]},
+                      "summary": "; ".join(x for x in ((row.agency or {}).get("summary"), why) if x)}
+        counts["already_disputed" if row.status == "residue" else "disputed"] += 1
+        _sib_dispute(row, REGIONAL_DISPUTED, why)
+    log("EOT20 regional: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
     return counts
 
 
