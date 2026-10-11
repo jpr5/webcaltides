@@ -1,0 +1,375 @@
+{
+ "check_errors_after_retries": 0,
+ "eligible_by_class": {
+  "diurnal": 40,
+  "mixed": 125,
+  "semidiurnal": 0
+ },
+ "notes": [
+  "Deviation (classes): NOAA's tideType takes only the values Mixed, Diurnal, Mixed Diurnal, Great Lakes and blank at the 302 water-level stations; it never says Semidiurnal, and semidiurnal-dominant stations such as Boston (8443970) are labelled Mixed. The semidiurnal class is therefore always empty and, by the fill rule, its 7 places go to mixed (14 mixed and 6 diurnal per partition). Accepted (orchestrator decision 1); the spec amendment is backlog.",
+  "Deviation (exclusions): only tideType Mixed and Diurnal map to a class. 'Mixed Diurnal', blank and 'Great Lakes' stations are in no class and are excluded (mapping 'Mixed Diurnal' to mixed or diurnal changes no list).",
+  "Deviation (require_tidal=true): a T1 station must be tidal: true in NOAA's waterlevels metadata (orchestrator decision 2, reversed in DT0b fix round 1). This removed 8762482 (West Bank 1, Bayou Gauche: non-tidal, no tidal levels in monthly_mean) from the reserve list; 8761305 (Shell Beach) took its place.",
+  "Deviation ('6-minute data served'): read as at least one 6-minute water_level value (datum STND) in every calendar month of 2015.",
+  "Deviation (fill order): a class with too few stations is filled from the next class in the order semidiurnal, mixed, diurnal, and from diurnal back to semidiurnal (cyclic). §5.1 does not say what follows diurnal; the wrap was not needed in this seal (unfilled 0).",
+  "Deviation (T1g): how a seed is expanded into gap positions is left to DT1 (see t1g_gap_patterns.json)."
+ ],
+ "options": {
+  "mixed_diurnal": "exclude",
+  "require_tidal": true
+ },
+ "partitions": {
+  "holdout": {
+   "by_class": {
+    "diurnal": 6,
+    "mixed": 14,
+    "semidiurnal": 0
+   },
+   "eligible_in_partition": {
+    "diurnal": 12,
+    "mixed": 37,
+    "semidiurnal": 0
+   },
+   "stations": [
+    {
+     "class": "mixed",
+     "id": "8631044",
+     "key_hex": "065ae0cab2315ef1"
+    },
+    {
+     "class": "mixed",
+     "id": "9415020",
+     "key_hex": "0a5925eaf4959e40"
+    },
+    {
+     "class": "mixed",
+     "id": "9497645",
+     "key_hex": "0b8ff38f20df7837"
+    },
+    {
+     "class": "mixed",
+     "id": "9452400",
+     "key_hex": "0c14507144666704"
+    },
+    {
+     "class": "mixed",
+     "id": "8518750",
+     "key_hex": "15aa2600991f1f34"
+    },
+    {
+     "class": "mixed",
+     "id": "9432780",
+     "key_hex": "167a4b1c26d47b7d"
+    },
+    {
+     "class": "mixed",
+     "id": "8638610",
+     "key_hex": "2459967f5d1c024c"
+    },
+    {
+     "class": "mixed",
+     "id": "8531680",
+     "key_hex": "4098f4002eebe3a1"
+    },
+    {
+     "class": "mixed",
+     "id": "8720030",
+     "key_hex": "492e51d187397c47"
+    },
+    {
+     "class": "mixed",
+     "id": "8465705",
+     "key_hex": "4af3127778f76f23"
+    },
+    {
+     "class": "mixed",
+     "id": "9455500",
+     "key_hex": "5344c31402497ca5"
+    },
+    {
+     "class": "mixed",
+     "id": "9459450",
+     "key_hex": "5786b803832223ec"
+    },
+    {
+     "class": "mixed",
+     "id": "8452660",
+     "key_hex": "57fa3c5c00ee00c3"
+    },
+    {
+     "class": "mixed",
+     "id": "8571892",
+     "key_hex": "5fdad5ad3f737659"
+    },
+    {
+     "class": "diurnal",
+     "id": "8775792",
+     "key_hex": "0500103c276756fd"
+    },
+    {
+     "class": "diurnal",
+     "id": "8761724",
+     "key_hex": "19eda5ce26d37d50"
+    },
+    {
+     "class": "diurnal",
+     "id": "8737048",
+     "key_hex": "246647c06957a277"
+    },
+    {
+     "class": "diurnal",
+     "id": "8760922",
+     "key_hex": "41c3e9f9ef683af4"
+    },
+    {
+     "class": "diurnal",
+     "id": "8770613",
+     "key_hex": "504ac08b274d6f27"
+    },
+    {
+     "class": "diurnal",
+     "id": "8768094",
+     "key_hex": "5782895aafac1550"
+    }
+   ],
+   "unfilled": 0
+  },
+  "reserve": {
+   "by_class": {
+    "diurnal": 6,
+    "mixed": 14,
+    "semidiurnal": 0
+   },
+   "eligible_in_partition": {
+    "diurnal": 16,
+    "mixed": 42,
+    "semidiurnal": 0
+   },
+   "stations": [
+    {
+     "class": "mixed",
+     "id": "8665530",
+     "key_hex": "092c321a981893e1"
+    },
+    {
+     "class": "mixed",
+     "id": "9452634",
+     "key_hex": "0c43724e7f20a3fc"
+    },
+    {
+     "class": "mixed",
+     "id": "8637689",
+     "key_hex": "1da026f3c049a3f1"
+    },
+    {
+     "class": "mixed",
+     "id": "9419750",
+     "key_hex": "21a36ccadd88e832"
+    },
+    {
+     "class": "mixed",
+     "id": "9431647",
+     "key_hex": "22c7c91ae31fb1a6"
+    },
+    {
+     "class": "mixed",
+     "id": "9414750",
+     "key_hex": "279aba1f4ae3505d"
+    },
+    {
+     "class": "mixed",
+     "id": "8536110",
+     "key_hex": "2ee796fe0fdcd5a6"
+    },
+    {
+     "class": "mixed",
+     "id": "9440569",
+     "key_hex": "3dbe434035a399fa"
+    },
+    {
+     "class": "mixed",
+     "id": "9451600",
+     "key_hex": "49e3c81e2465698e"
+    },
+    {
+     "class": "mixed",
+     "id": "9410170",
+     "key_hex": "4c2fc45d7737dfe4"
+    },
+    {
+     "class": "mixed",
+     "id": "1617760",
+     "key_hex": "580222f4a510136d"
+    },
+    {
+     "class": "mixed",
+     "id": "8443970",
+     "key_hex": "6132e29ee9a14fcf"
+    },
+    {
+     "class": "mixed",
+     "id": "9452210",
+     "key_hex": "61eda1aaf8466645"
+    },
+    {
+     "class": "mixed",
+     "id": "8545240",
+     "key_hex": "6cd7680473e48c1e"
+    },
+    {
+     "class": "diurnal",
+     "id": "8735523",
+     "key_hex": "0b54ab3d25e57e54"
+    },
+    {
+     "class": "diurnal",
+     "id": "8729210",
+     "key_hex": "1b580a2186ce0b5d"
+    },
+    {
+     "class": "diurnal",
+     "id": "9751381",
+     "key_hex": "524efed5761f641d"
+    },
+    {
+     "class": "diurnal",
+     "id": "8767961",
+     "key_hex": "557325df2646bc2c"
+    },
+    {
+     "class": "diurnal",
+     "id": "9759938",
+     "key_hex": "688a0c226147594b"
+    },
+    {
+     "class": "diurnal",
+     "id": "8761305",
+     "key_hex": "6926e28126e2f7eb"
+    }
+   ],
+   "unfilled": 0
+  },
+  "tuning": {
+   "by_class": {
+    "diurnal": 6,
+    "mixed": 14,
+    "semidiurnal": 0
+   },
+   "eligible_in_partition": {
+    "diurnal": 12,
+    "mixed": 46,
+    "semidiurnal": 0
+   },
+   "stations": [
+    {
+     "class": "mixed",
+     "id": "9410660",
+     "key_hex": "04a876bd0d5aba6f"
+    },
+    {
+     "class": "mixed",
+     "id": "1770000",
+     "key_hex": "06378fada142a8f8"
+    },
+    {
+     "class": "mixed",
+     "id": "9463502",
+     "key_hex": "0637ff4dbe17fd56"
+    },
+    {
+     "class": "mixed",
+     "id": "8726520",
+     "key_hex": "0c147a23092209da"
+    },
+    {
+     "class": "mixed",
+     "id": "8636580",
+     "key_hex": "0d50bcdef5703d72"
+    },
+    {
+     "class": "mixed",
+     "id": "9416841",
+     "key_hex": "24ce15ea08a29bae"
+    },
+    {
+     "class": "mixed",
+     "id": "9457804",
+     "key_hex": "2b2ba742136edbbf"
+    },
+    {
+     "class": "mixed",
+     "id": "8573927",
+     "key_hex": "32b5c01016fa1920"
+    },
+    {
+     "class": "mixed",
+     "id": "8573364",
+     "key_hex": "41f902c3d848615e"
+    },
+    {
+     "class": "mixed",
+     "id": "9412110",
+     "key_hex": "52b41f3f4cbc114d"
+    },
+    {
+     "class": "mixed",
+     "id": "9450460",
+     "key_hex": "534b6c83edbe1915"
+    },
+    {
+     "class": "mixed",
+     "id": "9440083",
+     "key_hex": "58e3a73620897f89"
+    },
+    {
+     "class": "mixed",
+     "id": "8537121",
+     "key_hex": "5df71ea933733e3d"
+    },
+    {
+     "class": "mixed",
+     "id": "8571421",
+     "key_hex": "619d38d797e2112c"
+    },
+    {
+     "class": "diurnal",
+     "id": "8738043",
+     "key_hex": "08b5b874829677c3"
+    },
+    {
+     "class": "diurnal",
+     "id": "9752695",
+     "key_hex": "09c16720cd3d446a"
+    },
+    {
+     "class": "diurnal",
+     "id": "8735180",
+     "key_hex": "20675d964ad7dcd9"
+    },
+    {
+     "class": "diurnal",
+     "id": "8737138",
+     "key_hex": "4cb2049de96f5163"
+    },
+    {
+     "class": "diurnal",
+     "id": "8761927",
+     "key_hex": "8b1b51e693f092af"
+    },
+    {
+     "class": "diurnal",
+     "id": "8739803",
+     "key_hex": "8bba325bdab53aeb"
+    }
+   ],
+   "unfilled": 0
+  }
+ },
+ "rule": "datums spec §5.2/§5.1: NOAA stations.json?type=waterlevels; all 12 months of 2015 in monthly_mean (datum STND) present and inferred '0'; 6-minute water_level (datum STND) served with at least one value in every calendar month of 2015; grouped by NOAA tideType (Semidiurnal, Mixed, Diurnal); per partition the 7, 7 and 6 stations with the smallest h (first 8 bytes, unsigned big-endian); a class with too few stations is filled from the next class (order semidiurnal, mixed, diurnal, cyclic)",
+ "station_status_counts": {
+  "eligible": 165,
+  "monthly_mean_incomplete_or_inferred": 81,
+  "no_class:'Mixed Diurnal'": 3,
+  "not_tidal": 53
+ },
+ "waterlevel_stations": 302
+}
