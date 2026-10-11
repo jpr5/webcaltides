@@ -7,12 +7,12 @@
   "registry_map": "data/gesla/4.1/station_map.csv",
   "registry_map_sha256": "951d1021abf83b8e5260d10eb65bea870edfbc17d2fcc5503607d2f78cbe823a",
   "decisions_sha256": "17ca9956b554feb68e12c7029814ebb5b6045416cb15ace83fa925d7d0ce93d8",
-  "fit_run_results_sha256": "c0bdee25fd2a2aff816ea3dff4232d2015fd5465af0e7f1ca9e36cba19205df5",
-  "fit_run_manifest_sha256": "84d53ff6a93e94f6961085c3aea171b4b86c56709ba82b4683a7f6ef14968efc",
+  "fit_run_results_sha256": "574b5ce6f1777dda3ac98930d597adc040346775fd42464e15cb34b47f79e6e3",
+  "fit_run_manifest_sha256": "eee875254ebf2cc242fb1599b67af5b452d576e3ef8cc870668fe2868ca855de",
   "audit_timebase_sha256": "0044a04c285916867661553ee4dd88780a72d465fd1e60848d5cdf0bc4b69142",
   "weak_inputs_sha256": "a12263f80a809e647cd5047826dc92ed60dd29077070b43feb226b3b3d8deac8",
-  "tide_summary_sha256": "665ecf0966475c1e7fc60f2e2876ebbb77a5064dec76be56e15e45ff0baec172",
-  "eot20_lag_sha256": "cc59c1b1d41e15363376ca3551c9b0c681a13c2b57fb7726964ec118eef9c5c2",
+  "tide_summary_sha256": "35169d32e8942bd92cbd6d4a827433729489c6cc8e172ffada728ddaf0f5dd36",
+  "eot20_lag_sha256": "d82173d1e76f60b34e413cbcd6b0b5110f463aa4949263cd4b7e2efd431ad0e5",
   "epoch_hours_sha256": "7466dac6fcbedadb6cd1b706ef1a2f066d3f468c5e682a4846fea6d7cb4aee7e"
  },
  "proposals": [
