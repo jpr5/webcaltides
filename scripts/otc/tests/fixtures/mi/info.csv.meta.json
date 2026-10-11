@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:06:04Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://erddap.marine.ie/erddap/info/IrishNationalTideGaugeNetwork/index.csv"
+ },
+ "sha256": "2770b2f6aea02bbdd3a296afc21e2daff435b44c6b546bc8a33636236e6aa90f",
+ "size": 13017,
+ "status": 200,
+ "url": "https://erddap.marine.ie/erddap/info/IrishNationalTideGaugeNetwork/index.csv"
+}

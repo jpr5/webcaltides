@@ -1,0 +1,376 @@
+{
+  "units": "meters",
+  "HarmonicConstituents": [
+    {
+      "number": 1,
+      "name": "M2",
+      "description": "Principal lunar semidiurnal constituent",
+      "amplitude": 1.873,
+      "phase_GMT": 270.0,
+      "phase_local": 9.2,
+      "speed": 28.984104,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 2,
+      "name": "S2",
+      "description": "Principal solar semidiurnal constituent",
+      "amplitude": 0.625,
+      "phase_GMT": 301.7,
+      "phase_local": 31.7,
+      "speed": 30.0,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 3,
+      "name": "N2",
+      "description": "Larger lunar elliptic semidiurnal constituent",
+      "amplitude": 0.378,
+      "phase_GMT": 246.4,
+      "phase_local": 350.5,
+      "speed": 28.43973,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 4,
+      "name": "K1",
+      "description": "Lunar diurnal constituent",
+      "amplitude": 0.511,
+      "phase_GMT": 261.0,
+      "phase_local": 125.6,
+      "speed": 15.041069,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 5,
+      "name": "M4",
+      "description": "Shallow water overtides of principal lunar constituent",
+      "amplitude": 0.017,
+      "phase_GMT": 290.1,
+      "phase_local": 128.4,
+      "speed": 57.96821,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 6,
+      "name": "O1",
+      "description": "Lunar diurnal constituent",
+      "amplitude": 0.309,
+      "phase_GMT": 245.1,
+      "phase_local": 119.6,
+      "speed": 13.943035,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 7,
+      "name": "M6",
+      "description": "Shallow water overtides of principal lunar constituent",
+      "amplitude": 0.001,
+      "phase_GMT": 299.7,
+      "phase_local": 237.1,
+      "speed": 86.95232,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 8,
+      "name": "MK3",
+      "description": "Shallow water terdiurnal",
+      "amplitude": 0.006,
+      "phase_GMT": 8.5,
+      "phase_local": 332.2,
+      "speed": 44.025173,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 9,
+      "name": "S4",
+      "description": "Shallow water overtides of principal solar constituent",
+      "amplitude": 0.003,
+      "phase_GMT": 10.4,
+      "phase_local": 190.4,
+      "speed": 60.0,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 10,
+      "name": "MN4",
+      "description": "Shallow water quarter diurnal constituent",
+      "amplitude": 0.007,
+      "phase_GMT": 266.5,
+      "phase_local": 109.7,
+      "speed": 57.423832,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 11,
+      "name": "NU2",
+      "description": "Larger lunar evectional constituent",
+      "amplitude": 0.074,
+      "phase_GMT": 249.0,
+      "phase_local": 352.4,
+      "speed": 28.512583,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 12,
+      "name": "S6",
+      "description": "Shallow water overtides of principal solar constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 90.0,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 13,
+      "name": "MU2",
+      "description": "Variational constituent",
+      "amplitude": 0.041,
+      "phase_GMT": 233.5,
+      "phase_local": 341.8,
+      "speed": 27.968208,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 14,
+      "name": "2N2",
+      "description": "Lunar elliptical semidiurnal second-order constituent",
+      "amplitude": 0.043,
+      "phase_GMT": 221.8,
+      "phase_local": 330.7,
+      "speed": 27.895355,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 15,
+      "name": "OO1",
+      "description": "Lunar diurnal",
+      "amplitude": 0.018,
+      "phase_GMT": 291.2,
+      "phase_local": 146.0,
+      "speed": 16.139101,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 16,
+      "name": "LAM2",
+      "description": "Smaller lunar evectional constituent",
+      "amplitude": 0.012,
+      "phase_GMT": 278.1,
+      "phase_local": 13.0,
+      "speed": 29.455626,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 17,
+      "name": "S1",
+      "description": "Solar diurnal constituent",
+      "amplitude": 0.015,
+      "phase_GMT": 65.0,
+      "phase_local": 290.0,
+      "speed": 15.0,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 18,
+      "name": "M1",
+      "description": "Smaller lunar elliptic diurnal constituent",
+      "amplitude": 0.017,
+      "phase_GMT": 271.8,
+      "phase_local": 141.3,
+      "speed": 14.496694,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 19,
+      "name": "J1",
+      "description": "Smaller lunar elliptic diurnal constituent",
+      "amplitude": 0.031,
+      "phase_GMT": 275.8,
+      "phase_local": 135.5,
+      "speed": 15.5854435,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 20,
+      "name": "MM",
+      "description": "Lunar monthly constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 0.5443747,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 21,
+      "name": "SSA",
+      "description": "Solar semiannual constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 0.0821373,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 22,
+      "name": "SA",
+      "description": "Solar annual constituent",
+      "amplitude": 0.11,
+      "phase_GMT": 262.6,
+      "phase_local": 262.2,
+      "speed": 0.0410686,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 23,
+      "name": "MSF",
+      "description": "Lunisolar synodic fortnightly constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 1.0158958,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 24,
+      "name": "MF",
+      "description": "Lunisolar fortnightly constituent",
+      "amplitude": 0.026,
+      "phase_GMT": 183.4,
+      "phase_local": 173.5,
+      "speed": 1.0980331,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 25,
+      "name": "RHO",
+      "description": "Larger lunar evectional diurnal constituent",
+      "amplitude": 0.011,
+      "phase_GMT": 240.9,
+      "phase_local": 119.7,
+      "speed": 13.471515,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 26,
+      "name": "Q1",
+      "description": "Larger lunar elliptic diurnal constituent",
+      "amplitude": 0.054,
+      "phase_GMT": 236.9,
+      "phase_local": 116.3,
+      "speed": 13.398661,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 27,
+      "name": "T2",
+      "description": "Larger solar elliptic constituent",
+      "amplitude": 0.036,
+      "phase_GMT": 294.9,
+      "phase_local": 25.3,
+      "speed": 29.958933,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 28,
+      "name": "R2",
+      "description": "Smaller solar elliptic constituent",
+      "amplitude": 0.007,
+      "phase_GMT": 332.6,
+      "phase_local": 62.3,
+      "speed": 30.041067,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 29,
+      "name": "2Q1",
+      "description": "Larger elliptic diurnal",
+      "amplitude": 0.006,
+      "phase_GMT": 242.5,
+      "phase_local": 126.8,
+      "speed": 12.854286,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 30,
+      "name": "P1",
+      "description": "Solar diurnal constituent",
+      "amplitude": 0.162,
+      "phase_GMT": 258.2,
+      "phase_local": 123.6,
+      "speed": 14.958931,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 31,
+      "name": "2SM2",
+      "description": "Shallow water semidiurnal constituent",
+      "amplitude": 0.005,
+      "phase_GMT": 91.3,
+      "phase_local": 172.1,
+      "speed": 31.015896,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 32,
+      "name": "M3",
+      "description": "Lunar terdiurnal constituent",
+      "amplitude": 0.019,
+      "phase_GMT": 338.8,
+      "phase_local": 307.5,
+      "speed": 43.47616,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 33,
+      "name": "L2",
+      "description": "Smaller lunar elliptic semidiurnal constituent",
+      "amplitude": 0.04,
+      "phase_GMT": 285.6,
+      "phase_local": 19.8,
+      "speed": 29.528479,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 34,
+      "name": "2MK3",
+      "description": "Shallow water terdiurnal constituent",
+      "amplitude": 0.004,
+      "phase_GMT": 70.4,
+      "phase_local": 44.1,
+      "speed": 42.92714,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 35,
+      "name": "K2",
+      "description": "Lunisolar semidiurnal constituent",
+      "amplitude": 0.172,
+      "phase_GMT": 294.4,
+      "phase_local": 23.7,
+      "speed": 30.082138,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 36,
+      "name": "M8",
+      "description": "Shallow water eighth diurnal constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 115.93642,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    },
+    {
+      "number": 37,
+      "name": "MS4",
+      "description": "Shallow water quarter diurnal constituent",
+      "amplitude": 0.014,
+      "phase_GMT": 330.3,
+      "phase_local": 159.4,
+      "speed": 58.984104,
+      "comments": "Source of constituents: Mean of 5 1-year LSQHAs (2020-2024). Sa and Mf are from mean of 20 1-year LSQHAs (2003-2015, 2018-2024). Ssa, Mm and Msf are unstable."
+    }
+  ],
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/9450460/harcon.json"
+}

@@ -1,0 +1,1149 @@
+{
+ "columns": "timestamp_utc,value_cm",
+ "dataset": "PEGELONLINE W (water level) raw measurements, tidal stations",
+ "day_utc": "2026-09-20",
+ "files": [
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "00c33ed9-6bea-45b4-8728-7edc7e43e2f3.csv.gz",
+   "sha256": "3057b74e1c843a96dcdd8101fc9fa9b49b34ef0df6562f3f81a7b5b121d030b7",
+   "size": 3759,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/00c33ed9-6bea-45b4-8728-7edc7e43e2f3/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "00e386ac-e35c-4a6e-80dd-f8cd8a9e7a62.csv.gz",
+   "sha256": "f654b2ded09fc6e0feb0f7089dee1f2d0e74fa5db849b26d2f7ee4ccb6763a69",
+   "size": 4962,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/00e386ac-e35c-4a6e-80dd-f8cd8a9e7a62/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "04acd7e5-3cbc-4cdd-b4a9-f452e868f4d6.csv.gz",
+   "sha256": "94ea0274ccabe4dfcde0eebf58f4bfc335c4007ff86e437b04d00b08d290e5d6",
+   "size": 5201,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/04acd7e5-3cbc-4cdd-b4a9-f452e868f4d6/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "06219dd9-a2c4-463c-9619-623b3c026cbc.csv.gz",
+   "sha256": "3e3ebf65b877ba245b763b8569a45a53a517038302e339674e3493ea26d70455",
+   "size": 3664,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/06219dd9-a2c4-463c-9619-623b3c026cbc/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "06e6b715-eb03-46ce-adf4-6cafca6368eb.csv.gz",
+   "sha256": "ec081279000d8e489647cf5c85cf9665b130fe5765e91ce06632bb557f895664",
+   "size": 5677,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/06e6b715-eb03-46ce-adf4-6cafca6368eb/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "07830b68-c5b8-42dd-bf48-7176802130d0.csv.gz",
+   "sha256": "e94d9597c32696bde7c10110de432e1a7b3ca3ba78323a4c9633c355ad21c719",
+   "size": 3775,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/07830b68-c5b8-42dd-bf48-7176802130d0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "087b6386-0957-4b47-af7d-ecd62f6d63ce.csv.gz",
+   "sha256": "ea27afe07c3f07adedd8ef577e39cd1eeac40f78762f0ecd27b693b8e1d2594d",
+   "size": 3423,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/087b6386-0957-4b47-af7d-ecd62f6d63ce/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "09227288-8c72-4b12-88fe-8765d1b2b400.csv.gz",
+   "sha256": "54fca793c8ce9b6e8b671d36834b339c58763cc8070015c4666bfa0bfae6ce8b",
+   "size": 3498,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/09227288-8c72-4b12-88fe-8765d1b2b400/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "09370c05-1041-4395-a5d4-b8db6e59c4c8.csv.gz",
+   "sha256": "22265621946768b6744280572965a0cbf179a735bbf6b05d2cce3623005f4fed",
+   "size": 3230,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/09370c05-1041-4395-a5d4-b8db6e59c4c8/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "0d8233b8-36c9-4a24-ad77-a4e7c617932f.csv.gz",
+   "sha256": "da5bc67312624afc8bb9e112235be6eda4eec485de2fdd6f2dcf98af692da1b1",
+   "size": 5063,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/0d8233b8-36c9-4a24-ad77-a4e7c617932f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "0f7f58a8-411f-43d9-b42a-e897e63c4faa.csv.gz",
+   "sha256": "4a9aa4dff409de893940dcadea857d163aca8258a61705678d31948f359c3d11",
+   "size": 5673,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/0f7f58a8-411f-43d9-b42a-e897e63c4faa/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "116572da-c036-4486-ac18-a92932424e30.csv.gz",
+   "sha256": "a6eafa20867b73ff0c7f54236682b80b6938a6fab3dc65dd8a8baae51ffadb0d",
+   "size": 5736,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/116572da-c036-4486-ac18-a92932424e30/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "136febf6-1371-4118-a9b8-4275444bda5d.csv.gz",
+   "sha256": "f5c63030b07064e520267b7892d76aff680ef6b29215cc5366da768b366cdf2f",
+   "size": 5067,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/136febf6-1371-4118-a9b8-4275444bda5d/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "15859426-834c-429e-9c41-2e097b717b1d.csv.gz",
+   "sha256": "6b3438219aae1c5ae103aae954f9ec1f07c120d21840f94e09f2e83c6f8f2916",
+   "size": 4162,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/15859426-834c-429e-9c41-2e097b717b1d/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "1b51e55e-088a-44c3-a633-b1bee44422d7.csv.gz",
+   "sha256": "958aff899d86ceda2b81e1c402050f7016040f4a586c89de868fea3d1fc22c5c",
+   "size": 5823,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1b51e55e-088a-44c3-a633-b1bee44422d7/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "1f1bbed7-c1fa-45b4-90d3-df94b50ad631.csv.gz",
+   "sha256": "99bdd4554e5f6e6e4a9281206b4990d52acd2fd25eb07111be8e4e690456119c",
+   "size": 5238,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1f1bbed7-c1fa-45b4-90d3-df94b50ad631/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "1fa822e6-fb0c-4331-83f1-749972046dca.csv.gz",
+   "sha256": "747e8eac1e17e0687badc3c7ecd28982535764f2742f1f654555f01c5537d531",
+   "size": 3504,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1fa822e6-fb0c-4331-83f1-749972046dca/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "1faa9b2c-c269-4662-af70-ef11da27cc1c.csv.gz",
+   "sha256": "1d7dfca443bc7d07568a2155f9d9e8c255fbfbc10cddf467679508d51d4eadec",
+   "size": 3780,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1faa9b2c-c269-4662-af70-ef11da27cc1c/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "220ff4c6-83da-4a1b-9c13-dfee5a2a8798.csv.gz",
+   "sha256": "37f11507b0433833f029141d7160e5bc84bbe8e1ed8c7b413ee63c921ed32f6c",
+   "size": 3360,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/220ff4c6-83da-4a1b-9c13-dfee5a2a8798/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "227b83f7-1302-4d7e-8d70-899036ff4ce2.csv.gz",
+   "sha256": "9ce957f97c1b21f14e4d912d1ea1aa33a2772fd145f2f51772040d9a82d728ea",
+   "size": 5703,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/227b83f7-1302-4d7e-8d70-899036ff4ce2/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "22fd01e0-090b-476b-80aa-f4586e259785.csv.gz",
+   "sha256": "33df51c7d80cf52f08dbf4b35b62c8058d927496987eb0f434260e7083697292",
+   "size": 3580,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/22fd01e0-090b-476b-80aa-f4586e259785/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "244cae8b-ce75-4c2d-a66e-cb804f8335a2.csv.gz",
+   "sha256": "a5b077a89cf5abbcfb0aa972dd899e65f3106e885cf5688e6cc9f502583e9062",
+   "size": 5340,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/244cae8b-ce75-4c2d-a66e-cb804f8335a2/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "24c6a014-864b-4d53-bd05-0b49106f5412.csv.gz",
+   "sha256": "b3abbcdb49315df9674b4202d935de69c5b50e2c6e7c8e3bbb8c44aa83d32480",
+   "size": 4912,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/24c6a014-864b-4d53-bd05-0b49106f5412/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "26259e8f-7d2d-47e0-8851-0257542b63b3.csv.gz",
+   "sha256": "6fcf133a51cb97dcf564d7ce4efd15db525f203ab0c9acbbaae8f7d12ac71701",
+   "size": 5436,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/26259e8f-7d2d-47e0-8851-0257542b63b3/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "26656fda-cacf-4e92-9935-3ae6e717fe5b.csv.gz",
+   "sha256": "dd97efa5fa5d69f2c22822ee9ebb6cbc1ead27019bfc23bb5a24f723dcc0d654",
+   "size": 4942,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/26656fda-cacf-4e92-9935-3ae6e717fe5b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "2852b9ab-d30e-4d04-ae06-3e946f48a0b1.csv.gz",
+   "sha256": "0622f9dcd280df03a6f31618b8f9fe0af7e88ca50f7496e6564a5f4a8a2626df",
+   "size": 5223,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/2852b9ab-d30e-4d04-ae06-3e946f48a0b1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "2e1d458b-f78f-41dc-bebd-e0512578610a.csv.gz",
+   "sha256": "e94e1d82155f025ab7a0a435d1e761ce67bd4fb24762d0a8c4269af72a1e5ebe",
+   "size": 5834,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/2e1d458b-f78f-41dc-bebd-e0512578610a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "2eacef2f-7a8f-413a-a2c7-f1da4cf22742.csv.gz",
+   "sha256": "7d06e145d68df9eb36b8963d1441c4a762d38e28b08efa5ada0ef2b15a17a786",
+   "size": 5662,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/2eacef2f-7a8f-413a-a2c7-f1da4cf22742/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "2ee12b9a-f7fd-4856-82b9-6bdd850c2bba.csv.gz",
+   "sha256": "9971dcd6b073baa5e03ec8652c90c962c8896a8bff8bc02be907cf764d9cd1ae",
+   "size": 5716,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/2ee12b9a-f7fd-4856-82b9-6bdd850c2bba/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "308c39b6-475f-42c3-857f-7cf257426fa1.csv.gz",
+   "sha256": "6310afafd71bdb758ee60c1da8d1c30bd93b74b8588e639ea2e999aa08747bb6",
+   "size": 3679,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/308c39b6-475f-42c3-857f-7cf257426fa1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3244d787-f884-40ae-9752-ad3507309edc.csv.gz",
+   "sha256": "61baa78a1cc7b69e46389b58ffe7c3633a2ad5b19f0c1b777670eb6021040ffc",
+   "size": 4149,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3244d787-f884-40ae-9752-ad3507309edc/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "33bdec83-6184-4ca5-a075-f44185aef302.csv.gz",
+   "sha256": "3a52bdd45413c30af2edd077a8b092a45bcc20cbef1fe7f8e99a12fb0203ae6b",
+   "size": 5371,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/33bdec83-6184-4ca5-a075-f44185aef302/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "340707f4-5d35-4898-8b34-95ea3f4206b3.csv.gz",
+   "sha256": "865777083caab36415517f65985ad2d2b27d962edc6d6d323de449138b421829",
+   "size": 3300,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/340707f4-5d35-4898-8b34-95ea3f4206b3/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "36e85829-2fb3-41a0-8a1b-aa9e76431b47.csv.gz",
+   "sha256": "079d218e5586e113daac9325a0d06288bac853367b0d077ced82d38709fde2d8",
+   "size": 5346,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/36e85829-2fb3-41a0-8a1b-aa9e76431b47/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "391bbba5-83d4-4791-b07e-65ab29b423f6.csv.gz",
+   "sha256": "ccfe816fa51526d714b6ac1a44cf0755c060a90ffe15ef88e37c6a2d2b14cd3b",
+   "size": 5479,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/391bbba5-83d4-4791-b07e-65ab29b423f6/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3ad4013f-644b-47f5-a641-44b332bfecb2.csv.gz",
+   "sha256": "a6dd1d1a843c4c5fd34429154eafc874b563270949ebf7d83defece194b71e61",
+   "size": 3717,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3ad4013f-644b-47f5-a641-44b332bfecb2/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3de8ea26-ab29-4e46-adad-06198ba2e0b7.csv.gz",
+   "sha256": "29fd0d8c42e8431e2ac0592cceea23d7d0789265f140c31087f4caff102d0f74",
+   "size": 5532,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3de8ea26-ab29-4e46-adad-06198ba2e0b7/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3ed90357-4b01-4119-b1c5-bd2c62871e7b.csv.gz",
+   "sha256": "75ef6b7140e7e626b740884911e54ac3df61780bfce7fd5f813cff2f4bef3f06",
+   "size": 5327,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3ed90357-4b01-4119-b1c5-bd2c62871e7b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3f0b6b74-80a9-4576-a3cb-ea967dfc349f.csv.gz",
+   "sha256": "8e702a5636dfb1270833930229015cd5967e210771abbe855be888baa25d7928",
+   "size": 3836,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3f0b6b74-80a9-4576-a3cb-ea967dfc349f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3f3b4445-9a6a-44c3-8575-d86ce30e2de0.csv.gz",
+   "sha256": "89ecca5d1062240c628d460547949f6cd37e2387a944d5e5ad16b6878104ca87",
+   "size": 5788,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3f3b4445-9a6a-44c3-8575-d86ce30e2de0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "3ff99b92-4396-4fa7-af73-02b9c015dcad.csv.gz",
+   "sha256": "8f8d267c11333de307eb316b93c13ab3a3ab0b8b274665160caa8b10abaebb63",
+   "size": 5041,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/3ff99b92-4396-4fa7-af73-02b9c015dcad/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "438b565e-f293-43c8-8771-377e555ed5ec.csv.gz",
+   "sha256": "45775ce41dd2621ebab9dddd871325c53931ca246cc5407e4b73b501ec800f95",
+   "size": 5065,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/438b565e-f293-43c8-8771-377e555ed5ec/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "478f21e9-906b-4c6f-a009-b5eabb052746.csv.gz",
+   "sha256": "8788e1d22317329f56f96d869a45a038f91a6994ee8a0efdfc8783af4227376c",
+   "size": 4709,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/478f21e9-906b-4c6f-a009-b5eabb052746/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "492f85b8-e5c6-439e-8e14-08ca78f10dce.csv.gz",
+   "sha256": "a7d6b8aa76995a1a65a7269f9451a16706bedb4b2938a4272e08a61756578d2c",
+   "size": 3422,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/492f85b8-e5c6-439e-8e14-08ca78f10dce/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "4a0061f0-7355-4a95-9c70-f05c8920d790.csv.gz",
+   "sha256": "62c439d1a7a6d5166b1f287502601431eb210674b1cdbb9d69477c250b0c9399",
+   "size": 4070,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/4a0061f0-7355-4a95-9c70-f05c8920d790/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "4b348b56-b08c-4522-9042-49c1edb45d0d.csv.gz",
+   "sha256": "8f539e6e81e6c8304a90af0a1369aacaadc1deb6f63e8e05b799331332e3b14f",
+   "size": 3331,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/4b348b56-b08c-4522-9042-49c1edb45d0d/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5140295e-b93e-4081-a920-642d89c7ca8b.csv.gz",
+   "sha256": "baa6c83f73a5b0416842cdc00b215e7c1f9abd3e9b761c460b64cb02714dfc95",
+   "size": 5034,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5140295e-b93e-4081-a920-642d89c7ca8b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5287a3e1-c540-4ab1-b52e-880d124cbc43.csv.gz",
+   "sha256": "7f4cc8b3be794c3d21d7100fd358d1eeef9442ad40f67e837e594b19d3bdd5d8",
+   "size": 5206,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5287a3e1-c540-4ab1-b52e-880d124cbc43/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "531da758-b2f5-471d-9d9f-a78576081079.csv.gz",
+   "sha256": "a2c9132d683bb6b8695488571a9d5829017d32adbb65db38f813e73a1a43844f",
+   "size": 5868,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/531da758-b2f5-471d-9d9f-a78576081079/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "53c277c3-7ddb-4281-9937-97dcfe3753fa.csv.gz",
+   "sha256": "87cba0f288cda88c0130e4a0807cfcfbf6376f8e16593e122a68b3f9f693e948",
+   "size": 5420,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/53c277c3-7ddb-4281-9937-97dcfe3753fa/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "575da86f-d975-4837-b6f5-6f19c3a5e4b6.csv.gz",
+   "sha256": "e327dfc0dca97d7bff132aead6e103420e4c16ef177d0f1eef73d4e5f8005eeb",
+   "size": 5247,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/575da86f-d975-4837-b6f5-6f19c3a5e4b6/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "599c23b1-4550-41e3-a7e7-3056989927f1.csv.gz",
+   "sha256": "62568819a193ee926594fc7ddccbd4b1380ecddbf04e44078e1f482d74100e3c",
+   "size": 5595,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/599c23b1-4550-41e3-a7e7-3056989927f1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5a33bf14-6bdc-4666-b2e3-ac78e3083e2a.csv.gz",
+   "sha256": "2cec9e60976c5a3b6acc41501823bb92d61332d92f2741d0af3efc1a5afbb527",
+   "size": 3652,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5a33bf14-6bdc-4666-b2e3-ac78e3083e2a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5d1e4350-0f39-4428-84c3-6f8f0bbe80d4.csv.gz",
+   "sha256": "4dc4625639ab302bb351f13782594b89485002f50f939ad33de7b981d72fd50e",
+   "size": 5295,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5d1e4350-0f39-4428-84c3-6f8f0bbe80d4/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5e6ae93a-7856-4005-bc77-fc6e4f5ad630.csv.gz",
+   "sha256": "9944a1414ca35dfce6226b9a4705e7f86595dc1b130b3886fe547e7427a2e96b",
+   "size": 5434,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5e6ae93a-7856-4005-bc77-fc6e4f5ad630/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5e92d73f-e4ea-42c1-9f98-91536c17cdff.csv.gz",
+   "sha256": "710432eaaf76a7d73d228762751fc53035551d84ff86ac912ca5dd30285f9b5b",
+   "size": 4387,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5e92d73f-e4ea-42c1-9f98-91536c17cdff/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "5fea1a12-326f-4919-ac9a-02f9fa11ab57.csv.gz",
+   "sha256": "585320d6350dea65d34fa4e8f7eccfded99088ea9fb61b34a16ddb41b61cbc85",
+   "size": 5563,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/5fea1a12-326f-4919-ac9a-02f9fa11ab57/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "610ab204-d3c4-4a11-a38b-e31461fdcf27.csv.gz",
+   "sha256": "31cce59c55760de2371cce99a801ef5a270885dbe8701180f3cb4bc5a023d689",
+   "size": 5187,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/610ab204-d3c4-4a11-a38b-e31461fdcf27/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "61394669-3f1b-44e5-ae37-50fd2512f4fa.csv.gz",
+   "sha256": "3950499d3d2e861e7e4bd09ccc88c3fbf2c491108dfef4f680363707a1602a6f",
+   "size": 3041,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/61394669-3f1b-44e5-ae37-50fd2512f4fa/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "6233e901-2600-4b54-ae06-7b987934e99e.csv.gz",
+   "sha256": "5277b952ea337f3a5f81aede8751b129fd3d1c96e1bbc74f34fb8b6463a9f4da",
+   "size": 5386,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/6233e901-2600-4b54-ae06-7b987934e99e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "662c4b5e-0241-456d-ac7d-9f62fd95c0d1.csv.gz",
+   "sha256": "916e4df800e16fbc6ea89946deda5e8da1baf93e47ed2495cd5163542ee33fc1",
+   "size": 4742,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/662c4b5e-0241-456d-ac7d-9f62fd95c0d1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "6b05e8dc-3089-497a-a602-f40c4283d8bb.csv.gz",
+   "sha256": "69f97bab72c6002db2bff40c1444e1cae08baee29c8de3637890c20e82316238",
+   "size": 5784,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/6b05e8dc-3089-497a-a602-f40c4283d8bb/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "6b53ef42-5bd9-4366-ace3-442e307bec60.csv.gz",
+   "sha256": "5bb7a8205b55ba86cd18c34502a1e153791f84974f7645f08073ea1bb0f957ad",
+   "size": 3408,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/6b53ef42-5bd9-4366-ace3-442e307bec60/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "70039212-c8a8-43fc-82a5-150d95831772.csv.gz",
+   "sha256": "5cd0fd6be8b41bdee5d677c4bc9a9b74680d54f51696a3e32611309566ea13b4",
+   "size": 4704,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/70039212-c8a8-43fc-82a5-150d95831772/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "706e5110-c5e2-4915-9989-c071fcb492ec.csv.gz",
+   "sha256": "0d80162218f7def1e7eb3bee376d8642887f7cc30503e202649ccf97f07dd25a",
+   "size": 5736,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/706e5110-c5e2-4915-9989-c071fcb492ec/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "70d4f87f-4489-455a-a435-d6df9e09a87e.csv.gz",
+   "sha256": "046f06bf9ca17167bd2ba06dd0bec85a89bd9be787e5bb8c7837dcf2fc922b6b",
+   "size": 3838,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/70d4f87f-4489-455a-a435-d6df9e09a87e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "721313e7-935a-4bb8-8c6d-0e014211b2ec.csv.gz",
+   "sha256": "b65b6e5c39163cb217ffa879d56546fac3b659218aa40c627bc433f07118b867",
+   "size": 5164,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/721313e7-935a-4bb8-8c6d-0e014211b2ec/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "733755fd-628f-4130-a694-aaba340531ba.csv.gz",
+   "sha256": "e296e40ed67b17e2af7a2a78547e8993fb218fb151489490507510dd5ef6c70a",
+   "size": 4852,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/733755fd-628f-4130-a694-aaba340531ba/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "736437d7-0f6f-41b7-bc69-5ed721da4f85.csv.gz",
+   "sha256": "bbd9167d5b7e6fd5fe4b6eba00bc3a5943aebf4cfff43de52e614e4f5b2583d9",
+   "size": 3442,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/736437d7-0f6f-41b7-bc69-5ed721da4f85/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "7398029b-c6a1-484f-b1f6-1afe568ee1e2.csv.gz",
+   "sha256": "aa66dbd87085e8f075393a83325ea267bd66ea8baa80918423b27d9975a76bf6",
+   "size": 5340,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/7398029b-c6a1-484f-b1f6-1afe568ee1e2/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "76844306-4c37-4a6f-aac4-9e518e96306f.csv.gz",
+   "sha256": "88ca726d1ad3e82769d29659207d514d1f8386cd6dbd0741843d130d6aeec868",
+   "size": 5856,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/76844306-4c37-4a6f-aac4-9e518e96306f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "7753c1fa-34d8-4d09-a7c7-38024079117c.csv.gz",
+   "sha256": "e3a5bb5d3c1f8e28f669e44e45b8a592dcbb2b7eb81e31761362efc8b9962f5c",
+   "size": 5013,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/7753c1fa-34d8-4d09-a7c7-38024079117c/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "78029185-9dfc-4b1b-8695-45ebc2a09cf4.csv.gz",
+   "sha256": "eea62ba9da87fe94b2d0c22f1fc9e8073b8e9e16d0b1e0751adf670a83e59b77",
+   "size": 5397,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/78029185-9dfc-4b1b-8695-45ebc2a09cf4/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "795ce865-3ac4-43b8-88d5-049a34e4359e.csv.gz",
+   "sha256": "a505777672b6f3f83948be568c9f298e7b897b66b296303813536cec51a7f2d8",
+   "size": 3339,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/795ce865-3ac4-43b8-88d5-049a34e4359e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "7cb4566b-c584-4167-8736-f52ca7fd837d.csv.gz",
+   "sha256": "e29de5a046453123d1034016bcc297cd336536482169dc062b9defe2e9711871",
+   "size": 5056,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/7cb4566b-c584-4167-8736-f52ca7fd837d/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "7d50c68c-3558-481d-bbe3-830f6f534a05.csv.gz",
+   "sha256": "5163e5dc7817ebe19aba1224606ba64978b52bb926802a12688a81ab1252f730",
+   "size": 3848,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/7d50c68c-3558-481d-bbe3-830f6f534a05/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "7f01fbd8-653c-40ba-8ed0-57386a9b4557.csv.gz",
+   "sha256": "0f0b527896b0faa6940b720f2e6c37186a4254311a6e4fb3ea8cc4decac1b70d",
+   "size": 3350,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/7f01fbd8-653c-40ba-8ed0-57386a9b4557/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "7febef93-09ce-49e9-9643-ecb3076ce9a7.csv.gz",
+   "sha256": "4f540177782e2eee9fba61f9a468d5eec09ed8615d9f407c13f9367e746adce6",
+   "size": 5740,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/7febef93-09ce-49e9-9643-ecb3076ce9a7/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "80f0fc4d-9fc7-449d-9d68-ee89333f0eff.csv.gz",
+   "sha256": "34c28c563811e9692703c96b7b2566a4de246a4f1c33c562fc716b558ed2356b",
+   "size": 5494,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/80f0fc4d-9fc7-449d-9d68-ee89333f0eff/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "816affba-0118-4668-887f-fb882ed573b2.csv.gz",
+   "sha256": "6788132e9004e765fc19a2ba3dae24ea0d638f520192f87947e7dc140b55f1f1",
+   "size": 5719,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/816affba-0118-4668-887f-fb882ed573b2/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "86c5688f-2fac-4d58-a245-ad8ce14cafbf.csv.gz",
+   "sha256": "1e87b0c7237457ac539dde0360e898f62ad608d4073d0dc401f71aaf0e25d662",
+   "size": 3450,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/86c5688f-2fac-4d58-a245-ad8ce14cafbf/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8727ebfd-e2e1-43da-ab3d-fee48cff9acc.csv.gz",
+   "sha256": "5ea5277535b2ff8fa0a199a6cf3a4dd8c1523ba6aec98de435f2187428b3ce71",
+   "size": 4489,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8727ebfd-e2e1-43da-ab3d-fee48cff9acc/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8a08c920-c911-43e5-90dd-27d4d4e757d0.csv.gz",
+   "sha256": "0b1bef37cc5e51e8df5e295ca8e78fec89423b46e67fef864124cf967648374c",
+   "size": 5166,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8a08c920-c911-43e5-90dd-27d4d4e757d0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8ac85e6c-6167-496c-b16f-fa94f81cd94a.csv.gz",
+   "sha256": "564d77ec91d0fab4ef7c1161e994f3d65fdc3c0d439513b64ddc69e24587585c",
+   "size": 4835,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8ac85e6c-6167-496c-b16f-fa94f81cd94a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8ba772ed-e45b-4be8-b91d-0c6c92de59e4.csv.gz",
+   "sha256": "91865dd4232c8bbdc2aa98aec53dc714b969b74e311f4d34b6070ed9951b228d",
+   "size": 3279,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8ba772ed-e45b-4be8-b91d-0c6c92de59e4/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8c20b4dc-1540-4b14-8c88-0e1d87de22c4.csv.gz",
+   "sha256": "8f2cedd017a5852f8ed3cc7132742172b7e98f61efb3d37d783e7b45abee70f8",
+   "size": 5226,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8c20b4dc-1540-4b14-8c88-0e1d87de22c4/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8c3295dc-fe73-45bc-9a7b-679d4aaad0cf.csv.gz",
+   "sha256": "2231003492bb962a3b4ec55dae879dc02ec0b4dd4da274471aa55e456b6bd04b",
+   "size": 4549,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8c3295dc-fe73-45bc-9a7b-679d4aaad0cf/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8d18d129-07f1-4c4d-adba-a985016be0b0.csv.gz",
+   "sha256": "2e0d9dc3b9049927bf7e7f407c60c94408ba8c2b915765829f4852bd3245be20",
+   "size": 5679,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8d18d129-07f1-4c4d-adba-a985016be0b0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "8effc15d-8583-4ac6-9f42-1b63c47f92b0.csv.gz",
+   "sha256": "ce1325ce07909e173d6e775cc821580d616b1f8e8c402b86c402a5f98355ab92",
+   "size": 3694,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/8effc15d-8583-4ac6-9f42-1b63c47f92b0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "905e7328-b8aa-4b08-9c22-c864101e462b.csv.gz",
+   "sha256": "44de5b27446bbd631255e67b514db6c848c51013bb3240996b42e2c9db3e648c",
+   "size": 3595,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/905e7328-b8aa-4b08-9c22-c864101e462b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "91922b9b-ef7b-4aae-95a1-9d6a9e61969a.csv.gz",
+   "sha256": "3ca0c0b0898094e21544c2115426bf6f06999c147668ab3dfb75317622685455",
+   "size": 3306,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/91922b9b-ef7b-4aae-95a1-9d6a9e61969a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "95a0ab45-a9ac-4f9a-93e9-b0ffa1c57b5f.csv.gz",
+   "sha256": "6a2700649a28d49783c0b682ae381d18158255ba1808c9e084cb1c2621c6e5bd",
+   "size": 3461,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/95a0ab45-a9ac-4f9a-93e9-b0ffa1c57b5f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "9c4c11f2-0548-4555-beac-ecfd36f9bd74.csv.gz",
+   "sha256": "2f3b330f1e356bf96fb2e337c2200990799d245169d88724607adc967e946bb8",
+   "size": 4856,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/9c4c11f2-0548-4555-beac-ecfd36f9bd74/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "9e19c411-f728-4a43-a057-39d4155c71cc.csv.gz",
+   "sha256": "5919da21e94be2ab2ee0603975bd676400f3eda0c828edd94f1d3e08ecf2e930",
+   "size": 3704,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/9e19c411-f728-4a43-a057-39d4155c71cc/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "9e7b2a4d-cfe8-4524-8a1e-c196ea897e9f.csv.gz",
+   "sha256": "b7b2bea9636c82e837e850f3ffec6444635d4a277de6f7083f454cb022d9c112",
+   "size": 4274,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/9e7b2a4d-cfe8-4524-8a1e-c196ea897e9f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "a0c1dcb6-7812-48e6-8c01-f7edad7a2caf.csv.gz",
+   "sha256": "0756607b9fb5dc295a617b2ac7f22be395853658ff21702710107d7bcb396ca5",
+   "size": 4690,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/a0c1dcb6-7812-48e6-8c01-f7edad7a2caf/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "a238b70f-1198-4b2f-8c03-41f3503e5389.csv.gz",
+   "sha256": "b3ff09074a8d36870a711d06ea710d55303777881035406d256717aacb401a70",
+   "size": 3421,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/a238b70f-1198-4b2f-8c03-41f3503e5389/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "a3328262-207d-4e65-96d8-202368ca0cb8.csv.gz",
+   "sha256": "6c84c6a0be9446e12de9189dc7608fc4194cb408ea1d7a6c158b3f811d5633c8",
+   "size": 3302,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/a3328262-207d-4e65-96d8-202368ca0cb8/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "a653eb04-de2e-47f7-8e2c-09277cfe95ae.csv.gz",
+   "sha256": "21d10dad202216aa5bc28c1af6326fd0cc6d16e766588fa07558374c5a005b97",
+   "size": 5411,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/a653eb04-de2e-47f7-8e2c-09277cfe95ae/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "a9e93be0-cb0e-4418-ba3c-94e7869f6199.csv.gz",
+   "sha256": "8d9e0fbaac698916698cfd115ac96b1fbb281f99b0806b76e157b97a762a8495",
+   "size": 5049,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/a9e93be0-cb0e-4418-ba3c-94e7869f6199/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "aa6af4e6-a44f-46c4-abf6-449f8a68bab1.csv.gz",
+   "sha256": "ffa31c16e54117d51d8b9f3684de3fc46dcada0ba89d9bfe1b5284e31b9fd9f4",
+   "size": 5503,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/aa6af4e6-a44f-46c4-abf6-449f8a68bab1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "aac49cf2-5d3f-4c69-9847-027fecaeef30.csv.gz",
+   "sha256": "07abefd0c40ca55cd34273bbfe1c008e44aeb2e2fed74ab34fa56decbfa2608b",
+   "size": 2474,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/aac49cf2-5d3f-4c69-9847-027fecaeef30/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "aad49293-242a-43ad-a8b1-e91d7792c4b2.csv.gz",
+   "sha256": "424f62d66d7777363e3c2c6c239e386e6dc4b367fa82f5733dd126c510a641a2",
+   "size": 5072,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/aad49293-242a-43ad-a8b1-e91d7792c4b2/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "abb23dad-0880-41ab-8d2d-dd33e11f148f.csv.gz",
+   "sha256": "7f8cf6b359949b44a1476b20f735607e5318f70a615eca8922304473f0b4ceb6",
+   "size": 5409,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/abb23dad-0880-41ab-8d2d-dd33e11f148f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "ad3b53f8-8c1b-439f-a0df-9f24827026d5.csv.gz",
+   "sha256": "ec1f332348ed186808680fec3f6f5810d91ab1b3d5f1b808eefaf7402557b730",
+   "size": 5195,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/ad3b53f8-8c1b-439f-a0df-9f24827026d5/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "ae1b91d0-e746-4f65-9f64-2d2e23603a82.csv.gz",
+   "sha256": "27e0bea38e63ee33c20a488f5dd2cac66da43f1b98beb4dba48b90a66f595e6d",
+   "size": 5824,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/ae1b91d0-e746-4f65-9f64-2d2e23603a82/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "aeb9ed1c-6c01-4829-94e4-e530dbf79821.csv.gz",
+   "sha256": "354034f7ea02e2bc4dead3b59781cf3e6d9d88909855646515720b889bcfaab7",
+   "size": 5952,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/aeb9ed1c-6c01-4829-94e4-e530dbf79821/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b02ce5c0-64e9-4d24-90b9-269a28a1e9f9.csv.gz",
+   "sha256": "ebefef2cee19c7d47d3d392c43c166655626d185eb87e8b55b8a0d8899a61dd3",
+   "size": 5830,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b02ce5c0-64e9-4d24-90b9-269a28a1e9f9/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b09f2243-60f0-469a-8f3b-0ea6abc83267.csv.gz",
+   "sha256": "2f5512b3c94023a966a0a4d3195da12bc78f1141a56f99a50950223ca8316802",
+   "size": 3354,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b09f2243-60f0-469a-8f3b-0ea6abc83267/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b1cda5a0-115f-4976-a0a6-9d427ff6dceb.csv.gz",
+   "sha256": "0cf6ab928a32369ce700c3cd75887e1d66e8361f21f3049a567b15a4aa12d114",
+   "size": 5246,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b1cda5a0-115f-4976-a0a6-9d427ff6dceb/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b26bfc88-eb8a-45b9-9dd0-0e41949a2648.csv.gz",
+   "sha256": "4817e6bd3c44750b55698f57f60e0f0d7d5253fc87345e9e70eaea65dce7df19",
+   "size": 5908,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b26bfc88-eb8a-45b9-9dd0-0e41949a2648/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b327e35c-5dad-4b79-9cef-60fbd504eb37.csv.gz",
+   "sha256": "cea9f14466722db47e44c43df7558040ccd9ae8bf7e2fdcfff571ecbf8cf7ee9",
+   "size": 3349,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b327e35c-5dad-4b79-9cef-60fbd504eb37/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b3d88ca6-ea13-4540-a623-c02e43800a3b.csv.gz",
+   "sha256": "bddc6a88bc3be33d8124c30e4092255ae2e039807294e1cf4cea4f2d7f973c52",
+   "size": 5618,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b3d88ca6-ea13-4540-a623-c02e43800a3b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b7e238e8-29ec-4522-8252-b2cae7d4f58e.csv.gz",
+   "sha256": "57b7ffc3f6e121554ed4613504e593e48086f050dd8aae9a126a912cc2705ceb",
+   "size": 3115,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b7e238e8-29ec-4522-8252-b2cae7d4f58e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b8d05bf9-2ef2-416d-ba70-b5dba74fe777.csv.gz",
+   "sha256": "dfa42c64016e167e029742ef9e7665618f967628399ed72e6901a6fa33d73d3c",
+   "size": 3151,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b8d05bf9-2ef2-416d-ba70-b5dba74fe777/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "b9163121-2747-4d2b-bcf5-ab5ff7396e56.csv.gz",
+   "sha256": "fabb7767c766ad71728fdcc5f4a3de073545b66bf3294e52d3d3abd389d9c1b9",
+   "size": 3186,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b9163121-2747-4d2b-bcf5-ab5ff7396e56/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "bacb459b-0f24-4233-bb35-cd224a51678e.csv.gz",
+   "sha256": "8126de076bb6b2aa172fbd5e8cf7bca601277b8e29802adf3e8aaaba11a8ec98",
+   "size": 5663,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/bacb459b-0f24-4233-bb35-cd224a51678e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "bb62b28f-9947-42b1-92e4-743a1e0c4a76.csv.gz",
+   "sha256": "e788b3499b0a3e02dcf96912134610c706ca151baa7666de5e9ca23a666dbe7b",
+   "size": 5156,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/bb62b28f-9947-42b1-92e4-743a1e0c4a76/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c0244c0e-6ae6-40cb-a967-4039b2a0ce7c.csv.gz",
+   "sha256": "bfe5fdda85109fe6856c7e883720554718925675ee94d9b301bee0c1bc77128e",
+   "size": 4695,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c0244c0e-6ae6-40cb-a967-4039b2a0ce7c/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c0ec139b-13b4-4f86-bee3-06665ad81a40.csv.gz",
+   "sha256": "11d25b726293261b9fb2eac11cb22fb0a2364b7334fa71997eb0f2e5349f83cd",
+   "size": 4929,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c0ec139b-13b4-4f86-bee3-06665ad81a40/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c0f33a36-cac4-4e47-a3f5-d1863c2f0f99.csv.gz",
+   "sha256": "1d55992399aa04574bfb74b8a47250fb6e0ec3c207cdf267f838120f8aacee9b",
+   "size": 3678,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c0f33a36-cac4-4e47-a3f5-d1863c2f0f99/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c1588dcc-e314-4097-a54c-c0ffbe79209f.csv.gz",
+   "sha256": "bfadb44a11a48714add7665f74b848ac34ff62e8e3afc263cfc26bd5f23374b3",
+   "size": 3423,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c1588dcc-e314-4097-a54c-c0ffbe79209f/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c1f059dd-5063-468a-9dfa-0360fe0b030d.csv.gz",
+   "sha256": "304e42ccad9175a5323ca0887036c648c7b077f335a377329be3a99a0c93d4ee",
+   "size": 5960,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c1f059dd-5063-468a-9dfa-0360fe0b030d/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c33c3667-b8c5-484a-8ea0-b92933b5a9f0.csv.gz",
+   "sha256": "c6899c40a9bda288d26747601c8b04d35d68c9fc5b362fcefd304549fbecf5fa",
+   "size": 3747,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c33c3667-b8c5-484a-8ea0-b92933b5a9f0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c41d42b1-5b0d-47c9-ba53-d58d3d109b64.csv.gz",
+   "sha256": "75bb54fd2bc6c42544beb07b3d3b56d4e2cf284c926205e05a444d8ca80d74d8",
+   "size": 4968,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c41d42b1-5b0d-47c9-ba53-d58d3d109b64/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c6772c3c-a6bb-4728-9250-a408ab3856bd.csv.gz",
+   "sha256": "0f09b7c431000c69597a81d683b8cedd19261685e20a6c2758002e4bef229666",
+   "size": 4950,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c6772c3c-a6bb-4728-9250-a408ab3856bd/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c7383149-1f77-430d-8bef-c5667be3846b.csv.gz",
+   "sha256": "bd1aaea891a2bda0b9bc3d9ac3547e0852bc7cd5a14e23435c30e08f7ee20750",
+   "size": 3976,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c7383149-1f77-430d-8bef-c5667be3846b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c8af067c-ba6a-4a76-86d8-1ce8e532ef8b.csv.gz",
+   "sha256": "23bb8a602f90608d422bf75b2bbf47f631fb6cfd0a1fddc848378a705296d449",
+   "size": 4690,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c8af067c-ba6a-4a76-86d8-1ce8e532ef8b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c8b9a2b6-b783-417f-8479-3a0d732fb901.csv.gz",
+   "sha256": "14975b84794f1ec31e7fee8bc6d620d0c0143553f980b48192ef0afbc435714b",
+   "size": 5122,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c8b9a2b6-b783-417f-8479-3a0d732fb901/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "c9df61c4-2a0b-47bd-8b51-fef7f430e528.csv.gz",
+   "sha256": "1d4c2eea44db5eb366b9dc5c61a33021898f55f682cfa0fffc233be38ae55162",
+   "size": 5722,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c9df61c4-2a0b-47bd-8b51-fef7f430e528/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "ca0e4a68-bd50-494c-bd45-abb33c5e1b0a.csv.gz",
+   "sha256": "040985b2fc1a37d1109cbf4d3f37a9bf1f6225b6c1aa981156a6c77346f0f2e0",
+   "size": 3407,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/ca0e4a68-bd50-494c-bd45-abb33c5e1b0a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "cb93548e-c1ce-43f6-b3a1-6903f8835b33.csv.gz",
+   "sha256": "fa873925899313e6add1d3371eadd790283040f900811600ba37e137ad5b6e14",
+   "size": 5163,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/cb93548e-c1ce-43f6-b3a1-6903f8835b33/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "cca92e6d-e2c3-4c5f-be56-5b8682b353eb.csv.gz",
+   "sha256": "74a410059f792b3c5e9650d94e6e8dd8cdab65fd7b22abe6561613165b1629ea",
+   "size": 5870,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/cca92e6d-e2c3-4c5f-be56-5b8682b353eb/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "cf8a3ea2-d5d2-4bf2-ba6b-cf1309d18bb1.csv.gz",
+   "sha256": "fd8be6654716198d92509ed214b8a3bc89dfb290f93eb3252cd184c23f00b074",
+   "size": 3773,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/cf8a3ea2-d5d2-4bf2-ba6b-cf1309d18bb1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d1c9bb3c-2929-46a8-a338-adfddf0ef524.csv.gz",
+   "sha256": "c360297c9c1915d84c616937d8c0025f9e0bd666ac3acb0f9429a5080f11b255",
+   "size": 3543,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d1c9bb3c-2929-46a8-a338-adfddf0ef524/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d22c341b-80c2-436d-98e1-8a2575bc975a.csv.gz",
+   "sha256": "e0e1b11daf55902a932dcc59f80cac4943b3e598b0aeeaac5682f416ebdddc46",
+   "size": 3744,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d22c341b-80c2-436d-98e1-8a2575bc975a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d3f822a0-e201-4a61-8913-589c74818ae0.csv.gz",
+   "sha256": "88b7ec2d5e8c653bb70b183235b53682f2223854aa7a4bc85b9eae606e795d97",
+   "size": 5519,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d3f822a0-e201-4a61-8913-589c74818ae0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d488c5cc-4de9-4631-8ce1-0db0e700b546.csv.gz",
+   "sha256": "14aeff29d48f0a81697be93da9ca29a8b26ea775cf196f21a62a70ceb3837a6e",
+   "size": 5721,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d488c5cc-4de9-4631-8ce1-0db0e700b546/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d4df3617-8209-4bcd-948e-fa723beb6666.csv.gz",
+   "sha256": "48308933fb17fc4b62b1349c48beef2218abddc5cd1742454cb3c2e3d2165a49",
+   "size": 3854,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d4df3617-8209-4bcd-948e-fa723beb6666/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d4f5f719-8c52-4f8d-945d-1c31404cc628.csv.gz",
+   "sha256": "87c689126f24de3d6d7186ebabb90864b5bcd199eddfa7a2e765addf5174cd6b",
+   "size": 5120,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d4f5f719-8c52-4f8d-945d-1c31404cc628/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d7a8df36-2978-45b8-99d1-76d84cf34c01.csv.gz",
+   "sha256": "92c047108ff45fc5c19ad3f9ae84708ea90565773207281de5d0a516000210dd",
+   "size": 334,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d7a8df36-2978-45b8-99d1-76d84cf34c01/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d863cbc3-5e5e-4095-855c-026f0850dd58.csv.gz",
+   "sha256": "301d76946e15d01505b46f84371b310630030be70a67368610200a9e85fa5e22",
+   "size": 5171,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d863cbc3-5e5e-4095-855c-026f0850dd58/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "d9acdbec-61ff-4308-978a-2f4d1c2c4059.csv.gz",
+   "sha256": "cf791e034d8e11a6bc28d4f483eae02ac235decf53ed53be2500c46eb9cce348",
+   "size": 5215,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/d9acdbec-61ff-4308-978a-2f4d1c2c4059/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "da893bbd-965a-49b7-a661-707a1ba899d1.csv.gz",
+   "sha256": "95973c10756dc4a588faf59c7cc793d7152d10777b42e374ab9d2b45a5d277b0",
+   "size": 3766,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/da893bbd-965a-49b7-a661-707a1ba899d1/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "e114aeec-c8d9-4d20-8fe1-8822058cb38b.csv.gz",
+   "sha256": "e6c6ee71ec69cf8da0158976eefa2e00a1e9b3fd88ebe4a5778be2ea33bb16a6",
+   "size": 5524,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/e114aeec-c8d9-4d20-8fe1-8822058cb38b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "e574d0af-5c63-4306-b1d3-43b7359de06d.csv.gz",
+   "sha256": "a5ca961f962e484cb742541be39151fc3788f09af05b9b3b2ecc01489a1abb8d",
+   "size": 4976,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/e574d0af-5c63-4306-b1d3-43b7359de06d/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "e5b8e9f3-f0cc-4ad7-8707-577ee1b25b3e.csv.gz",
+   "sha256": "67eca6ee7d8bd02d16a31941c8106a3b55ed2e4ce36efc72cb6e494b8030f456",
+   "size": 5215,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/e5b8e9f3-f0cc-4ad7-8707-577ee1b25b3e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "e5e02890-87bd-4fab-b590-ffa557c3532e.csv.gz",
+   "sha256": "f6bcf96740d24f40753b1f12c2ce33ee1e3f7ce7d62ca44af2fbf2e3055c2d07",
+   "size": 4369,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/e5e02890-87bd-4fab-b590-ffa557c3532e/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "e6b42536-6bf8-42e3-8ef5-7d1a283a8608.csv.gz",
+   "sha256": "f3588598750ae2463c51177f68c3e4246f35b372910b406fe3ed27dddd923744",
+   "size": 5642,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/e6b42536-6bf8-42e3-8ef5-7d1a283a8608/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "e8daa3e2-77d1-4cfa-9ac9-501e7b2b4b0a.csv.gz",
+   "sha256": "734bc3f950474900342d5a455bc5cdb056718c902becfc2f613af40944f09e68",
+   "size": 3795,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/e8daa3e2-77d1-4cfa-9ac9-501e7b2b4b0a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "eb3d4195-8c73-46b6-87e9-ef0de83edddf.csv.gz",
+   "sha256": "4b684049df5b0bc7958b1d8ea766c87cf8e8bd021bf03eb94b557ca07fe373ce",
+   "size": 3485,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/eb3d4195-8c73-46b6-87e9-ef0de83edddf/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "eb90bd3f-5405-412d-81e0-7a58be52dcef.csv.gz",
+   "sha256": "fba7790787d26acb2df02e543d69e72b8b0fe50b7b5c19cf16b3072dfc206e7b",
+   "size": 5079,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/eb90bd3f-5405-412d-81e0-7a58be52dcef/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "eba772d4-509e-4fe7-ba51-d9a29b190432.csv.gz",
+   "sha256": "976882465b8a93e2191ab9620397b22a3ba36366d6a63ccf4ca283e9db1ceca7",
+   "size": 5861,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/eba772d4-509e-4fe7-ba51-d9a29b190432/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "ec4a598d-773d-44c1-935e-2053b54e45a3.csv.gz",
+   "sha256": "cc3993a43ef38ebfb77c1c220767f289cf21dc9fdc85cf997aaaa6479a2dc845",
+   "size": 5581,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/ec4a598d-773d-44c1-935e-2053b54e45a3/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "edfdf747-be92-462f-87ed-53d228a33172.csv.gz",
+   "sha256": "0e28b23803321619dda8fd3c16c8dcbf38c13f8276b48826232b23f8b2e91aa9",
+   "size": 5178,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/edfdf747-be92-462f-87ed-53d228a33172/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "f0197bcf-6846-4c0a-9659-0c2626a9bcf0.csv.gz",
+   "sha256": "369e76ac770194a2d9ec9d09301829a549eca85fb5013d009fb29fc69b29ab31",
+   "size": 4969,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/f0197bcf-6846-4c0a-9659-0c2626a9bcf0/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "f3c6ee73-5561-4068-96ec-364016e7d9ef.csv.gz",
+   "sha256": "459a7bbfe3d427386406fb16fa416f33e453f6b31992490022eda52c7dec4a2e",
+   "size": 5699,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/f3c6ee73-5561-4068-96ec-364016e7d9ef/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "f4f9f7fb-eeff-46dc-9727-04d8aa56240a.csv.gz",
+   "sha256": "73c8b268b80df12528355baf86c4c22c7a7a72722cd062f0f2861b8c216140af",
+   "size": 3328,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/f4f9f7fb-eeff-46dc-9727-04d8aa56240a/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "f53bb77f-e55a-468f-b7be-b66baf7e3e5b.csv.gz",
+   "sha256": "a8b61347461b433a82c3e87ed657291113da1cec1e83d33969b2926653996490",
+   "size": 3308,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/f53bb77f-e55a-468f-b7be-b66baf7e3e5b/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "f77317d9-654f-4f51-925e-004c592049da.csv.gz",
+   "sha256": "fec30bfb2a6f62265e8c7347fe2d13d64057ea353d23c5ce635493df8cbb4f22",
+   "size": 5414,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/f77317d9-654f-4f51-925e-004c592049da/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "f85bd17b-06c7-49bd-8bfc-ee2bf3ffea99.csv.gz",
+   "sha256": "6eeb447b48e4091a4ae19370a6f6aa86746eecbe5c8cfc6f7b99da16cf9e3d94",
+   "size": 5418,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/f85bd17b-06c7-49bd-8bfc-ee2bf3ffea99/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "fac30fe9-a39c-445a-84de-637a199f1dfa.csv.gz",
+   "sha256": "2ac777520298a5ec1382fcb48e597fa98695cd63f2ad7cc153cfcc7c0dc27d07",
+   "size": 5255,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/fac30fe9-a39c-445a-84de-637a199f1dfa/W/measurements.json"
+  },
+  {
+   "fetched_at": "2026-10-08T06:31:24Z",
+   "path": "fed4c295-7a01-463c-998e-70ebad8cd2cc.csv.gz",
+   "sha256": "2a69736efe39a1cc40f03b5f2789f522d7c20e4d2c63cd517155a6db58998752",
+   "size": 5740,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/fed4c295-7a01-463c-998e-70ebad8cd2cc/W/measurements.json"
+  }
+ ],
+ "licence": "dl-de/zero-2-0 (https://www.govdata.de/dl-de/zero-2-0)"
+}

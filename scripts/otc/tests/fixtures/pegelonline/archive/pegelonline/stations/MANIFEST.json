@@ -1,0 +1,13 @@
+{
+ "dataset": "PEGELONLINE selected tidal stations, daily snapshots",
+ "files": [
+  {
+   "fetched_at": "2026-10-08T06:19:48Z",
+   "path": "2026-10-08.json",
+   "sha256": "3bf20093bb13baeac1f32cdd9184b36cb87fa9adc4af1c79342efd7771717e42",
+   "size": 71237,
+   "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json?includeTimeseries=true"
+  }
+ ],
+ "licence": "dl-de/zero-2-0 (https://www.govdata.de/dl-de/zero-2-0)"
+}

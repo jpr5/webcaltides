@@ -1,0 +1,3282 @@
+{
+ "licence": "dl-de/zero-2-0 (https://www.govdata.de/dl-de/zero-2-0)",
+ "source": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json?includeTimeseries=true",
+ "stations": [
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.98
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.371221,
+   "longitude": 12.723221,
+   "longname": "BARTH",
+   "number": "9650030",
+   "shortname": "BARTH",
+   "uuid": "00c33ed9-6bea-45b4-8728-7edc7e43e2f3",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.057
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 99.8,
+   "latitude": 54.314683,
+   "longitude": 8.950149,
+   "longname": "TÖNNING",
+   "number": "9520070",
+   "shortname": "TÖNNING",
+   "uuid": "00e386ac-e35c-4a6e-80dd-f8cd8a9e7a62",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 109.617,
+   "latitude": 54.265924,
+   "longitude": 8.84213,
+   "longname": "EIDER-SPERRWERK AP",
+   "number": "9530010",
+   "shortname": "EIDER-SPERRWERK AP",
+   "uuid": "04acd7e5-3cbc-4cdd-b4a9-f452e868f4d6",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.998
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 123.0,
+   "latitude": 54.372959,
+   "longitude": 11.005664,
+   "longname": "HEILIGENHAFEN",
+   "number": "9610070",
+   "shortname": "HEILIGENHAFEN",
+   "uuid": "06219dd9-a2c4-463c-9619-623b3c026cbc",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMERHAVEN",
+   "km": 55.811,
+   "latitude": 53.464497,
+   "longitude": 8.488052,
+   "longname": "NORDENHAM",
+   "number": "4970040",
+   "shortname": "NORDENHAM",
+   "uuid": "06e6b715-eb03-46ce-adf4-6cafca6368eb",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": 0.008
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 5.624,
+   "latitude": 53.291097,
+   "longitude": 10.401114,
+   "longname": "BARDOWICK OP",
+   "number": "5940029",
+   "shortname": "BARDOWICK OP",
+   "uuid": "07830b68-c5b8-42dd-bf48-7176802130d0",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.968
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.241313,
+   "longitude": 13.907208,
+   "longname": "GREIFSWALD OIE",
+   "number": "9690078",
+   "shortname": "GREIFSWALD OIE",
+   "uuid": "087b6386-0957-4b47-af7d-ecd62f6d63ce",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.977
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.434539,
+   "longitude": 13.032221,
+   "longname": "BARHÖFT",
+   "number": "9650040",
+   "shortname": "BARHÖFT",
+   "uuid": "09227288-8c72-4b12-88fe-8765d1b2b400",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.018
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 540.0,
+   "latitude": 54.511432,
+   "longitude": 9.569059,
+   "longname": "SCHLESWIG",
+   "number": "9610040",
+   "shortname": "SCHLESWIG",
+   "uuid": "09370c05-1041-4395-a5d4-b8db6e59c4c8",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.013
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 100.0,
+   "latitude": 54.174972,
+   "longitude": 7.894313,
+   "longname": "HELGOLAND SÜDHAFEN",
+   "number": "9510075",
+   "shortname": "HELGOLAND SÜDHAFEN",
+   "uuid": "0d8233b8-36c9-4a24-ad77-a4e7c617932f",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.016
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 585.99,
+   "latitude": 53.423294,
+   "longitude": 10.334765,
+   "longname": "WEHR GEESTHACHT UP",
+   "number": "5930062",
+   "shortname": "WEHR GEESTHACHT UP",
+   "uuid": "0f7f58a8-411f-43d9-b42a-e897e63c4faa",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.031
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 755.9,
+   "latitude": 54.013519,
+   "longitude": 8.314602,
+   "longname": "BAKE Z",
+   "number": "9510066",
+   "shortname": "BAKE Z",
+   "uuid": "104fdc24-1dc6-4cb7-b44f-10bd02e13f40",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMERHAVEN",
+   "km": 46.464,
+   "latitude": 53.381162,
+   "longitude": 8.500554,
+   "longname": "RECHTENFLETH",
+   "number": "4970030",
+   "shortname": "RECHTENFLETH",
+   "uuid": "116572da-c036-4486-ac18-a92932424e30",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.01
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 0.028,
+   "latitude": 53.752182,
+   "longitude": 9.653894,
+   "longname": "ELMSHORN HAFEN",
+   "number": "5970022",
+   "shortname": "ELMSHORN HAFEN",
+   "uuid": "136febf6-1371-4118-a9b8-4275444bda5d",
+   "water": "KRÜCKAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.009
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 5.1,
+   "latitude": 53.935698,
+   "longitude": 9.690579,
+   "longname": "GRÖNHUDE",
+   "number": "5970037",
+   "shortname": "GRÖNHUDE",
+   "uuid": "15859426-834c-429e-9c41-2e097b717b1d",
+   "water": "STÖR"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.03
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 0.547,
+   "latitude": 53.140229,
+   "longitude": 8.234081,
+   "longname": "OLDENBURG-DRIELAKE",
+   "number": "4960030",
+   "shortname": "OLDENBURG-DRIELAKE",
+   "uuid": "1b51e55e-088a-44c3-a633-b1bee44422d7",
+   "water": "HUNTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.034
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 674.0,
+   "latitude": 53.784361,
+   "longitude": 9.40943,
+   "longname": "GLÜCKSTADT",
+   "number": "5970035",
+   "shortname": "GLÜCKSTADT",
+   "uuid": "1f1bbed7-c1fa-45b4-90d3-df94b50ad631",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.968
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.204348,
+   "longitude": 13.771906,
+   "longname": "RUDEN",
+   "number": "9690077",
+   "shortname": "RUDEN",
+   "uuid": "1fa822e6-fb0c-4331-83f1-749972046dca",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.003
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 612.0,
+   "latitude": 54.474703,
+   "longitude": 9.836007,
+   "longname": "ECKERNFÖRDE",
+   "number": "9610045",
+   "shortname": "ECKERNFÖRDE",
+   "uuid": "1faa9b2c-c269-4662-af70-ef11da27cc1c",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.979
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.169731,
+   "longitude": 12.103388,
+   "longname": "WARNEMÜNDE",
+   "number": "9640015",
+   "shortname": "WARNEMÜNDE",
+   "uuid": "220ff4c6-83da-4a1b-9c13-dfee5a2a8798",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.033
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 1.0,
+   "latitude": 53.533025,
+   "longitude": 9.776752,
+   "longname": "ESTE INNERES SPERRWERK AP",
+   "number": "5950082",
+   "shortname": "ESTE INNERES SPERRWERK AP",
+   "uuid": "227b83f7-1302-4d7e-8d70-899036ff4ce2",
+   "water": "ESTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.015
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 89.8,
+   "latitude": 53.862755,
+   "longitude": 13.704278,
+   "longname": "ANKLAM",
+   "number": "9660001",
+   "shortname": "ANKLAM",
+   "uuid": "22fd01e0-090b-476b-80aa-f4586e259785",
+   "water": "PEENE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.05
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 24.67,
+   "latitude": 53.292704,
+   "longitude": 7.396102,
+   "longname": "TERBORG",
+   "number": "3910020",
+   "shortname": "TERBORG",
+   "uuid": "244cae8b-ce75-4c2d-a66e-cb804f8335a2",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.009
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 11.9,
+   "latitude": 53.927679,
+   "longitude": 9.632319,
+   "longname": "BREITENBERG",
+   "number": "5970038",
+   "shortname": "BREITENBERG",
+   "uuid": "24c6a014-864b-4d53-bd05-0b49106f5412",
+   "water": "STÖR"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.026
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 18.1,
+   "latitude": 53.671167,
+   "longitude": 9.558759,
+   "longname": "PINNAU-SPERRWERK BP",
+   "number": "5970018",
+   "shortname": "PINNAU-SPERRWERK BP",
+   "uuid": "26259e8f-7d2d-47e0-8851-0257542b63b3",
+   "water": "PINNAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.01
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 34.999,
+   "latitude": 53.767078,
+   "longitude": 7.984916,
+   "longname": "WANGEROOGE OST",
+   "number": "9420020",
+   "shortname": "WANGEROOGE OST",
+   "uuid": "26656fda-cacf-4e92-9935-3ae6e717fe5b",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.027
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 0.0,
+   "latitude": 54.500919,
+   "longitude": 8.702016,
+   "longname": "PELLWORM ANLEGER",
+   "number": "9550021",
+   "shortname": "PELLWORM ANLEGER",
+   "uuid": "2852b9ab-d30e-4d04-ae06-3e946f48a0b1",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 17.8,
+   "latitude": 53.200283,
+   "longitude": 8.447393,
+   "longname": "HUNTEBRÜCK",
+   "number": "4960070",
+   "shortname": "HUNTEBRÜCK",
+   "uuid": "2e1d458b-f78f-41dc-bebd-e0512578610a",
+   "water": "HUNTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 11.535,
+   "latitude": 53.168144,
+   "longitude": 8.378497,
+   "longname": "HOLLERSIEL",
+   "number": "4960050",
+   "shortname": "HOLLERSIEL",
+   "uuid": "2eacef2f-7a8f-413a-a2c7-f1da4cf22742",
+   "water": "HUNTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.021
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 588.787,
+   "latitude": 53.430844,
+   "longitude": 10.29679,
+   "longname": "ALTENGAMME",
+   "number": "5930070",
+   "shortname": "ALTENGAMME",
+   "uuid": "2ee12b9a-f7fd-4856-82b9-6bdd850c2bba",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -0.021
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 12.3,
+   "latitude": 53.342126,
+   "longitude": 10.383558,
+   "longname": "WITTORF UP",
+   "number": "5940050",
+   "shortname": "WITTORF UP",
+   "uuid": "308c39b6-475f-42c3-857f-7cf257426fa1",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.027
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 0.25,
+   "latitude": 53.512274,
+   "longitude": 9.591135,
+   "longname": "HORNEBURG",
+   "number": "5960020",
+   "shortname": "HORNEBURG",
+   "uuid": "3244d787-f884-40ae-9752-ad3507309edc",
+   "water": "LÜHE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 11.6,
+   "latitude": 53.602044,
+   "longitude": 8.149052,
+   "longname": "JADE-WESER-PORT",
+   "number": "9430050",
+   "shortname": "JADE-WESER-PORT",
+   "uuid": "33bdec83-6184-4ca5-a075-f44185aef302",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.971
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.234461,
+   "longitude": 13.289714,
+   "longname": "STAHLBRODE",
+   "number": "9650070",
+   "shortname": "STAHLBRODE",
+   "uuid": "340707f4-5d35-4898-8b34-95ea3f4206b3",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 7.992,
+   "latitude": 53.161504,
+   "longitude": 8.826505,
+   "longname": "NIEDERBLOCKLAND",
+   "number": "4940020",
+   "shortname": "NIEDERBLOCKLAND",
+   "uuid": "36e85829-2fb3-41a0-8a1b-aa9e76431b47",
+   "water": "WÜMME"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.026
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 658.444,
+   "latitude": 53.671389,
+   "longitude": 9.558228,
+   "longname": "PINNAU-SPERRWERK AP",
+   "number": "5970019",
+   "shortname": "PINNAU-SPERRWERK AP",
+   "uuid": "391bbba5-83d4-4791-b07e-65ab29b423f6",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.997
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 150.0,
+   "latitude": 54.372087,
+   "longitude": 10.15705,
+   "longname": "KIEL-HOLTENAU",
+   "number": "9610066",
+   "shortname": "KIEL-HOLTENAU",
+   "uuid": "3ad4013f-644b-47f5-a641-44b332bfecb2",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.036
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 598.159,
+   "latitude": 53.398709,
+   "longitude": 10.185374,
+   "longname": "ZOLLENSPIEKER",
+   "number": "5930090",
+   "shortname": "ZOLLENSPIEKER",
+   "uuid": "3de8ea26-ab29-4e46-adad-06198ba2e0b7",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.039
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 666.9,
+   "latitude": 53.731123,
+   "longitude": 9.459762,
+   "longname": "KOLLMAR",
+   "number": "5970025",
+   "shortname": "KOLLMAR",
+   "uuid": "3ed90357-4b01-4119-b1c5-bd2c62871e7b",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.017
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 263.0,
+   "latitude": 54.096523,
+   "longitude": 10.804988,
+   "longname": "NEUSTADT",
+   "number": "9610080",
+   "shortname": "NEUSTADT",
+   "uuid": "3f0b6b74-80a9-4576-a3cb-ea967dfc349f",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.01
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 17.843,
+   "latitude": 53.169406,
+   "longitude": 8.619533,
+   "longname": "VEGESACK",
+   "number": "4950010",
+   "shortname": "VEGESACK",
+   "uuid": "3f3b4445-9a6a-44c3-8575-d86ce30e2de0",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.99
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 733.7,
+   "latitude": 53.942075,
+   "longitude": 8.636197,
+   "longname": "MITTELGRUND",
+   "number": "9510132",
+   "shortname": "MITTELGRUND",
+   "uuid": "3ff99b92-4396-4fa7-af73-02b9c015dcad",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.11
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 50.848,
+   "latitude": 53.327173,
+   "longitude": 7.030674,
+   "longname": "KNOCK",
+   "number": "3990010",
+   "shortname": "KNOCK",
+   "uuid": "438b565e-f293-43c8-8771-377e555ed5ec",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 89.23,
+   "latitude": 53.576854,
+   "longitude": 6.661416,
+   "longname": "BORKUM SÜDSTRAND",
+   "number": "9340030",
+   "shortname": "BORKUM SÜDSTRAND",
+   "uuid": "478f21e9-906b-4c6f-a009-b5eabb052746",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.976
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.524494,
+   "longitude": 13.093555,
+   "longname": "NEUENDORF HAFEN",
+   "number": "9670046",
+   "shortname": "NEUENDORF HAFEN",
+   "uuid": "492f85b8-e5c6-439e-8e14-08ca78f10dce",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.981
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 141.6,
+   "latitude": 54.083064,
+   "longitude": 12.155109,
+   "longname": "ROSTOCK MÜHLENDAMM UW",
+   "number": "9640018",
+   "shortname": "ROSTOCK MÜHLENDAMM UW",
+   "uuid": "4a0061f0-7355-4a95-9c70-f05c8920d790",
+   "water": "WARNOW"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.97
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.557594,
+   "longitude": 13.245135,
+   "longname": "WITTOWER FÄHRE",
+   "number": "9670055",
+   "shortname": "WITTOWER FÄHRE",
+   "uuid": "4b348b56-b08c-4522-9042-49c1edb45d0d",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.024
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 714.02,
+   "latitude": 53.83537,
+   "longitude": 8.870724,
+   "longname": "OTTERNDORF MPM",
+   "number": "5990011",
+   "shortname": "OTTERNDORF MPM",
+   "uuid": "5140295e-b93e-4081-a920-642d89c7ca8b",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.019
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 100.0,
+   "latitude": 54.121761,
+   "longitude": 8.859102,
+   "longname": "BÜSUM",
+   "number": "9510095",
+   "shortname": "BÜSUM",
+   "uuid": "5287a3e1-c540-4ab1-b52e-880d124cbc43",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 21.493,
+   "latitude": 53.221223,
+   "longitude": 8.459939,
+   "longname": "ELSFLETH OHRT",
+   "number": "4960080",
+   "shortname": "ELSFLETH OHRT",
+   "uuid": "531da758-b2f5-471d-9d9f-a78576081079",
+   "water": "HUNTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.03
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 10.5,
+   "latitude": 53.716258,
+   "longitude": 9.526956,
+   "longname": "KRÜCKAU-SPERRWERK BP",
+   "number": "5970023",
+   "shortname": "KRÜCKAU-SPERRWERK BP",
+   "uuid": "53c277c3-7ddb-4281-9937-97dcfe3753fa",
+   "water": "KRÜCKAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.038
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 9.51,
+   "latitude": 53.678193,
+   "longitude": 9.677084,
+   "longname": "UETERSEN",
+   "number": "5970016",
+   "shortname": "UETERSEN",
+   "uuid": "575da86f-d975-4837-b6f5-6f19c3a5e4b6",
+   "water": "PINNAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.039
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 650.5,
+   "latitude": 53.609411,
+   "longitude": 9.584318,
+   "longname": "HETLINGEN",
+   "number": "5970010",
+   "shortname": "HETLINGEN",
+   "uuid": "599c23b1-4550-41e3-a7e7-3056989927f1",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.015
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 35.0,
+   "latitude": 54.823267,
+   "longitude": 9.654141,
+   "longname": "LANGBALLIGAU",
+   "number": "9610015",
+   "shortname": "LANGBALLIGAU",
+   "uuid": "5a33bf14-6bdc-4666-b2e3-ac78e3083e2a",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.05
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 35.302,
+   "latitude": 53.321351,
+   "longitude": 7.259801,
+   "longname": "POGUM",
+   "number": "3950020",
+   "shortname": "POGUM",
+   "uuid": "5d1e4350-0f39-4428-84c3-6f8f0bbe80d4",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 21.125,
+   "latitude": 53.213549,
+   "longitude": 7.473236,
+   "longname": "LEDASPERRWERK UP",
+   "number": "3880050",
+   "shortname": "LEDASPERRWERK UP",
+   "uuid": "5e6ae93a-7856-4005-bc77-fc6e4f5ad630",
+   "water": "LEDA"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.994
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 100.0,
+   "latitude": 55.016544,
+   "longitude": 8.440409,
+   "longname": "LIST AUF SYLT",
+   "number": "9570070",
+   "shortname": "LIST AUF SYLT",
+   "uuid": "5e92d73f-e4ea-42c1-9f98-91536c17cdff",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.033
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 1.0,
+   "latitude": 53.532827,
+   "longitude": 9.776502,
+   "longname": "ESTE INNERES SPERRWERK BP",
+   "number": "5950081",
+   "shortname": "ESTE INNERES SPERRWERK BP",
+   "uuid": "5fea1a12-326f-4919-ac9a-02f9fa11ab57",
+   "water": "ESTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.035
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 684.2,
+   "latitude": 53.862704,
+   "longitude": 9.31603,
+   "longname": "BROKDORF",
+   "number": "5970050",
+   "shortname": "BROKDORF",
+   "uuid": "610ab204-d3c4-4a11-a38b-e31461fdcf27",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.008
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 78.19,
+   "latitude": 54.338733,
+   "longitude": 9.139643,
+   "longname": "NORDFELD OBERWASSER",
+   "number": "9520040",
+   "shortname": "NORDFELD OBERWASSER",
+   "uuid": "61394669-3f1b-44e5-ae37-50fd2512f4fa",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.005
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 100.0,
+   "latitude": 54.730507,
+   "longitude": 8.686973,
+   "longname": "DAGEBÜLL",
+   "number": "9570040",
+   "shortname": "DAGEBÜLL",
+   "uuid": "6233e901-2600-4b54-ae06-7b987934e99e",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.08
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 194.374,
+   "latitude": 53.749237,
+   "longitude": 7.681935,
+   "longname": "SPIEKEROOG",
+   "number": "9410010",
+   "shortname": "SPIEKEROOG",
+   "uuid": "662c4b5e-0241-456d-ac7d-9f62fd95c0d1",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.016
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 28.467,
+   "latitude": 53.393888,
+   "longitude": 10.178546,
+   "longname": "ILMENAU SPERRWERK AP",
+   "number": "5940080",
+   "shortname": "ILMENAU SPERRWERK AP",
+   "uuid": "6b05e8dc-3089-497a-a602-f40c4283d8bb",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.97
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 1.0,
+   "latitude": 54.097711,
+   "longitude": 13.457153,
+   "longname": "GREIFSWALD-WIECK",
+   "number": "9650073",
+   "shortname": "GREIFSWALD-WIECK",
+   "uuid": "6b53ef42-5bd9-4366-ace3-442e307bec60",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.05
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 43.208,
+   "latitude": 53.776238,
+   "longitude": 7.867938,
+   "longname": "WANGEROOGE WEST",
+   "number": "9420040",
+   "shortname": "WANGEROOGE WEST",
+   "uuid": "70039212-c8a8-43fc-82a5-150d95831772",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.015
+    },
+    "unit": "cm"
+   },
+   "agency": "HAMBURG PORT AUTHORITY",
+   "km": 615.0,
+   "latitude": 53.472726,
+   "longitude": 9.991826,
+   "longname": "HAMBURG-HARBURG",
+   "number": "5952025",
+   "shortname": "HAMBURG-HARBURG",
+   "uuid": "706e5110-c5e2-4915-9989-c071fcb492ec",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.001
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 78.0,
+   "latitude": 54.672736,
+   "longitude": 10.036689,
+   "longname": "SCHLEIMÜNDE SP",
+   "number": "9610025",
+   "shortname": "SCHLEIMÜNDE SP",
+   "uuid": "70d4f87f-4489-455a-a435-d6df9e09a87e",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.021
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 83.14,
+   "latitude": 54.368469,
+   "longitude": 9.094603,
+   "longname": "FRIEDRICHSTADT STRASSENBRÜCKE",
+   "number": "9520060",
+   "shortname": "FRIEDRICHSTADT STRASSENBRÜCKE",
+   "uuid": "721313e7-935a-4bb8-8c6d-0e014211b2ec",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.997
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 100.0,
+   "latitude": 54.758093,
+   "longitude": 8.296035,
+   "longname": "HÖRNUM",
+   "number": "9570050",
+   "shortname": "HÖRNUM",
+   "uuid": "733755fd-628f-4130-a694-aaba340531ba",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.987
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 0.0,
+   "latitude": 54.499589,
+   "longitude": 10.273268,
+   "longname": "LT KIEL",
+   "number": "9610050",
+   "shortname": "LT KIEL",
+   "uuid": "736437d7-0f6f-41b7-bc69-5ed721da4f85",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.035
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 660.738,
+   "latitude": 53.67915,
+   "longitude": 9.494796,
+   "longname": "GRAUERORT REEDE",
+   "number": "5970026",
+   "shortname": "GRAUERORT REEDE",
+   "uuid": "7398029b-c6a1-484f-b1f6-1afe568ee1e2",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 2.3,
+   "latitude": 53.162825,
+   "longitude": 8.718208,
+   "longname": "WASSERHORST",
+   "number": "4930010",
+   "shortname": "WASSERHORST",
+   "uuid": "76844306-4c37-4a6f-aac4-9e518e96306f",
+   "water": "LESUM"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.07
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 65.69,
+   "latitude": 53.433602,
+   "longitude": 6.926207,
+   "longname": "DUKEGAT",
+   "number": "3990020",
+   "shortname": "DUKEGAT",
+   "uuid": "7753c1fa-34d8-4d09-a7c7-38024079117c",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMERHAVEN",
+   "km": 79.942,
+   "latitude": 53.639224,
+   "longitude": 8.445202,
+   "longname": "ROBBENSÜDSTEERT",
+   "number": "9460010",
+   "shortname": "ROBBENSÜDSTEERT",
+   "uuid": "78029185-9dfc-4b1b-8695-45ebc2a09cf4",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2009-07-10",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 0.0,
+   "latitude": 54.373651,
+   "longitude": 9.083813,
+   "longname": "FRIEDRICHSTADT TREENE",
+   "number": "9520061",
+   "shortname": "FRIEDRICHSTADT TREENE",
+   "uuid": "795ce865-3ac4-43b8-88d5-049a34e4359e",
+   "water": "TREENE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2013-11-13",
+     "value": -5.025
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 69.575,
+   "latitude": 53.820374,
+   "longitude": 9.039877,
+   "longname": "OSTE-SPERRWERK BP",
+   "number": "9000000532",
+   "shortname": "OSTE-SPERRWERK BP",
+   "uuid": "7cb4566b-c584-4167-8736-f52ca7fd837d",
+   "water": "OSTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.979
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": null,
+   "latitude": 54.458995,
+   "longitude": 12.57182,
+   "longname": "PREROW",
+   "number": "9650027",
+   "shortname": "Prerow",
+   "uuid": "7d50c68c-3558-481d-bbe3-830f6f534a05",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.005
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 26.09,
+   "latitude": 54.223219,
+   "longitude": 9.435676,
+   "longname": "LEXFÄHRE UNTERWASSER",
+   "number": "9520030",
+   "shortname": "LEXFÄHRE UNTERWASSER",
+   "uuid": "7f01fbd8-653c-40ba-8ed0-57386a9b4557",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.01
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 39.2,
+   "latitude": 53.315979,
+   "longitude": 8.486546,
+   "longname": "BRAKE",
+   "number": "4970020",
+   "shortname": "BRAKE",
+   "uuid": "7febef93-09ce-49e9-9643-ecb3076ce9a7",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.048
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 654.9,
+   "latitude": 53.629729,
+   "longitude": 9.526602,
+   "longname": "STADERSAND",
+   "number": "5970013",
+   "shortname": "STADERSAND",
+   "uuid": "80f0fc4d-9fc7-449d-9d68-ee89333f0eff",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.017
+    },
+    "unit": "cm"
+   },
+   "agency": "HAMBURG PORT AUTHORITY",
+   "km": 628.9,
+   "latitude": 53.540164,
+   "longitude": 9.880859,
+   "longname": "SEEMANNSHÖFT",
+   "number": "5952060",
+   "shortname": "SEEMANNSHÖFT",
+   "uuid": "816affba-0118-4668-887f-fb882ed573b2",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.005
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 26.09,
+   "latitude": 54.222472,
+   "longitude": 9.436143,
+   "longname": "LEXFÄHRE OBERWASSER",
+   "number": "9520020",
+   "shortname": "LEXFÄHRE OBERWASSER",
+   "uuid": "86c5688f-2fac-4d58-a245-ad8ce14cafbf",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 83.5,
+   "latitude": 53.557436,
+   "longitude": 6.747895,
+   "longname": "BORKUM FISCHERBALJE",
+   "number": "9340020",
+   "shortname": "BORKUM FISCHERBALJE",
+   "uuid": "8727ebfd-e2e1-43da-ab3d-fee48cff9acc",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.035
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 0.71,
+   "latitude": 53.48045,
+   "longitude": 9.703369,
+   "longname": "BUXTEHUDE",
+   "number": "5950080",
+   "shortname": "BUXTEHUDE",
+   "uuid": "8a08c920-c911-43e5-90dd-27d4d4e757d0",
+   "water": "ESTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 110.1,
+   "latitude": 54.265866,
+   "longitude": 8.849594,
+   "longname": "EIDER-SPERRWERK BP",
+   "number": "9520081",
+   "shortname": "EIDER-SPERRWERK BP",
+   "uuid": "8ac85e6c-6167-496c-b16f-fa94f81cd94a",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.175
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 14.9,
+   "latitude": 53.847927,
+   "longitude": 12.888042,
+   "longname": "AALBUDE",
+   "number": "9660009",
+   "shortname": "AALBUDE",
+   "uuid": "8ba772ed-e45b-4be8-b91d-0c6c92de59e4",
+   "water": "PEENE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.034
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 671.787,
+   "latitude": 53.754705,
+   "longitude": 9.391187,
+   "longname": "KRAUTSAND REEDE",
+   "number": "5970031",
+   "shortname": "KRAUTSAND REEDE",
+   "uuid": "8c20b4dc-1540-4b14-8c88-0e1d87de22c4",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2013-11-13",
+     "value": -5.025
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 69.575,
+   "latitude": 53.820383,
+   "longitude": 9.039725,
+   "longname": "OSTE-SPERRWERK AP",
+   "number": "9000000590",
+   "shortname": "OSTE-SPERRWERK AP",
+   "uuid": "8c3295dc-fe73-45bc-9a7b-679d4aaad0cf",
+   "water": "OSTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.031
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 645.5,
+   "latitude": 53.571575,
+   "longitude": 9.633362,
+   "longname": "LÜHORT",
+   "number": "5960010",
+   "shortname": "LÜHORT",
+   "uuid": "8d18d129-07f1-4c4d-adba-a985016be0b0",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.998
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 284.7,
+   "latitude": 54.49663,
+   "longitude": 11.238874,
+   "longname": "MARIENLEUCHTE",
+   "number": "9610075",
+   "shortname": "MARIENLEUCHTE",
+   "uuid": "8effc15d-8583-4ac6-9f42-1b63c47f92b0",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.974
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.584766,
+   "longitude": 13.111362,
+   "longname": "KLOSTER",
+   "number": "9670050",
+   "shortname": "KLOSTER",
+   "uuid": "905e7328-b8aa-4b08-9c22-c864101e462b",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.968
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.341603,
+   "longitude": 13.499696,
+   "longname": "LAUTERBACH",
+   "number": "9670063",
+   "shortname": "LAUTERBACH",
+   "uuid": "91922b9b-ef7b-4aae-95a1-9d6a9e61969a",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.006
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 100.0,
+   "latitude": 53.898762,
+   "longitude": 11.457918,
+   "longname": "WISMAR-BAUMHAUS",
+   "number": "9630008",
+   "shortname": "WISMAR-BAUMHAUS",
+   "uuid": "95a0ab45-a9ac-4f9a-93e9-b0ffa1c57b5f",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.025
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 0.0,
+   "latitude": 54.63176,
+   "longitude": 8.383943,
+   "longname": "WITTDÜN",
+   "number": "9570010",
+   "shortname": "WITTDÜN",
+   "uuid": "9c4c11f2-0548-4555-beac-ecfd36f9bd74",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 4.0,
+   "latitude": 54.795057,
+   "longitude": 9.433018,
+   "longname": "FLENSBURG",
+   "number": "9610010",
+   "shortname": "FLENSBURG",
+   "uuid": "9e19c411-f728-4a43-a057-39d4155c71cc",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.966
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.508293,
+   "longitude": 13.636651,
+   "longname": "SASSNITZ",
+   "number": "9670065",
+   "shortname": "SASSNITZ",
+   "uuid": "9e7b2a4d-cfe8-4524-8a1e-c196ea897e9f",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 182.129,
+   "latitude": 53.723233,
+   "longitude": 7.501654,
+   "longname": "LANGEOOG",
+   "number": "9390010",
+   "shortname": "LANGEOOG",
+   "uuid": "a0c1dcb6-7812-48e6-8c01-f7edad7a2caf",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": 0.008
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 5.687,
+   "latitude": 53.291656,
+   "longitude": 10.401067,
+   "longname": "BARDOWICK UP",
+   "number": "5940030",
+   "shortname": "BARDOWICK UP",
+   "uuid": "a238b70f-1198-4b2f-8c03-41f3503e5389",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.007
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 61.7,
+   "latitude": 53.928752,
+   "longitude": 13.342282,
+   "longname": "JARMEN",
+   "number": "9660005",
+   "shortname": "JARMEN",
+   "uuid": "a3328262-207d-4e65-96d8-202368ca0cb8",
+   "water": "PEENE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.03
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 663.3,
+   "latitude": 53.716141,
+   "longitude": 9.526337,
+   "longname": "KRÜCKAU-SPERRWERK AP",
+   "number": "5970024",
+   "shortname": "KRÜCKAU-SPERRWERK AP",
+   "uuid": "a653eb04-de2e-47f7-8e2c-09277cfe95ae",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NN",
+     "validFrom": "1998-04-21",
+     "value": -5.025
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 69.89,
+   "latitude": 53.822765,
+   "longitude": 9.037131,
+   "longname": "BELUM",
+   "number": "5980060",
+   "shortname": "BELUM",
+   "uuid": "a9e93be0-cb0e-4418-ba3c-94e7869f6199",
+   "water": "OSTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.06
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 6.852,
+   "latitude": 53.161188,
+   "longitude": 7.371913,
+   "longname": "WEENER",
+   "number": "3790020",
+   "shortname": "WEENER",
+   "uuid": "aa6af4e6-a44f-46c4-abf6-449f8a68bab1",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 0.265,
+   "latitude": 53.133971,
+   "longitude": 8.894403,
+   "longname": "BORGFELD",
+   "number": "4940010",
+   "shortname": "BORGFELD",
+   "uuid": "aac49cf2-5d3f-4c69-9847-027fecaeef30",
+   "water": "WÜMME"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.033
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 724.0,
+   "latitude": 53.867686,
+   "longitude": 8.717425,
+   "longname": "CUXHAVEN STEUBENHÖFT",
+   "number": "5990020",
+   "shortname": "CUXHAVEN STEUBENHÖFT",
+   "uuid": "aad49293-242a-43ad-a8b1-e91d7792c4b2",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 14.79,
+   "latitude": 53.215335,
+   "longitude": 7.426191,
+   "longname": "LEERORT",
+   "number": "3910010",
+   "shortname": "LEERORT",
+   "uuid": "abb23dad-0880-41ab-8d2d-dd33e11f148f",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.98
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMERHAVEN",
+   "km": 92.656,
+   "latitude": 53.718636,
+   "longitude": 8.307616,
+   "longname": "DWARSGAT",
+   "number": "9460020",
+   "shortname": "DWARSGAT",
+   "uuid": "ad3b53f8-8c1b-439f-a0df-9f24827026d5",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.017
+    },
+    "unit": "cm"
+   },
+   "agency": "HAMBURG PORT AUTHORITY",
+   "km": 609.9,
+   "latitude": 53.461414,
+   "longitude": 10.064018,
+   "longname": "BUNTHAUS",
+   "number": "5952020",
+   "shortname": "BUNTHAUS",
+   "uuid": "ae1b91d0-e746-4f65-9f64-2d2e23603a82",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.03
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 362.79,
+   "latitude": 53.060246,
+   "longitude": 8.854803,
+   "longname": "WESERWEHR UW",
+   "number": "4910040",
+   "shortname": "WESERWEHR UW",
+   "uuid": "aeb9ed1c-6c01-4829-94e4-e530dbf79821",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.098
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 605.273,
+   "latitude": 53.428692,
+   "longitude": 10.10112,
+   "longname": "OVER",
+   "number": "5950010",
+   "shortname": "OVER",
+   "uuid": "b02ce5c0-64e9-4d24-90b9-269a28a1e9f9",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.991
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 507.3,
+   "latitude": 54.664384,
+   "longitude": 9.937938,
+   "longname": "KAPPELN",
+   "number": "9610035",
+   "shortname": "KAPPELN",
+   "uuid": "b09f2243-60f0-469a-8f3b-0ea6abc83267",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 24.137,
+   "latitude": 53.699004,
+   "longitude": 8.047073,
+   "longname": "SCHILLIG",
+   "number": "9430030",
+   "shortname": "SCHILLIG",
+   "uuid": "b1cda5a0-115f-4976-a0a6-9d427ff6dceb",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 0.04,
+   "latitude": 53.073097,
+   "longitude": 8.803636,
+   "longname": "GROSSE WESERBRÜCKE",
+   "number": "4910050",
+   "shortname": "GROSSE WESERBRÜCKE",
+   "uuid": "b26bfc88-eb8a-45b9-9dd0-0e41949a2648",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.97
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.041737,
+   "longitude": 13.77038,
+   "longname": "WOLGAST",
+   "number": "9650080",
+   "shortname": "WOLGAST",
+   "uuid": "b327e35c-5dad-4b79-9cef-60fbd504eb37",
+   "water": "KLEINES HAFF"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 14.249,
+   "latitude": 53.179899,
+   "longitude": 8.41261,
+   "longname": "BUTTELERHÖRNE",
+   "number": "4960060",
+   "shortname": "BUTTELERHÖRNE",
+   "uuid": "b3d88ca6-ea13-4540-a623-c02e43800a3b",
+   "water": "HUNTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.014
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 31.8,
+   "latitude": 53.916354,
+   "longitude": 13.026563,
+   "longname": "DEMMIN",
+   "number": "9660007",
+   "shortname": "DEMMIN",
+   "uuid": "b7e238e8-29ec-4522-8252-b2cae7d4f58e",
+   "water": "PEENE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.979
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.371757,
+   "longitude": 12.41896,
+   "longname": "ALTHAGEN",
+   "number": "9650024",
+   "shortname": "ALTHAGEN",
+   "uuid": "b8d05bf9-2ef2-416d-ba70-b5dba74fe777",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.975
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.305682,
+   "longitude": 13.119015,
+   "longname": "STRALSUND",
+   "number": "9650043",
+   "shortname": "STRALSUND",
+   "uuid": "b9163121-2747-4d2b-bcf5-ab5ff7396e56",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.018
+    },
+    "unit": "cm"
+   },
+   "agency": "HAMBURG PORT AUTHORITY",
+   "km": 635.0,
+   "latitude": 53.555577,
+   "longitude": 9.807108,
+   "longname": "BLANKENESE UF",
+   "number": "5952065",
+   "shortname": "BLANKENESE UF",
+   "uuid": "bacb459b-0f24-4233-bb35-cd224a51678e",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2017-11-01",
+     "value": -4.99
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 17.71,
+   "latitude": 53.360317,
+   "longitude": 10.315493,
+   "longname": "FAHRENHOLZ UP",
+   "number": "5940060",
+   "shortname": "FAHRENHOLZ UP",
+   "uuid": "bb62b28f-9947-42b1-92e4-743a1e0c4a76",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 159.333,
+   "latitude": 53.696499,
+   "longitude": 7.157759,
+   "longname": "NORDERNEY RIFFGAT",
+   "number": "9360010",
+   "shortname": "NORDERNEY RIFFGAT",
+   "uuid": "c0244c0e-6ae6-40cb-a967-4039b2a0ce7c",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.015
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 0.0,
+   "latitude": 54.178894,
+   "longitude": 7.889904,
+   "longname": "HELGOLAND BINNENHAFEN",
+   "number": "9510070",
+   "shortname": "HELGOLAND BINNENHAFEN",
+   "uuid": "c0ec139b-13b4-4f86-bee3-06665ad81a40",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.967
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.060378,
+   "longitude": 14.000823,
+   "longname": "KOSEROW",
+   "number": "9690093",
+   "shortname": "KOSEROW",
+   "uuid": "c0f33a36-cac4-4e47-a3f5-d1863c2f0f99",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.982
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 53.75031,
+   "longitude": 14.066478,
+   "longname": "UECKERMÜNDE",
+   "number": "9690088",
+   "shortname": "UECKERMÜNDE",
+   "uuid": "c1588dcc-e314-4097-a54c-c0ffbe79209f",
+   "water": "KLEINES HAFF"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.03
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 8.367,
+   "latitude": 53.119797,
+   "longitude": 8.712215,
+   "longname": "OSLEBSHAUSEN",
+   "number": "4910060",
+   "shortname": "OSLEBSHAUSEN",
+   "uuid": "c1f059dd-5063-468a-9dfa-0360fe0b030d",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.99
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 17.64,
+   "latitude": 53.36028,
+   "longitude": 10.316377,
+   "longname": "FAHRENHOLZ OP",
+   "number": "5940070",
+   "shortname": "FAHRENHOLZ OP",
+   "uuid": "c33c3667-b8c5-484a-8ea0-b92933b5a9f0",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 41.049,
+   "latitude": 53.806299,
+   "longitude": 7.9292,
+   "longname": "WANGEROOGE NORD",
+   "number": "9420030",
+   "shortname": "WANGEROOGE NORD",
+   "uuid": "c41d42b1-5b0d-47c9-ba53-d58d3d109b64",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.98
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMERHAVEN",
+   "km": 115.0,
+   "latitude": 53.863269,
+   "longitude": 8.127572,
+   "longname": "LEUCHTTURM ALTE WESER",
+   "number": "9460040",
+   "shortname": "LEUCHTTURM ALTE WESER",
+   "uuid": "c6772c3c-a6bb-4728-9250-a408ab3856bd",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.025
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 26.2,
+   "latitude": 53.958024,
+   "longitude": 10.872182,
+   "longname": "TRAVEMÜNDE",
+   "number": "9620085",
+   "shortname": "TRAVEMÜNDE",
+   "uuid": "c7383149-1f77-430d-8bef-c5667be3846b",
+   "water": "TRAVE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.1
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 74.32,
+   "latitude": 53.493517,
+   "longitude": 6.841204,
+   "longname": "EMSHÖRN",
+   "number": "9340010",
+   "shortname": "EMSHÖRN",
+   "uuid": "c8af067c-ba6a-4a76-86d8-1ce8e532ef8b",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 31.13,
+   "latitude": 53.771714,
+   "longitude": 8.092507,
+   "longname": "MELLUMPLATE",
+   "number": "9420010",
+   "shortname": "MELLUMPLATE",
+   "uuid": "c8b9a2b6-b783-417f-8479-3a0d732fb901",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.03
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 7.6,
+   "latitude": 53.161207,
+   "longitude": 8.322516,
+   "longname": "REITHÖRNE",
+   "number": "4960040",
+   "shortname": "REITHÖRNE",
+   "uuid": "c9df61c4-2a0b-47bd-8b51-fef7f430e528",
+   "water": "HUNTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.981
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 141.5,
+   "latitude": 54.082438,
+   "longitude": 12.154273,
+   "longname": "ROSTOCK MÜHLENDAMM OW",
+   "number": "9640002",
+   "shortname": "ROSTOCK MÜHLENDAMM OW",
+   "uuid": "ca0e4a68-bd50-494c-bd45-abb33c5e1b0a",
+   "water": "WARNOW"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.009
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 78.312,
+   "latitude": 54.339462,
+   "longitude": 9.138247,
+   "longname": "NORDFELD UNTERWASSER",
+   "number": "9520050",
+   "shortname": "NORDFELD UNTERWASSER",
+   "uuid": "cb93548e-c1ce-43f6-b3a1-6903f8835b33",
+   "water": "EIDER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 26.261,
+   "latitude": 53.204709,
+   "longitude": 8.510193,
+   "longname": "FARGE",
+   "number": "4950020",
+   "shortname": "FARGE",
+   "uuid": "cca92e6d-e2c3-4c5f-be56-5b8682b353eb",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NN",
+     "validFrom": "2000-12-11",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 0.03,
+   "latitude": 53.484121,
+   "longitude": 9.15478,
+   "longname": "BREMERVÖRDE UW",
+   "number": "5980010",
+   "shortname": "BREMERVÖRDE UW",
+   "uuid": "cf8a3ea2-d5d2-4bf2-ba6b-cf1309d18bb1",
+   "water": "OSTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.969
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.280667,
+   "longitude": 13.709757,
+   "longname": "THIESSOW",
+   "number": "9670067",
+   "shortname": "THIESSOW",
+   "uuid": "d1c9bb3c-2929-46a8-a338-adfddf0ef524",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.001
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 100.0,
+   "latitude": 53.991997,
+   "longitude": 11.375642,
+   "longname": "TIMMENDORF POEL",
+   "number": "9630007",
+   "shortname": "TIMMENDORF POEL",
+   "uuid": "d22c341b-80c2-436d-98e1-8a2575bc975a",
+   "water": "OSTSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMERHAVEN",
+   "km": 66.638,
+   "latitude": 53.544956,
+   "longitude": 8.568175,
+   "longname": "BHV ALTER LEUCHTTURM",
+   "number": "4990010",
+   "shortname": "BHV ALTER LEUCHTTURM",
+   "uuid": "d3f822a0-e201-4a61-8913-589c74818ae0",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.004
+    },
+    "unit": "cm"
+   },
+   "agency": "HAMBURG PORT AUTHORITY",
+   "km": 623.1,
+   "latitude": 53.545442,
+   "longitude": 9.969965,
+   "longname": "HAMBURG ST. PAULI",
+   "number": "5952050",
+   "shortname": "HAMBURG ST. PAULI",
+   "uuid": "d488c5cc-4de9-4631-8ce1-0db0e700b546",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 0.73,
+   "latitude": 53.177994,
+   "longitude": 7.66914,
+   "longname": "DREYSCHLOOT",
+   "number": "3880010",
+   "shortname": "DREYSCHLOOT",
+   "uuid": "d4df3617-8209-4bcd-948e-fa723beb6666",
+   "water": "LEDA"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.0
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 695.214,
+   "latitude": 53.887807,
+   "longitude": 9.148745,
+   "longname": "BRUNSBÜTTEL MPM",
+   "number": "5970094",
+   "shortname": "BRUNSBÜTTEL MPM",
+   "uuid": "d4f5f719-8c52-4f8d-945d-1c31404cc628",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 15,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": 5.649
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 1.501,
+   "latitude": 53.261043,
+   "longitude": 10.41986,
+   "longname": "LÜNE",
+   "number": "5940020",
+   "shortname": "LÜNE",
+   "uuid": "d7a8df36-2978-45b8-99d1-76d84cf34c01",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.008
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 24.88,
+   "latitude": 53.924459,
+   "longitude": 9.500605,
+   "longname": "ITZEHOE HAFEN",
+   "number": "5970042",
+   "shortname": "ITZEHOE HAFEN",
+   "uuid": "d863cbc3-5e5e-4095-855c-026f0850dd58",
+   "water": "STÖR"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.031
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 678.636,
+   "latitude": 53.825946,
+   "longitude": 9.400981,
+   "longname": "STÖR-SPERRWERK AP",
+   "number": "5970041",
+   "shortname": "STÖR-SPERRWERK AP",
+   "uuid": "d9acdbec-61ff-4308-978a-2f4d1c2c4059",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.975
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 53.843665,
+   "longitude": 13.858494,
+   "longname": "KARNIN",
+   "number": "9690084",
+   "shortname": "KARNIN",
+   "uuid": "da893bbd-965a-49b7-a661-707a1ba899d1",
+   "water": "KLEINES HAFF"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.004
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT TÖNNING",
+   "km": 100.0,
+   "latitude": 54.472283,
+   "longitude": 9.02477,
+   "longname": "HUSUM",
+   "number": "9530020",
+   "shortname": "HUSUM",
+   "uuid": "e114aeec-c8d9-4d20-8fe1-8822058cb38b",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.023
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 733.0,
+   "latitude": 53.955509,
+   "longitude": 8.65823,
+   "longname": "ZEHNERLOCH",
+   "number": "9510010",
+   "shortname": "ZEHNERLOCH",
+   "uuid": "e574d0af-5c63-4306-b1d3-43b7359de06d",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.031
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 50.2,
+   "latitude": 53.826148,
+   "longitude": 9.4014,
+   "longname": "STÖR-SPERRWERK BP",
+   "number": "5970040",
+   "shortname": "STÖR-SPERRWERK BP",
+   "uuid": "e5b8e9f3-f0cc-4ad7-8707-577ee1b25b3e",
+   "water": "STÖR"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": null,
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 30.94,
+   "latitude": 53.640526,
+   "longitude": 9.25277,
+   "longname": "HECHTHAUSEN",
+   "number": "5980030",
+   "shortname": "HECHTHAUSEN",
+   "uuid": "e5e02890-87bd-4fab-b590-ffa557c3532e",
+   "water": "OSTE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.05
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 634.42,
+   "latitude": 53.535944,
+   "longitude": 9.791537,
+   "longname": "CRANZ",
+   "number": "5950070",
+   "shortname": "CRANZ",
+   "uuid": "e6b42536-6bf8-42e3-8ef5-7d1a283a8608",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.087
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 755.7,
+   "latitude": 53.984421,
+   "longitude": 8.31514,
+   "longname": "BAKE A",
+   "number": "9510063",
+   "shortname": "BAKE A",
+   "uuid": "e8daa3e2-77d1-4cfa-9ac9-501e7b2b4b0a",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -0.021
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LAUENBURG",
+   "km": 12.2,
+   "latitude": 53.341594,
+   "longitude": 10.383548,
+   "longname": "WITTORF OP",
+   "number": "5940049",
+   "shortname": "WITTORF OP",
+   "uuid": "eb3d4195-8c73-46b6-87e9-ef0de83edddf",
+   "water": "ILMENAU"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.016
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 703.44,
+   "latitude": 53.856369,
+   "longitude": 9.031629,
+   "longname": "OSTERIFF MPM",
+   "number": "5970096",
+   "shortname": "OSTERIFF MPM",
+   "uuid": "eb90bd3f-5405-412d-81e0-7a58be52dcef",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.08
+    },
+    "unit": "cm"
+   },
+   "agency": "BREMEN",
+   "km": 33.325,
+   "latitude": 53.263946,
+   "longitude": 8.481417,
+   "longname": "ELSFLETH",
+   "number": "4970010",
+   "shortname": "ELSFLETH",
+   "uuid": "eba772d4-509e-4fe7-ba51-d9a29b190432",
+   "water": "WESER"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.06
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 0.39,
+   "latitude": 53.108191,
+   "longitude": 7.365595,
+   "longname": "PAPENBURG",
+   "number": "3790010",
+   "shortname": "PAPENBURG",
+   "uuid": "ec4a598d-773d-44c1-935e-2053b54e45a3",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.01
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT EMDEN",
+   "km": 40.45,
+   "latitude": 53.336781,
+   "longitude": 7.186348,
+   "longname": "EMDEN NEUE SEESCHLEUSE",
+   "number": "3970010",
+   "shortname": "EMDEN NEUE SEESCHLEUSE",
+   "uuid": "edfdf747-be92-462f-87ed-53d228a33172",
+   "water": "EMS"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.005
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT CUXHAVEN",
+   "km": 745.0,
+   "latitude": 53.96704,
+   "longitude": 8.462561,
+   "longname": "SCHARHÖRN",
+   "number": "9510060",
+   "shortname": "SCHARHÖRN",
+   "uuid": "f0197bcf-6846-4c0a-9659-0c2626a9bcf0",
+   "water": "NORDSEE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.034
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT HAMBURG",
+   "km": 641.0,
+   "latitude": 53.567911,
+   "longitude": 9.702887,
+   "longname": "SCHULAU",
+   "number": "5950090",
+   "shortname": "SCHULAU",
+   "uuid": "f3c6ee73-5561-4068-96ec-364016e7d9ef",
+   "water": "ELBE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.021
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT LÜBECK",
+   "km": 7.79,
+   "latitude": 53.893008,
+   "longitude": 10.703065,
+   "longname": "LÜBECK-BAUHOF",
+   "number": "9620090",
+   "shortname": "LÜBECK-BAUHOF",
+   "uuid": "f4f9f7fb-eeff-46dc-9727-04d8aa56240a",
+   "water": "TRAVE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -4.965
+    },
+    "unit": "cm"
+   },
+   "agency": "STANDORT STRALSUND",
+   "km": 0.0,
+   "latitude": 54.10786,
+   "longitude": 13.807622,
+   "longname": "KARLSHAGEN",
+   "number": "9690085",
+   "shortname": "KARLSHAGEN",
+   "uuid": "f53bb77f-e55a-468f-b7be-b66baf7e3e5b",
+   "water": "KLEINES HAFF"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.02
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 4.053,
+   "latitude": 53.530306,
+   "longitude": 8.160729,
+   "longname": "WHV NEUER VORHAFEN",
+   "number": "9440030",
+   "shortname": "WHV NEUER VORHAFEN",
+   "uuid": "f77317d9-654f-4f51-925e-004c592049da",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 1.565,
+   "latitude": 53.514496,
+   "longitude": 8.145134,
+   "longname": "WHV ALTER VORHAFEN",
+   "number": "9440020",
+   "shortname": "WHV ALTER VORHAFEN",
+   "uuid": "f85bd17b-06c7-49bd-8bfc-ee2bf3ffea99",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.04
+    },
+    "unit": "cm"
+   },
+   "agency": "WILHELMSHAVEN",
+   "km": 18.098,
+   "latitude": 53.669165,
+   "longitude": 8.14859,
+   "longname": "HOOKSIELPLATE",
+   "number": "9430020",
+   "shortname": "HOOKSIELPLATE",
+   "uuid": "fac30fe9-a39c-445a-84de-637a199f1dfa",
+   "water": "JADE"
+  },
+  {
+   "W": {
+    "equidistance_min": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "validFrom": "2019-11-01",
+     "value": -5.018
+    },
+    "unit": "cm"
+   },
+   "agency": "HAMBURG PORT AUTHORITY",
+   "km": 615.3,
+   "latitude": 53.508392,
+   "longitude": 10.061595,
+   "longname": "SCHÖPFSTELLE",
+   "number": "5952030",
+   "shortname": "SCHÖPFSTELLE",
+   "uuid": "fed4c295-7a01-463c-998e-70ebad8cd2cc",
+   "water": "ELBE"
+  }
+ ]
+}

@@ -1,0 +1,376 @@
+{
+  "units": "meters",
+  "HarmonicConstituents": [
+    {
+      "number": 1,
+      "name": "M2",
+      "description": "Principal lunar semidiurnal constituent",
+      "amplitude": 1.371,
+      "phase_GMT": 109.2,
+      "phase_local": 324.2,
+      "speed": 28.984104,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 2,
+      "name": "S2",
+      "description": "Principal solar semidiurnal constituent",
+      "amplitude": 0.208,
+      "phase_GMT": 146.2,
+      "phase_local": 356.2,
+      "speed": 30.0,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 3,
+      "name": "N2",
+      "description": "Larger lunar elliptic semidiurnal constituent",
+      "amplitude": 0.305,
+      "phase_GMT": 76.7,
+      "phase_local": 294.5,
+      "speed": 28.43973,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 4,
+      "name": "K1",
+      "description": "Lunar diurnal constituent",
+      "amplitude": 0.143,
+      "phase_GMT": 205.6,
+      "phase_local": 130.4,
+      "speed": 15.041069,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 5,
+      "name": "M4",
+      "description": "Shallow water overtides of principal lunar constituent",
+      "amplitude": 0.023,
+      "phase_GMT": 29.0,
+      "phase_local": 99.2,
+      "speed": 57.96821,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 6,
+      "name": "O1",
+      "description": "Lunar diurnal constituent",
+      "amplitude": 0.116,
+      "phase_GMT": 187.1,
+      "phase_local": 117.4,
+      "speed": 13.943035,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 7,
+      "name": "M6",
+      "description": "Shallow water overtides of principal lunar constituent",
+      "amplitude": 0.029,
+      "phase_GMT": 281.3,
+      "phase_local": 206.5,
+      "speed": 86.95232,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 8,
+      "name": "MK3",
+      "description": "Shallow water terdiurnal",
+      "amplitude": 0.006,
+      "phase_GMT": 231.8,
+      "phase_local": 11.7,
+      "speed": 44.025173,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 9,
+      "name": "S4",
+      "description": "Shallow water overtides of principal solar constituent",
+      "amplitude": 0.002,
+      "phase_GMT": 119.3,
+      "phase_local": 179.3,
+      "speed": 60.0,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 10,
+      "name": "MN4",
+      "description": "Shallow water quarter diurnal constituent",
+      "amplitude": 0.011,
+      "phase_GMT": 13.7,
+      "phase_local": 86.6,
+      "speed": 57.423832,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 11,
+      "name": "NU2",
+      "description": "Larger lunar evectional constituent",
+      "amplitude": 0.066,
+      "phase_GMT": 84.0,
+      "phase_local": 301.4,
+      "speed": 28.512583,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 12,
+      "name": "S6",
+      "description": "Shallow water overtides of principal solar constituent",
+      "amplitude": 0.002,
+      "phase_GMT": 246.8,
+      "phase_local": 156.8,
+      "speed": 90.0,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 13,
+      "name": "MU2",
+      "description": "Variational constituent",
+      "amplitude": 0.01,
+      "phase_GMT": 53.3,
+      "phase_local": 273.5,
+      "speed": 27.968208,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 14,
+      "name": "2N2",
+      "description": "Lunar elliptical semidiurnal second-order constituent",
+      "amplitude": 0.041,
+      "phase_GMT": 53.7,
+      "phase_local": 274.3,
+      "speed": 27.895355,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 15,
+      "name": "OO1",
+      "description": "Lunar diurnal",
+      "amplitude": 0.004,
+      "phase_GMT": 218.7,
+      "phase_local": 138.0,
+      "speed": 16.139101,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 16,
+      "name": "LAM2",
+      "description": "Smaller lunar evectional constituent",
+      "amplitude": 0.02,
+      "phase_GMT": 140.1,
+      "phase_local": 352.8,
+      "speed": 29.455626,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 17,
+      "name": "S1",
+      "description": "Solar diurnal constituent",
+      "amplitude": 0.005,
+      "phase_GMT": 131.6,
+      "phase_local": 56.6,
+      "speed": 15.0,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 18,
+      "name": "M1",
+      "description": "Smaller lunar elliptic diurnal constituent",
+      "amplitude": 0.005,
+      "phase_GMT": 223.2,
+      "phase_local": 150.7,
+      "speed": 14.496694,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 19,
+      "name": "J1",
+      "description": "Smaller lunar elliptic diurnal constituent",
+      "amplitude": 0.01,
+      "phase_GMT": 210.0,
+      "phase_local": 132.1,
+      "speed": 15.5854435,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 20,
+      "name": "MM",
+      "description": "Lunar monthly constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 0.5443747,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 21,
+      "name": "SSA",
+      "description": "Solar semiannual constituent",
+      "amplitude": 0.022,
+      "phase_GMT": 97.5,
+      "phase_local": 97.1,
+      "speed": 0.0821373,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 22,
+      "name": "SA",
+      "description": "Solar annual constituent",
+      "amplitude": 0.049,
+      "phase_GMT": 136.3,
+      "phase_local": 136.1,
+      "speed": 0.0410686,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 23,
+      "name": "MSF",
+      "description": "Lunisolar synodic fortnightly constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 1.0158958,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 24,
+      "name": "MF",
+      "description": "Lunisolar fortnightly constituent",
+      "amplitude": 0.0,
+      "phase_GMT": 0.0,
+      "phase_local": 0.0,
+      "speed": 1.0980331,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 25,
+      "name": "RHO",
+      "description": "Larger lunar evectional diurnal constituent",
+      "amplitude": 0.005,
+      "phase_GMT": 179.3,
+      "phase_local": 112.0,
+      "speed": 13.471515,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 26,
+      "name": "Q1",
+      "description": "Larger lunar elliptic diurnal constituent",
+      "amplitude": 0.019,
+      "phase_GMT": 172.1,
+      "phase_local": 105.1,
+      "speed": 13.398661,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 27,
+      "name": "T2",
+      "description": "Larger solar elliptic constituent",
+      "amplitude": 0.018,
+      "phase_GMT": 120.1,
+      "phase_local": 330.3,
+      "speed": 29.958933,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 28,
+      "name": "R2",
+      "description": "Smaller solar elliptic constituent",
+      "amplitude": 0.004,
+      "phase_GMT": 13.1,
+      "phase_local": 222.9,
+      "speed": 30.041067,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 29,
+      "name": "2Q1",
+      "description": "Larger elliptic diurnal",
+      "amplitude": 0.002,
+      "phase_GMT": 211.3,
+      "phase_local": 147.0,
+      "speed": 12.854286,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 30,
+      "name": "P1",
+      "description": "Solar diurnal constituent",
+      "amplitude": 0.047,
+      "phase_GMT": 204.8,
+      "phase_local": 130.0,
+      "speed": 14.958931,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 31,
+      "name": "2SM2",
+      "description": "Shallow water semidiurnal constituent",
+      "amplitude": 0.003,
+      "phase_GMT": 110.3,
+      "phase_local": 315.2,
+      "speed": 31.015896,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 32,
+      "name": "M3",
+      "description": "Lunar terdiurnal constituent",
+      "amplitude": 0.002,
+      "phase_GMT": 149.2,
+      "phase_local": 291.8,
+      "speed": 43.47616,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 33,
+      "name": "L2",
+      "description": "Smaller lunar elliptic semidiurnal constituent",
+      "amplitude": 0.068,
+      "phase_GMT": 160.4,
+      "phase_local": 12.8,
+      "speed": 29.528479,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 34,
+      "name": "2MK3",
+      "description": "Shallow water terdiurnal constituent",
+      "amplitude": 0.007,
+      "phase_GMT": 204.7,
+      "phase_local": 350.1,
+      "speed": 42.92714,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 35,
+      "name": "K2",
+      "description": "Lunisolar semidiurnal constituent",
+      "amplitude": 0.059,
+      "phase_GMT": 146.1,
+      "phase_local": 355.7,
+      "speed": 30.082138,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 36,
+      "name": "M8",
+      "description": "Shallow water eighth diurnal constituent",
+      "amplitude": 0.006,
+      "phase_GMT": 241.3,
+      "phase_local": 21.6,
+      "speed": 115.93642,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    },
+    {
+      "number": 37,
+      "name": "MS4",
+      "description": "Shallow water quarter diurnal constituent",
+      "amplitude": 0.009,
+      "phase_GMT": 74.0,
+      "phase_local": 139.1,
+      "speed": 58.984104,
+      "comments": "Vector Average of 5 years (2015-2019).  Sa and SSa from 20 year Analysis (2000-2019)"
+    }
+  ],
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/8443970/harcon.json"
+}

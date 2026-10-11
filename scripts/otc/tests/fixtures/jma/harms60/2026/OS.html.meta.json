@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T23:00:07Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/harms60.php?stn=OS&year=2026&tyear=2026"
+ },
+ "sha256": "3ceb77deac64e7232ccf747c408708d44645182524784b54614ffbd24f269fbf",
+ "size": 12820,
+ "status": 200,
+ "url": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/harms60.php?stn=OS&year=2026&tyear=2026"
+}

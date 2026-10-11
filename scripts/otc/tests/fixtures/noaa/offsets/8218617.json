@@ -1,0 +1,10 @@
+{
+  "refStationId": "9450460",
+  "type": "S",
+  "heightOffsetHighTide": 0.1,
+  "heightOffsetLowTide": -0.1,
+  "timeOffsetHighTide": 51,
+  "timeOffsetLowTide": 77,
+  "heightAdjustedType": "F",
+  "self": null
+}

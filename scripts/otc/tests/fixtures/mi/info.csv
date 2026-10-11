@@ -1,0 +1,186 @@
+Row Type,Variable Name,Attribute Name,Data Type,Value
+attribute,NC_GLOBAL,acknowledgement,String,"This infrastructure has been part funded under the Marine RTDI Measure of the National \nDevelopment Plan 2000-2006, co-funded by the European Regional Development Fund (ERDF). Currently this is a best endeavours project run on \ndiscretionary funds."
+attribute,NC_GLOBAL,area,String,North Atlantic Ocean
+attribute,NC_GLOBAL,cdm_data_type,String,TimeSeries
+attribute,NC_GLOBAL,cdm_timeseries_variables,String,"station_id, longitude, latitude"
+attribute,NC_GLOBAL,comment,String,"Purpose: Monitoring of sea level, sea temperature and atmospheric pressure in specific coastal \nlocations in Ireland."
+attribute,NC_GLOBAL,contact,String,data_requests@marine.ie
+attribute,NC_GLOBAL,contributor_name,String,Kieran Lyons
+attribute,NC_GLOBAL,contributor_role,String,ProjectMember
+attribute,NC_GLOBAL,Conventions,String,"Copernicus-InSituTAC-FormatManual-1.4, SeaDataNet_1.0, CF-1.6, OceanSITES-1.3, ACDD-1.2"
+attribute,NC_GLOBAL,data_mode,String,M
+attribute,NC_GLOBAL,data_type,String,OceanSITES time-series data
+attribute,NC_GLOBAL,date_created,String,2007-01-01T00:00:00Z
+attribute,NC_GLOBAL,date_modified,String,2019-01-17T00:00:00Z
+attribute,NC_GLOBAL,defaultDataQuery,String,&time>=now-6hours
+attribute,NC_GLOBAL,defaultGraphQuery,String,"longitude,latitude,Water_Level_LAT&time>=now-60minutes&latitude>=51&latitude<=56&longitude>=-11&longitude<=-5&.draw=markers&.marker=5|5&.land=over"
+attribute,NC_GLOBAL,Easternmost_Easting,double,-6.06809
+attribute,NC_GLOBAL,featureType,String,TimeSeries
+attribute,NC_GLOBAL,geospatial_lat_max,double,55.3717
+attribute,NC_GLOBAL,geospatial_lat_min,double,51.55896
+attribute,NC_GLOBAL,geospatial_lat_units,String,degrees_north
+attribute,NC_GLOBAL,geospatial_lon_max,double,-6.06809
+attribute,NC_GLOBAL,geospatial_lon_min,double,-10.27732
+attribute,NC_GLOBAL,geospatial_lon_units,String,degrees_east
+attribute,NC_GLOBAL,geospatial_vertical_max,String,0
+attribute,NC_GLOBAL,geospatial_vertical_min,String,0
+attribute,NC_GLOBAL,geospatial_vertical_positive,String,up
+attribute,NC_GLOBAL,geospatial_vertical_units,String,m
+attribute,NC_GLOBAL,history,String,"2020-05-26: Metadata attributes enhanced following Copernicus Marine In Situ NetCDF format manual, \nOceanSITES and SeaDataNet attribute and vocabulary requirements."
+attribute,NC_GLOBAL,id,String,ie.marine.data:dataset.2774
+attribute,NC_GLOBAL,infoUrl,String,http://data.marine.ie/geonetwork/srv/eng/catalog.search#/metadata/ie.marine.data:dataset.2774
+attribute,NC_GLOBAL,institution,String,Marine Institute
+attribute,NC_GLOBAL,institution_edmo_code,String,396
+attribute,NC_GLOBAL,institution_references,String,www.marine.ie
+attribute,NC_GLOBAL,keywords,String,"Sea level, Vertical spatial coordinates"
+attribute,NC_GLOBAL,keywords_vocabulary,String,SeaDataNet Parameter Discovery Vocabulary
+attribute,NC_GLOBAL,license,String,Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/)
+attribute,NC_GLOBAL,license_URL,String,https://creativecommons.org/licenses/by/4.0/legalcode
+attribute,NC_GLOBAL,naming_authority,String,Marine Institute
+attribute,NC_GLOBAL,network,String,Irish Tide Gauge Network
+attribute,NC_GLOBAL,Northernmost_Northing,double,55.3717
+attribute,NC_GLOBAL,principal_investigator,String,Guy Westbrook
+attribute,NC_GLOBAL,principal_investigator_email,String,guy.westbrook@marine.ie
+attribute,NC_GLOBAL,principal_investigator_url,String,http://www.marine.ie/Home/site-area/data-services/real-time-observations/tidal-observations
+attribute,NC_GLOBAL,processing_level,String,Instrument data that has been converted to geophysical values
+attribute,NC_GLOBAL,publisher_email,String,data_requests@marine.ie
+attribute,NC_GLOBAL,publisher_name,String,Marine Institute
+attribute,NC_GLOBAL,publisher_url,String,www.marine.ie
+attribute,NC_GLOBAL,source,String,coastal structure
+attribute,NC_GLOBAL,source_platform_category_code,String,17
+attribute,NC_GLOBAL,sourceUrl,String,(source database)
+attribute,NC_GLOBAL,Southernmost_Northing,double,51.55896
+attribute,NC_GLOBAL,standard_name_vocabulary,String,CF-72
+attribute,NC_GLOBAL,subsetVariables,String,"station_id, longitude, latitude"
+attribute,NC_GLOBAL,summary,String,"Network of tide gauges located around the coast of Ireland collecting water level data as part of the \ndevelopment of a permanent tidal monitoring infrastructure. Parameters collected include; Station (ID), dateTime (yyyy-mm-ddThh:mm:ss), \nWater Level (Sea Level above Lowest Astronomical Tide [LAT], m) and Water Level (Water Level wrt Ordnance Datum Malin Head, m). Users of \nthe download service can choose a gauge, time period, parameter(s) and output file type. Advanced downloads allow a user choose an Area of \nInterest (ie. more than one tide gauge) and depth value (ie. with tide gauge always '0') to download data. Real time data are also \navailable from the FTP site, see\u00c2\u00a0www.irishtides.ie."
+attribute,NC_GLOBAL,time_coverage_resolution,String,PT5M
+attribute,NC_GLOBAL,time_coverage_start,String,2000-07-26T02:05:00Z
+attribute,NC_GLOBAL,title,String,Irish National Tide Gauge Network Real Time Data
+attribute,NC_GLOBAL,Westernmost_Easting,double,-10.27732
+attribute,NC_GLOBAL,zapidox,String,"[\n    {\n        ""name"": ""getStationDataBetweenDates"",\n        ""description"": ""Get recorded tide gauge data for a specific station between two dates."",\n        ""formats"": [\n            "".csv0"",\n            "".jsonlKVP""\n       ],\n        ""query"": \n""longitude%2Clatitude%2Caltitude%2Ctime%2Cstation_id%2Cdatasourceid%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&time%3E=2019-05-15T00%3A00%3A00Z&time%3C2019-08-01T00%3A00%3A00Z&station_id=%22Galway%20Port%22""\n    }\n]"
+variable,time,,double,
+attribute,time,_CoordinateAxisType,String,Time
+attribute,time,axis,String,T
+attribute,time,calendar,String,julian
+attribute,time,ioos_category,String,Time
+attribute,time,long_name,String,time of measurement
+attribute,time,Processing_level,String,Instrument data that has been converted to geophysical values
+attribute,time,QC_indicator,String,unknown
+attribute,time,sdn_parameter_name,String,Elapsed time relative to 1970-01-01T00:00:00Z
+attribute,time,sdn_parameter_urn,String,SDN:P01::ELTMEP01
+attribute,time,sdn_units_name,String,Seconds
+attribute,time,sdn_units_urn,String,SDN:P06::UTBB
+attribute,time,standard_name,String,time
+attribute,time,time_origin,String,01-JAN-1970 00:00:00
+attribute,time,units,String,seconds since 1970-01-01T00:00:00Z
+variable,altitude,,float,
+attribute,altitude,_CoordinateAxisType,String,Height
+attribute,altitude,_CoordinateZisPositive,String,up
+attribute,altitude,_FillValue,float,-99999.0
+attribute,altitude,axis,String,Z
+attribute,altitude,coordinate_reference_frame,String,urn:ogc:def:crs:EPSG::5715
+attribute,altitude,ioos_category,String,Location
+attribute,altitude,long_name,String,height of measurement
+attribute,altitude,positive,String,up
+attribute,altitude,Processing_level,String,Instrument data that has been converted to geophysical values
+attribute,altitude,QC_indicator,String,unknown
+attribute,altitude,reference,String,mean_sea_level
+attribute,altitude,sdn_parameter_name,String,Height (spatial coordinate) relative to sea level
+attribute,altitude,sdn_parameter_urn,String,SDN:P01::AHSLZZ01
+attribute,altitude,sdn_units_name,String,metres
+attribute,altitude,sdn_units_urn,String,SDN:P06::ULAA
+attribute,altitude,standard_name,String,altitude
+attribute,altitude,units,String,m
+attribute,altitude,valid_max,float,0.0
+attribute,altitude,valid_min,float,0.0
+variable,latitude,,float,
+attribute,latitude,_CoordinateAxisType,String,Lat
+attribute,latitude,_FillValue,float,99999.0
+attribute,latitude,actual_range,float,"51.558964, 55.3717"
+attribute,latitude,axis,String,Y
+attribute,latitude,coordinate_reference_frame,String,urn:ogc:def:crs:EPSG::4326
+attribute,latitude,ioos_category,String,Location
+attribute,latitude,long_name,String,latitude of measurement
+attribute,latitude,Processing_level,String,Instrument data that has been converted to geophysical values
+attribute,latitude,QC_indicator,String,unknown
+attribute,latitude,reference,String,WGS84
+attribute,latitude,sdn_parameter_name,String,Latitude north
+attribute,latitude,sdn_parameter_urn,String,SDN:P01::ALATZZ01
+attribute,latitude,sdn_units_name,String,Degrees north
+attribute,latitude,sdn_units_urn,String,SDN:P06::DEGN
+attribute,latitude,standard_name,String,latitude
+attribute,latitude,units,String,degrees_north
+attribute,latitude,valid_max,float,90.0
+attribute,latitude,valid_min,float,-90.0
+variable,longitude,,float,
+attribute,longitude,_CoordinateAxisType,String,Lon
+attribute,longitude,_FillValue,float,99999.0
+attribute,longitude,actual_range,float,"-10.27732, -6.06809"
+attribute,longitude,axis,String,X
+attribute,longitude,coordinate_reference_frame,String,urn:ogc:def:crs:EPSG::4326
+attribute,longitude,ioos_category,String,Location
+attribute,longitude,long_name,String,longitude of measurement
+attribute,longitude,Processing_level,String,Instrument data that has been converted to geophysical values
+attribute,longitude,QC_indicator,String,unknown
+attribute,longitude,reference,String,WGS84
+attribute,longitude,sdn_parameter_name,String,Longitude east
+attribute,longitude,sdn_parameter_urn,String,SDN:P01::ALONZZ01
+attribute,longitude,sdn_units_name,String,Degrees east
+attribute,longitude,sdn_units_urn,String,SDN:P06::DEGE
+attribute,longitude,standard_name,String,longitude
+attribute,longitude,units,String,degrees_east
+attribute,longitude,valid_max,float,180.0
+attribute,longitude,valid_min,float,-180.0
+variable,station_id,,String,
+attribute,station_id,cf_role,String,timeseries_id
+attribute,station_id,ioos_category,String,Identifier
+attribute,station_id,long_name,String,Station ID
+variable,datasourceid,,int,
+attribute,datasourceid,ioos_category,String,Identifier
+attribute,datasourceid,long_name,String,Data Source Identifier
+variable,Water_Level_LAT,,float,
+attribute,Water_Level_LAT,_FillValue,float,-9999.0
+attribute,Water_Level_LAT,ancillary_variables,String,"QC_Flag, datasourceid"
+attribute,Water_Level_LAT,cell_methods,String,mean
+attribute,Water_Level_LAT,ioos_category,String,Sea Level
+attribute,Water_Level_LAT,long_name,String,sea level above Lowest Astronomical Tide
+attribute,Water_Level_LAT,processing_method,String,instantaneous values
+attribute,Water_Level_LAT,resolution,String,1 mm
+attribute,Water_Level_LAT,sdn_instrument_name,String,unknown
+attribute,Water_Level_LAT,sdn_instrument_urn,String,SDN:L22::TOOLZZZ
+attribute,Water_Level_LAT,sdn_P02_urn,String,SDN:P02::ASLV
+attribute,Water_Level_LAT,sdn_parameter_name,String,"Surface elevation (Lowest Astronomical Tide datum) of the water body by fixed \nin-situ pressure sensor"
+attribute,Water_Level_LAT,sdn_parameter_urn,String,SDN:P01::ASLVLTPG
+attribute,Water_Level_LAT,sdn_units_name,String,metres
+attribute,Water_Level_LAT,sdn_units_urn,String,SDN:P06::ULAA
+attribute,Water_Level_LAT,sea_level_datum,String,Lowest Astronomical Tide (LAT)
+attribute,Water_Level_LAT,standard_name,String,sea_surface_height_above_geopotential_datum
+attribute,Water_Level_LAT,time_sampling,String,5 mins
+attribute,Water_Level_LAT,units,String,metres
+variable,Water_Level_OD_Malin,,float,
+attribute,Water_Level_OD_Malin,_FillValue,float,-9999.0
+attribute,Water_Level_OD_Malin,ancillary_variables,String,"QC_Flag, datasourceid"
+attribute,Water_Level_OD_Malin,cell_methods,String,mean
+attribute,Water_Level_OD_Malin,ioos_category,String,Sea Level
+attribute,Water_Level_OD_Malin,long_name,String,sea level above Ordnance Datum Malin
+attribute,Water_Level_OD_Malin,processing_method,String,instantaneous values
+attribute,Water_Level_OD_Malin,resolution,String,1 mm
+attribute,Water_Level_OD_Malin,sdn_instrument_name,String,unknown
+attribute,Water_Level_OD_Malin,sdn_instrument_urn,String,SDN:L22::TOOLZZZ
+attribute,Water_Level_OD_Malin,sdn_P02_urn,String,SDN:P02::ASLV
+attribute,Water_Level_OD_Malin,sdn_parameter_name,String,"Surface elevation (Ordnance Datum Malin) of the water body by fixed in-situ \npressure sensor"
+attribute,Water_Level_OD_Malin,sdn_parameter_urn,String,SDN:P01::ASLVODMA
+attribute,Water_Level_OD_Malin,sdn_units_name,String,metres
+attribute,Water_Level_OD_Malin,sdn_units_urn,String,SDN:P06::ULAA
+attribute,Water_Level_OD_Malin,sea_level_datum,String,Ordnance Datum Malin (OD Malin)
+attribute,Water_Level_OD_Malin,standard_name,String,sea_surface_height_above_geopotential_datum
+attribute,Water_Level_OD_Malin,time_sampling,String,5 mins
+attribute,Water_Level_OD_Malin,units,String,metres
+variable,QC_Flag,,int,
+attribute,QC_Flag,Conventions,String,SeaDataNet measurand qualifier flags
+attribute,QC_Flag,flag_meanings,String,"""unknown good missing_value"""
+attribute,QC_Flag,flag_values,String,"0, 1, 9"
+attribute,QC_Flag,ioos_category,String,Quality
+attribute,QC_Flag,long_name,String,quality flag for all measurements
+attribute,QC_Flag,sdn_conventions_urn,String,SDN:L20::
+attribute,QC_Flag,standard_name,String,quality_flag

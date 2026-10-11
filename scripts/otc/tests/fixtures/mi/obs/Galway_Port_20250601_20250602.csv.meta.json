@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:06:07Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Galway%20Port%22&time%3E=2025-06-01T00%3A00%3A00Z&time%3C2025-06-02T00%3A00%3A00Z"
+ },
+ "sha256": "6ea727da909b035590551531550ac0d668a4d781493af068a00ab1b609d0ec2b",
+ "size": 17723,
+ "status": 200,
+ "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Galway%20Port%22&time%3E=2025-06-01T00%3A00%3A00Z&time%3C2025-06-02T00%3A00%3A00Z"
+}

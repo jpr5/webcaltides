@@ -1,0 +1,14 @@
+{
+  "id": "EPT0003",
+  "refStationId": "",
+  "refStationBin": null,
+  "meanFloodDir": 260.0,
+  "meanEbbDir": 90.0,
+  "mfcTimeAdjMin": null,
+  "sbeTimeAdjMin": null,
+  "mecTimeAdjMin": null,
+  "sbfTimeAdjMin": null,
+  "mfcAmpAdj": null,
+  "mecAmpAdj": null,
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/EPT0003_14/currentpredictionoffsets.json"
+}

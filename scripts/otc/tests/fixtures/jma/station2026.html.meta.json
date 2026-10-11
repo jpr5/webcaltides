@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T22:58:33Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/station2026.php"
+ },
+ "sha256": "e9da7fe349686b7c4557f2cab10492e8d6ed004429240069ed4d8573be7bb7a9",
+ "size": 103694,
+ "status": 200,
+ "url": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/station2026.php"
+}

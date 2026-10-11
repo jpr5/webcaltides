@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:06:09Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Aranmore%20Island%20-%20Leabgarrow%22&time%3E=2024-01-01T00%3A00%3A00Z&time%3C2024-01-02T00%3A00%3A00Z"
+ },
+ "sha256": "989ad47979a18dbb3d888a35d9f05432d132dd7b8e950d43ebe38a85842315fe",
+ "size": 23228,
+ "status": 200,
+ "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Aranmore%20Island%20-%20Leabgarrow%22&time%3E=2024-01-01T00%3A00%3A00Z&time%3C2024-01-02T00%3A00%3A00Z"
+}

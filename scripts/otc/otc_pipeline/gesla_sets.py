@@ -677,6 +677,15 @@ def source_set(doc: Mapping, *, licence_id: str) -> SourceSet:
     `licence_id` is required: no licence is assumed."""
     if not isinstance(licence_id, str) or not licence_id:
         raise ValueError(f"{doc.get('record_id')}: no licence id (the per-contributor licences, L-NC, assign it)")
+    ss = comparator_set(doc)
+    return SourceSet(station_hint=ss.station_hint, constant_set={**ss.constant_set, "licence_id": licence_id})
+
+
+def comparator_set(doc: Mapping) -> SourceSet:
+    """COMPARATOR ONLY: the fit document's set as `source_set` makes it, with the same checks, but with
+    no licence_id. For comparisons inside the pipeline (the per-source canary), never for a release:
+    the schema requires licence_id on every set, so a release holding a comparator fails
+    validate_release, and the build (build_release) never takes one."""
     if doc.get("doc_version") != DOC_VERSION:
         raise ValueError(f"{doc.get('record_id')}: doc_version {doc.get('doc_version')!r}, expected {DOC_VERSION}")
     rid = doc["record_id"]
@@ -711,7 +720,7 @@ def source_set(doc: Mapping, *, licence_id: str) -> SourceSet:
                         "good_hours": doc["good_hours"]},
         # The zero and the named levels are the datums slots' (DT5f/DT5g/DT6); only Z0 is known here.
         "datum": {"msl_offset_m": f["z0_m"]},
-        "convention_id": CONVENTION_ID, "licence_id": licence_id,
+        "convention_id": CONVENTION_ID,
         "time_base": dict(tb),
         "constituents": cons,
         "provenance": {"input_sha256": [doc["member_sha256"]], "tcd_sha256": doc["tcd_sha256"]},
@@ -736,15 +745,30 @@ def load_gesla_sets(datestamp: str | None = None, *, licence_ids: Mapping[str, s
     """The gesla-fit sets of one build (or of in_dir), sorted by record id; `only` keeps those records.
     Every record needs its licence id in licence_ids (else ValueError). Syncs from the work bucket first
     when the local cache has no MANIFEST.json."""
+    in_dir = _fits_in(datestamp, in_dir)
+    return _load_sets(in_dir, only, lambda d: source_set(d, licence_id=licence_of(licence_ids, d["record_id"])))
+
+
+def load_comparator_sets(datestamp: str | None = None, *, in_dir: Path | None = None,
+                         only: Iterable[str] | None = None) -> list[SourceSet]:
+    """COMPARATOR ONLY: the gesla-fit sets of one build (or of in_dir) as `comparator_set` makes them,
+    with no licence: for the per-source canary, never for a release (see comparator_set)."""
+    return _load_sets(_fits_in(datestamp, in_dir), only, comparator_set)
+
+
+def _fits_in(datestamp: str | None, in_dir: Path | None) -> Path:
     if in_dir is None:
         if datestamp is None:
             raise ValueError("load_gesla_sets needs a datestamp or in_dir")
         in_dir = fits_dir(datestamp)
         if not (in_dir / "MANIFEST.json").exists():
             sync_down(datestamp)
+    return in_dir
+
+
+def _load_sets(in_dir: Path, only: Iterable[str] | None, make) -> list[SourceSet]:
     keep = set(only) if only is not None else None
-    sets = [source_set(d, licence_id=licence_of(licence_ids, d["record_id"]))
-            for d in read_fits(in_dir) if keep is None or d["record_id"] in keep]
+    sets = [make(d) for d in read_fits(in_dir) if keep is None or d["record_id"] in keep]
     if keep is not None and len(sets) != len(keep):
         have = {s.constant_set["source_record_id"] for s in sets}
         raise KeyError(f"{in_dir}: no fit document for {sorted(keep - have)}")

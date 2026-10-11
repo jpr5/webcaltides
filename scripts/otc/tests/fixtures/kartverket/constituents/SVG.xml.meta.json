@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:19:38Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=constituents&stationcode=SVG&lang=en"
+ },
+ "sha256": "33ab9b5899d8a18890e768cb02fc77a5e08977e201b75a1a84e3384679d4b14a",
+ "size": 5655,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=constituents&stationcode=SVG&lang=en"
+}

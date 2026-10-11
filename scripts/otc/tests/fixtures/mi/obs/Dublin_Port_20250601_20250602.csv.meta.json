@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:06:06Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Dublin%20Port%22&time%3E=2025-06-01T00%3A00%3A00Z&time%3C2025-06-02T00%3A00%3A00Z"
+ },
+ "sha256": "b6177d6f1cfacd548645b3240835c801c58676db837b3b5e719d242591c3ca78",
+ "size": 18369,
+ "status": 200,
+ "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Dublin%20Port%22&time%3E=2025-06-01T00%3A00%3A00Z&time%3C2025-06-02T00%3A00%3A00Z"
+}

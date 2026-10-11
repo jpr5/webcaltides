@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:19:41Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=constituents&stationcode=TRD&lang=en"
+ },
+ "sha256": "2bb68ad9ae697613ff0aeff00088bf1120d2081246dd34a5eb1f87cb8efe83c3",
+ "size": 6157,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=constituents&stationcode=TRD&lang=en"
+}

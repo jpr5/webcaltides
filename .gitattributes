@@ -2,3 +2,6 @@ data/harmonics*.sql filter=lfs diff=lfs merge=lfs -text
 data/*.csv filter=lfs diff=lfs merge=lfs -text
 data/*.json filter=lfs diff=lfs merge=lfs -text
 data/noaa_station_types.json !filter !diff !merge text
+
+# Saved upstream responses: kept byte for byte (their .meta.json records the SHA-256), never EOL-converted
+scripts/otc/tests/fixtures/** -text

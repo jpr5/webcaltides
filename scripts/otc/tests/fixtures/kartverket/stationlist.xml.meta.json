@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:19:10Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlist&type=perm&lang=en"
+ },
+ "sha256": "404c3d7265bf2ff47e660bbeac283d7df442c5aadcb48bec274ffb70636caf99",
+ "size": 3309,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlist&type=perm&lang=en"
+}

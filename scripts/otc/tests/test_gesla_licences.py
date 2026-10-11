@@ -337,6 +337,7 @@ def _two_licence_adapter(tmp_path, monkeypatch):
     ex = json.loads(EXAMPLE.read_text())
     base = next(cs for st in ex["stations"] for cs in st.get("constant_sets", []) if cs["set_id"] == "OTC-EXAMPLE-0016/gesla-fit")
     conv = next(c for c in ex["conventions"] if c["convention_id"] == "noaa-greenwich-schureman-v1")
+    conv = {k: v for k, v in conv.items() if k != "astro_table_id"}   # the build names its astro table (KP0b), not the adapter
     lics = [x for x in ex["licences"] if x["licence_id"] in ("gesla-derived", "gesla-cmems-nc")]
     (tmp_path / "a.json").write_bytes(b"{}")
     sha = hashlib.sha256(b"{}").hexdigest()
@@ -371,8 +372,9 @@ def _two_licence_adapter(tmp_path, monkeypatch):
     return TwoLicences(), fetched
 
 
-# The contract shell carries no astro tables (KP0b's), so a convention with f and u always reports this one.
-ASTRO_ONLY = ["release: (root): 'astro_tables' is a required property"]
+# The contract shell carries no astro tables (KP0b's); the two errors that say so are the build's, not the
+# adapter's (adapter.BUILD_OWNED_ASTRO_ERRORS), so a two-licence adapter passes the contract.
+ASTRO_ONLY = []
 
 
 def test_run_contract_and_assemble_release_carry_both_licences(tmp_path, monkeypatch):

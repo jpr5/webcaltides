@@ -5,7 +5,7 @@ An adapter turns one upstream source into either
 - `SourceSet`s (official and model sources, and the GESLA-fit build output), or
 - `GaugeRecord`s (gauge sources that serve observations; the fit pipeline makes their sets).
 
-The registry (`sources.py`) says which of the two each of the 15 sources emits.
+The registry (`sources.py`) says which of the two each of the 16 sources emits.
 
 `check_contract(adapter, fetched)` returns every way the adapter's output breaks the contract;
 `assert_contract` raises `ContractError` with them. Each adapter's tests run it on saved real
@@ -31,6 +31,14 @@ Conventions for a `SourceSet` (the build assigns OTC ids, adapters never do):
 - Licences: `licence()` returns the adapter's one licence. A source whose records carry different
   licences (GESLA: one per contributor, L-NC) defines `licences()` instead, returning every licence
   object it uses; each set's `licence_id` must be one of them (ids unique).
+- Each licence states `commercial_use` (and, when it is false, `restriction` and `terms_url`):
+  nothing defaults it.
+- The `convention` carries no `astro_table_id`: the astro tables (KP0b) are the build's, and the
+  build names its table on each convention that predicts with f and u. Without `astro_tables` the
+  contract shell has none, and exactly the two errors that say so (BUILD_OWNED_ASTRO_ERRORS) are
+  not the adapter's; with `astro_tables` the shell carries them and is checked whole.
+- A gauge record's `declared_time_base` is a format 1.0 time-base class (`time_base_label` of the
+  pinned schema): the fit's time-base annotation publishes it as `declared`.
 - A gauge adapter's `record_id` is `<source>:<upstream id>`.
 - `check_contract` calls only the accessor the registry names for the source: `records()` for
   gauge observation sources, `sets()` for every other source. Any exception an adapter raises
@@ -39,6 +47,7 @@ Conventions for a `SourceSet` (the build assigns OTC ids, adapters never do):
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib
 import re
@@ -50,7 +59,7 @@ from typing import Any, Iterable, Literal, Mapping, Protocol, runtime_checkable
 
 from gesla.record import GaugeRecord
 
-from otc_pipeline.release_writer import FORMAT_VERSION, validate_release
+from otc_pipeline.release_writer import FORMAT_VERSION, pinned_schema, validate_release
 
 __all__ = [
     "Adapter", "ContractError", "FetchResult", "InputFile", "SourceSet",
@@ -66,6 +75,10 @@ OPTIONAL_HINT_KEYS = ("default_current_bin",)
 SOURCE_RE = re.compile(r"[a-z0-9-]+")
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 EMPTY_TABLE_ERROR = "release: constituents: [] should be non-empty"
+# Format 1.0 needs astro_tables, and an astro_table_id on a convention that predicts with f and u.
+# Both are the build's (KP0b); a contract shell built without astro_tables is missing exactly these.
+BUILD_OWNED_ASTRO_ERRORS = ("release: (root): 'astro_tables' is a required property",
+                            "release: conventions/0: 'astro_table_id' is a required property")
 # assemble_release's one-source shell is checked, never published: its release fields are fixed.
 CONTRACT_FIT_MIN_GOOD_HOURS = 360
 CONTRACT_BUILD_COMMIT = "0000000"
@@ -158,15 +171,15 @@ class ContractError(AssertionError):
 
 
 def _sources():
-    """otc_pipeline.sources, the source registry. It lives on the adapter branches (A-NOAAC and its
-    siblings) and is not in the GESLA lineage yet: until that merge, the contract check cannot run here."""
-    try:
-        return importlib.import_module("otc_pipeline.sources")
-    except ModuleNotFoundError as e:
-        if e.name != "otc_pipeline.sources":
-            raise
-        raise RuntimeError("the adapter contract needs otc_pipeline.sources (the source registry), which is on "
-                           "the adapter branches; merge blitz/otc-adapters/A-NOAAC to run check_contract") from None
+    """otc_pipeline.sources, the source registry. Imported when first used: it imports the adapters,
+    which import this module."""
+    return importlib.import_module("otc_pipeline.sources")
+
+
+@functools.lru_cache(maxsize=1)
+def _time_base_label_re() -> re.Pattern:
+    """The pinned schema's time_base_label pattern (its ECMA end guard reads the same in Python)."""
+    return re.compile(pinned_schema()["$defs"]["time_base_label"]["pattern"])
 
 
 def _attr(adapter, name: str):
@@ -255,10 +268,15 @@ def _station_id(i: int) -> str:
 
 
 def assemble_release(adapter, sets: list[SourceSet], fetched: FetchResult,
-                     constituent_table: list[dict] | None = None) -> dict:
+                     constituent_table: list[dict] | None = None, astro_tables: list[dict] | None = None) -> dict:
     """A one-source release around the adapter's sets, as the build would lay it out, so the F1
-    validator can check it. Without `constituent_table`, the table is the sets' own constituents."""
+    validator can check it. Without `constituent_table`, the table is the sets' own constituents.
+    With `astro_tables`, the release carries them and a convention that predicts with f and u names
+    the first one, as the build does; without them the release has none (the build's, KP0b)."""
     conv = adapter.convention()
+    if astro_tables and isinstance(conv, dict) and conv.get("nodal_handling") == "f_u_at_prediction" \
+            and "astro_table_id" not in conv:
+        conv = {**conv, "astro_table_id": astro_tables[0].get("astro_table_id")}
     lics = adapter_licences(adapter)
     source = _attr(adapter, "source")
     upstream_sid: dict[str, str] = {}
@@ -308,13 +326,16 @@ def assemble_release(adapter, sets: list[SourceSet], fetched: FetchResult,
     # with no constants (gauge records, a station list) gives an empty table: the release-level
     # table is the build's, and check_contract does not fault the adapter for it.
     rows = constituent_table if constituent_table is not None else [table[n] for n in sorted(table)]
-    return {
+    release = {
         "format_version": FORMAT_VERSION,
         "release": {"datestamp": "20000101", "created": "2000-01-01T00:00:00Z", "concept_doi": None,
                     "min_reader_version": FORMAT_VERSION, "fit_min_good_hours": CONTRACT_FIT_MIN_GOOD_HOURS,
                     "source_versions": {source if isinstance(source, str) else "?": fetched.source_version}},
         "conventions": [conv], "licences": lics, "constituents": rows, "stations": stations,
     }
+    if astro_tables:
+        release["astro_tables"] = list(astro_tables)
+    return release
 
 
 def _attribute_errors(attrs: dict, errors: list[str]) -> None:
@@ -512,6 +533,9 @@ def _record_errors(attrs, fetched, records, keys, errors: list[str]) -> None:
                 errors.append(f"{where}: no watch key for {upstream!r}")
         if len(r) == 0:
             errors.append(f"{where}: no samples")
+        label = r.declared_time_base
+        if not isinstance(label, str) or not _time_base_label_re().search(label):
+            errors.append(f"{where}: declared_time_base {label!r} is not a format 1.0 time_base_label")
 
 
 @dataclass
@@ -524,7 +548,8 @@ class ContractRun:
     keys: dict = field(default_factory=dict)
 
 
-def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = None) -> ContractRun:
+def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = None,
+                 astro_tables: list[dict] | None = None) -> ContractRun:
     """`check_contract`, keeping the sets, records and watch keys it checked (each called once)."""
     errors: list[str] = []
     attrs = {k: _attr(adapter, k) for k in
@@ -556,6 +581,9 @@ def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = Non
     conv_ok, lic_ok = conv is not _FAILED, lics is not _FAILED
     conv = conv if isinstance(conv, dict) else {}
     lics = lics if lics is not _FAILED else []
+    if "astro_table_id" in conv:
+        errors.append(f"convention astro_table_id {conv['astro_table_id']!r} is assigned by the build "
+                      "(its astro tables, KP0b), not the adapter")
     sets: list = []
     records: list = []
     if _expected_output(attrs["source"], attrs["source_type"]) == "records":
@@ -578,18 +606,21 @@ def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = Non
             source = attrs["source"]
             convention = staticmethod(lambda: conv)
             licences = staticmethod(lambda: lics)
-        release = assemble_release(_Fixed, sets, fetched, constituent_table)
+        release = assemble_release(_Fixed, sets, fetched, constituent_table, astro_tables)
         rel_errors = [f"release: {e}" for e in
                       validate_release(release)]
         if not release["constituents"] and constituent_table is None:
             rel_errors = [e for e in rel_errors if e != EMPTY_TABLE_ERROR]
+        if not astro_tables and "astro_table_id" not in conv:
+            rel_errors = [e for e in rel_errors if e not in BUILD_OWNED_ASTRO_ERRORS]
         errors += rel_errors
     return ContractRun(errors, sets, records, keys)
 
 
-def check_contract(adapter, fetched: FetchResult, *, constituent_table: list[dict] | None = None) -> list[str]:
+def check_contract(adapter, fetched: FetchResult, *, constituent_table: list[dict] | None = None,
+                   astro_tables: list[dict] | None = None) -> list[str]:
     """Every way `adapter`'s output for `fetched` breaks the contract. Empty list = passes."""
-    return run_contract(adapter, fetched, constituent_table=constituent_table).errors
+    return run_contract(adapter, fetched, constituent_table=constituent_table, astro_tables=astro_tables).errors
 
 
 def assert_contract(adapter, fetched: FetchResult, **kw) -> None:

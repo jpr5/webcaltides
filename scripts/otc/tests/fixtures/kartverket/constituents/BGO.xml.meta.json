@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:19:13Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=constituents&stationcode=BGO&lang=en"
+ },
+ "sha256": "428b6132f83090b16c8764a83269ecfe7849d1d47d08cc2ea4bb12ed14c09e8a",
+ "size": 5960,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=constituents&stationcode=BGO&lang=en"
+}

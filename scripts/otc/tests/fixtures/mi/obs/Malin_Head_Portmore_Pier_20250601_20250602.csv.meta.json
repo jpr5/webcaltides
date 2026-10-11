@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:06:08Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Malin%20Head%20-%20Portmore%20Pier%22&time%3E=2025-06-01T00%3A00%3A00Z&time%3C2025-06-02T00%3A00%3A00Z"
+ },
+ "sha256": "6d9a23b351edeafb3de2e9941ae732ed280dfab7c326083ed09b1420e8315c4b",
+ "size": 22670,
+ "status": 200,
+ "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?time%2Cstation_id%2Clatitude%2Clongitude%2CWater_Level_LAT%2CWater_Level_OD_Malin%2CQC_Flag&station_id=%22Malin%20Head%20-%20Portmore%20Pier%22&time%3E=2025-06-01T00%3A00%3A00Z&time%3C2025-06-02T00%3A00%3A00Z"
+}

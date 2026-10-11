@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-08T17:06:05Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?station_id%2Clongitude%2Clatitude&distinct()"
+ },
+ "sha256": "b62def5197306a51a11a1dd36763d50321615aa90b5e19d7391a44eb708b94ad",
+ "size": 839,
+ "status": 200,
+ "url": "https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.csv?station_id%2Clongitude%2Clatitude&distinct()"
+}
