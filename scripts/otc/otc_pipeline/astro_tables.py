@@ -33,7 +33,7 @@ from typing import Iterable, Mapping
 from gesla.tcd_table import TcdTable
 
 __all__ = ["AstroTableMismatch", "CHECK7_SPEED_TOL", "CongenRun", "F_TOL", "FIRST_YEAR", "GENERATOR", "LAST_YEAR",
-           "OTC_ADDED", "SOURCE_TCD_SHA256", "TABLE_ID", "TCD_SHA256", "V0U_TOL", "astro_table", "astro_table_errors", "load_congen_run", "release_table_errors",
+           "OTC_ADDED", "SOURCE_TCD_SHA256", "TABLE_ID", "TCD_SHA256", "V0U_TOL", "astro_table", "fit_dump_errors", "astro_table_errors", "load_congen_run", "release_table_errors",
            "tcd_equality_errors"]
 
 # The OTC TCD: tcd-20251228 + MA2 and MB2 (congen_tables.sh OTC_TCD_ID / OTC_TCD_SHA256; a test checks they agree).
@@ -71,6 +71,8 @@ NAME_TO_TCD = {"LAM2": "LDA2", "RHO": "RHO1", "SIGMA1": "SIG1", "THETA1": "THE1"
 CONGEN_RUN_FILES = {"congen_dump": f"congen-{FIRST_YEAR}-{LAST_YEAR}.json",
                     "tcd_dump": f"tcd-{FIRST_YEAR}-{LAST_YEAR}.json"}
 CONGEN_TCD = f"congen-{FIRST_YEAR}-{LAST_YEAR}.tcd"
+# What congen_tables.sh also lists for a run with the OTC TCD (load_congen_run hashes and checks them).
+OTC_RUN_FILES = ("fit_dump", "congen_input", "otc_definitions")
 
 
 class AstroTableMismatch(ValueError):
@@ -119,10 +121,21 @@ def load_congen_run(run_dir: Path, *, tcd_sha256: str = TCD_SHA256) -> CongenRun
     must cover FIRST_YEAR-LAST_YEAR. PROVENANCE's otc_tcd must name the OTC TCD's making: SOURCE_TCD_SHA256,
     OTC_ADDED and the SHA-256 of the committed OTC_DEFINITIONS; when the run holds the OTC TCD file (files.otc_tcd,
     as congen_tables.sh writes it), it is hashed on disk and must be the TCD the TCD dump is of. Any other
-    content raises AstroTableMismatch."""
+    content raises AstroTableMismatch.
+
+    Every file PROVENANCE lists (files.*) is hashed on disk and must match. A run that holds the OTC TCD (as
+    congen_tables.sh writes it) must also list the GESLA fit's dump (fit_dump), the congen input (congen_input) and
+    the OTC definitions (otc_definitions): the definitions file must be the committed OTC_DEFINITIONS, the congen
+    input must end with it, and the fit dump must be of the same TCD with the TCD dump's values for its years."""
     run_dir = Path(run_dir)
     try:
         prov = json.loads((run_dir / "PROVENANCE.json").read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        raise AstroTableMismatch(f"{run_dir}/PROVENANCE.json: missing or malformed ({type(e).__name__}: {e})") from None
+    if isinstance(prov, dict) and "otc_tcd" not in prov:
+        raise AstroTableMismatch(f"{run_dir}: PROVENANCE.json has no otc_tcd: a congen run made before the OTC TCD "
+                                 "(otc-tcd-20251228-ma2mb2); make one with scripts/otc/tools/congen_tables.sh")
+    try:
         files = {key: _entry(prov, key, run_dir) for key in (*CONGEN_RUN_FILES, "congen_tcd")}
         years, tool, command = prov["years"], prov["tool"], prov["command"]
         tools = {k: tool[k]["sha256"] for k in ("congen", "libtcd")}
@@ -150,6 +163,23 @@ def load_congen_run(run_dir: Path, *, tcd_sha256: str = TCD_SHA256) -> CongenRun
         got = _sha256(run_dir / name)
         if got != entry.get("sha256"):
             raise AstroTableMismatch(f"{run_dir / name}: SHA-256 {got}, PROVENANCE says {entry.get('sha256')}")
+    for key in sorted(prov["files"]):                 # every other file the run lists, hashed on disk too
+        if key in files or key == "otc_tcd":
+            continue
+        entry = _entry(prov, key, run_dir)
+        path = run_dir / str(entry.get("path"))
+        got = _sha256(path) if path.is_file() else None
+        if got is None or got != entry.get("sha256"):
+            raise AstroTableMismatch(f"{path}: SHA-256 {got}, PROVENANCE says {entry.get('sha256')}")
+    if otc_file is not None:
+        absent = sorted(set(OTC_RUN_FILES) - set(prov["files"]))
+        if absent:
+            raise AstroTableMismatch(f"{run_dir}: a run with the OTC TCD must list {absent} in PROVENANCE files")
+        defs = OTC_DEFINITIONS.read_bytes()
+        if (run_dir / prov["files"]["otc_definitions"]["path"]).read_bytes() != defs:
+            raise AstroTableMismatch(f"{run_dir}: the run's OTC definitions are not the committed {OTC_DEFINITIONS.name}")
+        if not (run_dir / prov["files"]["congen_input"]["path"]).read_bytes().endswith(defs):
+            raise AstroTableMismatch(f"{run_dir}: the run's congen input does not end with the committed OTC definitions")
     if files["congen_tcd"]["sha256"] == tcd_sha256:
         raise AstroTableMismatch(f"{run_dir / CONGEN_TCD} is the TCD itself, not a congen run's output")
     congen, tcd = (TcdTable.load(run_dir / CONGEN_RUN_FILES[k]) for k in CONGEN_RUN_FILES)
@@ -160,6 +190,10 @@ def load_congen_run(run_dir: Path, *, tcd_sha256: str = TCD_SHA256) -> CongenRun
                                      f"{otc_file.get('sha256')}, the TCD dump is of {tcd.tcd_sha256}")
     if tcd.tcd_sha256 != tcd_sha256:
         raise AstroTableMismatch(f"the TCD dump is of TCD {tcd.tcd_sha256}, expected {tcd_sha256}")
+    if otc_file is not None:
+        errors = fit_dump_errors(TcdTable.load(run_dir / prov["files"]["fit_dump"]["path"]), tcd)
+        if errors:
+            raise AstroTableMismatch(f"{run_dir}: the fit dump is not the TCD dump's: " + "; ".join(errors[:5]))
     if congen.tcd_sha256 != files["congen_tcd"]["sha256"]:
         raise AstroTableMismatch(f"the congen dump is of TCD {congen.tcd_sha256}, not the run's "
                                  f"{files['congen_tcd']['sha256']}")
@@ -168,6 +202,25 @@ def load_congen_run(run_dir: Path, *, tcd_sha256: str = TCD_SHA256) -> CongenRun
             raise AstroTableMismatch(f"the {what} dump covers {t.first_year}-{t.last_year}, expected "
                                      f"{FIRST_YEAR}-{LAST_YEAR}")
     return CongenRun(congen, tcd, prov, run_dir, _LOADER)
+
+
+def fit_dump_errors(fit: TcdTable, tcd: TcdTable) -> list[str]:
+    """Why the GESLA fit's dump (a run's tcd-1900-2100.json) is not the run's TCD dump for its years: another TCD,
+    other constituents or aliases, or any speed, V0+u or f not equal (the same stored values). Empty list = it is."""
+    errors = []
+    if fit.tcd_sha256 != tcd.tcd_sha256:
+        errors.append(f"fit dump of TCD {fit.tcd_sha256}, TCD dump of {tcd.tcd_sha256}")
+    if not tcd.first_year <= fit.first_year <= fit.last_year <= tcd.last_year:
+        return errors + [f"fit dump years {fit.first_year}-{fit.last_year} outside {tcd.first_year}-{tcd.last_year}"]
+    if set(fit.constituents) != set(tcd.constituents) or dict(fit.aliases) != dict(tcd.aliases):
+        errors.append("constituents or aliases differ")
+        return errors
+    lo, hi = fit.first_year - tcd.first_year, fit.last_year - tcd.first_year + 1
+    for n, c in sorted(fit.constituents.items()):
+        t = tcd.constituents[n]
+        if (c.speed, c.v0u, c.f) != (t.speed, t.v0u[lo:hi], t.f[lo:hi]):
+            errors.append(f"{n}: values differ")
+    return errors
 
 
 def _v0u_diff(a: float, b: float) -> float:

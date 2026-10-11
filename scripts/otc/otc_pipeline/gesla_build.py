@@ -51,7 +51,7 @@ from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
 from otc_pipeline import station_map as sm
 from otc_pipeline import ticon_sets as ts
-from otc_pipeline.astro_tables import TABLE_ID, TCD_SHA256, astro_table, load_congen_run
+from otc_pipeline.astro_tables import TABLE_ID, TCD_SHA256, AstroTableMismatch, astro_table, load_congen_run
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline.release_writer import validate_release, write_release
 
@@ -116,7 +116,10 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     final = gs.load_audit(verdicts_dir)
     carry = ts.TiconCarry.from_audit(ts.load_ticon(ticon_csv), final, rel.metadata(), references_path=ticon_refs)
     names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table)
-    crun = load_congen_run(congen_run, tcd_sha256=table.tcd_sha256)
+    try:
+        crun = load_congen_run(congen_run, tcd_sha256=table.tcd_sha256)
+    except AstroTableMismatch as e:
+        raise SystemExit(f"--congen-run: {e}") from None
     otc_file = crun.provenance["files"].get("otc_tcd")
     if not otc_file:
         raise SystemExit(f"{congen_run}: the congen run holds no OTC TCD file (files.otc_tcd): run congen_tables.sh")

@@ -279,7 +279,7 @@ def test_the_otc_definitions_are_m2_with_h_1_and_h_3():
     (lambda prov, c, t: prov["otc_tcd"]["source_tcd"].update(sha256="0" * 64), "the run's OTC TCD is made from"),
     (lambda prov, c, t: prov["otc_tcd"].update(added=["MA2"]), "the run's OTC TCD is made from"),
     (lambda prov, c, t: prov["otc_tcd"].update(definitions_sha256="0" * 64), "the run's OTC TCD is made from"),
-    (lambda prov, c, t: prov.pop("otc_tcd"), "missing or malformed"),
+    (lambda prov, c, t: prov.pop("otc_tcd"), "PROVENANCE.json has no otc_tcd: a congen run made before the OTC TCD"),
 ])
 def test_a_run_whose_otc_tcd_is_not_the_decided_one_is_refused(tmp_path, edit, what):
     _write_run(tmp_path, edit=edit)
@@ -291,10 +291,19 @@ def test_the_otc_tcd_file_in_a_run_is_hashed_and_must_be_the_dumped_tcd(tmp_path
     otc = b"stand-in OTC TCD"
     sha = __import__("hashlib").sha256(otc).hexdigest()
 
+    import hashlib
+    defs = at.OTC_DEFINITIONS.read_bytes()
+
     def with_file(prov, congen, tcd):
         prov["files"]["otc_tcd"] = {"path": "otc.tcd", "sha256": sha}
         tcd["tcd_sha256"] = sha
+        # a run holding the OTC TCD lists its other files too: the fit dump (here the TCD dump's own years)
+        (tmp_path / "fit.json").write_text(json.dumps(tcd))
+        for key, name in (("fit_dump", "fit.json"), ("congen_input", "in.txt"), ("otc_definitions", "defs.txt")):
+            prov["files"][key] = {"path": name, "sha256": hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()}
     (tmp_path / "otc.tcd").write_bytes(otc)
+    (tmp_path / "in.txt").write_bytes(b"congen input\n" + defs)
+    (tmp_path / "defs.txt").write_bytes(defs)
     _write_run(tmp_path, edit=with_file)
     assert load_congen_run(tmp_path, tcd_sha256=sha).tcd.tcd_sha256 == sha
     (tmp_path / "otc.tcd").write_bytes(otc + b"\0")
@@ -644,6 +653,116 @@ def test_tcd_json_aliases_are_dump_tcd_rbs():
     rb = (root / "gesla" / "dump_tcd.rb").read_text()
     block = re.search(r"TICON_TO_TCD_NAMES = \{(.*?)\}", rb, re.S).group(1)
     assert dict(re.findall(r"'([A-Z0-9]+)' => '([A-Z0-9]+)'", block)) == mod.ALIASES
+
+
+def _run_copy(tmp_path):
+    import shutil
+    src = _run_dir()
+    d = tmp_path / "run"
+    d.mkdir()
+    for k, e in json.loads((src / "PROVENANCE.json").read_text())["files"].items():
+        shutil.copy2(src / e["path"], d / e["path"])
+    shutil.copy2(src / "PROVENANCE.json", d / "PROVENANCE.json")
+    return d
+
+
+def _bump_m2_2026(p: Path) -> None:
+    j = json.loads(p.read_text())
+    v = j["constituents"]["M2"]["v0u"]
+    i = 2026 - j["years"][0]
+    v[i] = round((v[i] + 1.0) % 360, 2)
+    p.write_text(json.dumps(j, separators=(",", ":")))
+
+
+def _reprovenance(d: Path, key: str) -> None:
+    """PROVENANCE made to agree with an edited file (an attacker or a stale run that re-hashed it)."""
+    prov = json.loads((d / "PROVENANCE.json").read_text())
+    e = prov["files"][key]
+    e["sha256"] = __import__("hashlib").sha256((d / e["path"]).read_bytes()).hexdigest()
+    (d / "PROVENANCE.json").write_text(json.dumps(prov))
+
+
+def test_every_listed_run_file_is_hashed(tmp_path):
+    # N4: the fit dump, the congen input and the OTC definitions are hashed against PROVENANCE like the dumps
+    d = _run_copy(tmp_path)
+    load_congen_run(d)
+    for key in ("fit_dump", "congen_input", "otc_definitions"):
+        e = json.loads((d / "PROVENANCE.json").read_text())["files"][key]
+        keep = (d / e["path"]).read_bytes()
+        (d / e["path"]).write_bytes(keep + b"\n")
+        with pytest.raises(AstroTableMismatch, match=f"{re.escape(e['path'])}: SHA-256 .*PROVENANCE says"):
+            load_congen_run(d)
+        (d / e["path"]).write_bytes(keep)
+    load_congen_run(d)
+
+
+def test_a_fit_dump_with_other_values_is_refused_even_when_rehashed(tmp_path):
+    # N4: a fit dump that still says it is of the OTC TCD (tcd_sha256) but holds other values
+    d = _run_copy(tmp_path)
+    _bump_m2_2026(d / "tcd-1900-2100.json")
+    _reprovenance(d, "fit_dump")
+    with pytest.raises(AstroTableMismatch, match="the fit dump is not the TCD dump's: M2: values differ"):
+        load_congen_run(d)
+
+
+@pytest.mark.parametrize("key,match", [("otc_definitions", "are not the committed otc_constituents.txt"),
+                                       ("congen_input", "does not end with the committed OTC definitions")])
+def test_edited_definitions_or_congen_input_are_refused_even_when_rehashed(tmp_path, key, match):
+    d = _run_copy(tmp_path)
+    e = json.loads((d / "PROVENANCE.json").read_text())["files"][key]
+    (d / e["path"]).write_bytes((d / e["path"]).read_bytes() + b"# edited\n")
+    _reprovenance(d, key)
+    with pytest.raises(AstroTableMismatch, match=match):
+        load_congen_run(d)
+
+
+def test_a_run_with_the_otc_tcd_must_list_its_other_files(tmp_path):
+    d = _run_copy(tmp_path)
+    prov = json.loads((d / "PROVENANCE.json").read_text())
+    del prov["files"]["fit_dump"]
+    (d / "PROVENANCE.json").write_text(json.dumps(prov))
+    with pytest.raises(AstroTableMismatch, match=r"must list \['fit_dump'\]"):
+        load_congen_run(d)
+
+
+def test_fit_dump_errors_compares_the_years_it_holds():
+    _, tcd = load_congen_run(_run_dir())
+    fit = TcdTable.load(_run_dir() / "tcd-1900-2100.json")
+    assert at.fit_dump_errors(fit, tcd) == []
+    other = TcdTable({"years": [1900, 2100], "tcd_sha256": "0" * 64, "aliases": dict(fit.aliases),
+                      "constituents": {n: {"speed": c.speed, "v0u": list(c.v0u), "f": list(c.f)}
+                                       for n, c in fit.constituents.items()}})
+    assert at.fit_dump_errors(other, tcd) == [f"fit dump of TCD {'0' * 64}, TCD dump of {tcd.tcd_sha256}"]
+
+
+def test_tcd_merge_leaves_nothing_behind_on_failure(tmp_path):
+    # N6: a failure before the OTC TCD exists (OUT is a directory) and after (TCD_MERGE_FAIL_AFTER_RECORDS) leaves
+    # neither OUT.tcd.records nor a partial OUT.tcd; a normal run writes the pinned OTC TCD
+    import hashlib
+    import shutil
+    import subprocess
+    prefix = otc_work() / "astro" / "congen-1.7-r2" / "build" / "prefix"
+    prefix = Path(os.environ.get("OTC_LIBTCD_PREFIX", prefix))
+    src = Path(__file__).resolve().parents[3] / "data" / "harmonics-dwf-20251228-free.tcd"
+    cc = shutil.which("cc") or shutil.which("gcc")
+    if not ((prefix / "lib" / "libtcd.a").is_file() and src.is_file() and cc):
+        pytest.skip("needs a built libtcd (congen_tables.sh build/prefix), the source TCD and a C compiler")
+    exe = tmp_path / "tcd_merge"
+    subprocess.run([cc, "-O2", f"-I{prefix / 'include'}", str(Path(__file__).resolve().parents[1] / "tools" / "tcd" /
+                    "tcd_merge.c"), str(prefix / "lib" / "libtcd.a"), "-o", str(exe)], check=True)
+    congen = _run_dir() / at.CONGEN_TCD
+    args = lambda out: [str(exe), str(src), str(congen), str(out), "2026-10-11 00:00", "MA2", "MB2"]
+    (tmp_path / "busy.tcd").mkdir()
+    (tmp_path / "busy.tcd" / "keep").write_text("x")
+    r = subprocess.run(args(tmp_path / "busy.tcd"), capture_output=True, text=True)
+    assert r.returncode == 1 and "could not create" in r.stderr and not (tmp_path / "busy.tcd.records").exists()
+    r = subprocess.run(args(tmp_path / "part.tcd"), capture_output=True, text=True,
+                       env={**os.environ, "TCD_MERGE_FAIL_AFTER_RECORDS": "100"})
+    assert r.returncode == 1 and "TCD_MERGE_FAIL_AFTER_RECORDS" in r.stderr
+    assert not (tmp_path / "part.tcd").exists() and not (tmp_path / "part.tcd.records").exists()
+    subprocess.run(args(tmp_path / "ok.tcd"), check=True, capture_output=True)
+    assert hashlib.sha256((tmp_path / "ok.tcd").read_bytes()).hexdigest() == at.TCD_SHA256
+    assert not (tmp_path / "ok.tcd.records").exists()
 
 
 def test_noaa_names_get_their_own_rows_with_the_tcd_values():
