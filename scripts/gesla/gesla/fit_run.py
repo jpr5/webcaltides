@@ -38,7 +38,7 @@ from .qc import clean
 from .read_gesla import GeslaRelease, ShaMismatch, load_contributor_roles, otc_work
 from .select_constituents import (FIT_SPAN_YEARS, fit_record, in_tcd_years, last_years, record_hours, sampling_corrected,
                                   select_candidate_list)
-from .tcd_table import TcdTable
+from .tcd_table import TcdTable, dump_path
 from .timebase_audit import check_audit_outputs, correction_of, declared_correction, write_manifest
 from .timebase_verdict import Correction
 
@@ -49,8 +49,9 @@ TIMEBASE = Path(os.environ.get("TIMEBASE_CSV", "timebase.csv"))
 
 
 def tcd_table_path() -> Path:
-    """The TCD dump the fit reads: $TCD_TABLE, else $OTC_WORK/tcd_table.json."""
-    return Path(os.environ.get("TCD_TABLE") or otc_work() / "tcd_table.json")
+    """The TCD dump the fit reads: tcd_table.dump_path() ($TCD_TABLE or $OTC_TCD_TABLE, else
+    $OTC_WORK/tcd_table.json; the two set to different files is an error)."""
+    return dump_path()
 RESULTS = OUT / "results.jsonl"
 FITS = OUT / "fits"
 SHORT_HOURS = 15 * 24

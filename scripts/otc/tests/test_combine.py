@@ -508,3 +508,42 @@ def test_rules_2_and_3_never_join_a_station_holding_another_gauge_of_the_agency(
     assert (sid, ev["how"]) == ("OTC-dddddddd", "unambiguous")
     # another source's records do not count as this agency's gauges
     assert combine.join(ref("8440889", 40.004, -70.0), one, source="kartverket")[0] == "OTC-cccccccc"
+
+
+# --- one TCD dump for the fits, the astro table and every agency source (INT-2, FIX-CONST review N7) ---------------
+
+def _tcd_dump(path, tcd_sha256, rows):
+    import json
+    path.write_text(json.dumps({"tcd_sha256": tcd_sha256, "years": [2000, 2001], "aliases": {},
+                                "constituents": {k: {"speed": v, "v0u": [0.0, 0.0], "f": [1.0, 1.0]}
+                                                 for k, v in rows.items()}}))
+    return path
+
+
+@pytest.mark.parametrize("source", combine.AGENCY_SOURCES)
+def test_every_agency_source_reads_its_speeds_from_the_build_dump(tmp_path, source):
+    from otc_pipeline.astro_tables import TCD_SHA256
+    dump = _tcd_dump(tmp_path / "otc.json", TCD_SHA256, {"M2": 28.9841042, "MA2": 28.9430356})
+    sp = combine.agency_speeds(source, dump)
+    assert sp.tcd_sha256 == TCD_SHA256 and sp.dump_sha256 == hashlib.sha256(dump.read_bytes()).hexdigest()
+    assert sp.speeds["MA2"] == 28.9430356            # a row of the OTC TCD, never "no table row"
+
+
+@pytest.mark.parametrize("source", combine.AGENCY_SOURCES)
+def test_a_dump_of_another_tcd_stops_the_agency_read(tmp_path, source):
+    from otc_pipeline.astro_tables import SOURCE_TCD_SHA256
+    dump = _tcd_dump(tmp_path / "xtide.json", SOURCE_TCD_SHA256, {"M2": 28.9841042})
+    with pytest.raises(CombineError, match="the agency sets are read on the release's otc-tcd-20251228-ma2mb2"):
+        combine.agency_speeds(source, dump)
+
+
+def test_a_source_on_another_dump_than_the_build_stops_the_build():
+    from types import SimpleNamespace
+
+    from otc_pipeline import build_otc as bo
+    parts = SimpleNamespace(provenance={"tcd": {"path": "/otc.json", "sha256": "d" * 64}})
+    same = {s: SimpleNamespace(tcd_dump_sha256="d" * 64) for s in combine.AGENCY_SOURCES}
+    bo.check_one_table(same, parts)
+    for bad in ("e" * 64, None):
+        with pytest.raises(CombineError, match="read another TCD dump than the build's"):
+            bo.check_one_table({**same, "kartverket": SimpleNamespace(tcd_dump_sha256=bad)}, parts)

@@ -53,8 +53,9 @@ from otc_pipeline.adapter import InputFile, SourceSet, adapter_licences
 from otc_pipeline.canary import distance_km
 from otc_pipeline.release_writer import pinned_schema
 
-__all__ = ["AGENCY_SOURCES", "JOIN_RADIUS_KM", "AgencySource", "CombineError", "Place", "apply_corrections",
-           "gesla_places", "join", "load_agency", "load_corrections", "merge", "mint_agency", "record_id"]
+__all__ = ["AGENCY_SOURCES", "JOIN_RADIUS_KM", "AgencySource", "CombineError", "Place", "agency_speeds",
+           "apply_corrections", "gesla_places", "join", "load_agency", "load_corrections", "merge", "mint_agency",
+           "record_id"]
 
 AGENCY_SOURCES = ("kartverket", "linz", "jma", "noaa", "noaa-currents")
 JOIN_RADIUS_KM = 1.0
@@ -80,6 +81,7 @@ class AgencySource:
     sets: list[SourceSet]
     alias_system: str
     corrections: list[dict] = field(default_factory=list)   # the position corrections applied (apply_corrections)
+    tcd_dump_sha256: str | None = None   # the SHA-256 of the TCD dump the adapter's speeds came from (load_agency)
 
 
 def upstream_id(ss: SourceSet, alias_system: str) -> str:
@@ -135,21 +137,43 @@ def _linz_cached(cache_dir: Path):
                         levels_file=_cached_input(cache_dir, "pages/standard-port-tidal-levels.html"))
 
 
-def load_agency(cache_root: Path, sources: Iterable[str] = AGENCY_SOURCES, *, jma_year: int,
+def agency_speeds(source: str, tcd_path: Path):
+    """The speeds table `source`'s adapter takes, read from the TCD dump at `tcd_path`; a dump of another TCD than
+    the release's (astro_tables.TCD_SHA256, the OTC TCD) is a CombineError: the agency sets, the fits and the astro
+    table are on one table, and an agency constituent the release has a row for (MA2, MB2) is never dropped."""
+    from otc_pipeline.adapters import jma, linz
+    from otc_pipeline.astro_tables import TABLE_ID, TCD_SHA256
+    from otc_pipeline.constituent_speeds import TableSpeeds
+    readers = {"noaa": TableSpeeds, "noaa-currents": TableSpeeds, "kartverket": TableSpeeds,
+               "linz": linz.Speeds, "jma": jma.Speeds}
+    if source not in readers:
+        raise CombineError(f"{source}: no speeds table is defined for this source")
+    speeds = readers[source].from_tcd_dump(Path(tcd_path))
+    if speeds.tcd_sha256 != TCD_SHA256:
+        raise CombineError(f"{tcd_path}: a dump of TCD {speeds.tcd_sha256}; the agency sets are read on the release's "
+                           f"{TABLE_ID} ({TCD_SHA256}), the dump the fits and the astro table use")
+    return speeds
+
+
+def load_agency(cache_root: Path, sources: Iterable[str] = AGENCY_SOURCES, *, jma_year: int, tcd_path: Path,
                 corrections: list[dict] | None = None) -> dict[str, AgencySource]:
     """Each source's sets from `cache_root/<source>`, with the network blocked, positions corrected
-    (apply_corrections with `corrections`, default the committed file)."""
+    (apply_corrections with `corrections`, default the committed file). Every adapter reads its speeds from the
+    TCD dump at `tcd_path` (agency_speeds: the OTC TCD's, the dump the build's fits use); each source records the
+    dump's SHA-256 (AgencySource.tcd_dump_sha256)."""
     from otc_pipeline.sources import SOURCES
     corrections = load_corrections() if corrections is None else corrections
     out = {}
     with no_network():
         for src in sources:
-            adapter = SOURCES[src](**({"year": jma_year} if src == "jma" else {}))
+            adapter = SOURCES[src](**({"year": jma_year} if src == "jma" else {}),
+                                   speeds=agency_speeds(src, tcd_path))
             cache = Path(cache_root) / src
             fetched = _linz_cached(cache) if src == "linz" else adapter.fetch(cache)
             sets = list(adapter.sets(fetched))
             out[src] = AgencySource(src, fetched.source_version, adapter.convention(), adapter_licences(adapter),
-                                    sets, getattr(adapter, "alias_system", None) or src)
+                                    sets, getattr(adapter, "alias_system", None) or src,
+                                    tcd_dump_sha256=adapter.speeds.dump_sha256)
     for a in out.values():
         apply_corrections(a, [c for c in corrections if c["source"] == a.source])
     unused = [c for c in corrections if c["source"] in out
@@ -604,12 +628,14 @@ def main(argv: list[str] | None = None) -> int:
     mp.add_argument("--datestamp", required=True)
     a = ap.parse_args(argv)
     from otc_pipeline import gesla_build as gb
-    agency = load_agency(a.agency_cache, jma_year=int(a.datestamp[:4]))
+    from gesla.tcd_table import dump_path
+    tcd = a.tcd or dump_path()
+    agency = load_agency(a.agency_cache, jma_year=int(a.datestamp[:4]), tcd_path=tcd)
     parts = gb.build_parts(fit_run=a.fit_run, audit_dir=a.audit_dir, verdicts_dir=a.verdicts_dir,
                            calibration_dir=a.calibration, overlay_run=a.overlay_run, ticon_csv=a.ticon_csv,
                            ticon_refs=a.ticon_refs, congen_run=a.congen_run, datestamp=a.datestamp,
                            created=f"{a.datestamp[:4]}-{a.datestamp[4:6]}-{a.datestamp[6:]}T00:00:00Z",
-                           build_commit="0000000", tcd_path=a.tcd, extra_names=agency_names(agency))
+                           build_commit="0000000", tcd_path=tcd, extra_names=agency_names(agency))
     smap = sm.load()
     new, rows = mint_agency(smap, agency, gesla_places(parts.release))
     how = Counter(r["how"] for r in rows)

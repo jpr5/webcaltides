@@ -51,7 +51,6 @@ import io
 import json
 import logging
 import math
-import os
 import re
 import subprocess
 import sys
@@ -113,7 +112,6 @@ NZ_LON = ((165.0, 180.0), (-180.0, -175.0))
 MAX_LIST_KM = 5.0
 SPEED_TOL_DEG_PER_HOUR = 1e-4       # LINZ frequency x 360 vs the TCD speed of the mapped name
 REPO = Path(__file__).resolve().parents[4]
-TCD_PATH = REPO / "data" / "latest-xtide.tcd"
 OTC_WORK_CLI = REPO / "bin" / "otc-work"
 
 
@@ -324,18 +322,24 @@ class Speeds:
     """Constituent name -> TCD name and speed (deg/h). `from_tcd_dump` reads the TCD dump."""
 
     def __init__(self, speeds: Mapping[str, float], aliases: Mapping[str, str] | None = None,
-                 tcd_sha256: str | None = None):
+                 tcd_sha256: str | None = None, dump_sha256: str | None = None):
         self.speeds = dict(speeds)
         self.aliases = dict(aliases or {})
         self.tcd_sha256 = tcd_sha256
+        self.dump_sha256 = dump_sha256      # the SHA-256 of the dump file read (from_tcd_dump), else None
 
     @classmethod
-    def from_tcd_dump(cls, path: Path | None = None, tcd_path: Path = TCD_PATH) -> "Speeds":
-        from gesla.read_gesla import otc_work
-        from gesla.tcd_table import TcdTable
-        dump = Path(path or os.environ.get("OTC_TCD_TABLE") or otc_work() / "tcd_table.json")
-        table = TcdTable.load(dump, tcd_sha256=sha256_file(tcd_path))
-        return cls({n: c.speed for n, c in table.constituents.items()}, table.aliases, table.tcd_sha256)
+    def from_tcd_dump(cls, path: Path | None = None, tcd_sha256: str | None = None) -> "Speeds":
+        """From the TCD dump at `path`, else gesla.tcd_table.dump_path(); with `tcd_sha256`, a dump of another
+        TCD raises ValueError."""
+        from gesla.tcd_table import TcdTable, dump_path
+        dump = Path(path or dump_path())
+        raw = dump.read_bytes()
+        table = TcdTable(json.loads(raw))
+        if tcd_sha256 is not None and table.tcd_sha256 != tcd_sha256:
+            raise ValueError(f"{dump}: dump is for TCD {table.tcd_sha256}, expected {tcd_sha256}")
+        return cls({n: c.speed for n, c in table.constituents.items()}, table.aliases, table.tcd_sha256,
+                   hashlib.sha256(raw).hexdigest())
 
     def name(self, raw: str) -> str:
         up = raw.strip().upper()

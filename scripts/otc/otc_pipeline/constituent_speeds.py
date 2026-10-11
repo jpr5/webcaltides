@@ -13,13 +13,14 @@ then by the TCD dump's own aliases. So an adapter:
   and detail NO_ASTRO_ROW: its f and u cannot be checked, and none are made up.
 
 The speeds come from the TCD dump (`from_tcd_dump`), which KP0b checks equal to the congen run's within
-1e-7 deg/h. NAME_TO_TCD is KP0b's (otc_pipeline.astro_tables.NAME_TO_TCD on blitz/otc-gesla/KP0b at
+1e-7 deg/h. A combined build gives every adapter the dump its fits and astro table use (combine.load_agency
+`tcd_path`) and stops when a source read another (build_otc.check_one_table). NAME_TO_TCD is KP0b's (otc_pipeline.astro_tables.NAME_TO_TCD on blitz/otc-gesla/KP0b at
 336cc19); the two must stay the same when the branches merge.
 """
 from __future__ import annotations
 
+import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Mapping
 
@@ -44,18 +45,21 @@ class TableSpeeds:
     """Release constituent name -> the speed of its astro-table row (deg/h), or None for no row."""
 
     def __init__(self, speeds: Mapping[str, float], aliases: Mapping[str, str] | None = None,
-                 tcd_sha256: str | None = None):
+                 tcd_sha256: str | None = None, dump_sha256: str | None = None):
         self.speeds = dict(speeds)
         self.aliases = dict(aliases or {})
         self.tcd_sha256 = tcd_sha256
+        self.dump_sha256 = dump_sha256      # the SHA-256 of the dump file read (from_tcd_dump), else None
 
     @classmethod
     def from_tcd_dump(cls, path: Path | None = None) -> "TableSpeeds":
-        from gesla.read_gesla import otc_work
-        from gesla.tcd_table import TcdTable
-        dump = Path(path or os.environ.get("OTC_TCD_TABLE") or otc_work() / "tcd_table.json")
-        table = TcdTable.load(dump)
-        return cls({n: c.speed for n, c in table.constituents.items()}, table.aliases, table.tcd_sha256)
+        """From the TCD dump at `path`, else gesla.tcd_table.dump_path() (a combined build passes its own)."""
+        from gesla.tcd_table import TcdTable, dump_path
+        dump = Path(path or dump_path())
+        raw = dump.read_bytes()
+        table = TcdTable(json.loads(raw))
+        return cls({n: c.speed for n, c in table.constituents.items()}, table.aliases, table.tcd_sha256,
+                   hashlib.sha256(raw).hexdigest())
 
     @classmethod
     def from_json(cls, path: Path) -> "TableSpeeds":

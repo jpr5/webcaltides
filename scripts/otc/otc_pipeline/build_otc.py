@@ -4,7 +4,8 @@
         --datestamp YYYYMMDD --created ISO8601 --out OUT          (bin/build-otc runs this)
 
 1. The agency sets (combine.load_agency): kartverket, linz, jma, noaa, noaa-currents from ROOT/<source>, with the
-   network blocked, positions corrected (data/otc/position_corrections.json).
+   network blocked, positions corrected (data/otc/position_corrections.json), their speeds read from --tcd, the
+   dump the GESLA build fits and publishes with (check_one_table: any source on another dump stops the build).
 2. The GESLA build (gesla_build.build_parts: every GESLA and TICON-4 gate as gesla_build runs them), with the
    agency constituent names in the astro table.
 3. The canaries (D8): kartverket, linz, jma and noaa against this build's GESLA fits (canary.canary; comparators:
@@ -27,6 +28,8 @@ import os
 import sys
 import time
 from pathlib import Path
+
+from gesla.tcd_table import dump_path
 
 from otc_pipeline import combine
 from otc_pipeline import currents_canary as cc
@@ -116,6 +119,16 @@ def run_canaries(agency: dict, comparators: list, currents_cache: Path, *, start
     return conv, full
 
 
+def check_one_table(agency: dict, parts: gb.BuildParts) -> None:
+    """Every agency source read its speeds from the dump the GESLA build fitted and published with (the same
+    file: SHA-256); else CombineError, the build stops."""
+    want = parts.provenance["tcd"]["sha256"]
+    other = {src: a.tcd_dump_sha256 for src, a in agency.items() if a.tcd_dump_sha256 != want}
+    if other:
+        raise combine.CombineError(f"agency sources read another TCD dump than the build's {parts.provenance['tcd']['path']} "
+                                   f"({want}): {other}")
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -127,7 +140,8 @@ def main(argv: list[str] | None = None) -> int:
                  "agency-cache", "currents-canary-cache", "out"):
         ap.add_argument(f"--{name}", type=Path, required=True)
     ap.add_argument("--overlay-run", type=Path)
-    ap.add_argument("--tcd", type=Path, help="the TCD dump (default $OTC_WORK/tcd_table.json)")
+    ap.add_argument("--tcd", type=Path, help="the TCD dump of the fits, the astro table and the agency sets "
+                    "(default gesla.tcd_table.dump_path(): $TCD_TABLE or $OTC_TCD_TABLE, else $OTC_WORK/tcd_table.json)")
     ap.add_argument("--currents-canary-start", default=cc.START)
     ap.add_argument("--datestamp", required=True)
     ap.add_argument("--created", required=True)
@@ -141,14 +155,17 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"{a.out}: not empty")
     commit = gb.head_commit()
     log(f"build_commit {commit}")
-    agency = combine.load_agency(a.agency_cache, jma_year=int(a.datestamp[:4]))
+    tcd = a.tcd or dump_path()
+    agency = combine.load_agency(a.agency_cache, jma_year=int(a.datestamp[:4]), tcd_path=tcd)
     log("agency sets: " + ", ".join(f"{s} {len(x.sets)}" for s, x in agency.items()))
     parts = gb.build_parts(fit_run=a.fit_run, audit_dir=a.audit_dir, verdicts_dir=a.verdicts_dir,
                            calibration_dir=a.calibration, overlay_run=a.overlay_run, ticon_csv=a.ticon_csv,
                            ticon_refs=a.ticon_refs, congen_run=a.congen_run, datestamp=a.datestamp,
-                           created=a.created, build_commit=commit, tcd_path=a.tcd,
+                           created=a.created, build_commit=commit, tcd_path=tcd,
                            extra_names=combine.agency_names(agency), log=log)
     log(f"gesla build_release: {parts.report.summary()}")
+    check_one_table(agency, parts)
+    log(f"one TCD dump: {parts.provenance['tcd']['sha256'][:12]} (fits, astro table and every agency source)")
     comparators = gesla_comparators(parts)
     log(f"canary comparators (GESLA fits): {len(comparators)}")
     conv, full = run_canaries(agency, comparators, a.currents_canary_cache, start=a.currents_canary_start, log=log)
@@ -172,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
                   "agency_cache": {s: {"path": str((a.agency_cache / s).resolve()),
                                        "manifest_sha256": _sha256(a.agency_cache / s / "MANIFEST.json")}
                                    for s in agency},
+                  "agency_tcd_dump_sha256": {s: x.tcd_dump_sha256 for s, x in agency.items()},
                   "position_corrections_sha256": _sha256(combine.CORRECTIONS_PATH),
                   "canary_exceptions_sha256": _sha256(EXCEPTIONS_PATH),
                   "currents_canary_cache": str(a.currents_canary_cache.resolve())}

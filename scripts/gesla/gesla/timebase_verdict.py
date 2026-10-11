@@ -50,7 +50,7 @@ import numpy as np
 import pandas as pd
 
 from .record import GaugeRecord
-from .tcd_table import TcdTable
+from .tcd_table import TcdTable, dump_path
 from .timebase_measure import (MonthLag, Samples, constituent_lags, monthly_lags, read_fixture, samples,
                                sampling_test, spring_gap)
 
@@ -674,8 +674,6 @@ def run_positive_controls(release, table: TcdTable, *, log=None) -> list[Control
 
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
-    import os as _os
-    from pathlib import Path
 
     from .read_gesla import GeslaRelease, otc_work
 
@@ -683,7 +681,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("command", choices=["controls"])
     ap.parse_args(argv)
     release = GeslaRelease(otc_work() / "inputs" / "gesla" / "4.1")
-    table = TcdTable.load(Path(_os.environ.get("OTC_TCD_TABLE", otc_work() / "tcd_table.json")))
+    table = TcdTable.load(dump_path())   # the one table (tcd_table.dump_path)
     run_positive_controls(release, table, log=print)   # PositiveControlError propagates: exit 1
     print("positive controls: all right")
     return 0

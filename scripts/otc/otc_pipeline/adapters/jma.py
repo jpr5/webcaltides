@@ -259,17 +259,22 @@ def fetch_predictions(cache_dir: Path, code: str, year: int, fetcher: PoliteFetc
 class Speeds:
     """TCD name and speed for a JMA constituent. `from_tcd_dump` reads the TCD dump (G03a)."""
 
-    def __init__(self, speeds: Mapping[str, float]):
+    def __init__(self, speeds: Mapping[str, float], tcd_sha256: str | None = None, dump_sha256: str | None = None):
         self.speeds = dict(speeds)
+        self.tcd_sha256 = tcd_sha256
+        self.dump_sha256 = dump_sha256      # the SHA-256 of the dump file read (from_tcd_dump), else None
 
     @classmethod
     def from_tcd_dump(cls, path: Path | None = None) -> "Speeds":
-        import os
+        """From the TCD dump at `path`, else gesla.tcd_table.dump_path() (a combined build passes its own)."""
+        import hashlib
 
-        from gesla.read_gesla import otc_work
-        from gesla.tcd_table import TcdTable
-        dump = Path(path or os.environ.get("OTC_TCD_TABLE") or otc_work() / "tcd_table.json")
-        return cls({n: c.speed for n, c in TcdTable.load(dump).constituents.items()})
+        from gesla.tcd_table import TcdTable, dump_path
+        dump = Path(path or dump_path())
+        raw = dump.read_bytes()
+        table = TcdTable(json.loads(raw))
+        return cls({n: c.speed for n, c in table.constituents.items()}, table.tcd_sha256,
+                   hashlib.sha256(raw).hexdigest())
 
     def tcd(self, jma_name: str, jma_speed: float) -> tuple[str, float]:
         name = NAME_MAP.get(jma_name, jma_name)

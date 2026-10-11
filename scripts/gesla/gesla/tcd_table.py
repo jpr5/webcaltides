@@ -8,10 +8,28 @@ fit uses these values so that its phases are in the engine's convention.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
+
+
+DUMP_ENV = ("TCD_TABLE", "OTC_TCD_TABLE")
+
+
+def dump_path() -> Path:
+    """The TCD dump every reader uses unless it is given one: $TCD_TABLE (the fit's variable) or $OTC_TCD_TABLE
+    (the adapters' and the time-base audit's), else $OTC_WORK/tcd_table.json. Both set to different files is an
+    error: the fit, the audit and the agency sets read one table."""
+    set_ = {k: Path(os.environ[k]) for k in DUMP_ENV if os.environ.get(k)}
+    if len({p.resolve() for p in set_.values()}) > 1:
+        raise ValueError("TCD_TABLE and OTC_TCD_TABLE name different TCD dumps "
+                         f"({set_['TCD_TABLE']}, {set_['OTC_TCD_TABLE']}): one table is read, set one of them")
+    if set_:
+        return next(iter(set_.values()))
+    from .read_gesla import otc_work
+    return otc_work() / "tcd_table.json"
 
 
 @dataclass(frozen=True)

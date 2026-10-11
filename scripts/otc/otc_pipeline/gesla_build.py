@@ -21,7 +21,8 @@ Inputs (none of them is in git; each is checked where it is read):
 - CONGEN: a congen_tables.sh run (astro_tables.load_congen_run); the astro table is built from it for every
   constituent the release can publish, and build_release checks it against the run. The release is built on the
   OTC TCD (astro_tables.TABLE_ID, TCD_SHA256: tcd-20251228 + MA2 and MB2): the fit's TCD dump must be of it (the
-  run's tcd-1900-2100.json) and the run must hold the OTC TCD file; anything else is refused.
+  run's tcd-1900-2100.json) and the run must hold the OTC TCD file; anything else is refused. The dump each audit
+  (AUDIT, FINAL) read must be this dump or one with only rows of it (audit_dump), else the build stops.
 
 The station map, epoch hours, licences and withheld switches are the committed files under data/. build_commit is
 the repository HEAD; a tree with uncommitted changes to tracked files is refused, so the output is the committed
@@ -47,8 +48,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from gesla.read_gesla import GeslaRelease, otc_work
+from gesla.read_gesla import GeslaRelease
 from gesla.short_accuracy import check_bound, read_calibration
+from gesla.tcd_table import dump_path
 
 from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
@@ -94,6 +96,33 @@ def _audit_identity(audit_dir: Path, audit: gs.Audit) -> dict:
             "timebase_csv_sha256": audit.csv_sha256, "commit": audit.decided_build_commit}
 
 
+def audit_dump(audit_dir: Path, dump) -> dict:
+    """The TCD dump the time-base audit in `audit_dir` read (its manifest's inputs.tcd_table), checked against the
+    build's dump: the same file ("same"), or a dump whose every row (speed, V0+u and f for every year), alias and
+    year range is the build dump's, which only has more rows ("rows of the build's": the dump before MA2 and MB2 were
+    added). Anything else, a manifest without it, or a file that is no longer the one the audit hashed, stops the
+    build: the audit, the fits and the agency sets read one table."""
+    m = json.loads((Path(audit_dir) / "timebase_manifest.json").read_text())
+    rec = (m.get("inputs") or {}).get("tcd_table")
+    if not rec or not rec.get("path") or not rec.get("sha256"):
+        raise SystemExit(f"{audit_dir}: the audit manifest names no TCD dump (inputs.tcd_table)")
+    if rec["sha256"] == dump.sha256:
+        return {"path": rec["path"], "sha256": rec["sha256"], "relation": "same"}
+    path = Path(rec["path"])
+    if not path.is_file() or _sha256(path) != rec["sha256"]:
+        raise SystemExit(f"{audit_dir}: the audit read the TCD dump {path} ({rec['sha256']}), another than the build's "
+                         f"{dump.path} ({dump.sha256}), and that file is not there as the audit hashed it")
+    data, mine = json.loads(path.read_bytes()), json.loads(Path(dump.path).read_bytes())
+    other = sorted(n for n, c in data["constituents"].items() if mine["constituents"].get(n) != c)
+    if data["years"] != mine["years"] or data["aliases"] != mine["aliases"] or other:
+        raise SystemExit(f"{audit_dir}: the audit read the TCD dump {path} ({rec['sha256']}), another table than the "
+                         f"build's {dump.path} ({dump.sha256}): rows that differ or are not in the build's: {other[:20]}"
+                         f"{'' if data['years'] == mine['years'] else ', years'}"
+                         f"{'' if data['aliases'] == mine['aliases'] else ', aliases'}")
+    return {"path": rec["path"], "sha256": rec["sha256"], "relation": "rows of the build's",
+            "rows_not_read": sorted(set(mine["constituents"]) - set(data["constituents"]))}
+
+
 @dataclass
 class BuildParts:
     """What build_parts makes: the release and its report, the congen run and provenance (build's result), and
@@ -126,12 +155,13 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
     """build(), with its inputs kept (BuildParts). `extra_names`: constituent names the astro table must also
     have (the agency sets' of a combined build, otc_pipeline.build_otc); the GESLA sets do not change."""
     rel = GeslaRelease()
-    tcd_path = tcd_path or otc_work() / "tcd_table.json"
+    tcd_path = tcd_path or dump_path()
     dump = gs.load_tcd_dump(tcd_path)
     table = dump.table
     if table.tcd_sha256 != TCD_SHA256:
         raise SystemExit(f"{tcd_path}: a dump of TCD {table.tcd_sha256}; the release is built on the OTC TCD "
                          f"{TABLE_ID} ({TCD_SHA256}): fit and build with its dump (the congen run's tcd-1900-2100.json)")
+    audit_dumps = {"audit": audit_dump(audit_dir, dump), "verdicts": audit_dump(verdicts_dir, dump)}
     results = (fit_run / "results.jsonl").read_bytes()      # one read: hashed (the station map pin), then parsed
     rows = [json.loads(x) for x in results.decode("utf-8").splitlines() if x.strip()]
     fitted = sorted(r["record"] for r in rows if r["outcome"] == "fitted")
@@ -176,8 +206,8 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
         "build_commit": build_commit,
         "fit_run": fit_identity,
         "overlay_run": _run_identity(overlay_run) if overlay_run is not None else None,
-        "audit": _audit_identity(audit_dir, audit),
-        "verdicts": _audit_identity(verdicts_dir, final),
+        "audit": {**_audit_identity(audit_dir, audit), "tcd_dump": audit_dumps["audit"]},
+        "verdicts": {**_audit_identity(verdicts_dir, final), "tcd_dump": audit_dumps["verdicts"]},
         "calibration": {"path": _path(calibration_dir), "sha256": cal["_sha256"]},
         "congen_run": {"path": _path(crun.run_dir), "provenance_sha256": _sha256(crun.run_dir / "PROVENANCE.json")},
         "tcd": {"path": _path(dump.path), "sha256": dump.sha256},
@@ -209,7 +239,8 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("fit-run", "audit-dir", "verdicts-dir", "calibration", "ticon-csv", "ticon-refs", "congen-run", "out"):
         ap.add_argument(f"--{name}", type=Path, required=True)
     ap.add_argument("--overlay-run", type=Path)
-    ap.add_argument("--tcd", type=Path, help="the TCD dump (default $OTC_WORK/tcd_table.json)")
+    ap.add_argument("--tcd", type=Path, help="the TCD dump (default gesla.tcd_table.dump_path(): $TCD_TABLE or "
+                    "$OTC_TCD_TABLE, else $OTC_WORK/tcd_table.json)")
     ap.add_argument("--datestamp", required=True)
     ap.add_argument("--created", required=True)
     argv = sys.argv[1:] if argv is None else list(argv)

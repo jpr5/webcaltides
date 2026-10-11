@@ -130,7 +130,7 @@ from .read_gesla import GeslaRelease, otc_work
 from .record import GaugeRecord
 from .residue import ResidueCase
 from .select_constituents import FIT_SPAN_YEARS, SECONDS_PER_YEAR, analyse, between, in_tcd_years, load_noaa_harcon
-from .tcd_table import TcdTable
+from .tcd_table import TcdTable, dump_path
 from .timebase_measure import Samples, monthly_lags, samples
 from .timebase_weak import (ORIGIN_VERIFIED, Lineage, Served, WeakInputs, assess, fit_features, load_served,
                             served_kind, sha256_file)
@@ -2779,7 +2779,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--fit-results needs --weak-inputs (EOT20 picks the offset side)")
     work = otc_work()
     release = GeslaRelease(work / "inputs/gesla" / a.version)
-    table_path = Path(os.environ.get("OTC_TCD_TABLE", work / "tcd_table.json"))
+    table_path = dump_path()       # the one table (tcd_table.dump_path): the fit's and the agency sets'
     table = TcdTable.load(table_path)
     run_positive_controls(release, table, log=_log)       # PositiveControlError: the build stops here
     inv = load_inventory(repo / "data/gesla" / a.version / "inventory.csv")

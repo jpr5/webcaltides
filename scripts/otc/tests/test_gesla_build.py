@@ -74,8 +74,9 @@ def _inputs(tmp_path):
     put("run/timebase_manifest.json", '{"run": 1}')
     put("overlay/results.jsonl", '{"record": "a", "outcome": "fitted"}\n')
     put("overlay/timebase_manifest.json", '{"overlay": 1}')
-    put("audit/timebase_manifest.json", '{"audit": 1}')
-    put("final/timebase_manifest.json", '{"final": 1}')
+    same = {"tcd_table": {"path": str(tmp_path / "tcd.json"), "sha256": "d" * 64}}   # the dump load_tcd_dump fakes
+    put("audit/timebase_manifest.json", json.dumps({"audit": 1, "inputs": same}))
+    put("final/timebase_manifest.json", json.dumps({"final": 1, "inputs": same}))
     put("congen/PROVENANCE.json", '{"congen": 1}')
     put("ticon.csv", "ticon\n")
     put("refs.json", "{}")
@@ -214,6 +215,54 @@ def test_a_congen_run_without_the_otc_tcd_is_refused(fakes, monkeypatch):
         _build(fakes)
 
 
+def _dump(path, rows, years=(1900, 2100), aliases=None):
+    n = years[1] - years[0] + 1
+    path.write_text(json.dumps({"tcd_sha256": at.TCD_SHA256, "years": list(years), "aliases": aliases or {},
+                                "constituents": {k: {"speed": v, "v0u": [1.0] * n, "f": [1.0] * n}
+                                                 for k, v in rows.items()}}))
+    return path
+
+
+@pytest.mark.parametrize("which", ["audit_dir", "verdicts_dir"])
+def test_an_audit_made_on_another_table_stops_the_build(fakes, which):
+    # INT-2 N7: the time-base audit, the fits and the agency sets read one table; an audit whose dump has a row
+    # the build's dump does not have, or has with other values, never reaches a release
+    p = fakes.paths
+    _dump(p["tcd_path"], {"M2": 28.9841042, "MA2": 28.9430356})
+    for rows in ({"M2": 28.9841042, "GAM2": 28.9112506}, {"M2": 28.98}):
+        old = _dump(p["tcd_path"].parent / "old.json", rows)
+        (p[which] / "timebase_manifest.json").write_text(json.dumps(
+            {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
+        with pytest.raises(SystemExit, match="another table than the build's"):
+            _build(fakes)
+        assert "docs_from_fit_run" not in fakes.seen
+    (p[which] / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": str(old), "sha256": "f" * 64}}}))     # the file is not the one it read
+    with pytest.raises(SystemExit, match="not there as the audit hashed it"):
+        _build(fakes)
+    (p[which] / "timebase_manifest.json").write_text("{}")
+    with pytest.raises(SystemExit, match="names no TCD dump"):
+        _build(fakes)
+
+
+def test_an_audit_on_the_rows_of_the_build_dump_is_recorded(fakes):
+    # the dump before MA2 and MB2 were added: every row it has is the build dump's
+    p = fakes.paths
+    _dump(p["tcd_path"], {"M2": 28.9841042, "MA2": 28.9430356, "MB2": 29.0251729})
+    old = _dump(p["tcd_path"].parent / "old.json", {"M2": 28.9841042})
+    (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
+    *_, prov = _build(fakes)
+    assert prov["audit"]["tcd_dump"] == {"path": str(old), "sha256": _sha(old), "relation": "rows of the build's",
+                                         "rows_not_read": ["MA2", "MB2"]}
+    assert prov["verdicts"]["tcd_dump"]["relation"] == "same"
+    _dump(old, {"M2": 28.9841042}, years=(1900, 2000))
+    (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
+    with pytest.raises(SystemExit, match="years"):
+        _build(fakes)
+
+
 def test_build_records_the_identity_of_every_input(fakes):
     p = fakes.paths
     *_, prov = _build(fakes)
@@ -228,7 +277,8 @@ def test_build_records_the_identity_of_every_input(fakes):
                                        ("verdicts", "verdicts_dir", "2" * 64, "fin0001")):
         assert prov[key] == {"path": str(p[name].resolve()),
                              "manifest_sha256": _sha(p[name] / "timebase_manifest.json"),
-                             "timebase_csv_sha256": csv_sha, "commit": commit}, key
+                             "timebase_csv_sha256": csv_sha, "commit": commit,
+                             "tcd_dump": {"path": str(p["tcd_path"]), "sha256": "d" * 64, "relation": "same"}}, key
     assert prov["calibration"] == {"path": str(p["calibration_dir"].resolve()), "sha256": "c" * 64}
     assert prov["congen_run"] == {"path": str(p["congen_run"].resolve()),
                                   "provenance_sha256": _sha(p["congen_run"] / "PROVENANCE.json")}

@@ -285,6 +285,21 @@ def test_the_fit_reads_tcd_table_when_set(monkeypatch, tmp_path):
     assert fr.tcd_table_path() == tmp_path / "tcd_table.json"
 
 
+def test_the_fit_and_the_agency_readers_read_one_dump(monkeypatch, tmp_path):
+    # INT-2 N7: $OTC_TCD_TABLE (the adapters' and the audit's) and $TCD_TABLE (the fit's) name one table
+    from gesla.tcd_table import dump_path
+    monkeypatch.delenv("TCD_TABLE", raising=False)
+    monkeypatch.setenv("OTC_TCD_TABLE", str(tmp_path / "otc.json"))
+    assert fr.tcd_table_path() == dump_path() == tmp_path / "otc.json"
+    monkeypatch.setenv("TCD_TABLE", str(tmp_path / "otc.json"))
+    assert fr.tcd_table_path() == tmp_path / "otc.json"
+    monkeypatch.setenv("TCD_TABLE", str(tmp_path / "xtide.json"))
+    with pytest.raises(ValueError, match="name different TCD dumps"):
+        fr.tcd_table_path()
+    with pytest.raises(ValueError, match="name different TCD dumps"):
+        dump_path()
+
+
 # --- gate5 review C M1-M3 (and A 3): a fit run never reports complete over a bad write, a resume across a change,
 # or an input-integrity failure ------------------------------------------------------------------------------------
 
