@@ -1,0 +1,82 @@
+{
+ "_note": "synthetic test body in the shape of NOAA datums.json?units=metric; the values are invented, not NOAA data",
+ "accepted": "",
+ "superseded": "",
+ "epoch": "1983-2001",
+ "units": "meters",
+ "OrthometricDatum": "NAVD88",
+ "datums": [
+  {
+   "name": "STND",
+   "description": "STND",
+   "value": 0.0
+  },
+  {
+   "name": "MHHW",
+   "description": "MHHW",
+   "value": 4.0
+  },
+  {
+   "name": "MHW",
+   "description": "MHW",
+   "value": 3.9
+  },
+  {
+   "name": "DTL",
+   "description": "DTL",
+   "value": 2.4
+  },
+  {
+   "name": "MTL",
+   "description": "MTL",
+   "value": 2.35
+  },
+  {
+   "name": "MSL",
+   "description": "MSL",
+   "value": 2.4
+  },
+  {
+   "name": "MLW",
+   "description": "MLW",
+   "value": 0.8
+  },
+  {
+   "name": "MLLW",
+   "description": "MLLW",
+   "value": 0.7
+  },
+  {
+   "name": "GT",
+   "description": "GT",
+   "value": 3.3
+  },
+  {
+   "name": "MN",
+   "description": "MN",
+   "value": 3.1
+  }
+ ],
+ "LAT": null,
+ "LATdate": "",
+ "LATtime": "",
+ "HAT": null,
+ "HATdate": "",
+ "HATtime": "",
+ "min": null,
+ "mindate": "",
+ "mintime": "",
+ "max": null,
+ "maxdate": "",
+ "maxtime": "",
+ "disclaimers": {
+  "disclaimers": [],
+  "self": null
+ },
+ "DatumAnalysisPeriod": [
+  "07/01/2002 - 09/30/2002"
+ ],
+ "NGSLink": "",
+ "ctrlStation": "8443970 Boston, MA",
+ "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/X/datums.json"
+}

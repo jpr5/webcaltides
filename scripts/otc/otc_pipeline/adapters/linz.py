@@ -22,6 +22,24 @@ tide-predictions station list (position from each port's prediction CSV header l
 otherwise it is replaced by the list position, and the set's provenance records the
 replacement. A rejected position with no list entry is an error.
 
+Datums (datums spec §4.1 item 4, slot DT5c). LINZ's "Standard port tidal levels" page gives, for
+about 16 standard ports, MHWS, MHWN, MLWN, MLWS, MSL, HAT and LAT in metres "referred to Chart
+Datum, which is the same as the zero of the tidal predictions in all cases". A standard port's
+set (matched by name to its prediction CSV header, then by port number to its zip member) gets
+`zero` `chart_datum`, `zero_name` CD, `chart_datum` `cd` (= 0) and those levels, each kind
+`published`, method `source`, LINZ's column name; the epochs are the periods the page states:
+MHWS..MLWS are averages over predictions for one stated year (1 July 2026 - 30 June 2027 on the
+page of 8 Jun 2026), HAT and LAT the extremes over 1 January 2000 - 31 December 2018. MSL is
+from each port's observation period, given on another page: no epoch. The spring and neap
+ranges are differences of the levels: not taken. The set's Z0 (`msl_offset_m`) is above the
+same zero; a port whose Z0 differs from the page's MSL by more than MSL_Z0_TOLERANCE_M gets no
+levels (logged), since its constants might not be referred to chart datum.
+
+SA and S1. The files are IOS (Foreman) analyses: SA is h - p1 and S1 is T + p1 - 90, not the TCD's
+h and T. Their phases are converted (`ios_definitions`) after the NZST correction. LINZ prints SA's
+frequency as .00011407 cph, IOS's h - p1 (the TCD's h rounds to .00011408); a file with any other SA
+frequency is refused, since its definition would then be unknown.
+
 Licence: CC BY 4.0 (LINZ site default, https://www.linz.govt.nz/copyright), attribution in text.
 """
 from __future__ import annotations
@@ -31,6 +49,7 @@ import hashlib
 import html
 import io
 import json
+import logging
 import math
 import os
 import re
@@ -45,10 +64,16 @@ from typing import Iterable, Mapping
 
 from otc_pipeline.adapter import FetchResult, InputFile, SourceSet, sha256_file
 from otc_pipeline.canary import to_greenwich
+from otc_pipeline.datums import period, published
+from otc_pipeline.ios_definitions import P1_RATE_DEG_PER_HOUR, to_tcd_phase
 from otc_pipeline.http import PoliteFetcher
+
+log = logging.getLogger(__name__)
 
 CONSTITUENTS_PAGE = ("https://www.linz.govt.nz/products-services/data/types-linz-data/"
                      "sea-level-data/tide-constituents")
+STANDARD_PORT_LEVELS_PAGE = ("https://www.linz.govt.nz/guidance/marine-information/tide-prediction-guidance/"
+                             "standard-port-tidal-levels")
 STATION_LIST_PAGE = ("https://www.linz.govt.nz/products-services/tides-and-tidal-streams/"
                      "tide-predictions/tide-predictions-list-view")
 ZIP_LINK_RE = re.compile(r'href="([^"]*/(NZ_Tide_Constituents_[^"/]*\.zip))"')
@@ -63,6 +88,17 @@ ROW_RE = re.compile(r"^\s*\d+\s+([A-Z0-9]+)\s+(\d*\.\d+)\s+\d+\s+(\d{4})/(\d{4})
 PORT_HEADER_RE = re.compile(r"^\s*(\d+)\s*,\s*([^,]+?)\s*,\s*(\d+)°(\d+(?:\.\d+)?)'?([NS])\s*,"
                             r"\s*(\d+)°(\d+(?:\.\d+)?)'?([EW])")
 
+LEVELS_HEADER = ("Standard Port", "MHWS", "MHWN", "MLWN", "MLWS", "SpringRange", "NeapRange", "MSL", "HAT", "LAT")
+LEVEL_KEYS = {"MHWS": "mhws", "MHWN": "mhwn", "MLWN": "mlwn", "MLWS": "mlws", "MSL": "msl", "HAT": "hat", "LAT": "lat"}
+SPRING_NEAP = ("MHWS", "MHWN", "MLWN", "MLWS")
+LEVELS_ZERO_NOTE = "referred to Chart Datum, which is the same as the zero of the tidal predictions in all cases"
+_LEVELS_PERIOD = r"(\d{1,2} [A-Z][a-z]+ \d{4})\s*[–-]\s*(\d{1,2} [A-Z][a-z]+ \d{4})"
+SPRING_NEAP_PERIOD_RE = re.compile(r"MHWS, MHWN, MLWN and MLWS tidal levels given in the table are the averages of "
+                                   r"the levels of all spring and neap tides predicted for the period " + _LEVELS_PERIOD)
+HAT_LAT_PERIOD_RE = re.compile(r"values for HAT and LAT given in the table above are the highest and lowest tidal "
+                               r"levels that are predicted to occur under average meteorological conditions during "
+                               r"the period " + _LEVELS_PERIOD)
+MSL_Z0_TOLERANCE_M = 0.05           # page MSL (2 decimals) vs the constants' Z0 at the same port
 TIME_ZONE_MERIDIAN = 180            # the only TIME ZONE value the convention covers
 UTC_OFFSET_HOURS = TIME_ZONE_MERIDIAN / 15.0
 NZ_LAT = (-53.0, -30.0)
@@ -99,6 +135,55 @@ def port_csv_urls(list_html: str, year: int) -> list[str]:
     if not out:
         raise ValueError("tide-predictions list view: no Daily Predictions port with a CSV link")
     return sorted(set(out))
+
+
+def _day(text: str) -> str:
+    return datetime.strptime(text, "%d %B %Y").date().isoformat()
+
+
+def parse_standard_port_levels(page_html: str) -> dict:
+    """The standard-port tidal levels page: {"ports": {name: {column: metres}}, "spring_neap": (start,
+    end), "hat_lat": (start, end)} (ISO dates). Raises ValueError when the table layout, the
+    chart-datum note or either stated period is not as read here."""
+    tables = re.findall(r"<table\b.*?</table>", page_html, re.S)
+    if len(tables) != 1:
+        raise ValueError(f"standard port levels page: expected one table, found {len(tables)}")
+    rows = []
+    for tr in re.findall(r"<tr\b.*?</tr>", tables[0], re.S):
+        cells = [re.sub(r"\s+", "", html.unescape(re.sub(r"<[^>]+>", "", c))) if i else
+                 re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", c))).strip()
+                 for i, c in enumerate(re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", tr, re.S))]
+        rows.append(cells)
+    if not rows or tuple(rows[0]) != LEVELS_HEADER:
+        raise ValueError(f"standard port levels table header {rows[:1]!r} is not {LEVELS_HEADER!r}")
+    ports = {}
+    for r in rows[1:]:
+        if len(r) != len(LEVELS_HEADER) or r[0] in ports:
+            raise ValueError(f"standard port levels row {r!r}")
+        ports[r[0]] = {col: float(v) for col, v in zip(LEVELS_HEADER[1:], r[1:])}
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", page_html)))
+    if LEVELS_ZERO_NOTE not in text:
+        raise ValueError(f"standard port levels page no longer says {LEVELS_ZERO_NOTE!r}")
+    sn, hl = SPRING_NEAP_PERIOD_RE.search(text), HAT_LAT_PERIOD_RE.search(text)
+    if not sn or not hl:
+        raise ValueError("standard port levels page: the MHWS..MLWS or HAT/LAT period is not stated as expected")
+    return {"ports": ports, "spring_neap": (_day(sn[1]), _day(sn[2])), "hat_lat": (_day(hl[1]), _day(hl[2]))}
+
+
+def levels_datum(levels: dict, z0: float | None) -> tuple[dict | None, str | None]:
+    """A standard port's datum above chart datum, or (None, why) when its Z0 does not match MSL."""
+    row = levels["row"]
+    if z0 is None or abs(z0 - row["MSL"]) > MSL_Z0_TOLERANCE_M:
+        return None, (f"standard-port levels not written: Z0 {z0} m vs the page's MSL {row['MSL']} m "
+                      f"(tolerance {MSL_Z0_TOLERANCE_M} m)")
+    sn = period(*levels["spring_neap"], "LINZ spring/neap predictions")
+    hl = period(*levels["hat_lat"], "LINZ HAT/LAT predictions")
+    named, basis = {"cd": 0.0}, {"cd": published("Chart Datum")}
+    for col, key in LEVEL_KEYS.items():
+        named[key] = row[col]
+        basis[key] = published(col, epoch=sn if col in SPRING_NEAP else hl if col in ("HAT", "LAT") else None)
+    return {"msl_offset_m": round(z0, 6), "zero": "chart_datum", "zero_name": "CD", "chart_datum": "cd",
+            "named": named, "basis": basis}, None
 
 
 @dataclass(frozen=True)
@@ -260,7 +345,7 @@ class LinzAdapter:
     source = "linz"
     source_type = "official"
     quantity = "water_level"
-    adapter_version = "1.0.0"
+    adapter_version = "1.1.0"   # 1.1: standard-port datums (DT5c)
     contract_sample = ("070AUCKLAND", "073TAURANGA", "097NAPIER", "077NELSON")
 
     def __init__(self, *, speeds: Speeds | None = None, phase_reference: str = "local",
@@ -286,6 +371,7 @@ class LinzAdapter:
         zname = urllib.parse.unquote(zip_url.rsplit("/", 1)[1])
         zgot = f.get(zip_url, cache_name=f"zip/{zname}")
         lst = f.get(STATION_LIST_PAGE, cache_name="pages/tide-predictions-list-view.html", refresh=True)
+        lv = f.get(STANDARD_PORT_LEVELS_PAGE, cache_name="pages/standard-port-tidal-levels.html", refresh=True)
         year = datetime.now(timezone.utc).year
         port_files = []
         for url in port_csv_urls(lst.bytes().decode("utf-8", "replace"), year):
@@ -293,7 +379,7 @@ class LinzAdapter:
             quoted = urllib.parse.quote(url, safe=":/")
             port_files.append(f.get(quoted, cache_name=f"ports/{name}").input_file())
         return load_fetched(cache_dir, zgot.input_file(), port_files,
-                            page_files=(page.input_file(), lst.input_file()), only=only)
+                            page_files=(page.input_file(), lst.input_file()), levels_file=lv.input_file(), only=only)
 
     # -- contract -------------------------------------------------------------------------------
 
@@ -373,7 +459,12 @@ class LinzAdapter:
                 if abs(r.freq_cph * 360.0 - speed) > SPEED_TOL_DEG_PER_HOUR:
                     raise ValueError(f"{sid}: {r.name} frequency {r.freq_cph} cph is {r.freq_cph * 360:.7f} deg/h, "
                                      f"TCD {name} is {speed:.7f}")
-                g = round(to_greenwich(r.phase_deg, speed, conv), 3) % 360.0
+                if name == "SA":   # IOS's h - p1, which LINZ prints as .00011407 cph (the TCD's h: .00011408)
+                    ios = round((speed - P1_RATE_DEG_PER_HOUR) / 360.0, 8)
+                    if round(r.freq_cph, 8) != ios:
+                        raise ValueError(f"{sid}: SA frequency {r.freq_cph} cph is not IOS's h - p1 ({ios}): "
+                                         "no phase conversion is known for this definition")
+                g = round(to_tcd_phase(name, to_greenwich(r.phase_deg, speed, conv)), 3) % 360.0
                 c = {"name": name, "speed_deg_per_hour": speed, "amplitude_m": round(r.amp_cm / 100.0, 6),
                      "phase_deg": g}
                 if name != r.name:
@@ -390,7 +481,17 @@ class LinzAdapter:
                   "provenance": {"adapter_version": self.adapter_version, "input_sha256": inputs,
                                  "member": it["member"], "position": pos,
                                  "header_dropped": "station number, statistics (untrusted)"}}
-            if z0 is not None:
+            if it.get("levels"):
+                datum, why = levels_datum(it["levels"], z0)
+                if why:   # provenance is a closed list: logged, not published
+                    log.warning("linz %s: %s", sid, why)
+                    datum = {"msl_offset_m": round(z0, 6)} if z0 is not None else None
+                cs["datum"] = datum
+                if datum is None:
+                    del cs["datum"]
+                else:
+                    inputs.append(it["levels"]["sha256"])
+            elif z0 is not None:
                 cs["datum"] = {"msl_offset_m": round(z0, 6)}
             name = port.name if port is not None else hf.header_name.title()
             tz = "Pacific/Chatham" if lon < 0 else "Pacific/Auckland"
@@ -403,11 +504,14 @@ class LinzAdapter:
 # --- fetch assembly (no network) ------------------------------------------------------------------
 
 def load_fetched(cache_dir: Path, zip_file: InputFile, port_files: Iterable[InputFile], *,
-                 page_files: Iterable[InputFile] = (), only: list[str] | None = None) -> FetchResult:
-    """Unpack the cached zip into `members/`, read the port CSV headers, and build the FetchResult.
-    Every cached file is checked against its SHA-256 first."""
+                 page_files: Iterable[InputFile] = (), levels_file: InputFile | None = None,
+                 only: list[str] | None = None) -> FetchResult:
+    """Unpack the cached zip into `members/`, read the port CSV headers and (when given) the
+    standard-port levels page, and build the FetchResult. Every cached file is checked against
+    its SHA-256 first. A standard port on the levels page with no port CSV or no zip member is an
+    error: its levels would be lost silently."""
     cache_dir = Path(cache_dir)
-    files = [zip_file, *port_files, *page_files]
+    files = [zip_file, *port_files, *page_files, *([levels_file] if levels_file else [])]
     for fl in files:
         if sha256_file(cache_dir / fl.path) != fl.sha256:
             raise ValueError(f"{fl.path}: bytes differ from the fetched SHA-256")
@@ -417,9 +521,18 @@ def load_fetched(cache_dir: Path, zip_file: InputFile, port_files: Iterable[Inpu
         if port.number in ports and ports[port.number][0] != port:
             raise ValueError(f"port {port.number:03d} has two different headers on the station list")
         ports[port.number] = (port, pf.sha256)
+    std = None
+    if levels_file is not None:
+        std = parse_standard_port_levels((cache_dir / levels_file.path).read_bytes().decode("utf-8"))
+        by_name = {p.name: n for n, (p, _sha) in ports.items()}
+        missing = sorted(set(std["ports"]) - set(by_name))
+        if missing:
+            raise ValueError(f"standard ports {missing} have no prediction CSV on the station list")
+        std_numbers = {by_name[name]: name for name in std["ports"]}
     zbytes = (cache_dir / zip_file.path).read_bytes()
     keep = set(only) if only is not None else None
     items, members = {}, []
+    seen_numbers: set[int] = set()
     with zipfile.ZipFile(io.BytesIO(zbytes)) as z:
         names = sorted(n for n in z.namelist() if not n.endswith("/"))
         bad = [n for n in names if not MEMBER_RE.match(Path(n).name)]
@@ -445,8 +558,20 @@ def load_fetched(cache_dir: Path, zip_file: InputFile, port_files: Iterable[Inpu
             items[sid] = {"member": Path(n).name, "text": text, "member_sha256": msha,
                           "zip_sha256": zip_file.sha256, "watch_sha256": normalised_sha256(text),
                           "port": asdict(port[0]) if port else None, "port_sha256": port[1] if port else None}
+            if std is not None and number in std_numbers:
+                row = std["ports"][std_numbers[number]]
+                items[sid]["levels"] = {"row": row, "spring_neap": std["spring_neap"], "hat_lat": std["hat_lat"],
+                                        "sha256": levels_file.sha256}
+                # the watch key covers the published levels and their periods too (PP §4.2)
+                items[sid]["watch_sha256"] = hashlib.sha256(json.dumps(
+                    [items[sid]["watch_sha256"], row, std["spring_neap"], std["hat_lat"]],
+                    sort_keys=True).encode()).hexdigest()
+            seen_numbers.add(number)
     if keep is not None and keep - set(items):
         raise KeyError(f"no zip member for {sorted(keep - set(items))}")
+    if std is not None and keep is None and set(std_numbers) - seen_numbers:
+        raise ValueError(f"standard ports {sorted(std_numbers[n] for n in set(std_numbers) - seen_numbers)} "
+                         "have no zip member")
     m = ZIP_YEAR_RE.search(zip_file.path)
     version = m.group(1) if m else zip_file.fetched_at[:10].replace("-", "")
     return FetchResult(source="linz", source_version=version, cache_dir=cache_dir,

@@ -25,6 +25,17 @@ What the API states, and what this adapter declares (the G04 time-base audit ver
 - QC: the raw series carries no quality flag. `good` is every finite value.
 - Heights: centimetres above the gauge zero (PNP); converted to metres, datum unchanged (the fit
   absorbs the constant offset; PNP is `W.gaugeZero` in the snapshot, metres above NHN).
+
+Published datums (datums spec §4.1 item 6, slot DT5e). The harvest snapshot has no characteristic
+values, so `fetch` also reads `stations.json?includeTimeseries=true&includeCharacteristicValues=true`
+from the live API (one request). `published_datums` gives, per record, the levels PEGELONLINE
+publishes above the gauge zero, for the fit (A-PEG-b) to put on the record's set beside its own
+`msl_offset_m`: `zero` `gauge_zero`, `zero_name` PNP; MThw -> `mhw` and MTnw -> `mlw` (cm -> m,
+`source_name` the German names, `epoch` the published timespan); `nhn` = -(gaugeZero in m NHN),
+the height of the NHN zero above PNP, only where the unit is "m. ü. NHN" (not NN, DHHN12). That
+gaugeZero is the current one, valid from its `validFrom` date, which the notes carry:
+PEGELONLINE does not say whether MThw/MTnw over an older timespan refer to the same PNP. HThw and
+NTnw are observed extremes, not taken. PEGELONLINE states no chart datum: no `chart_datum`.
 """
 from __future__ import annotations
 
@@ -40,12 +51,14 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 import numpy as np
 
 from gesla.record import GaugeRecord
 from otc_pipeline.adapter import FetchResult, InputFile, sha256_file
+from otc_pipeline.datums import period, published
+from otc_pipeline.http import PoliteFetcher
 
 ARCHIVE = "archive/pegelonline"
 BUCKET = "opentideconstants-work"
@@ -53,6 +66,12 @@ DECLARED_TIME_BASE = "utc_instant"
 SAMPLING = "instantaneous"
 CSV_HEADER = ["timestamp_utc", "value_cm"]
 _DAY_KEY = re.compile(rf"\A{ARCHIVE}/(\d{{4}})/(\d{{2}})/(\d{{2}})/MANIFEST\.json\Z")
+CHARACTERISTIC_URL = "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json"
+CHARACTERISTIC_PARAMS = {"includeTimeseries": "true", "includeCharacteristicValues": "true"}
+CHARACTERISTIC_NAME = "characteristic/stations.json"
+# characteristic value shortname -> (OTC key); the observed extremes HThw/NTnw are not taken
+CHARACTERISTIC_KEYS = {"MThw": "mhw", "MTnw": "mlw"}
+NHN_UNIT = "m. ü. NHN"
 _SNAPSHOT_KEY = re.compile(rf"\A{ARCHIVE}/stations/(\d{{4}}-\d{{2}}-\d{{2}})\.json\Z")
 
 # GESLA-4.1 "GAUGE TYPE" of every WSV record, by PEGELONLINE station number (the number is in the
@@ -160,14 +179,18 @@ class PegelonlineAdapter:
     source = "pegelonline"
     source_type = "gauge"
     quantity = "water_level"
-    adapter_version = "pegelonline-a-1"
+    adapter_version = "pegelonline-a-2"   # a-2: published datums (DT5e)
     # Cuxhaven Steubenhöft, Helgoland Binnenhafen, Bremerhaven Alter Leuchtturm (manifest A-PEG-a)
     contract_sample = ("aad49293-242a-43ad-a8b1-e91d7792c4b2", "c0ec139b-13b4-4f86-bee3-06665ad81a40",
                        "d3f822a0-e201-4a61-8913-589c74818ae0")
 
-    def __init__(self, store=None, workers: int = 8):
+    def __init__(self, store=None, workers: int = 8,
+                 characteristic_fetcher: Callable[[Path], PoliteFetcher] | None = None):
+        """`characteristic_fetcher`: cache dir -> fetcher for the live characteristic-values request
+        (default PoliteFetcher, one request a second)."""
         self.store = store if store is not None else WorkBucketStore()
         self.workers = workers
+        self._characteristic_fetcher = characteristic_fetcher or (lambda d: PoliteFetcher(d, min_interval_s=1.0))
 
     # fetch ---------------------------------------------------------------------------------
 
@@ -219,8 +242,21 @@ class PegelonlineAdapter:
         for key, e in todo:
             files.append(self._input(cache_dir, key, e))
 
+        cv = self._characteristic_fetcher(cache_dir).get(CHARACTERISTIC_URL, params=CHARACTERISTIC_PARAMS,
+                                                         cache_name=CHARACTERISTIC_NAME, refresh=True)
+        files.append(cv.input_file())
+        w_series = {}
+        for st in json.loads(cv.bytes()):
+            w = [t for t in st.get("timeseries") or [] if t.get("shortname") == "W"]
+            if len(w) > 1:
+                raise ValueError(f"{CHARACTERISTIC_NAME}: station {st.get('uuid')} has {len(w)} W series")
+            if w:
+                w_series[st["uuid"]] = {"gaugeZero": w[0].get("gaugeZero"),
+                                        "characteristicValues": w[0].get("characteristicValues") or []}
+
         last = _DAY_KEY.match(day_manifests[-1]).groups()
-        items = {u: {"station": stations[u], "days": tuple(days[u])} for u in wanted}
+        items = {u: {"station": stations[u], "days": tuple(days[u]), "characteristic": w_series.get(u),
+                     "characteristic_sha256": cv.sha256} for u in wanted}
         return FetchResult(source=self.source, source_version="".join(last), cache_dir=cache_dir,
                            files=tuple(files), items=items)
 
@@ -291,6 +327,39 @@ class PegelonlineAdapter:
     def sets(self, fetched: FetchResult):
         return ()
 
+    def published_datums(self, fetched: FetchResult) -> dict[str, dict]:
+        """record_id -> {"datum": the published levels above PNP (no msl_offset_m: the fit's Z0 goes
+        with it), "notes": the gauge zero's value and validFrom, for the slot report (not release
+        provenance, which is a closed list)}. Records whose station
+        publishes neither MThw/MTnw nor an NHN gauge zero are left out."""
+        out = {}
+        for uuid in sorted(fetched.items):
+            w = fetched.items[uuid].get("characteristic")
+            if not w:
+                continue
+            named, basis, prov = {}, {}, {"characteristic_sha256": fetched.items[uuid]["characteristic_sha256"]}
+            for cv in w["characteristicValues"]:
+                key = CHARACTERISTIC_KEYS.get(cv.get("shortname"))
+                if key is None:
+                    continue
+                if cv.get("unit") != "cm" or key in named:
+                    raise ValueError(f"pegelonline:{uuid}: characteristic value {cv.get('shortname')} "
+                                     f"unit {cv.get('unit')!r} or listed twice")
+                named[key] = round(float(cv["value"]) / 100.0, 6)
+                basis[key] = published(cv["shortname"], epoch=period(
+                    cv["timespanStart"], cv["timespanEnd"], f"PEGELONLINE {cv['shortname']} timespan"))
+            gz = w.get("gaugeZero") or {}
+            if gz.get("unit") == NHN_UNIT and isinstance(gz.get("value"), (int, float)):
+                named["nhn"], basis["nhn"] = round(-float(gz["value"]), 6), published("NHN")
+                prov["gauge_zero_m_nhn"] = gz["value"]
+                prov["gauge_zero_valid_from"] = gz.get("validFrom")
+            if not named:
+                continue
+            out[f"{self.source}:{uuid}"] = {
+                "datum": {"zero": "gauge_zero", "zero_name": "PNP", "named": named, "basis": basis},
+                "notes": prov}
+        return out
+
     def watch_keys(self, fetched: FetchResult) -> dict[str, str]:
         """uuid -> SHA-256 of the station's normalised series (UTC stamps, cm) and metadata."""
         keys = {}
@@ -298,7 +367,8 @@ class PegelonlineAdapter:
             st = fetched.items[uuid]["station"]
             t, cm = self._series(fetched, uuid)
             h = hashlib.sha256()
-            h.update(json.dumps({k: st.get(k) for k in ("latitude", "longitude", "number", "W")},
+            h.update(json.dumps({**{k: st.get(k) for k in ("latitude", "longitude", "number", "W")},
+                                 "characteristic": fetched.items[uuid].get("characteristic")},
                                 sort_keys=True, separators=(",", ":")).encode())
             h.update(t.astype("<i8").tobytes())
             h.update(cm.astype("<f8").tobytes())

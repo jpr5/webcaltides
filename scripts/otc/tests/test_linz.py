@@ -2,6 +2,8 @@
 (NZ_Tide_Constituents_2025.zip, sha256 0843afa0…9406), the tide-constituents page, the
 tide-predictions list view (its table) and six ports' prediction CSVs, all in fixtures/linz/.
 `tcd_speeds.json` holds the TCD speeds of the names the zip uses (from the TCD dump).
+`pages/standard-port-tidal-levels.synthetic.html` is a SYNTHETIC page in the layout of LINZ's standard
+port tidal levels page (invented numbers, no fetched data in git) for the DT5c datum tests.
 
 The live test (OTC_LIVE=1) fetches the zip, the station list and every port CSV and runs the
 contract on all 56 sets.
@@ -20,6 +22,7 @@ from otc_pipeline.adapter import InputFile, assemble_release, assert_contract, c
 from otc_pipeline.adapters import linz
 from otc_pipeline.adapters.linz import (LinzAdapter, Port, Speeds, ddmm, find_zip_url, in_nz_box, load_fetched,
                                         normalised_sha256, parse_harm, parse_port_csv_header, port_csv_urls, site_id)
+from otc_pipeline.ios_definitions import P1_EPOCH, p1_deg
 from otc_pipeline.release_writer import validate_release
 
 from contract_stubs import shape_only_astro_tables
@@ -40,7 +43,10 @@ def _input(cache: Path, rel: str, url: str) -> InputFile:
     return InputFile(rel, hashlib.sha256(data).hexdigest(), len(data), url, "2026-10-08T00:00:00Z")
 
 
-def fixture_fetch(tmp_path: Path, members=MEMBERS, mutate=None, only=None):
+LEVELS_PAGE = "pages/standard-port-tidal-levels.synthetic.html"
+
+
+def fixture_fetch(tmp_path: Path, members=MEMBERS, mutate=None, only=None, levels: str | None = None):
     """A FetchResult over a zip of the fixture members (optionally rewritten by `mutate`)."""
     cache = tmp_path / "cache"
     (cache / "zip").mkdir(parents=True)
@@ -54,7 +60,12 @@ def fixture_fetch(tmp_path: Path, members=MEMBERS, mutate=None, only=None):
         (cache / "ports" / p.name).write_bytes(p.read_bytes())
         ports.append(_input(cache, f"ports/{p.name}", f"https://static.charts.linz.govt.nz/x/{p.name}"))
     zf = _input(cache, f"zip/{ZIP_NAME}", f"https://www.linz.govt.nz/sites/default/files/2026-08/{ZIP_NAME}")
-    return load_fetched(cache, zf, ports, only=only)
+    lv = None
+    if levels is not None:
+        (cache / "pages").mkdir()
+        (cache / "pages" / "levels.html").write_text(levels, encoding="utf-8")
+        lv = _input(cache, "pages/levels.html", linz.STANDARD_PORT_LEVELS_PAGE)
+    return load_fetched(cache, zf, ports, levels_file=lv, only=only)
 
 
 def sets_by_id(adapter, fetched):
@@ -275,3 +286,92 @@ def test_live_all_sites(tmp_path):
     nelson = sets_by_id(ad, fetched)["077NELSON"]
     assert nelson.station_hint["lat"] == pytest.approx(-41.27, abs=0.05)
     assert linz.MAX_LIST_KM == 5.0
+
+
+# --- published datums (datums spec §4.1 item 4, DT5c) on the synthetic levels page ---------------
+
+def levels_page() -> str:
+    return (FIX / LEVELS_PAGE).read_text(encoding="utf-8")
+
+
+def test_standard_port_levels_page_is_parsed():
+    got = linz.parse_standard_port_levels(levels_page())
+    assert got["spring_neap"] == ("2026-07-01", "2027-06-30")
+    assert got["hat_lat"] == ("2000-01-01", "2018-12-31")
+    assert got["ports"]["Auckland"] == {"MHWS": 3.3, "MHWN": 2.8, "MLWN": 1.1, "MLWS": 0.5, "SpringRange": 2.8,
+                                        "NeapRange": 1.7, "MSL": 1.95, "HAT": 3.7, "LAT": 0.1}
+
+
+@pytest.mark.parametrize("old, new, msg", [
+    ("<th>MSL</th>", "<th>Z0</th>", "header"),
+    ("which is the same as the zero of the tidal predictions", "which is near the zero", "no longer says"),
+    ("predicted for the period 1 July 2026", "predicted for the year 1 July 2026", "period"),
+])
+def test_a_changed_levels_page_is_refused(old, new, msg):
+    with pytest.raises(ValueError, match=msg):
+        linz.parse_standard_port_levels(levels_page().replace(old, new))
+
+
+def test_standard_port_set_gets_the_levels_above_chart_datum(tmp_path):
+    f = fixture_fetch(tmp_path, levels=levels_page())
+    sets = sets_by_id(LinzAdapter(speeds=speeds()), f)
+    d = sets["070AUCKLAND"].constant_set["datum"]
+    assert (d["zero"], d["zero_name"], d["chart_datum"]) == ("chart_datum", "CD", "cd")
+    assert d["msl_offset_m"] == 1.94345                       # the constants' Z0, as before
+    assert d["named"] == {"cd": 0.0, "mhws": 3.3, "mhwn": 2.8, "mlwn": 1.1, "mlws": 0.5, "msl": 1.95,
+                          "hat": 3.7, "lat": 0.1}
+    sn = {"start": "2026-07-01", "end": "2027-06-30", "name": "LINZ spring/neap predictions"}
+    hl = {"start": "2000-01-01", "end": "2018-12-31", "name": "LINZ HAT/LAT predictions"}
+    for k in ("mhws", "mhwn", "mlwn", "mlws"):
+        assert d["basis"][k] == {"kind": "published", "method": "source", "source_name": k.upper(), "epoch": sn}
+    for k in ("hat", "lat"):
+        assert d["basis"][k]["epoch"] == hl
+    assert "epoch" not in d["basis"]["msl"] and d["basis"]["cd"]["source_name"] == "Chart Datum"
+    assert f.items["070AUCKLAND"]["levels"]["sha256"] in sets["070AUCKLAND"].constant_set["provenance"]["input_sha256"]
+    # a port that is not a standard port keeps only its Z0
+    assert sets["210DARGAVILLE"].constant_set["datum"] == {"msl_offset_m": 2.444751}
+
+
+def test_a_port_whose_z0_is_far_from_msl_gets_no_levels(tmp_path, caplog):
+    s = sets_by_id(LinzAdapter(speeds=speeds()), fixture_fetch(tmp_path, levels=levels_page()))["097NAPIER"]
+    assert s.constant_set["datum"] == {"msl_offset_m": 1.010259}
+    assert "097NAPIER: standard-port levels not written: Z0 1.010259 m vs the page's MSL 1.5 m" in caplog.text
+
+
+def test_a_standard_port_with_no_port_csv_is_an_error(tmp_path):
+    page = levels_page().replace("<td>Tauranga</td>", "<td>Taurangaa</td>")
+    with pytest.raises(ValueError, match="Taurangaa"):
+        fixture_fetch(tmp_path, levels=page)
+
+
+def test_linz_contract_and_build_checks_with_levels(tmp_path):
+    from otc_pipeline.datums import datum_build_errors
+    f = fixture_fetch(tmp_path, levels=levels_page())
+    a = LinzAdapter(speeds=speeds())
+    assert check_contract(a, f) == []
+    for s in a.sets(f):
+        assert datum_build_errors(s.constant_set.get("datum", {})) == []
+
+
+def test_watch_key_follows_the_levels(tmp_path):
+    a = LinzAdapter(speeds=speeds())
+    k1 = a.watch_keys(fixture_fetch(tmp_path / "a", levels=levels_page()))
+    k2 = a.watch_keys(fixture_fetch(tmp_path / "b", levels=levels_page().replace("<td>3.30</td>", "<td>3.31</td>")))
+    assert k1["070AUCKLAND"] != k2["070AUCKLAND"] and k1["073TAURANGA"] == k2["073TAURANGA"]
+
+
+# --- SA and S1: IOS's arguments converted to the TCD's -------------------------------------------------
+
+def test_sa_and_s1_are_converted_from_ios_to_the_tcd(tmp_path):
+    c = cons(sets_by_id(LinzAdapter(speeds=speeds()), fixture_fetch(tmp_path))["070AUCKLAND"])
+    p1 = p1_deg(P1_EPOCH)
+    # served (UTC+12): SA .00011407 cph 4.9046 cm 99.40; S1 .04166667 cph 0.4938 cm 238.77
+    assert c["SA"][1] == pytest.approx((99.40 - 0.0410686 * 12 + p1) % 360, abs=1e-3)
+    assert c["S1"][1] == pytest.approx((238.77 - 15.0 * 12 - p1 + 90) % 360, abs=1e-3)
+
+
+def test_sa_served_at_the_tcd_frequency_is_refused(tmp_path):
+    def mutate(member, data):
+        return data.replace(b"   2 SA      .00011407", b"   2 SA      .00011408")
+    with pytest.raises(ValueError, match="SA"):
+        list(LinzAdapter(speeds=speeds()).sets(fixture_fetch(tmp_path, mutate=mutate)))

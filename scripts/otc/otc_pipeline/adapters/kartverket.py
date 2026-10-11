@@ -8,6 +8,24 @@ phases to Greenwich with `canary.to_greenwich` under the convention it declares
 per-source canary against our GESLA fits of the NHS records (Bergen, Trondheim, Stavanger, ...)
 is what fixes that sign: read as Greenwich, every phase is off by speed x 1 h.
 
+Datums (datums spec §4.1 item 3, slot DT5b). `tideapi.php?tide_request=stationlevels&stationcode=
+<CODE>` gives the station's levels in cm above chart datum (`reflevel="CD"`). The adapter writes
+HAT, MHWS, MHW, MHWN, MSL, MLWN, MLW, MLWS, LAT, CD and NN2000 (keys `hat` ... `nn2000`), in
+metres above CD: the set's `zero` is `chart_datum`, `zero_name` CD, `chart_datum` `cd` (CD is
+Kartverket's published chart datum; it is not always LAT: south of Utsira it is below LAT).
+Each basis is kind `published`, method `source`, Kartverket's code; only MSL states an epoch
+(its `epoch` attribute, 1996-2014, or where that is absent the same years in the level's
+name, "Mean Sea Level (1996-2014)"). The storm-surge return levels and the observed extremes
+(type RETURN and OBS) are not tidal datums and are not taken. `msl_offset_m` (Z0 above CD) is
+Kartverket's MSL: the constants carry no mean level, and with Z0 = MSL the constants reproduce
+Kartverket's own tide tables over a year (monthly mean bias within 0.1 cm at Bodo and Bergen,
+ADPORT sa-fix evidence).
+
+SA and S1 are served with IOS's arguments (h - p1 and T + p1 - 90, XDO ZZAZZYZ and AAYZZAA), not
+the TCD's (h, T): their phases are converted (`ios_definitions`), after the UTC+1 correction. A
+served speed is checked against its astro row to Kartverket's precision (SPEED_PRECISION_DEG_PER_HOUR,
+after the IOS p1 term), so another p1-type definition difference cannot pass unseen.
+
 `phase_reference="greenwich_utc"` is the test flag that reads the served phases as Greenwich
 (the RED of the proof). Only the default convention ships.
 
@@ -23,6 +41,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
@@ -31,6 +50,8 @@ from pathlib import Path
 from otc_pipeline.adapter import FetchResult, SourceSet
 from otc_pipeline.canary import to_greenwich
 from otc_pipeline.constituent_speeds import TableSpeeds, dropped_no_row
+from otc_pipeline.datums import period, published
+from otc_pipeline.ios_definitions import IOS_TO_TCD, KARTVERKET_XDO, P1_RATE_DEG_PER_HOUR, to_tcd_phase
 from otc_pipeline.http import PoliteFetcher
 
 URL = "https://vannstand.kartverket.no/tideapi.php"
@@ -42,6 +63,10 @@ SPDX = "CC-BY-4.0"
 # 4.0) rests on it, so a response that points anywhere else is refused.
 SERVED_LICENCE_URLS = ("http://kartverket.no/data/lisens/",)
 SVALBARD_MIN_LAT = 74.0          # Ny-Ålesund (NYA) is in Svalbard: country SJM
+# stationlevels code -> OTC datum key (datums spec §4.1 item 3, rule 10)
+LEVEL_KEYS = {"HAT": "hat", "MHWS": "mhws", "MHW": "mhw", "MHWN": "mhwn", "MSL": "msl", "MLWN": "mlwn",
+              "MLW": "mlw", "MLWS": "mlws", "LAT": "lat", "CD": "cd", "NN2000": "nn2000"}
+LEVELS_REFLEVEL = "CD"
 
 
 def _iso_utc(stamp: str) -> str:
@@ -79,7 +104,7 @@ def parse_constituents(data: bytes, code: str) -> dict:
         raise ValueError(f"{code}: response is for {None if loc is None else loc.get('code')!r}")
     obs = cs.find("observations")
     cons = [{"name": c.get("name"), "amplitude_cm": float(c.get("amplitude")),
-             "phase_deg": float(c.get("phaseangle")), "speed": float(c.get("speed"))}
+             "phase_deg": float(c.get("phaseangle")), "speed": float(c.get("speed")), "xdo": c.get("doodson")}
             for c in cs.iter("constituent")]
     if not cons:
         raise ValueError(f"{code}: no constituents")
@@ -90,11 +115,73 @@ def parse_constituents(data: bytes, code: str) -> dict:
             "constituents": cons}
 
 
+def parse_levels(data: bytes, code: str) -> dict:
+    """A stationlevels response as {code: {"value_m", "epoch"}} for the tidal levels and CD/NN2000.
+    Raises ValueError unless it is the station's levels in cm above CD under the licence the
+    adapter claims, with CD among them."""
+    root = ET.fromstring(data)
+    meta = root.find("meta")
+    pointer = None if meta is None else meta.get("licenseurl")
+    if pointer not in SERVED_LICENCE_URLS:
+        raise ValueError(f"{code}: stationlevels licence pointer is {pointer!r}, not one of {SERVED_LICENCE_URLS}")
+    ll = root.find("locationlevel")
+    if ll is None:
+        raise ValueError(f"{code}: no <locationlevel> in the stationlevels response")
+    if ll.get("unit") != SERVED_UNIT or ll.get("reflevel") != LEVELS_REFLEVEL:
+        raise ValueError(f"{code}: stationlevels unit {ll.get('unit')!r} / reflevel {ll.get('reflevel')!r}, "
+                         f"expected {SERVED_UNIT!r} / {LEVELS_REFLEVEL!r}")
+    loc = ll.find("location")
+    if loc is None or loc.get("code") != code:
+        raise ValueError(f"{code}: stationlevels response is for {None if loc is None else loc.get('code')!r}")
+    out = {}
+    for r in ll.iter("reflevel"):
+        c = r.get("code")
+        if c not in LEVEL_KEYS:
+            continue
+        if c in out:
+            raise ValueError(f"{code}: level {c} is listed twice")
+        # the epoch Kartverket states: the `epoch` attribute, or else "(YYYY-YYYY)" in the level's name
+        # (some stations give it only there, e.g. BOH "Mean Sea Level (1996-2014)")
+        named_epoch = re.search(r"\((\d{4}-\d{4})\)", r.get("name") or "")
+        out[c] = {"value_m": round(float(r.get("value")) / 100.0, 6),
+                  "epoch": r.get("epoch") or (named_epoch[1] if named_epoch else None)}
+    if "CD" not in out:
+        raise ValueError(f"{code}: stationlevels has no CD")
+    if out["CD"]["value_m"] != 0.0:
+        raise ValueError(f"{code}: CD is {out['CD']['value_m']} m above the reference level CD")
+    return out
+
+
+def levels_datum(levels: dict) -> dict:
+    """The set's datum from parse_levels: every level above CD, Kartverket's code as source_name."""
+    named, basis = {}, {}
+    for c, lv in levels.items():
+        epoch = None
+        if lv["epoch"]:
+            a, _, b = lv["epoch"].partition("-")
+            if not (len(a) == len(b) == 4 and a.isdigit() and b.isdigit()):
+                raise ValueError(f"level {c}: epoch {lv['epoch']!r} is not YYYY-YYYY")
+            epoch = period(f"{a}-01-01", f"{b}-12-31", f"Kartverket {c} {a}-{b}")
+        named[LEVEL_KEYS[c]], basis[LEVEL_KEYS[c]] = lv["value_m"], published(c, epoch=epoch)
+    return {"zero": "chart_datum", "zero_name": "CD", "chart_datum": "cd", "named": named, "basis": basis}
+
+
+# Kartverket gives speeds to 1e-8 deg/h; its own rounding of the TCD-equal definitions stays below 3e-7
+SPEED_PRECISION_DEG_PER_HOUR = 1e-6
+
+
+def _with_z0(datum: dict | None) -> dict | None:
+    """Z0 above CD (msl_offset_m) is Kartverket's MSL above CD."""
+    if datum and "msl" in (datum.get("named") or {}):
+        return {**datum, "msl_offset_m": datum["named"]["msl"]}
+    return datum
+
+
 class KartverketAdapter:
     source = "kartverket"
     source_type = "official"
     quantity = "water_level"
-    adapter_version = "1"
+    adapter_version = "2"   # 2: published datums (DT5b)
     contract_sample = ("BGO", "TRD", "SVG")
 
     def __init__(self, phase_reference: str = "local", speeds: TableSpeeds | None = None):
@@ -124,9 +211,12 @@ class KartverketAdapter:
         for code in codes:
             got = f.get(URL, params={"tide_request": "constituents", "stationcode": code, "lang": "en"},
                         cache_name=f"constituents/{code}.xml")
-            files.append(got.input_file())
+            lv = f.get(URL, params={"tide_request": "stationlevels", "stationcode": code, "lang": "en"},
+                       cache_name=f"stationlevels/{code}.xml")
+            files += [got.input_file(), lv.input_file()]
             items[code] = {"station": stations[code], **parse_constituents(got.bytes(), code),
-                           "input_sha256": [sl.input_file().sha256, got.sha256]}
+                           "levels": parse_levels(lv.bytes(), code),
+                           "input_sha256": [sl.input_file().sha256, got.sha256, lv.sha256]}
         version = min(fl.fetched_at for fl in files)[:10].replace("-", "")
         fetched = FetchResult(source=self.source, source_version=version, cache_dir=cache_dir,
                               files=tuple(files), items=items)
@@ -164,7 +254,7 @@ class KartverketAdapter:
         """code -> SHA-256 of the station's normalised constants (not the raw bytes)."""
         keys = {}
         for code, it in fetched.items.items():
-            norm = {k: it[k] for k in ("unit", "utcoffset", "location", "observations", "constituents")}
+            norm = {k: it[k] for k in ("unit", "utcoffset", "location", "observations", "constituents", "levels")}
             keys[code] = hashlib.sha256(json.dumps(norm, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         return keys
 
@@ -183,14 +273,28 @@ class KartverketAdapter:
                 if speed is None:
                     dropped.append(dropped_no_row(c["name"]))
                     continue
+                # IOS's SA and S1 (served with their XDO code) get the TCD's argument; every served speed
+                # is its row's (plus IOS's p1 term) to Kartverket's precision
+                k = 0
+                if c["name"] in IOS_TO_TCD:
+                    if c.get("xdo") != KARTVERKET_XDO[c["name"]]:
+                        raise ValueError(f"{code}: {c['name']} served with XDO {c.get('xdo')!r}, not IOS's "
+                                         f"{KARTVERKET_XDO[c['name']]!r}: no phase conversion is known for it")
+                    k = IOS_TO_TCD[c["name"]][0]
+                want = speed + k * P1_RATE_DEG_PER_HOUR
+                if abs(c["speed"] - want) > SPEED_PRECISION_DEG_PER_HOUR:
+                    raise ValueError(f"{code}: {c['name']} served at {c['speed']} deg/h, its astro row "
+                                     f"{speed} (+ IOS p1 term {k}) is {want:.8f}: a definition the adapter "
+                                     "does not know")
                 # the served phase is referred to UTC+1 with the served speed
+                g = to_tcd_phase(c["name"], to_greenwich(c["phase_deg"], c["speed"], conv))
                 cons.append({"name": c["name"], "speed_deg_per_hour": speed,
                              "amplitude_m": round(c["amplitude_cm"] / 100.0, 6),
-                             "phase_deg": round(to_greenwich(c["phase_deg"], c["speed"], conv), 3)})
+                             "phase_deg": round(g, 3) % 360.0})
             cs = {"source": self.source, "source_type": self.source_type, "quantity": self.quantity,
                   "source_record_id": code, "source_version": fetched.source_version,
                   "convention_id": conv["convention_id"], "licence_id": self.licence()["licence_id"],
-                  "qc_status": "ok", "constituents": cons,
+                  "qc_status": "ok", "constituents": cons, "datum": _with_z0(levels_datum(it["levels"])),
                   "provenance": {"adapter_version": self.adapter_version, "input_sha256": it["input_sha256"]}}
             if dropped:
                 cs["dropped_constituents"] = dropped

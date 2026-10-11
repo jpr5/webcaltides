@@ -11,6 +11,18 @@ Upstream (metadata API, no key; NOAA rate-limits, so every request goes through 
   `heightAdjustedType` R is a ratio (unitless); F is an additive offset in feet, which we convert
   exactly to metres (x 0.3048) and publish as type A. (`units=metric` would round the converted
   value to 0.01 m, e.g. 0.1 ft -> 0.03 m.)
+- `stations/<id>/datums.json?units=metric` per station (R and S): NOAA's published tidal datums
+  (datums spec §4.1 item 2, slot DT5a). Every level is given above the station datum STND; we
+  re-express each above the station's MLLW, NOAA's chart datum: the set's (or the subordinate's
+  `subordinate_offsets.datum`) `zero` is `chart_datum` with `zero_name` MLLW, `chart_datum` is
+  `mllw`, and a reference set's `msl_offset_m` is MSL - MLLW. Each level's basis is kind
+  `published`, method `source`, NOAA's name; the tidal levels carry NOAA's epoch (`epoch`, or the
+  single DatumAnalysisPeriod when `epoch` is not a year range) and NOAA's control station
+  (`ctrlStation`, id only); LAT and HAT carry neither (NOAA computes them from predictions over
+  its own 40-year window, not over the epoch, and not by comparison with the control); STND and
+  the orthometric datums (NAVD88, PRVD02, ...) are geodetic ties and carry neither. The ranges
+  (GT, MN, DHQ, DLQ) are differences of stored levels and HWI/LWI are times: not taken. A station
+  with no MLLW gets no datum (no chart datum to refer the levels to).
 
 The data is a U.S. Government work (public domain). The constants are NOAA's own amplitudes and
 Greenwich phases (a phase of 360 is written as 0); each speed is the release's astro-table row for
@@ -35,7 +47,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import math
+import re
 import sys
 import tempfile
 from functools import lru_cache
@@ -45,7 +59,10 @@ from typing import Callable, Iterable
 
 from otc_pipeline.adapter import FetchResult, InputFile, SourceSet
 from otc_pipeline.constituent_speeds import TableSpeeds, dropped_no_row
+from otc_pipeline.datums import period, published
 from otc_pipeline.http import PoliteFetcher
+
+log = logging.getLogger(__name__)
 
 API = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi"
 LIST_URL = f"{API}/stations.json"
@@ -59,6 +76,17 @@ PHASE_FIELDS = ("phase_GMT", "phase_local")
 STATION_FIELDS = ("id", "name", "lat", "lng", "type", "reference_id", "state", "timezonecorr", "timemeridian")
 FT_TO_M = 0.3048
 HEIGHT_TYPES = {"R": "R", "F": "A"}   # NOAA heightAdjustedType -> schema height_adjusted_type
+# NOAA datum name -> OTC key (datums spec rule 10: canonical where NOAA's definition is the
+# canonical one, otherwise NOAA's name in lower case).
+TIDAL_DATUMS = {"MHHW": "mhhw", "MHW": "mhw", "DTL": "dtl", "MTL": "mtl", "MSL": "msl", "MLW": "mlw",
+                "MLLW": "mllw"}
+GEODETIC_DATUMS = {"STND": "stnd", "NAVD88": "navd88", "GUVD04": "guvd04", "NMVD03": "nmvd03",
+                   "PRVD02": "prvd02", "VIVD09": "vivd09"}
+# Not levels, or not datums of the station: ranges (differences of stored levels), intervals
+# (hours), and the Columbia River Datum offset (CRD_OFFSET, a river-gauge correction).
+DATUMS_NOT_TAKEN = frozenset({"GT", "MN", "DHQ", "DLQ", "HWI", "LWI", "CRD_OFFSET"})
+_EPOCH_RE = re.compile(r"(\d{4})-(\d{4})")
+_PERIOD_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4}) - (\d{2})/(\d{2})/(\d{4})")
 
 # NOAA id -> (alpha-3, IANA zone), where NOAA's position gives no land zone or the wrong country.
 PLACE_OVERRIDES: dict[str, tuple[str, str, str]] = {
@@ -146,6 +174,59 @@ def place(station_id: str, lat: float, lon: float) -> tuple[str, str]:
     return ALPHA3[a2], zone
 
 
+def _datum_epoch(body: dict) -> dict | None:
+    """The epoch NOAA states for the tidal levels: `epoch` when it is a year range (1983-2001 is the
+    NTDE; 2012-2016 and 2002-2006 are NOAA's modified 5-year epochs), else the one
+    DatumAnalysisPeriod (e.g. "Special" datums from a single series); None when neither is stated
+    (an empty or "0000-0000" epoch with several analysis periods)."""
+    m = _EPOCH_RE.fullmatch(str(body.get("epoch") or "").strip())
+    if m and m[1] != "0000" and int(m[1]) <= int(m[2]):
+        name = "NTDE 1983-2001" if (m[1], m[2]) == ("1983", "2001") else f"NOAA epoch {m[1]}-{m[2]}"
+        return period(f"{m[1]}-01-01", f"{m[2]}-12-31", name)
+    periods = body.get("DatumAnalysisPeriod") or []
+    if len(periods) == 1:
+        p = _PERIOD_RE.fullmatch(str(periods[0]).strip())
+        if p:
+            return period(f"{p[3]}-{p[1]}-{p[2]}", f"{p[6]}-{p[4]}-{p[5]}", "NOAA datum analysis period")
+    return None
+
+
+def _number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def noaa_datum(body: dict, *, with_msl_offset: bool) -> tuple[dict | None, list[str]]:
+    """NOAA's datums.json (units=metric) as an OTC datum above the station's MLLW, and the names
+    NOAA gives that are not taken. (None, ...) when NOAA gives no MLLW or the units are not metres."""
+    if not isinstance(body, dict) or body.get("units") != "meters":
+        return None, []
+    levels = {d["name"]: float(d["value"]) for d in body.get("datums") or []
+              if isinstance(d, dict) and _number(d.get("value"))}
+    if "MLLW" not in levels:
+        return None, []
+    mllw = levels["MLLW"]
+    epoch = _datum_epoch(body)
+    ctrl = str(body.get("ctrlStation") or "").strip().split(" ", 1)[0] or None
+    named, basis, not_taken = {}, {}, []
+    for src, v in levels.items():
+        if src in TIDAL_DATUMS:
+            key, b = TIDAL_DATUMS[src], published(src, epoch=epoch, control_source_id=ctrl)
+        elif src in GEODETIC_DATUMS:
+            key, b = GEODETIC_DATUMS[src], published(src)
+        else:
+            if src not in DATUMS_NOT_TAKEN:
+                not_taken.append(src)
+            continue
+        named[key], basis[key] = round(v - mllw, 6), b
+    for src, key in (("LAT", "lat"), ("HAT", "hat")):
+        if _number(body.get(src)):
+            named[key], basis[key] = round(float(body[src]) - mllw, 6), published(src)
+    datum = {"zero": "chart_datum", "zero_name": "MLLW", "chart_datum": "mllw", "named": named, "basis": basis}
+    if with_msl_offset and "msl" in named:
+        datum = {"msl_offset_m": named["msl"], **datum}
+    return datum, sorted(not_taken)
+
+
 def _height(off: dict, key: str) -> float:
     """A height offset: a ratio as given (R), or an additive offset in feet as metres (F)."""
     v = off[key]
@@ -156,7 +237,7 @@ class NoaaAdapter:
     source = "noaa"
     source_type = "official"
     quantity = "water_level"
-    adapter_version = "1.0.0"
+    adapter_version = "1.1.0"   # 1.1: published datums (DT5a)
     # Boston, Seattle, San Francisco (the G9 stations) and Hull, MA (subordinate to Boston).
     contract_sample = ("8443970", "9447130", "9414290", "8444351")
 
@@ -206,9 +287,10 @@ class NoaaAdapter:
             else:
                 got = f.get(f"{API}/stations/{sid}/tidepredoffsets.json", cache_name=f"offsets/{sid}.json")
                 key = "offsets"
-            files.append(got.input_file())
-            items[sid] = {"station": st, key: json.loads(got.bytes()),
-                          "input_sha256": [lst.sha256, got.sha256]}
+            dat = f.get(f"{API}/stations/{sid}/datums.json", params=UNITS, cache_name=f"datums/{sid}.json")
+            files += [got.input_file(), dat.input_file()]
+            items[sid] = {"station": st, key: json.loads(got.bytes()), "datums": json.loads(dat.bytes()),
+                          "input_sha256": [lst.sha256, got.sha256, dat.sha256]}
             if progress is not None:
                 progress(n, len(todo))
         version = min(fl.fetched_at for fl in files)[:10].replace("-", "")
@@ -238,8 +320,10 @@ class NoaaAdapter:
         for sid, it in fetched.items.items():
             body = it.get("harcon", it.get("offsets"))
             body = {k: v for k, v in body.items() if k != "self"} if isinstance(body, dict) else body
+            dat = it.get("datums")
+            dat = {k: v for k, v in dat.items() if k not in ("self", "disclaimers")} if isinstance(dat, dict) else dat
             out[sid] = canonical_sha256({"station": {k: it["station"].get(k) for k in STATION_FIELDS},
-                                         "data": body})
+                                         "data": body, "datums": dat})
         return out
 
     def records(self, fetched: FetchResult) -> Iterable:
@@ -304,6 +388,9 @@ class NoaaAdapter:
                 for c in it["harcon"]["HarmonicConstituents"]:
                     con = self._constituent(sid, c)
                     cons.append(con) if con is not None else dropped.append(dropped_no_row(c["name"]))
+                datum, not_taken = noaa_datum(it.get("datums"), with_msl_offset=True)
+                if not_taken:   # provenance is a closed list: a name NOAA adds is logged, not published
+                    log.warning("noaa %s: datum names not taken: %s", sid, ", ".join(not_taken))
                 yield SourceSet(
                     station_hint=self._hint(st, "reference"),
                     constant_set={
@@ -311,6 +398,7 @@ class NoaaAdapter:
                         "source_record_id": sid, "source_version": fetched.source_version,
                         "convention_id": conv, "licence_id": lic, "qc_status": "ok",
                         "constituents": cons, **({"dropped_constituents": dropped} if dropped else {}),
+                        **({"datum": datum} if datum else {}),
                         "provenance": {"adapter_version": self.adapter_version,
                                        "input_sha256": list(it["input_sha256"]),
                                        "selection_reason": "NOAA CO-OPS harmonic constants; speeds as the "
@@ -318,6 +406,7 @@ class NoaaAdapter:
                     })
             else:
                 off = it["offsets"]
+                datum, _not_taken = noaa_datum(it.get("datums"), with_msl_offset=False)
                 yield SourceSet(
                     station_hint=self._hint(st, "subordinate"), constant_set=None,
                     subordinate_offsets={
@@ -327,7 +416,7 @@ class NoaaAdapter:
                         "height_offset_high": _height(off, "heightOffsetHighTide"),
                         "height_offset_low": _height(off, "heightOffsetLowTide"),
                         "height_adjusted_type": HEIGHT_TYPES[off["heightAdjustedType"]],
-                        "licence_id": lic,
+                        "licence_id": lic, **({"datum": datum} if datum else {}),
                     })
 
 

@@ -253,3 +253,38 @@ def test_another_served_licence_is_refused(tmp_path, served):
     info.write_text("".join(lines))
     with pytest.raises(ValueError, match="licen"):
         MarineInstituteAdapter(start=date(2025, 6, 1), end=date(2025, 6, 2)).load(cache, only=list(NAMED))
+
+
+# --- published datum (datums spec §4.1 item 7, DT5e) -----------------------------------------------
+
+def test_published_lat_above_od_malin(june):
+    adapter, fetched = june
+    pub = adapter.published_datums(fetched)
+    assert sorted(pub) == [f"marine-institute:{s}" for s in sorted(NAMED)]
+    for sid in NAMED:
+        rows = raw_rows(FIXTURES / "obs" / obs_cache_name(sid, date(2025, 6, 1), date(2025, 6, 2)).split("/", 1)[1])
+        diffs = {round(float(r[5]) - float(r[4]), 3) for r in rows if -9999 not in (float(r[4]), float(r[5]))}
+        assert len(diffs) == 1                                   # one constant per station, read from the bytes
+        assert pub[f"marine-institute:{sid}"]["datum"] == {
+            "zero": "vertical_datum", "zero_name": "OD Malin", "named": {"lat": diffs.pop()},
+            "basis": {"lat": {"kind": "published", "method": "source", "source_name": "LAT"}}}
+
+
+def test_no_lat_when_the_difference_is_not_constant():
+    text = (FIXTURES / "obs" / "Dublin_Port_20250601_20250602.csv").read_text().splitlines()
+    r = text[5].split(",")
+    r[4] = f"{float(r[4]) + 0.01:.3f}"                       # one row's LAT height off by 1 cm
+    text[5] = ",".join(r)
+    parsed = parse_obs_csv("\n".join(text) + "\n")
+    assert len(parsed.lat_above_od_malin) == 2
+
+
+def test_a_lat_record_gets_no_published_datum():
+    text = (FIXTURES / "obs" / "Dublin_Port_20250601_20250602.csv").read_text().splitlines()
+    out = text[:2]
+    for line in text[2:]:
+        r = line.split(",")
+        r[5] = "-9999.0"                                     # no OD Malin: the record is kept in LAT
+        out.append(",".join(r))
+    parsed = parse_obs_csv("\n".join(out) + "\n")
+    assert parsed.datum == "LAT" and parsed.lat_above_od_malin == ()

@@ -25,6 +25,15 @@ interval. Read either way the stamp is within 2.5 min of the sample, inside the 
 of `utc_instant` (BP §2); the -b slot's time-base audit checks the declaration against the
 IMI predictions.
 
+Published datum (datums spec §4.1 item 7, slot DT5e): every row carries the level in both LAT
+and OD Malin, so their difference is the height of the Marine Institute's LAT above OD Malin.
+`published_datums` gives it, per OD Malin record, as `lat` (kind `published`, `source_name`
+LAT) with `zero` `vertical_datum`, `zero_name` OD Malin, for the fit (A-mi-b) to put beside its
+own `msl_offset_m`; only when the difference is one constant (to the data's 1 mm) over every
+row with both values. No `chart_datum`: no Marine Institute source read here says LAT is the
+chart datum (the dataset calls it "Lowest Astronomical Tide", nothing more). A record kept in
+LAT (no OD Malin) gets no published datum.
+
 A station with no rows in the window (ERDDAP answers 404 "no matching results") is skipped by
 `fetch`; asking `load` for it is an error.
 """
@@ -47,6 +56,7 @@ import numpy as np
 
 from gesla.record import GaugeRecord
 from otc_pipeline.adapter import FetchResult, InputFile, SourceSet, sha256_file
+from otc_pipeline.datums import published
 from otc_pipeline.http import HttpError, PoliteFetcher
 
 __all__ = ["MarineInstituteAdapter", "ParsedObs", "obs_cache_name", "obs_url", "parse_obs_csv"]
@@ -94,6 +104,7 @@ class ParsedObs:
     lat: float
     lon: float
     datum: str              # "OD Malin" or "LAT"
+    lat_above_od_malin: tuple[float, ...]   # distinct OD Malin - LAT values (1 mm) over rows with both
     times_s: np.ndarray     # int64, as stamped
     heights_m: np.ndarray   # float64, NaN where missing
     qc: tuple[str, ...]
@@ -133,10 +144,14 @@ def parse_obs_csv(text: str) -> ParsedObs:
     od = np.array([_height(r[5]) for r in data], dtype=np.float64)
     lat_h = np.array([_height(r[4]) for r in data], dtype=np.float64)
     datum, heights = ("OD Malin", od) if np.isfinite(od).any() else ("LAT", lat_h)
+    both = np.isfinite(od) & np.isfinite(lat_h)
+    # metres at 1 mm resolution: LAT above OD Malin = (height above OD Malin) - (height above LAT)
+    offsets = tuple(sorted({round(float(v), 3) for v in (od[both] - lat_h[both])}))
     qc = tuple(r[6] for r in data)
     good = np.array([q in GOOD_QC for q in qc], dtype=bool) & np.isfinite(heights)
     last = data[-1]
     return ParsedObs(station_id=last[1], lat=float(last[2]), lon=float(last[3]), datum=datum,
+                     lat_above_od_malin=offsets,
                      times_s=times, heights_m=heights, qc=qc, good=good)
 
 
@@ -176,7 +191,7 @@ class MarineInstituteAdapter:
     source = "marine-institute"
     source_type = "gauge"
     quantity = "water_level"
-    adapter_version = "mi-1"
+    adapter_version = "mi-2"   # mi-2: published LAT above OD Malin (DT5e)
     contract_sample = ("Dublin Port", "Galway Port", "Malin Head - Portmore Pier")
 
     def __init__(self, start: date | None = None, end: date | None = None, *,
@@ -290,3 +305,20 @@ class MarineInstituteAdapter:
 
     def sets(self, fetched: FetchResult) -> Iterable[SourceSet]:
         return ()
+
+    def published_datums(self, fetched: FetchResult) -> dict[str, dict]:
+        """record_id -> {"datum": LAT above OD Malin (no msl_offset_m: the fit's Z0 goes with it),
+        "notes": the file it was read from}, for every OD Malin record whose LAT - OD Malin difference is constant."""
+        out = {}
+        for sid, item in sorted(fetched.items.items()):
+            o: ParsedObs = item["obs"]
+            if o.datum != "OD Malin" or len(o.lat_above_od_malin) != 1:
+                if o.datum == "OD Malin" and len(o.lat_above_od_malin) > 1:
+                    log.warning("marine-institute: %s: LAT - OD Malin is not constant (%s); no published datum",
+                                sid, o.lat_above_od_malin[:5])
+                continue
+            out[f"{self.source}:{sid}"] = {
+                "datum": {"zero": "vertical_datum", "zero_name": "OD Malin",
+                          "named": {"lat": o.lat_above_od_malin[0]}, "basis": {"lat": published("LAT")}},
+                "notes": {"lat_from": item["file"].path}}
+        return out

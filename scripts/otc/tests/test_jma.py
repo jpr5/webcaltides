@@ -198,9 +198,32 @@ def test_station_hint_and_datum(cache, speeds):
     assert s.station_hint == {"name": "東京", "country": "JPN", "lat": round(35 + 39 / 60, 6),
                               "lon": round(139 + 46 / 60, 6), "type": "reference", "timezone": "Asia/Tokyo",
                               "aliases": {}}
-    # MSL 120.0 cm above the tide-table datum. The named levels (tide-table datum, MSL, TP) need a
-    # basis in format 1.0: DT5d writes them, so only Z0 is published here.
-    assert s.constant_set["datum"] == {"msl_offset_m": 1.2}
+    # MSL 120.0 cm above the tide-table datum (DT5d): the tide-table datum is the zero and the chart
+    # datum; no epoch on MSL (JMA states 2020-2024 only "as a rule"); no `tp` (module docstring).
+    assert s.constant_set["datum"] == {
+        "msl_offset_m": 1.2, "zero": "chart_datum", "zero_name": "潮位表基準面", "chart_datum": "tide_table_datum",
+        "named": {"tide_table_datum": 0.0, "msl": 1.2},
+        "basis": {"tide_table_datum": {"kind": "published", "method": "source", "source_name": "潮位表基準面"},
+                  "msl": {"kind": "published", "method": "source", "source_name": "MSL"}}}
+
+
+def test_provisional_msl_is_flagged(cache, speeds):
+    from dataclasses import replace
+    a = adapter(speeds)
+    fetched = a.fetch(cache, only=list(STATIONS))
+    raw = parse_station_table((cache / "station2026.html").read_bytes())
+    assert raw["OF"]["note"] == "＊１" and raw["TK"]["note"] == ""       # Ofunato is marked ＊１ on the page
+    items = dict(fetched.items)
+    items["TK"] = {**items["TK"], "station": {**items["TK"]["station"], "note": raw["OF"]["note"]}}
+    tk = {s.constant_set["source_record_id"]: s for s in a.sets(replace(fetched, items=items))}["TK"]
+    assert tk.constant_set["datum"]["basis"]["msl"]["flags"] == ["provisional"]
+
+
+def test_a_footnote_that_no_longer_says_provisional_is_refused():
+    data = (FIXTURES / "station2026.html").read_text(encoding="utf-8")
+    assert "暫定値" in data
+    with pytest.raises(JmaParseError, match="provisional"):
+        parse_station_table(data.replace("暫定値", "値").encode("utf-8"))
 
 
 def test_local_meridian_rule():

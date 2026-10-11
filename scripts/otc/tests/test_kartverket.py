@@ -2,7 +2,9 @@
 
 The fixtures in fixtures/kartverket/ are a real fetch cache (bodies plus the fetcher's
 .meta.json) from `kv().fetch(...)` on 2026-10-08: the permanent-station list and
-the constituents of Bergen (BGO), Trondheim (TRD) and Stavanger (SVG). The tests run offline: the
+the constituents of Bergen (BGO), Trondheim (TRD) and Stavanger (SVG). stationlevels/*.xml are
+SYNTHETIC bodies in the shape of Kartverket's stationlevels response (invented values, no fetched
+data in git), with their cache .meta.json, for the DT5b datum tests. The tests run offline: the
 cache answers every request, and any network call fails the test. Expected values are read
 from the raw XML here, independently of the adapter.
 
@@ -27,6 +29,7 @@ from otc_pipeline.adapter import (
     check_contract,
 )
 from otc_pipeline.adapters.kartverket import KartverketAdapter, parse_constituents
+from otc_pipeline.ios_definitions import P1_EPOCH, p1_deg, to_tcd_phase
 from otc_pipeline.constituent_speeds import NO_ASTRO_ROW, SPEED_FLAG_DEG_PER_HOUR, SpeedDeviation, TableSpeeds
 from otc_pipeline.release_writer import validate_release
 from otc_pipeline.sources import SOURCES, registry_errors
@@ -107,9 +110,10 @@ def test_amplitudes_are_metres_and_phases_greenwich(cache):
             s = served[name]
             assert c["amplitude_m"] == pytest.approx(s["amplitude"] / 100.0, abs=1e-9)
             assert c["speed_deg_per_hour"] == SPEEDS.speed(name)   # the astro row's, within 1e-4 of the served
-            # UTC+1 -> Greenwich: g = g_local - speed x 1 h (sign fixed by the canary proof)
-            want = (s["phaseangle"] - s["speed"]) % 360.0
-            assert c["phase_deg"] == pytest.approx(want, abs=1e-3)
+            # UTC+1 -> Greenwich: g = g_local - speed x 1 h (sign fixed by the canary proof); SA and S1
+            # are served with IOS's arguments and converted to the TCD's (ios_definitions)
+            want = to_tcd_phase(name, (s["phaseangle"] - s["speed"]) % 360.0)
+            assert abs((c["phase_deg"] - want + 180) % 360 - 180) < 1e-3
             assert 0.0 <= c["phase_deg"] < 360.0
 
 
@@ -144,7 +148,8 @@ def test_manifest_is_written(cache):
     kv().fetch(cache, only=list(STATIONS))
     m = json.loads((cache / "MANIFEST.json").read_text())
     assert m["licence"] == "CC-BY-4.0" and m["archive"] == "cache/kartverket/"
-    assert {f["path"] for f in m["files"]} == {"stationlist.xml", *(f"constituents/{c}.xml" for c in STATIONS)}
+    assert {f["path"] for f in m["files"]} == {"stationlist.xml", *(f"constituents/{c}.xml" for c in STATIONS),
+                                               *(f"stationlevels/{c}.xml" for c in STATIONS)}
 
 
 def test_watch_key_changes_with_the_constants(cache):
@@ -267,3 +272,96 @@ def test_the_attribution_names_no_fixed_constituent():
     a = kv().licence()["attribution"]
     assert "GAM2" not in a
     assert "constituents with no astro-table row left out (see each set's dropped_constituents)" in a
+
+
+# -- published datums (datums spec §4.1 item 3, DT5b) on the synthetic stationlevels bodies ------
+
+def raw_levels(code: str) -> dict[str, ET.Element]:
+    root = ET.parse(FIXTURES / "stationlevels" / f"{code}.xml").getroot()
+    return {r.get("code"): r for r in root.iter("reflevel")}
+
+
+def test_datum_is_kartverkets_levels_above_cd(cache):
+    sets = sets_by_code(kv(), cache)
+    for code in STATIONS:
+        d, lv = sets[code].constant_set["datum"], raw_levels(code)
+        assert (d["zero"], d["zero_name"], d["chart_datum"]) == ("chart_datum", "CD", "cd")
+        # Z0 above CD is Kartverket's MSL: its own tables are reproduced with it (ADPORT sa-fix evidence)
+        assert d["msl_offset_m"] == pytest.approx(float(lv["MSL"].get("value")) / 100.0, abs=1e-9)
+        want = {k.lower(): float(lv[k].get("value")) / 100.0
+                for k in ("HAT", "MHWS", "MHW", "MHWN", "MSL", "MLWN", "MLW", "MLWS", "LAT", "CD", "NN2000")}
+        assert d["named"] == pytest.approx(want, abs=1e-9)
+        assert set(d["basis"]) == set(want)    # storm-surge (RETURN) and observed (OBS) levels not taken
+        for k, b in d["basis"].items():
+            assert (b["kind"], b["method"], b["source_name"]) == ("published", "source", k.upper())
+            assert ("epoch" in b) == (k == "msl"), k
+
+
+def test_msl_epoch_from_attribute_or_name(cache):
+    sets = sets_by_code(kv(), cache)
+    want = {"start": "1996-01-01", "end": "2014-12-31", "name": "Kartverket MSL 1996-2014"}
+    assert sets["BGO"].constant_set["datum"]["basis"]["msl"]["epoch"] == want   # epoch="1996-2014"
+    assert sets["TRD"].constant_set["datum"]["basis"]["msl"]["epoch"] == want   # only in the name
+
+
+def test_cd_below_lat_keeps_cd_as_chart_datum(cache):
+    d = sets_by_code(kv(), cache)["SVG"].constant_set["datum"]
+    assert d["named"]["lat"] == pytest.approx(0.2) and d["named"]["cd"] == 0.0 and d["chart_datum"] == "cd"
+
+
+@pytest.mark.parametrize("old, new, msg", [
+    ('reflevel="CD">', 'reflevel="LAT">', "reflevel"),
+    ('unit="cm"', 'unit="m"', "unit"),
+    ('<reflevel code="CD" value="0.0"', '<reflevel code="CDX" value="0.0"', "no CD"),
+    ('<reflevel code="CD" value="0.0"', '<reflevel code="CD" value="5.0"', "CD is"),
+    ('licenseurl="http://kartverket.no/data/lisens/"', 'licenseurl="https://example.org/"', "licence"),
+])
+def test_unexpected_levels_response_is_refused(old, new, msg):
+    from otc_pipeline.adapters.kartverket import parse_levels
+    data = (FIXTURES / "stationlevels" / "BGO.xml").read_text()
+    assert old in data
+    with pytest.raises(ValueError, match=msg):
+        parse_levels(data.replace(old, new).encode(), "BGO")
+
+
+def test_datums_pass_build_checks_8_9_13(cache):
+    from otc_pipeline.datums import datum_build_errors
+    for s in sets_by_code(kv(), cache).values():
+        assert datum_build_errors(s.constant_set["datum"]) == []
+
+
+# --- SA and S1: IOS's arguments converted to the TCD's -------------------------------------------------
+
+def test_sa_and_s1_are_converted_from_ios_to_the_tcd(cache):
+    cons = {c["name"]: c for c in sets_by_code(kv(), cache)["BGO"].constant_set["constituents"]}
+    sa, s1 = raw("BGO")["SA"], raw("BGO")["S1"]
+    p1 = p1_deg(P1_EPOCH)
+    assert cons["SA"]["phase_deg"] == pytest.approx((sa["phaseangle"] - sa["speed"] + p1) % 360, abs=1e-3)
+    assert cons["S1"]["phase_deg"] == pytest.approx((s1["phaseangle"] - s1["speed"] - p1 + 90) % 360, abs=1e-3)
+
+
+def _mutate(cache, code, old, new):
+    import hashlib
+    f = cache / "constituents" / f"{code}.xml"
+    t = f.read_text()
+    assert old in t
+    f.write_text(t.replace(old, new))
+    meta = cache / "constituents" / f"{code}.xml.meta.json"
+    m = json.loads(meta.read_text())
+    m["sha256"], m["size"] = hashlib.sha256(f.read_bytes()).hexdigest(), f.stat().st_size
+    meta.write_text(json.dumps(m))
+
+
+def test_sa_served_with_another_definition_is_refused(cache):
+    _mutate(cache, "BGO", 'speed="0.04106668" doodson="ZZAZZYZ"', 'speed="0.04106860" doodson="ZZAZZZZ"')
+    a = kv()
+    with pytest.raises(ValueError, match="SA"):
+        list(a.sets(a.fetch(cache, only=["BGO"])))
+
+
+def test_a_hidden_p1_term_is_refused(cache):
+    # M2 served 2e-6 deg/h off its row (a p1 term): inside the 1e-4 flag, outside Kartverket's precision
+    _mutate(cache, "BGO", 'speed="28.98410425"', 'speed="28.98410621"')
+    a = kv()
+    with pytest.raises(ValueError, match="M2"):
+        list(a.sets(a.fetch(cache, only=["BGO"])))

@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-10T12:00:00Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlevels&stationcode=SVG&lang=en"
+ },
+ "sha256": "2b84cc12bc156f1b52ef6f933c2b801745002af8caeb431902ca48977e5e0b40",
+ "size": 1320,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlevels&stationcode=SVG&lang=en"
+}

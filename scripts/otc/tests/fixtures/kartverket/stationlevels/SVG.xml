@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<tide>
+<!-- SYNTHETIC test body in the shape of Kartverket stationlevels; values invented -->
+<meta licenseurl="http://kartverket.no/data/lisens/"/>
+<locationlevel unit="cm" reflevel="CD">
+<location name="SVG" code="SVG" latitude="60.0" longitude="5.0"/>
+<reflevel code="100YMAX" value="250.0" name="100-years high water (storm surge)" type="RETURN"/>
+<reflevel code="HAT" value="120.0" name="Highest Astronomical Tide" type="REF"/>
+<reflevel code="MHWS" value="95.0" name="Mean High Water Springs" type="REF"/>
+<reflevel code="MHW" value="90.0" name="Mean High Water" type="REF"/>
+<reflevel code="MHWN" value="85.0" name="Mean High Water Neaps" type="REF"/>
+<reflevel code="NN2000" value="70.0" name="NN 2000" type="REF"/>
+<reflevel code="MSL" value="68.0" epoch="1996-2014" name="Mean Sea Level (1996-2014)" type="REF"/>
+<reflevel code="MLWN" value="50.0" name="Mean Low Water Neaps" type="REF"/>
+<reflevel code="MLW" value="45.0" name="Mean Low Water" type="REF"/>
+<reflevel code="MLWS" value="40.0" name="Mean Low Water Springs" type="REF"/>
+<reflevel code="LAT" value="20.0" name="Lowest Astronomical Tide" type="REF"/>
+<reflevel code="CD" value="0.0" name="Chart Datum" type="REF"/>
+<reflevel code="LOWL" value="-40.0" name="Lowest Observed Water Level" type="OBS"/>
+</locationlevel>
+</tide>

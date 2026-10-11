@@ -1,0 +1,107 @@
+[
+ {
+  "_note": "SYNTHETIC test body in the shape of PEGELONLINE's characteristic-values response; values invented",
+  "uuid": "aad49293-242a-43ad-a8b1-e91d7792c4b2",
+  "number": "5990020",
+  "shortname": "CUXHAVEN STEUBENHÖFT",
+  "timeseries": [
+   {
+    "shortname": "W",
+    "unit": "cm",
+    "equidistance": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "value": -5.0,
+     "validFrom": "2019-11-01"
+    },
+    "characteristicValues": [
+     {
+      "shortname": "MThw",
+      "longname": "MThw",
+      "unit": "cm",
+      "value": 650.0,
+      "timespanStart": "2010-11-01",
+      "timespanEnd": "2020-10-31"
+     },
+     {
+      "shortname": "MTnw",
+      "longname": "MTnw",
+      "unit": "cm",
+      "value": 360.0,
+      "timespanStart": "2010-11-01",
+      "timespanEnd": "2020-10-31"
+     },
+     {
+      "shortname": "HThw",
+      "longname": "HThw",
+      "unit": "cm",
+      "value": 900.0,
+      "timespanStart": "2010-11-01",
+      "timespanEnd": "2020-10-31"
+     },
+     {
+      "shortname": "NTnw",
+      "longname": "NTnw",
+      "unit": "cm",
+      "value": 200.0,
+      "timespanStart": "2010-11-01",
+      "timespanEnd": "2020-10-31"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "uuid": "c0ec139b-13b4-4f86-bee3-06665ad81a40",
+  "number": "9510095",
+  "shortname": "HELGOLAND BINNENHAFEN",
+  "timeseries": [
+   {
+    "shortname": "W",
+    "unit": "cm",
+    "equidistance": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NN",
+     "value": -5.0,
+     "validFrom": "1998-01-01"
+    },
+    "characteristicValues": [
+     {
+      "shortname": "MThw",
+      "longname": "MThw",
+      "unit": "cm",
+      "value": 600.0,
+      "timespanStart": "2005-11-01",
+      "timespanEnd": "2015-10-31"
+     },
+     {
+      "shortname": "MTnw",
+      "longname": "MTnw",
+      "unit": "cm",
+      "value": 360.0,
+      "timespanStart": "2005-11-01",
+      "timespanEnd": "2015-10-31"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "uuid": "d3f822a0-e201-4a61-8913-589c74818ae0",
+  "number": "4970030",
+  "shortname": "BHV ALTER LEUCHTTURM",
+  "timeseries": [
+   {
+    "shortname": "W",
+    "unit": "cm",
+    "equidistance": 1,
+    "gaugeZero": {
+     "unit": "m. ü. NHN",
+     "value": -5.5,
+     "validFrom": "2019-11-01"
+    },
+    "characteristicValues": []
+   }
+  ]
+ }
+]

@@ -31,6 +31,18 @@ with a 分潮一覧表 (harms60) link: the page says the list is given only for 
 third-party station whose MSL elevation is listed is a JCG or GSI station (the page lists MSL
 elevations only for JMA, JCG and GSI stations).
 
+Datums (datums spec §4.1 item 5, slot DT5d). The constants' zero is the station's tide-table
+datum (潮位表基準面), which JMA describes as the average low water of spring tides, "海図の水深0mに
+ほぼ相当" (approximately the zero of the chart's depths): `zero` `chart_datum`, `zero_name` and
+`source_name` 潮位表基準面, `chart_datum` `tide_table_datum` (= 0). `msl` is JMA's MSL above that
+datum (the table's MSL-潮位表基準面, also msl_offset_m), flagged `provisional` where the table marks
+it ＊１ (provisional values after the 2011 earthquake's ground movement). No epoch is written: the
+page says MSL is "原則として" (as a rule) the 2020-2024 mean, not per station. JMA's elevation
+(標高) of the datum is not written as `tp`: JMA uses Tokyo Bay mean sea level (TP) as the
+reference "but at some stations, such as remote islands, GSI's local height reference or the
+station's own MSL" without saying which, and the ＊２ stations (横浜, 神津島, 能登) are computed from
+MSL; a `tp` key would mislabel those.
+
 Predictions. `fetch_predictions` fetches JMA's hourly tide predictions (text, cm above the
 tide-table datum, JST) for audits; `parse_predictions` reads them.
 
@@ -50,6 +62,7 @@ from typing import Mapping
 
 from otc_pipeline.adapter import FetchResult, SourceSet
 from otc_pipeline.canary import to_greenwich
+from otc_pipeline.datums import published
 from otc_pipeline.http import PoliteFetcher
 
 BASE = "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/"
@@ -69,6 +82,8 @@ TABLE_ABBRS = ("番号", "地点記号", "掲載地点名", "緯度", "経度", 
 TABLE_UNIT_NOTES = ("MSL-<br />潮位表<br />基準面<br />（cm）", "振幅<br />（cm）", "遅角<br />（°）")
 HARMS_HEADER = ("記号（日本語名称）", "速度（度/時）", "振幅（cm）", "遅角（°）")
 MAIN4 = ("M2", "S2", "K1", "O1")
+PROVISIONAL_MSL_MARK = "＊１"      # 備考: the MSL is a provisional value (the table's footnote)
+TIDE_TABLE_DATUM = "潮位表基準面"
 
 # JMA symbol (subscripts flattened, Greek letters spelled) -> TCD name. JMA's M1 is
 # 155.555 (14.4920521 deg/h) = TCD M1C, not TCD M1 (14.4966939). JMA's OQ2 (27.3416964) is not
@@ -167,6 +182,10 @@ def parse_station_table(data: bytes) -> dict[str, dict]:
             raise JmaParseError(f"{code}: no MSL above the tide-table datum")
     if not out:
         raise JmaParseError("station table has no station rows")
+    # ＊１ is read as "provisional MSL" (DT5d's `provisional` flag): refuse a page whose footnote no
+    # longer says so
+    if any("＊１" in v["note"] for v in out.values()) and not re.search(r"＊１[^＊]*MSL[^＊]*暫定値", _text(t)):
+        raise JmaParseError("station table marks ＊１ but its footnote no longer says the MSL is provisional (暫定値)")
     return out
 
 
@@ -266,7 +285,7 @@ class JmaAdapter:
     source = "jma"
     source_type = "official"
     quantity = "water_level"
-    adapter_version = "1"
+    adapter_version = "2"   # 2: tide-table datum and MSL with basis (DT5d)
     contract_sample = ("TK", "OS", "QS")   # Tokyo, Osaka (JMA); Yokohama (third party)
 
     def __init__(self, phase_reference: str = "local_meridian", *, year: int | None = None,
@@ -405,10 +424,13 @@ class JmaAdapter:
                 if r["source_name"] != name:
                     c["source_name"] = r["source_name"]
                 cons.append(c)
-            # Format 1.0 publishes named levels only with their basis (how each was obtained);
-            # the tide-table datum, MSL and TP levels JMA gives (msl_above_datum_cm,
-            # datum_elevation_cm) are DT5d's to write with it. Z0 above the zero is msl_offset_m.
-            datum = {"msl_offset_m": round(st["msl_above_datum_cm"] / 100.0, 4)}
+            # The tide-table datum and JMA's MSL above it (module docstring: no `tp`, no MSL epoch).
+            msl = round(st["msl_above_datum_cm"] / 100.0, 4)
+            datum = {"msl_offset_m": msl, "zero": "chart_datum", "zero_name": TIDE_TABLE_DATUM,
+                     "chart_datum": "tide_table_datum",
+                     "named": {"tide_table_datum": 0.0, "msl": msl},
+                     "basis": {"tide_table_datum": published(TIDE_TABLE_DATUM),
+                               "msl": published("MSL", provisional=PROVISIONAL_MSL_MARK in st["note"])}}
             prov = {"adapter_version": self.adapter_version, "input_sha256": list(it["input_sha256"]),
                     "owner": owner,
                     "redistribution": "redistribute" if owner == "jma" else "comparator_only",

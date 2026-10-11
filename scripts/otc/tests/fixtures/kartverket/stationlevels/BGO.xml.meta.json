@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-10T12:00:00Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlevels&stationcode=BGO&lang=en"
+ },
+ "sha256": "5cd4f6801c215759730b72e65d0b2f45fdcf76018399e246515d1ffd8a316a00",
+ "size": 1323,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlevels&stationcode=BGO&lang=en"
+}

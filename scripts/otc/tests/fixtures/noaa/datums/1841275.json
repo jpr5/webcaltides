@@ -1,0 +1,29 @@
+{
+ "_note": "synthetic test body in the shape of NOAA datums.json?units=metric; the values are invented, not NOAA data",
+ "accepted": "",
+ "superseded": "",
+ "epoch": null,
+ "units": "meters",
+ "OrthometricDatum": "NAVD88",
+ "datums": [],
+ "LAT": null,
+ "LATdate": "",
+ "LATtime": "",
+ "HAT": null,
+ "HATdate": "",
+ "HATtime": "",
+ "min": null,
+ "mindate": "",
+ "mintime": "",
+ "max": null,
+ "maxdate": "",
+ "maxtime": "",
+ "disclaimers": {
+  "disclaimers": [],
+  "self": null
+ },
+ "DatumAnalysisPeriod": [],
+ "NGSLink": "",
+ "ctrlStation": "",
+ "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/X/datums.json"
+}

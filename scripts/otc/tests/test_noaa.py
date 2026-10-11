@@ -4,7 +4,9 @@ Fixtures (tests/fixtures/noaa/, fetched 2026-10-08): the full tide-prediction st
 (gzipped), harcon.json for Boston 8443970, Seattle 9447130 and San Francisco 9414290, and
 tidepredoffsets.json (native units) for Hull 8444351 (ratio offsets from Boston), Mill Bay
 8218617 (additive offsets in feet from Ketchikan 9450460, whose harcon is saved too) and Malakal
-Harbor 1841275 (listed as subordinate to itself). The live run is `test_registered_adapter_live` (OTC_LIVE=1).
+Harbor 1841275 (listed as subordinate to itself). datums/*.json are SYNTHETIC bodies in the shape of
+NOAA's datums.json (invented values, not NOAA data; no fetched data in git): they test the DT5a
+transform. The live run is `test_registered_adapter_live` (OTC_LIVE=1).
 """
 from __future__ import annotations
 
@@ -93,7 +95,7 @@ def test_greenwich_phases_are_published_unmodified(fetched):
     harcon = json.loads((FIX / "harcon/8443970.json").read_text())["HarmonicConstituents"]
     assert len(boston.constant_set["constituents"]) == len(harcon) == 37
     assert boston.constant_set["provenance"]["input_sha256"] == [
-        f.sha256 for f in fetched.files if f.path in (noaa.LIST_NAME, "harcon/8443970.json")]
+        f.sha256 for f in fetched.files if f.path in (noaa.LIST_NAME, "harcon/8443970.json", "datums/8443970.json")]
 
 
 def test_phase_local_flag_publishes_local_phases(tmp_path):
@@ -120,7 +122,7 @@ def test_subordinate_offsets(fetched):
     hull = by_id(adapter().sets(fetched))["8444351"]
     assert hull.constant_set is None
     assert hull.station_hint["type"] == "subordinate"
-    assert hull.subordinate_offsets == {
+    assert {k: v for k, v in hull.subordinate_offsets.items() if k != "datum"} == {
         "reference_source_record_id": "8443970", "time_offset_high_min": 5, "time_offset_low_min": 7,
         "height_offset_high": 0.97, "height_offset_low": 0.97, "height_adjusted_type": "R",
         "licence_id": "noaa-public-domain"}
@@ -162,6 +164,7 @@ def test_additive_offsets_in_feet_become_metres(tmp_path):
     a = adapter()
     f = a.fetch(tmp_path, only=["8218617"])
     assert sorted(f.items) == ["8218617", "9450460"]
+    # Mill Bay's datums body is empty: no datum
     assert by_id(a.sets(f))["8218617"].subordinate_offsets == {
         "reference_source_record_id": "9450460", "time_offset_high_min": 51, "time_offset_low_min": 77,
         "height_offset_high": 0.03048, "height_offset_low": -0.03048, "height_adjusted_type": "A",
@@ -181,7 +184,9 @@ def test_requests(tmp_path):
     assert seen["f"].urls == [
         f"{noaa.API}/stations.json?type=tidepredictions",
         f"{noaa.API}/stations/8443970/harcon.json?units=metric",
+        f"{noaa.API}/stations/8443970/datums.json?units=metric",
         f"{noaa.API}/stations/8444351/tidepredoffsets.json",
+        f"{noaa.API}/stations/8444351/datums.json?units=metric",
     ]
 
 
@@ -261,3 +266,83 @@ def test_the_whole_release_validates_with_astro_tables(fetched):
     assert validate_release(release) == []
     assert release["conventions"][0]["astro_table_id"] == "test-shape-only"
     assert {cs["qc_status"] for st in release["stations"] for cs in st["constant_sets"]} == {"ok"}
+
+
+# -- published datums (datums spec §4.1 item 2, DT5a) on the synthetic datums bodies ---------------
+
+NTDE = {"start": "1983-01-01", "end": "2001-12-31", "name": "NTDE 1983-2001"}
+
+
+def test_reference_datum_is_noaas_levels_above_mllw(fetched):
+    d = by_id(adapter().sets(fetched))["8443970"].constant_set["datum"]
+    body = json.loads((FIX / "datums/8443970.json").read_text())
+    stnd = {x["name"]: x["value"] for x in body["datums"]}
+    mllw = stnd["MLLW"]
+    assert (d["zero"], d["zero_name"], d["chart_datum"]) == ("chart_datum", "MLLW", "mllw")
+    assert d["msl_offset_m"] == pytest.approx(stnd["MSL"] - mllw, abs=1e-9)
+    expect = {k.lower(): stnd[k] - mllw for k in ("STND", "MHHW", "MHW", "DTL", "MTL", "MSL", "MLW", "MLLW", "NAVD88")}
+    expect |= {"lat": body["LAT"] - mllw, "hat": body["HAT"] - mllw}
+    assert d["named"].keys() == expect.keys()          # GT, MN, DHQ, DLQ, HWI, LWI not taken
+    for k, v in expect.items():
+        assert d["named"][k] == pytest.approx(v, abs=5e-7), k
+    for k in ("mhhw", "mhw", "dtl", "mtl", "msl", "mlw", "mllw"):
+        assert d["basis"][k] == {"kind": "published", "method": "source", "source_name": k.upper(), "epoch": NTDE}
+    for k in ("lat", "hat", "stnd", "navd88"):     # no epoch (LAT/HAT: NOAA's 40-year window), no control
+        assert d["basis"][k] == {"kind": "published", "method": "source", "source_name": k.upper()}
+
+
+def test_subordinate_datum_names_its_control_and_has_no_z0(fetched):
+    d = by_id(adapter().sets(fetched))["8444351"].subordinate_offsets["datum"]
+    assert "msl_offset_m" not in d
+    assert d["chart_datum"] == "mllw" and d["named"]["mllw"] == 0.0
+    assert d["named"]["mhhw"] == pytest.approx(4.0 - 0.7)
+    assert d["basis"]["mhhw"]["control"] == {"source_id": "8443970"}    # "8443970 Boston, MA" -> the id
+    assert d["basis"]["mhhw"]["epoch"] == NTDE                        # epoch, not the 2002 analysis period
+
+
+def test_no_mllw_means_no_datum(fetched):
+    # San Francisco's synthetic body has MHHW and MHW but no MLLW
+    assert "datum" not in by_id(adapter().sets(fetched))["9414290"].constant_set
+
+
+@pytest.mark.parametrize("epoch, periods, want", [
+    ("1983-2001", ["01/01/1983 - 12/31/2001"], NTDE),
+    ("2012-2016", ["01/01/1983 - 12/31/2001", "01/01/2012 - 12/31/2016"],
+     {"start": "2012-01-01", "end": "2016-12-31", "name": "NOAA epoch 2012-2016"}),
+    ("0000-0000", ["10/01/2011 - 09/30/2019"],
+     {"start": "2011-10-01", "end": "2019-09-30", "name": "NOAA datum analysis period"}),
+    ("Special", ["01/01/1924 - 01/01/1925"],
+     {"start": "1924-01-01", "end": "1925-01-01", "name": "NOAA datum analysis period"}),
+    ("0000-0000", ["05/01/1993 - 04/30/1999", "12/01/2002 - 11/30/2009"], None),
+    (None, [], None),
+])
+def test_epoch_rule(epoch, periods, want):
+    assert noaa._datum_epoch({"epoch": epoch, "DatumAnalysisPeriod": periods}) == want
+
+
+def test_datum_needs_metres_and_mllw():
+    body = {"units": "feet", "datums": [{"name": "MLLW", "value": 1.0}]}
+    assert noaa.noaa_datum(body, with_msl_offset=True) == (None, [])
+    body = {"units": "meters", "datums": [{"name": "MLLW", "value": 1.0}, {"name": "XYZ", "value": 2.0},
+                                          {"name": "GT", "value": 3.0}], "LAT": None}
+    datum, not_taken = noaa.noaa_datum(body, with_msl_offset=True)
+    assert datum["named"] == {"mllw": 0.0} and "msl_offset_m" not in datum
+    assert not_taken == ["XYZ"]                       # an unknown name is recorded; GT is a range
+
+
+def test_watch_key_follows_the_datums(fetched):
+    a = adapter()
+    keys = a.watch_keys(fetched)
+    items = dict(fetched.items)
+    body = json.loads(json.dumps(items["8443970"]["datums"]))
+    body["LAT"] += 0.001
+    items["8443970"] = {**items["8443970"], "datums": body}
+    assert a.watch_keys(replace(fetched, items=items))["8443970"] != keys["8443970"]
+
+
+def test_datums_pass_build_checks_8_9_13(fetched):
+    from otc_pipeline.datums import datum_build_errors
+    for s in adapter().sets(fetched):
+        for d in ((s.constant_set or {}).get("datum"), (s.subordinate_offsets or {}).get("datum")):
+            if d:
+                assert datum_build_errors(d) == []

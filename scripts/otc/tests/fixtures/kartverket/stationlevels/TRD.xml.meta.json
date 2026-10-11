@@ -1,0 +1,13 @@
+{
+ "fetched_at": "2026-10-10T12:00:00Z",
+ "request": {
+  "body_sha256": null,
+  "headers": [],
+  "method": "GET",
+  "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlevels&stationcode=TRD&lang=en"
+ },
+ "sha256": "593e7e532a8b6bb317e9bd39dd7006a262b49e68eebffd70704f2003faf1464b",
+ "size": 1307,
+ "status": 200,
+ "url": "https://vannstand.kartverket.no/tideapi.php?tide_request=stationlevels&stationcode=TRD&lang=en"
+}
