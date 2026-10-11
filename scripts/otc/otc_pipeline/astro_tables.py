@@ -11,6 +11,13 @@ for every year (§3.4 rule 2): V0+u modulo 360, min(d, 360 - d) < 0.005 degree w
 360, and |f_a - f_b| < 0.00005. A mismatch stops the build (AstroTableMismatch). So the release, the
 reference engine (which reads the TCD) and the GESLA fit (which reads the TCD dump) use the same numbers.
 
+The TCD is the OTC TCD (FIX-CONST option A, owner decision 2026-10-11): tcd-20251228
+(data/harmonics-dwf-20251228-free.tcd) with MA2 and MB2 added, defined in congen's Basic form in
+scripts/otc/tools/otc_constituents.txt (M2's arguments with h = 1 and h = 3, M2's node factor). The
+run makes it (tools/tcd/tcd_merge.c), so it is checked here like the run's other files: its own
+id (TABLE_ID) and SHA-256 (TCD_SHA256), the source TCD's SHA-256, the added names and the
+definitions file's SHA-256.
+
 The tables are published under the release's licence, CC BY 4.0, with the credit in GENERATOR
 (§3.4 rule 3): Schureman, US C&GS Special Publication 98, and congen (David Flater, XTide).
 """
@@ -25,12 +32,17 @@ from typing import Iterable, Mapping
 
 from gesla.tcd_table import TcdTable
 
-__all__ = ["AstroTableMismatch", "CHECK7_SPEED_TOL", "CongenRun", "F_TOL", "FIRST_YEAR", "GENERATOR", "LAST_YEAR", "TABLE_ID",
-           "V0U_TOL", "astro_table", "astro_table_errors", "load_congen_run", "release_table_errors",
+__all__ = ["AstroTableMismatch", "CHECK7_SPEED_TOL", "CongenRun", "F_TOL", "FIRST_YEAR", "GENERATOR", "LAST_YEAR",
+           "OTC_ADDED", "SOURCE_TCD_SHA256", "TABLE_ID", "TCD_SHA256", "V0U_TOL", "astro_table", "astro_table_errors", "load_congen_run", "release_table_errors",
            "tcd_equality_errors"]
 
-TABLE_ID = "tcd-20251228"   # data/harmonics-dwf-20251228-free.tcd (data/latest-xtide.tcd)
-TCD_SHA256 = "33f97cb73ac25a0fec273950c0b85ff55ddbe7edf4448e80ea8d5b3d59b0aeb1"
+# The OTC TCD: tcd-20251228 + MA2 and MB2 (congen_tables.sh OTC_TCD_ID / OTC_TCD_SHA256; a test checks they agree).
+TABLE_ID = "otc-tcd-20251228-ma2mb2"
+TCD_SHA256 = "ab8fa42c6dfce040924b3b035c1a87bef1cc4f10ed17449ae3ea16d0c76516a9"
+# data/harmonics-dwf-20251228-free.tcd (data/latest-xtide.tcd), the XTide file the OTC TCD is made from
+SOURCE_TCD_SHA256 = "33f97cb73ac25a0fec273950c0b85ff55ddbe7edf4448e80ea8d5b3d59b0aeb1"
+OTC_ADDED = ("MA2", "MB2")
+OTC_DEFINITIONS = Path(__file__).resolve().parents[1] / "tools" / "otc_constituents.txt"
 # The tool tarballs scripts/otc/tools/congen_tables.sh pins (the same values; a test checks they agree).
 CONGEN_SHA256 = "1dbae015e338e5780a505ebf233058f5e91628319a11bfbc465cb556cfb4b0d7"   # congen-1.7-r2.tar.xz
 LIBTCD_SHA256 = "e1dde9aafb771eab57c676a99b4b79d61c6800990a0e72782bc20057a8a2d877"   # libtcd-2.2.7-r3.tar.xz
@@ -45,8 +57,8 @@ F_TOL = 0.00005      # half the TCD's 0.0001 step (§3.4 rule 2: |a - b| < 0.000
 # 1.0000001e-7 depending on the constituent) is within, and 1.4e-7 is not.
 CHECK7_SPEED_TOL = 1e-7
 CHECK7_SPEED_EPS = 1e-12
-GENERATOR = ("congen 1.7-r2 (XTide, David Flater) after Schureman, Manual of Harmonic Analysis and Prediction "
-             "of Tides, US C&GS Special Publication 98")
+GENERATOR = ("congen 1.7-r2 (XTide, David Flater), with OTC's MA2 and MB2 definitions, after Schureman, Manual of "
+             "Harmonic Analysis and Prediction of Tides, US C&GS Special Publication 98")
 V0_MODEL = "schureman_tcd"
 # Release constituent names that the TCD (and congen) spell differently. A table row is keyed by the
 # name the release uses (the schema has no aliases in astro_tables), with the values of the TCD's row.
@@ -104,15 +116,25 @@ def load_congen_run(run_dir: Path, *, tcd_sha256: str = TCD_SHA256) -> CongenRun
     and libtcd tarballs (CONGEN_SHA256, LIBTCD_SHA256) and the congen command for FIRST_YEAR-LAST_YEAR.
     Every file (both dumps and the congen .tcd itself) is hashed on disk and checked against it; the
     congen dump must be of that .tcd, the TCD dump of the TCD `tcd_sha256`, and the run and both dumps
-    must cover FIRST_YEAR-LAST_YEAR. Any other content raises AstroTableMismatch."""
+    must cover FIRST_YEAR-LAST_YEAR. PROVENANCE's otc_tcd must name the OTC TCD's making: SOURCE_TCD_SHA256,
+    OTC_ADDED and the SHA-256 of the committed OTC_DEFINITIONS; when the run holds the OTC TCD file (files.otc_tcd,
+    as congen_tables.sh writes it), it is hashed on disk and must be the TCD the TCD dump is of. Any other
+    content raises AstroTableMismatch."""
     run_dir = Path(run_dir)
     try:
         prov = json.loads((run_dir / "PROVENANCE.json").read_text())
         files = {key: _entry(prov, key, run_dir) for key in (*CONGEN_RUN_FILES, "congen_tcd")}
         years, tool, command = prov["years"], prov["tool"], prov["command"]
         tools = {k: tool[k]["sha256"] for k in ("congen", "libtcd")}
+        otc = prov["otc_tcd"]
+        otc_made = (otc["source_tcd"]["sha256"], tuple(otc["added"]), otc["definitions_sha256"])
+        otc_file = _entry(prov, "otc_tcd", run_dir) if "otc_tcd" in prov["files"] else None
     except (KeyError, TypeError, json.JSONDecodeError) as e:
         raise AstroTableMismatch(f"{run_dir}/PROVENANCE.json: missing or malformed ({type(e).__name__}: {e})") from None
+    want_made = (SOURCE_TCD_SHA256, OTC_ADDED, _sha256(OTC_DEFINITIONS))
+    if otc_made != want_made:
+        raise AstroTableMismatch(f"{run_dir}: the run's OTC TCD is made from {otc_made} (source TCD, added, "
+                                 f"definitions SHA-256), expected {want_made}")
     if tools != {"congen": CONGEN_SHA256, "libtcd": LIBTCD_SHA256}:
         raise AstroTableMismatch(f"{run_dir}: the run's tools are {tools}, not the pinned congen 1.7-r2 "
                                  f"{CONGEN_SHA256} and libtcd 2.2.7-r3 {LIBTCD_SHA256}")
@@ -131,6 +153,11 @@ def load_congen_run(run_dir: Path, *, tcd_sha256: str = TCD_SHA256) -> CongenRun
     if files["congen_tcd"]["sha256"] == tcd_sha256:
         raise AstroTableMismatch(f"{run_dir / CONGEN_TCD} is the TCD itself, not a congen run's output")
     congen, tcd = (TcdTable.load(run_dir / CONGEN_RUN_FILES[k]) for k in CONGEN_RUN_FILES)
+    if otc_file is not None:
+        got = _sha256(run_dir / str(otc_file.get("path")))
+        if got != otc_file.get("sha256") or got != tcd.tcd_sha256:
+            raise AstroTableMismatch(f"{run_dir}: the OTC TCD {otc_file.get('path')} hashes to {got}; PROVENANCE says "
+                                     f"{otc_file.get('sha256')}, the TCD dump is of {tcd.tcd_sha256}")
     if tcd.tcd_sha256 != tcd_sha256:
         raise AstroTableMismatch(f"the TCD dump is of TCD {tcd.tcd_sha256}, expected {tcd_sha256}")
     if congen.tcd_sha256 != files["congen_tcd"]["sha256"]:

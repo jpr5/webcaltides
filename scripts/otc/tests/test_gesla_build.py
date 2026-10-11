@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from otc_pipeline import astro_tables as at
 from otc_pipeline import gesla_build as gb
 from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
@@ -87,6 +88,7 @@ def _inputs(tmp_path):
 class _Run(SimpleNamespace):
     """Stands for astro_tables.CongenRun: unpacks as (congen, tcd)."""
     congen, tcd, run_dir = "congen", "tcd", None
+    provenance = {"files": {"otc_tcd": {"path": "otc.tcd", "sha256": at.TCD_SHA256}}}
 
     def __iter__(self):
         return iter((self.congen, self.tcd))
@@ -100,7 +102,7 @@ def fakes(tmp_path, monkeypatch):
                                        decided_build_commit="aud0001"),
               "final": SimpleNamespace(rows={"a": {"time_base_status": "disputed", "disputed_reason": "eot20_whole_hour"}},
                                        csv_sha256="2" * 64, decided_build_commit="fin0001")}
-    table = SimpleNamespace(tcd_sha256="t" * 64)
+    table = SimpleNamespace(tcd_sha256=at.TCD_SHA256)
     crun = _Run()
     cal = {"cal_version": 6, "_sha256": "c" * 64}
     doc = {"record_id": "a", "fit": {"constituents": {"M2": {}}}}
@@ -167,7 +169,22 @@ def test_build_hands_each_input_to_its_step(fakes):
     assert br["fit_run_results_sha256"] == _sha(p["fit_run"] / "results.jsonl")
     assert br["congen_run"] is fakes.crun is crun and br["build_commit"] == "abc1234"
     assert br["refused"] == [{"record": "b", "reason": "too_short"}] and br["docs"] == [fakes.doc]
-    assert seen["congen"] == (p["congen_run"], "t" * 64)
+    assert seen["congen"] == (p["congen_run"], at.TCD_SHA256)
+
+
+def test_a_fit_dump_of_another_tcd_is_refused(fakes, monkeypatch):
+    # the release is built on the OTC TCD: a fit made with the plain XTide TCD's dump never reaches the release
+    other = SimpleNamespace(table=SimpleNamespace(tcd_sha256=at.SOURCE_TCD_SHA256), sha256="d" * 64, path=Path("x"))
+    monkeypatch.setattr(gs, "load_tcd_dump", lambda p: other)
+    with pytest.raises(SystemExit, match="the release is built on the OTC TCD otc-tcd-20251228-ma2mb2"):
+        _build(fakes)
+    assert "docs_from_fit_run" not in fakes.seen
+
+
+def test_a_congen_run_without_the_otc_tcd_is_refused(fakes, monkeypatch):
+    monkeypatch.setattr(fakes.crun, "provenance", {"files": {}})
+    with pytest.raises(SystemExit, match="holds no OTC TCD file"):
+        _build(fakes)
 
 
 def test_build_records_the_identity_of_every_input(fakes):
@@ -189,6 +206,8 @@ def test_build_records_the_identity_of_every_input(fakes):
     assert prov["congen_run"] == {"path": str(p["congen_run"].resolve()),
                                   "provenance_sha256": _sha(p["congen_run"] / "PROVENANCE.json")}
     assert prov["tcd"] == {"path": str(p["tcd_path"].resolve()), "sha256": "d" * 64}
+    assert prov["otc_tcd"] == {"id": at.TABLE_ID, "path": str((p["congen_run"] / "otc.tcd").resolve()),
+                               "sha256": at.TCD_SHA256}
     assert prov["ticon_csv"] == {"path": str(p["ticon_csv"].resolve()), "sha256": _sha(p["ticon_csv"])}
     assert prov["ticon_refs"] == {"path": str(p["ticon_refs"].resolve()), "sha256": _sha(p["ticon_refs"])}
 

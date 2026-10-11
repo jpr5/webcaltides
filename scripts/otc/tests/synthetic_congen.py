@@ -1,5 +1,5 @@
 """A synthetic congen run for the synthetic build tests: a run directory as congen_tables.sh writes it
-(PROVENANCE.json with the pinned tools, a stand-in .tcd file, a congen dump and a TCD dump for
+(PROVENANCE.json with the pinned tools and the OTC TCD's making, a stand-in .tcd file, a congen dump and a TCD dump for
 1700-2100) with the speeds of a small fit table and made-up yearly values, loaded by
 astro_tables.load_congen_run like a real one. The two dumps hold the same values. No TCD values are
 in git. The directories live under one temp dir made here and removed at exit."""
@@ -51,7 +51,9 @@ def write_run(d: Path, table: TcdTable, *, edit=None) -> Path:
     prov = {"tool": {"congen": {"url": "https://flaterco.com/files/xtide/congen-1.7-r2.tar.xz", "sha256": at.CONGEN_SHA256},
                      "libtcd": {"url": "https://flaterco.com/files/xtide/libtcd-2.2.7-r3.tar.xz", "sha256": at.LIBTCD_SHA256}},
             "command": f"congen -b {at.FIRST_YEAR} -e {at.LAST_YEAR} -tcd {at.CONGEN_TCD} < congen-1.7/congen_input.txt",
-            "years": [at.FIRST_YEAR, at.LAST_YEAR], "files": {"congen_tcd": {"path": at.CONGEN_TCD, "sha256": run_sha}}}
+            "years": [at.FIRST_YEAR, at.LAST_YEAR], "files": {"congen_tcd": {"path": at.CONGEN_TCD, "sha256": run_sha}},
+            "otc_tcd": {"source_tcd": {"sha256": at.SOURCE_TCD_SHA256}, "added": list(at.OTC_ADDED),
+                        "definitions_sha256": hashlib.sha256(at.OTC_DEFINITIONS.read_bytes()).hexdigest()}}
     if edit:
         edit(prov, congen, tcd)
     for key, data in (("congen_dump", congen), ("tcd_dump", tcd)):

@@ -17,7 +17,7 @@ Skips unless these are set (local caches; no GESLA data is in git):
   OTC_TIMEBASE_CSV  the rows of an audit made before the crash check (G04-int full-3), which the gate
                     refuses: the test puts them in a stub audit dir (audit_stub)
 and the verified GESLA cache and the TCD dump are in $OTC_WORK, and a congen_tables.sh run is in
-$OTC_CONGEN_RUN (default $OTC_WORK/astro/congen-1.7-r2).
+$OTC_CONGEN_RUN (default $OTC_WORK/astro/otc-tcd-20251228-ma2mb2).
 
 Station ids are test inputs: their slot (the station map) is not done for this test.
 The licences are the real per-contributor ones (L-NC, otc_pipeline.gesla_licences). The astro table is KP0b's,
@@ -82,7 +82,7 @@ def inputs(tmp_path_factory):
         pytest.skip(f"no verified GESLA cache: {e}")
     dump = load_tcd_dump(otc_work() / "tcd_table.json")
     roles = load_contributor_roles(REPO / "data/gesla/contributor_roles.csv")
-    congen_run = Path(os.environ.get("OTC_CONGEN_RUN", otc_work() / "astro" / "congen-1.7-r2"))
+    congen_run = Path(os.environ.get("OTC_CONGEN_RUN", otc_work() / "astro" / "otc-tcd-20251228-ma2mb2"))
     if not (congen_run / "PROVENANCE.json").is_file():
         pytest.skip(f"needs a congen_tables.sh run in {congen_run}")
     return run, audit_dir, verdicts_dir, rel, dump, roles, load_congen_run(congen_run)

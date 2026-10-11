@@ -2,7 +2,7 @@
 is exactly the run's, and build check 7.
 
 Synthetic dumps for the rules. The last tests read a real congen_tables.sh run
-($OTC_CONGEN_RUN, default $OTC_WORK/astro/congen-1.7-r2) and skip without it: no TCD values are in git.
+($OTC_CONGEN_RUN, default $OTC_WORK/astro/otc-tcd-20251228-ma2mb2) and skip without it: no TCD values are in git.
 """
 import copy
 import json
@@ -260,7 +260,46 @@ def test_a_congen_run_is_made_only_by_load_congen_run():
 def test_the_pinned_tools_are_the_scripts():
     script = (Path(__file__).resolve().parents[1] / "tools" / "congen_tables.sh").read_text()
     assert f"CONGEN_SHA256={at.CONGEN_SHA256}" in script and f"LIBTCD_SHA256={at.LIBTCD_SHA256}" in script
-    assert f"TCD_SHA256={at.TCD_SHA256}" in script
+    assert f"\nOTC_TCD_SHA256={at.TCD_SHA256}\n" in script and f"\nOTC_TCD_ID={at.TABLE_ID}\n" in script
+    assert f"\nSOURCE_TCD_SHA256={at.SOURCE_TCD_SHA256}\n" in script
+    assert f"\nOTC_ADDED=({' '.join(at.OTC_ADDED)})\n" in script
+
+
+def test_the_otc_definitions_are_m2_with_h_1_and_h_3():
+    """MA2 and MB2 in congen's Basic form: M2's arguments (T s h = 2 -2 2, u = 2 xi - 2 nu, node factor 78)
+    with only h changed."""
+    rows = {ln.split()[0]: ln.split()[1:] for ln in at.OTC_DEFINITIONS.read_text().splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")}
+    m2 = ["Basic", "2", "-2", "2", "0", "0", "0", "2", "-2", "0", "0", "0", "0", "78"]
+    assert sorted(rows) == sorted(at.OTC_ADDED)
+    assert rows["MA2"] == m2[:3] + ["1"] + m2[4:] and rows["MB2"] == m2[:3] + ["3"] + m2[4:]
+
+
+@pytest.mark.parametrize("edit,what", [
+    (lambda prov, c, t: prov["otc_tcd"]["source_tcd"].update(sha256="0" * 64), "the run's OTC TCD is made from"),
+    (lambda prov, c, t: prov["otc_tcd"].update(added=["MA2"]), "the run's OTC TCD is made from"),
+    (lambda prov, c, t: prov["otc_tcd"].update(definitions_sha256="0" * 64), "the run's OTC TCD is made from"),
+    (lambda prov, c, t: prov.pop("otc_tcd"), "missing or malformed"),
+])
+def test_a_run_whose_otc_tcd_is_not_the_decided_one_is_refused(tmp_path, edit, what):
+    _write_run(tmp_path, edit=edit)
+    with pytest.raises(AstroTableMismatch, match=what):
+        load_congen_run(tmp_path)
+
+
+def test_the_otc_tcd_file_in_a_run_is_hashed_and_must_be_the_dumped_tcd(tmp_path):
+    otc = b"stand-in OTC TCD"
+    sha = __import__("hashlib").sha256(otc).hexdigest()
+
+    def with_file(prov, congen, tcd):
+        prov["files"]["otc_tcd"] = {"path": "otc.tcd", "sha256": sha}
+        tcd["tcd_sha256"] = sha
+    (tmp_path / "otc.tcd").write_bytes(otc)
+    _write_run(tmp_path, edit=with_file)
+    assert load_congen_run(tmp_path, tcd_sha256=sha).tcd.tcd_sha256 == sha
+    (tmp_path / "otc.tcd").write_bytes(otc + b"\0")
+    with pytest.raises(AstroTableMismatch, match="the OTC TCD otc.tcd hashes to"):
+        load_congen_run(tmp_path, tcd_sha256=sha)
 
 
 def test_the_gate_scripts_map_noaa_names_as_the_astro_tables_do():
@@ -508,7 +547,7 @@ def test_build_release_stops_on_a_missing_row():
 # --- the real congen run ------------------------------------------------------------------------------
 
 def _run_dir() -> Path:
-    d = Path(os.environ.get("OTC_CONGEN_RUN", otc_work() / "astro" / "congen-1.7-r2"))
+    d = Path(os.environ.get("OTC_CONGEN_RUN", otc_work() / "astro" / "otc-tcd-20251228-ma2mb2"))
     if not (d / "PROVENANCE.json").is_file():
         pytest.skip(f"needs a congen_tables.sh run in {d}")
     return d
@@ -522,8 +561,9 @@ GESLA_45 = ["2MK3", "2MK5", "2MO5", "2MS6", "2N2", "2Q1", "2SM2", "EPS2", "J1", 
 def test_the_congen_run_equals_the_tcd_for_every_constituent_and_year():
     congen, tcd = load_congen_run(_run_dir())
     assert (congen.first_year, congen.last_year, tcd.first_year, tcd.last_year) == (1700, 2100, 1700, 2100)
-    assert set(congen.constituents) == set(tcd.constituents) and len(tcd.constituents) == 176
+    assert set(congen.constituents) == set(tcd.constituents) and len(tcd.constituents) == 178
     assert tcd_equality_errors(congen, tcd, tcd.constituents) == []
+    assert tcd.tcd_sha256 == at.TCD_SHA256
     t = astro_table(congen, tcd, GESLA_45)
     assert t["tables_sha256"] == at.TCD_SHA256 and (t["first_year"], t["last_year"]) == (1700, 2100)
     for name, row in t["constituents"].items():
@@ -542,6 +582,68 @@ def test_the_real_tables_with_one_value_moved_by_001_degree_stop_the_build(tmp_p
     data["constituents"]["M2"]["v0u"][2026 - 1700] += 0.01
     with pytest.raises(AstroTableMismatch, match="M2 2026: V0\\+u"):
         astro_table(TcdTable(data), tcd, GESLA_45)
+
+
+def test_ma2_and_mb2_are_m2_minus_and_plus_sa():
+    """Speeds M2 -/+ SA within one stored step (1e-7 deg/h); V0+u M2's -/+ SA's within one step (0.01 degree);
+    f M2's, every year 1700-2100."""
+    congen, tcd = load_congen_run(_run_dir())
+    m2, sa = tcd["M2"], tcd["SA"]
+    for name, sign in (("MA2", -1), ("MB2", 1)):
+        c = tcd[name]
+        assert abs(c.speed - (m2.speed + sign * sa.speed)) <= 1e-7 + 1e-12, name
+        d = [abs(v - (m + sign * s)) % 360.0 for v, m, s in zip(c.v0u, m2.v0u, sa.v0u, strict=True)]
+        assert max(min(x, 360.0 - x) for x in d) <= 0.01 + 1e-9, name
+        assert c.f == m2.f, name
+    t = astro_table(congen, tcd, ["MA2", "MB2", "M2"])
+    assert t["astro_table_id"] == at.TABLE_ID == "otc-tcd-20251228-ma2mb2"
+
+
+def test_the_otc_tcd_keeps_every_source_constituent_unchanged():
+    """The run's TCD dump against the source TCD's fit dump ($OTC_WORK/tcd_table.json, dump_tcd.rb of
+    data/harmonics-dwf-20251228-free.tcd, 1900-2100): every one of its 176 constituents is equal."""
+    src_path = otc_work() / "tcd_table.json"
+    if not src_path.is_file():
+        pytest.skip(f"needs {src_path}")
+    src = TcdTable.load(src_path)
+    if src.tcd_sha256 != at.SOURCE_TCD_SHA256:
+        pytest.skip(f"{src_path} is not a dump of the source TCD")
+    _, tcd = load_congen_run(_run_dir())
+    assert len(src.constituents) == 176 and set(tcd.constituents) == set(src.constituents) | set(at.OTC_ADDED)
+    off = src.first_year - tcd.first_year
+    for n, c in src.constituents.items():
+        o = tcd.constituents[n]
+        assert (o.speed, o.v0u[off:], o.f[off:]) == (c.speed, c.v0u, c.f), n
+
+
+def test_the_libtcd_dump_is_dump_tcd_rb_byte_for_byte(tmp_path):
+    """tools/tcd (tcd_dump.c + tcd_json.py, built by the run) on the source TCD writes the file dump_tcd.rb
+    wrote for it ($OTC_WORK/tcd_table.json, 1900-2100)."""
+    import subprocess
+    import sys
+    run = _run_dir()
+    exe = run / "build" / "tcd_dump"
+    ref = otc_work() / "tcd_table.json"
+    src = Path(__file__).resolve().parents[3] / "data" / "harmonics-dwf-20251228-free.tcd"
+    if not (exe.is_file() and ref.is_file() and src.is_file()):
+        pytest.skip("needs the run's tcd_dump, $OTC_WORK/tcd_table.json and the source TCD")
+    tsv, out = tmp_path / "d.tsv", tmp_path / "d.json"
+    tsv.write_text(subprocess.run([str(exe), str(src), "1900", "2100"], check=True, capture_output=True,
+                                  text=True).stdout)
+    subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "tools" / "tcd" / "tcd_json.py"),
+                    str(src), "1900", "2100", str(tsv), str(out)], check=True, capture_output=True)
+    assert out.read_bytes() == ref.read_bytes()
+
+
+def test_tcd_json_aliases_are_dump_tcd_rbs():
+    import importlib.util
+    root = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location("tcd_json", root / "otc" / "tools" / "tcd" / "tcd_json.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rb = (root / "gesla" / "dump_tcd.rb").read_text()
+    block = re.search(r"TICON_TO_TCD_NAMES = \{(.*?)\}", rb, re.S).group(1)
+    assert dict(re.findall(r"'([A-Z0-9]+)' => '([A-Z0-9]+)'", block)) == mod.ALIASES
 
 
 def test_noaa_names_get_their_own_rows_with_the_tcd_values():

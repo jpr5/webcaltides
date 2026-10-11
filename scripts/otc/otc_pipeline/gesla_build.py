@@ -17,7 +17,9 @@ Inputs (none of them is in git; each is checked where it is read):
 - TICON.csv: the pinned TICON-4 download; refs.json: ticon_refs' official references (its SHA-256 goes into every
   carried set's provenance).
 - CONGEN: a congen_tables.sh run (astro_tables.load_congen_run); the astro table is built from it for every
-  constituent the release can publish, and build_release checks it against the run.
+  constituent the release can publish, and build_release checks it against the run. The release is built on the
+  OTC TCD (astro_tables.TABLE_ID, TCD_SHA256: tcd-20251228 + MA2 and MB2): the fit's TCD dump must be of it (the
+  run's tcd-1900-2100.json) and the run must hold the OTC TCD file; anything else is refused.
 
 The station map, epoch hours, licences and withheld switches are the committed files under data/. build_commit is
 the repository HEAD; a tree with uncommitted changes to tracked files is refused, so the output is the committed
@@ -27,7 +29,8 @@ BUILD_REPORT.json carries `provenance` (the 1.0 release document has no place fo
 directory, build_commit, and each input's path (resolved) and content hash: the fit run's and the overlay's
 results.jsonl and timebase_manifest.json, each audit dir's timebase_manifest.json (which binds its outputs) and
 timebase.csv with its commit, the calibration's short_accuracy.json, the congen run's PROVENANCE.json, the TCD dump,
-the TICON-4 csv and refs.json.
+the OTC TCD file (its id and SHA-256, from the run's PROVENANCE, which load_congen_run checked on disk), the
+TICON-4 csv and refs.json.
 """
 from __future__ import annotations
 
@@ -48,7 +51,7 @@ from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
 from otc_pipeline import station_map as sm
 from otc_pipeline import ticon_sets as ts
-from otc_pipeline.astro_tables import TABLE_ID, astro_table, load_congen_run
+from otc_pipeline.astro_tables import TABLE_ID, TCD_SHA256, astro_table, load_congen_run
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline.release_writer import validate_release, write_release
 
@@ -97,6 +100,9 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     tcd_path = tcd_path or otc_work() / "tcd_table.json"
     dump = gs.load_tcd_dump(tcd_path)
     table = dump.table
+    if table.tcd_sha256 != TCD_SHA256:
+        raise SystemExit(f"{tcd_path}: a dump of TCD {table.tcd_sha256}; the release is built on the OTC TCD "
+                         f"{TABLE_ID} ({TCD_SHA256}): fit and build with its dump (the congen run's tcd-1900-2100.json)")
     results = (fit_run / "results.jsonl").read_bytes()      # one read: hashed (the station map pin), then parsed
     rows = [json.loads(x) for x in results.decode("utf-8").splitlines() if x.strip()]
     fitted = sorted(r["record"] for r in rows if r["outcome"] == "fitted")
@@ -111,6 +117,9 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     carry = ts.TiconCarry.from_audit(ts.load_ticon(ticon_csv), final, rel.metadata(), references_path=ticon_refs)
     names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table)
     crun = load_congen_run(congen_run, tcd_sha256=table.tcd_sha256)
+    otc_file = crun.provenance["files"].get("otc_tcd")
+    if not otc_file:
+        raise SystemExit(f"{congen_run}: the congen run holds no OTC TCD file (files.otc_tcd): run congen_tables.sh")
     congen, tcd = crun
     astro = [astro_table(congen, tcd, sorted(names), table_id=TABLE_ID)]
     results_sha256 = hashlib.sha256(results).hexdigest()
@@ -134,6 +143,7 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
         "calibration": {"path": _path(calibration_dir), "sha256": cal["_sha256"]},
         "congen_run": {"path": _path(crun.run_dir), "provenance_sha256": _sha256(crun.run_dir / "PROVENANCE.json")},
         "tcd": {"path": _path(dump.path), "sha256": dump.sha256},
+        "otc_tcd": {"id": TABLE_ID, "path": _path(crun.run_dir / otc_file["path"]), "sha256": otc_file["sha256"]},
         "ticon_csv": {"path": _path(ticon_csv), "sha256": _sha256(ticon_csv)},
         "ticon_refs": {"path": _path(ticon_refs), "sha256": _sha256(ticon_refs)},
     }
