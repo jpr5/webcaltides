@@ -1,0 +1,8 @@
+{
+ "note": "timebase.csv is over 1 MB, so it lives in the private work bucket (manifest §0.3); this pins it. Built by python -m gesla.timebase_audit --candidates <G07a station_map.csv> --build-date 20261008 at the G04c commit.",
+ "objects": {
+  "builds/20261008/gesla/timebase.csv": {"sha256": "b09a51ce1b18704076de053196cd1483ed06426aa90ab0b6bc50f991286a1ef3", "size": 1020709},
+  "builds/20261008/gesla/timebase_providers.csv": {"sha256": "074970be18ce6bffb72007489e2548f021e723a59e2cfbfe0d400c6422159ec0", "size": 4618},
+  "builds/20261008/gesla/residue.jsonl": {"sha256": "7b02447b78bcffe14bead30b975716a350115d89332d1183d74f506b2715d31c", "size": 219160}
+ }
+}

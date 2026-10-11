@@ -1,0 +1,80 @@
+contributor,version,interval_s,provider_verdict,inheritable,n_records,n_audited,n_inherited,n_excluded,n_residue,verdicts
+BODC,4.1,900,none,0,6,0,0,6,0,
+BODC,4.1,3600,none,0,39,0,0,39,0,
+BOM,4.1,300,none,0,2,0,0,2,0,
+BOM,4.1,600,none,0,8,0,0,8,0,
+BOM,4.1,900,none,0,20,0,0,20,0,
+BOM,4.1,3600,utc_instant,0,105,1,0,104,0,utc_instant=1
+BfG,4.1,3600,utc_instant,1,5,4,1,0,0,utc_instant=4
+CCO,4.1,600,none,0,14,0,0,14,0,
+CDWR,4.1,900,none,0,1,0,0,1,0,
+CDWR,4.1,3600,utc_instant,0,110,15,0,95,7,unexplained=7 utc_instant=8
+CMEMS,4.1,60,none,0,3,0,0,3,0,
+CMEMS,4.1,120,none,0,1,0,0,1,0,
+CMEMS,4.1,300,none,0,5,0,0,5,0,
+CMEMS,4.1,600,utc_instant,0,177,66,0,111,15,"months_bad:2015-05=1 months_bad:2017-05,2017-10=1 months_bad:2024-11=1 months_bad:2025-12=2 unexplained=15 utc_instant=46"
+CMEMS,4.1,840,none,0,1,0,0,1,0,
+CMEMS,4.1,900,none,0,10,0,0,10,0,
+CMEMS,4.1,960,none,0,1,0,0,1,0,
+CMEMS,4.1,1200,none,0,1,0,0,1,0,
+CMEMS,4.1,1800,none,0,8,0,0,8,0,
+CMEMS,4.1,3600,utc_instant,0,389,45,0,344,2,"months_bad:2008-12=1 months_bad:2010-02,2010-04=1 months_bad:2012-09=1 months_bad:2018-01=1 months_bad:2019-06,2019-11=1 months_bad:2024-02=1 months_bad:2024-12=1 months_bad:2025-11=2 unexplained=2 utc_instant=34"
+CMEMS,4.1,10800,none,0,1,0,0,1,0,
+CRMS,4.1,3600,none,0,3,1,0,2,1,unexplained=1
+CV,4.1,3600,none,0,1,0,0,1,0,
+DA_IDH,4.1,900,none,0,1,0,0,1,0,
+DA_IDH,4.1,3600,none,0,4,0,0,4,0,
+DA_MM,4.1,3600,none,0,2,0,0,2,0,
+DA_MM,4.1,86400,none,0,1,0,0,1,0,
+DA_SAT,4.1,1800,none,0,1,0,0,1,0,
+DA_SAT,4.1,3600,utc_instant,0,16,3,0,13,1,unexplained=1 utc_instant=2
+DMI,4.1,3600,none,0,3,0,0,3,0,
+ESEAS,4.1,3600,none,0,3,0,0,3,0,
+FMI,4.1,3600,none,0,14,0,0,14,0,
+GLOSS,4.1,900,none,0,2,0,0,2,0,
+ICG,4.1,3600,none,0,1,0,0,1,0,
+IEO,4.1,3600,none,0,12,0,0,12,0,
+ISPRA,4.1,600,none,0,7,0,0,7,0,
+ISPRA,4.1,3600,none,0,28,0,0,28,0,
+JODC_GIAJ,4.1,3600,none,0,25,0,0,25,0,
+JODC_JCG,4.1,3600,none,0,31,0,0,31,0,
+JODC_JMA,4.1,3600,none,0,80,0,0,80,0,
+JODC_PAHB,4.1,3600,none,0,69,0,0,69,0,
+MEDS,4.1,3600,utc_instant,0,305,198,0,107,21,unexplained=21 utc_instant=177
+MI_C,4.1,300,utc_instant,0,6,5,0,1,1,unexplained=1 utc_instant=4
+MI_C,4.1,360,utc_instant,1,14,14,0,0,0,"months_bad:2024-02=1 months_bad:2024-05,2024-07=1 utc_instant=12"
+MI_C,4.1,900,utc_instant,1,3,3,0,0,0,utc_instant=3
+MI_R,4.1,300,none,0,1,0,0,1,0,
+MI_R,4.1,360,utc_instant,0,1,1,0,0,0,utc_instant=1
+MI_R,4.1,1800,none,0,5,0,0,5,0,
+MI_R,4.1,3600,none,0,1,1,0,0,1,unexplained=1
+NCDEM,4.1,3600,utc_instant,0,12,3,0,9,1,unexplained=1 utc_instant=2
+NHS,4.1,3600,utc_instant,1,24,24,0,0,0,months_bad:2024-12=1 utc_instant=23
+NOAA,4.1,3600,utc_instant,0,587,434,0,153,30,months_bad:1986-12=1 months_bad:2008-09=1 months_bad:2009-10=1 months_bad:2011-10=1 months_bad:2026-02=2 unexplained=30 utc_instant=398
+NOC,4.1,450,none,0,1,0,0,1,0,
+NOC,4.1,900,none,0,4,0,0,4,0,
+NOC,4.1,3600,none,0,2,0,0,2,0,
+NWFWMD,4.1,3600,utc_instant,0,9,4,0,5,1,unexplained=1 utc_instant=3
+REFMAR,4.1,3600,utc_instant,0,105,2,0,103,0,utc_instant=2
+RWS,4.1,600,utc_instant,0,33,19,0,14,6,months_bad:2014-12=1 unexplained=6 utc_instant=12
+RWS,4.1,1800,none,0,1,1,0,0,1,unexplained=1
+RWS,4.1,3600,utc_instant,0,72,41,0,31,10,"months_bad:2021-02,2024-11=1 months_bad:2024-07=1 unexplained=10 utc_instant=29"
+RWS,4.1,10800,utc_instant,0,16,12,0,4,2,months_bad:2023-08=1 months_bad:2025-12=2 unexplained=2 utc_instant=7
+RWS,4.1,86400,utc_instant,1,11,4,7,0,0,utc_instant=4
+RWS_HIST,4.1,600,utc_instant,0,9,6,0,3,1,months_bad:2014-12=1 unexplained=1 utc_instant=4
+RWS_HIST,4.1,1800,none,0,1,1,0,0,1,unexplained=1
+RWS_HIST,4.1,3600,utc_instant,0,81,44,0,37,13,unexplained=13 utc_instant=31
+RWS_HIST,4.1,10800,utc_instant,0,20,12,0,8,1,unexplained=1 utc_instant=11
+RWS_HIST,4.1,86400,utc_instant,1,11,5,6,0,0,utc_instant=5
+SFWMD,4.1,3600,none,0,35,0,0,35,0,
+SMHI,4.1,3600,none,0,64,0,0,64,0,
+TTW,4.1,3600,none,0,3,0,0,3,0,
+UHSLC_FD,4.1,3600,utc_instant,0,233,61,0,172,5,"months_bad:2024-03=1 months_bad:2024-08=1 months_bad:2025-06,2025-11=1 months_bad:2025-07=4 months_bad:2025-07,2026-02=1 months_bad:2026-02=1 unexplained=5 utc_instant=47"
+UHSLC_RQ,4.1,3540,none,0,1,0,0,1,0,
+UHSLC_RQ,4.1,3600,utc_instant,0,624,146,0,478,3,months_bad:2008-09=1 months_bad:2009-10=1 unexplained=3 utc_instant=141
+UNAM,4.1,60,none,0,28,0,0,28,0,
+UNAM,4.1,360,none,0,12,0,0,12,0,
+UNAM_HIST,4.1,3600,utc_instant,0,32,1,0,31,0,utc_instant=1
+USGS,4.1,3600,utc_instant,0,465,82,0,383,27,months_bad:2011-02=1 unexplained=27 utc_instant=54
+UZ,4.1,3600,none,0,1,0,0,1,0,
+WSV,4.1,3600,mixed,0,79,61,0,18,49,"months_bad:2024-01,2025-01=1 months_bad:2025-09,2026-05=1 months_bad:2025-10=1 unexplained=49 utc_instant=1 utc_mean_start60=8"
