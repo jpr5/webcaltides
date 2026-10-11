@@ -89,6 +89,17 @@ _EPOCH_RE = re.compile(r"(\d{4})-(\d{4})")
 _PERIOD_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4}) - (\d{2})/(\d{2})/(\d{4})")
 
 # NOAA id -> (alpha-3, IANA zone), where NOAA's position gives no land zone or the wrong country.
+# The one NOAA licence object: noaa and noaa-currents publish under it, and a release holds one object per
+# licence_id, so both adapters return this one.
+NOAA_LICENCE = {"licence_id": "noaa-public-domain", "spdx": "LicenseRef-PublicDomain-USGov",
+                "provider": "NOAA Center for Operational Oceanographic Products and Services (CO-OPS)",
+                "attribution": "NOAA CO-OPS data (a U.S. Government work, not subject to copyright). Units "
+                               "converted to SI (feet to metres, cm/s to m/s) and constituent speeds set to the "
+                               "release's astro table by OpenTideConstants; not official NOAA material.",
+                "url": "https://tidesandcurrents.noaa.gov/disclaimers.html",
+                # a U.S. Government work is public domain (17 U.S.C. 105): commercial use is allowed
+                "commercial_use": True}
+
 PLACE_OVERRIDES: dict[str, tuple[str, str, str]] = {
     "TPT2737": ("UMI", "Etc/GMT+12", "Howland Island: no land zone at NOAA's position"),
     "TPT2739": ("UMI", "Etc/GMT+11", "Palmyra Island: no land zone; nearest land zone is Kiribati"),
@@ -304,14 +315,7 @@ class NoaaAdapter:
                 "constituent_table_version": "noaa-37"}
 
     def licence(self) -> dict:
-        return {"licence_id": "noaa-public-domain", "spdx": "LicenseRef-PublicDomain-USGov",
-                "provider": "NOAA Center for Operational Oceanographic Products and Services (CO-OPS)",
-                "attribution": "NOAA CO-OPS data (a U.S. Government work, not subject to copyright). Units "
-                               "converted to SI (feet offsets to metres) and constituent speeds set to the "
-                               "release's astro table by OpenTideConstants; not official NOAA material.",
-                "url": "https://tidesandcurrents.noaa.gov/disclaimers.html",
-                # a U.S. Government work is public domain (17 U.S.C. 105): commercial use is allowed
-                "commercial_use": True}
+        return dict(NOAA_LICENCE)
 
     def watch_keys(self, fetched: FetchResult) -> dict[str, str]:
         """Per station: SHA-256 of the normalised JSON of its list entry and its harcon or offsets
