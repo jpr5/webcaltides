@@ -846,6 +846,7 @@
   "OTC-02e2c432": {
    "founder": "richmond_river_locks-8638495-usa-noaa",
    "records": [
+    "noaa:8638495",
     "richmond_river_locks-8638495-usa-noaa"
    ],
    "registry": [
@@ -2505,6 +2506,7 @@
   "OTC-088a10ef": {
    "founder": "unalaska-9462620-usa-noaa",
    "records": [
+    "noaa:9462620",
     "unalaska-9462620-usa-noaa"
    ],
    "registry": [
@@ -2706,7 +2708,6 @@
   "OTC-0910253c": {
    "founder": "nylesund-823-nor-uhslc_fd",
    "records": [
-    "kartverket:NYA",
     "nylesund-823-nor-uhslc_fd",
     "nylesund-823a-nor-uhslc_rq"
    ],
@@ -3411,8 +3412,7 @@
   "OTC-0bac4c60": {
    "founder": "kabelvaagtg-kab-nor-cmems",
    "records": [
-    "kabelvaagtg-kab-nor-cmems",
-    "kartverket:KAB"
+    "kabelvaagtg-kab-nor-cmems"
    ],
    "registry": [
     "T72cb1fd"
@@ -8205,7 +8205,8 @@
   "OTC-1d0f351b": {
    "founder": "akutan-9462694-usa-noaa",
    "records": [
-    "akutan-9462694-usa-noaa"
+    "akutan-9462694-usa-noaa",
+    "noaa:9462694"
    ]
   },
   "OTC-1d17a326": {
@@ -9466,12 +9467,6 @@
     "noaa-currents:ACT0416"
    ]
   },
-  "OTC-21acdd88": {
-   "founder": "noaa:8630308",
-   "records": [
-    "noaa:8630308"
-   ]
-  },
   "OTC-21b571cc": {
    "founder": "roscoff-54-fra-refmar",
    "records": [
@@ -9909,12 +9904,6 @@
    "founder": "crms3169-crms3169-usa-crms",
    "records": [
     "crms3169-crms3169-usa-crms"
-   ]
-  },
-  "OTC-231481d0": {
-   "founder": "noaa:9414863",
-   "records": [
-    "noaa:9414863"
    ]
   },
   "OTC-2315dffd": {
@@ -11209,8 +11198,7 @@
   "OTC-2746a406": {
    "founder": "clearwater_bch_fl-773a-usa-uhslc_rq",
    "records": [
-    "clearwater_bch_fl-773a-usa-uhslc_rq",
-    "noaa:8726724"
+    "clearwater_bch_fl-773a-usa-uhslc_rq"
    ],
    "registry": [
     "T4dce6cc"
@@ -11281,8 +11269,7 @@
   "OTC-277fa911": {
    "founder": "delaware_river_at_marine_terminal_at_trenton_nj-1464040-usa-usgs",
    "records": [
-    "delaware_river_at_marine_terminal_at_trenton_nj-1464040-usa-usgs",
-    "noaa:8539993"
+    "delaware_river_at_marine_terminal_at_trenton_nj-1464040-usa-usgs"
    ],
    "registry": [
     "Tdad398c"
@@ -11747,8 +11734,7 @@
   "OTC-29422ee6": {
    "founder": "chesapeake_bbt-749a-usa-uhslc_rq",
    "records": [
-    "chesapeake_bbt-749a-usa-uhslc_rq",
-    "noaa:8638863"
+    "chesapeake_bbt-749a-usa-uhslc_rq"
    ],
    "registry": [
     "Tfc47918"
@@ -12239,7 +12225,8 @@
   "OTC-2b5b17c6": {
    "founder": "kodiak_island-9457292-usa-noaa",
    "records": [
-    "kodiak_island-9457292-usa-noaa"
+    "kodiak_island-9457292-usa-noaa",
+    "noaa:9457292"
    ],
    "registry": [
     "T06af9ea"
@@ -14656,6 +14643,7 @@
   "OTC-33b0cbf0": {
    "founder": "riverside-8440889-usa-noaa",
    "records": [
+    "noaa:8440889",
     "riverside-8440889-usa-noaa"
    ],
    "registry": [
@@ -16732,7 +16720,7 @@
    "founder": "baltimore-8574680-usa-noaa",
    "records": [
     "baltimore-8574680-usa-noaa",
-    "noaa:8574683"
+    "noaa:8574680"
    ],
    "registry": [
     "T5906ebd"
@@ -18055,7 +18043,8 @@
   "OTC-3ec299ec": {
    "founder": "clearwater_beach-8726724-usa-noaa",
    "records": [
-    "clearwater_beach-8726724-usa-noaa"
+    "clearwater_beach-8726724-usa-noaa",
+    "noaa:8726724"
    ],
    "registry": [
     "T4dce6cc"
@@ -19580,6 +19569,7 @@
   "OTC-4386a86c": {
    "founder": "ny_alesund-nya-nor-nhs",
    "records": [
+    "kartverket:NYA",
     "ny_alesund-nya-nor-nhs",
     "ny_alesundtg-ny_-nor-cmems"
    ],
@@ -20381,6 +20371,7 @@
   "OTC-4611e750": {
    "founder": "richmond-9414863-usa-noaa",
    "records": [
+    "noaa:9414863",
     "richmond-9414863-usa-noaa"
    ],
    "registry": [
@@ -21097,12 +21088,6 @@
    "founder": "noaa:8660148",
    "records": [
     "noaa:8660148"
-   ]
-  },
-  "OTC-485abd68": {
-   "founder": "noaa:8574680",
-   "records": [
-    "noaa:8574680"
    ]
   },
   "OTC-485ed386": {
@@ -22964,8 +22949,7 @@
   "OTC-4ee59b3a": {
    "founder": "merrimack_river_at_bates_bridge_near_haverhill_ma-11006988-usa-usgs",
    "records": [
-    "merrimack_river_at_bates_bridge_near_haverhill_ma-11006988-usa-usgs",
-    "noaa:8440889"
+    "merrimack_river_at_bates_bridge_near_haverhill_ma-11006988-usa-usgs"
    ]
   },
   "OTC-4ef123d4": {
@@ -23713,7 +23697,8 @@
   "OTC-5148096d": {
    "founder": "fare_ute_point-1732417-usa-noaa",
    "records": [
-    "fare_ute_point-1732417-usa-noaa"
+    "fare_ute_point-1732417-usa-noaa",
+    "noaa:1732417"
    ],
    "registry": [
     "T94c015d"
@@ -24193,6 +24178,7 @@
   "OTC-52f44510": {
    "founder": "trenton_marine_terminal-8539993-usa-noaa",
    "records": [
+    "noaa:8539993",
     "trenton_marine_terminal-8539993-usa-noaa"
    ],
    "registry": [
@@ -25577,8 +25563,7 @@
   "OTC-57ace1da": {
    "founder": "james_river_at_city_locks_at_richmond_va-2037705-usa-usgs",
    "records": [
-    "james_river_at_city_locks_at_richmond_va-2037705-usa-usgs",
-    "noaa:8638495"
+    "james_river_at_city_locks_at_richmond_va-2037705-usa-usgs"
    ],
    "registry": [
     "T6b3564e"
@@ -25822,6 +25807,7 @@
   "OTC-588c9eec": {
    "founder": "st_augustine_beach-8720587-usa-noaa",
    "records": [
+    "noaa:8720587",
     "st_augustine_beach-8720587-usa-noaa"
    ],
    "registry": [
@@ -27283,12 +27269,6 @@
     "nokbrunsbttel-5970091-deu-wsv"
    ]
   },
-  "OTC-5d71a204": {
-   "founder": "noaa:1619000",
-   "records": [
-    "noaa:1619000"
-   ]
-  },
   "OTC-5d81998d": {
    "founder": "little_harbour-497-can-meds",
    "records": [
@@ -27874,12 +27854,6 @@
     "Td4c641b"
    ]
   },
-  "OTC-5f882644": {
-   "founder": "noaa:9462694",
-   "records": [
-    "noaa:9462694"
-   ]
-  },
   "OTC-5f89b9f1": {
    "founder": "noaa:8729538",
    "records": [
@@ -28032,12 +28006,6 @@
    "founder": "dixon_entrance-9335-can-meds",
    "records": [
     "dixon_entrance-9335-can-meds"
-   ]
-  },
-  "OTC-606ba56f": {
-   "founder": "noaa:8461490",
-   "records": [
-    "noaa:8461490"
    ]
   },
   "OTC-6071d317": {
@@ -30301,12 +30269,6 @@
    ],
    "registry": [
     "Tb8c40d1"
-   ]
-  },
-  "OTC-67fdc4c0": {
-   "founder": "noaa:9451936",
-   "records": [
-    "noaa:9451936"
    ]
   },
   "OTC-6811e49d": {
@@ -34727,7 +34689,7 @@
    "founder": "chincoteague_bay_inlet_at_chincoteague_va-1484746-usa-usgs",
    "records": [
     "chincoteague_bay_inlet_at_chincoteague_va-1484746-usa-usgs",
-    "noaa:8630315"
+    "noaa:8630308"
    ],
    "registry": [
     "T0d53864"
@@ -36618,7 +36580,6 @@
   "OTC-7d9be75f": {
    "founder": "papeete-015-fra-uhslc_fd",
    "records": [
-    "noaa:1732417",
     "papeete-015-fra-uhslc_fd",
     "papeete-015a-fra-uhslc_rq",
     "papeete-015b-fra-uhslc_rq",
@@ -37865,12 +37826,6 @@
     "linz:180RAGLAN"
    ]
   },
-  "OTC-8225dd03": {
-   "founder": "noaa:8775283",
-   "records": [
-    "noaa:8775283"
-   ]
-  },
   "OTC-822d7f69": {
    "founder": "noaa-currents:ACT1276",
    "records": [
@@ -38403,7 +38358,8 @@
   "OTC-83e9ddd0": {
    "founder": "daymark_185-8675761-usa-noaa",
    "records": [
-    "daymark_185-8675761-usa-noaa"
+    "daymark_185-8675761-usa-noaa",
+    "noaa:8675761"
    ]
   },
   "OTC-83ebc6c6": {
@@ -38614,7 +38570,8 @@
   "OTC-84edbe1b": {
    "founder": "christiansted_harbor-9751364-usa-noaa",
    "records": [
-    "christiansted_harbor-9751364-usa-noaa"
+    "christiansted_harbor-9751364-usa-noaa",
+    "noaa:9751364"
    ],
    "registry": [
     "T0057184"
@@ -39264,7 +39221,8 @@
   "OTC-87044666": {
    "founder": "emmonak-9467701-usa-noaa",
    "records": [
-    "emmonak-9467701-usa-noaa"
+    "emmonak-9467701-usa-noaa",
+    "noaa:9467701"
    ]
   },
   "OTC-8715c135": {
@@ -40888,7 +40846,8 @@
   "OTC-8c70dc71": {
    "founder": "kabelvag-kab-nor-nhs",
    "records": [
-    "kabelvag-kab-nor-nhs"
+    "kabelvag-kab-nor-nhs",
+    "kartverket:KAB"
    ],
    "registry": [
     "T72cb1fd"
@@ -42179,6 +42138,7 @@
   "OTC-90a37fdc": {
    "founder": "sabine_pass_north-8770570-usa-noaa",
    "records": [
+    "noaa:8770570",
     "sabine_pass_north-8770570-usa-noaa"
    ],
    "registry": [
@@ -42715,8 +42675,7 @@
   "OTC-92a14fe1": {
    "founder": "humboldt_bay_ca-576a-usa-uhslc_rq",
    "records": [
-    "humboldt_bay_ca-576a-usa-uhslc_rq",
-    "noaa:9418767"
+    "humboldt_bay_ca-576a-usa-uhslc_rq"
    ],
    "registry": [
     "T60f278b"
@@ -43073,8 +43032,7 @@
    "founder": "kodiak_isl_alaska-039-usa-uhslc_fd",
    "records": [
     "kodiak_isl_alaska-039-usa-uhslc_fd",
-    "kodiak_isl_alaska-039a-usa-uhslc_rq",
-    "noaa:9457292"
+    "kodiak_isl_alaska-039a-usa-uhslc_rq"
    ],
    "registry": [
     "T06af9ea"
@@ -43458,6 +43416,7 @@
   "OTC-9586a259": {
    "founder": "panama_city-8729108-usa-noaa",
    "records": [
+    "noaa:8729108",
     "panama_city-8729108-usa-noaa"
    ],
    "registry": [
@@ -43838,7 +43797,8 @@
   "OTC-968c8a65": {
    "founder": "chesapeake_bay_bridge_tunnel-8638863-usa-noaa",
    "records": [
-    "chesapeake_bay_bridge_tunnel-8638863-usa-noaa"
+    "chesapeake_bay_bridge_tunnel-8638863-usa-noaa",
+    "noaa:8638863"
    ],
    "registry": [
     "Tfc47918"
@@ -44940,6 +44900,7 @@
   "OTC-9a5e33fb": {
    "founder": "north_spit-9418767-usa-noaa",
    "records": [
+    "noaa:9418767",
     "north_spit-9418767-usa-noaa"
    ],
    "registry": [
@@ -47069,6 +47030,7 @@
   "OTC-a1534ddb": {
    "founder": "southern_chincoteague_island-8630315-usa-noaa",
    "records": [
+    "noaa:8630315",
     "southern_chincoteague_island-8630315-usa-noaa"
    ],
    "registry": [
@@ -47978,7 +47940,8 @@
   "OTC-a438cc6d": {
    "founder": "moda-8775283-usa-noaa",
    "records": [
-    "moda-8775283-usa-noaa"
+    "moda-8775283-usa-noaa",
+    "noaa:8775283"
    ]
   },
   "OTC-a4465c74": {
@@ -49058,7 +49021,6 @@
   "OTC-a7538a49": {
    "founder": "sabine_pass_n_tx-766a-usa-uhslc_rq",
    "records": [
-    "noaa:8770570",
     "sabine_pass_n_tx-766a-usa-uhslc_rq"
    ],
    "registry": [
@@ -49256,7 +49218,8 @@
   "OTC-a803b2b4": {
    "founder": "fort_mchenry_marsh-8574683-usa-noaa",
    "records": [
-    "fort_mchenry_marsh-8574683-usa-noaa"
+    "fort_mchenry_marsh-8574683-usa-noaa",
+    "noaa:8574683"
    ],
    "registry": [
     "T5906ebd"
@@ -49683,8 +49646,7 @@
   "OTC-a98033f5": {
    "founder": "nantucket_ma-743a-usa-uhslc_rq",
    "records": [
-    "nantucket_ma-743a-usa-uhslc_rq",
-    "noaa:8449130"
+    "nantucket_ma-743a-usa-uhslc_rq"
    ],
    "registry": [
     "T105b2c2"
@@ -51296,8 +51258,7 @@
    "records": [
     "dutch_harbor_ak-041-usa-uhslc_fd",
     "dutch_harbor_ak-041a-usa-uhslc_rq",
-    "dutch_harbor_ak-041b-usa-uhslc_rq",
-    "noaa:9462620"
+    "dutch_harbor_ak-041b-usa-uhslc_rq"
    ],
    "registry": [
     "T57d3167"
@@ -52099,6 +52060,7 @@
   "OTC-b221b982": {
    "founder": "patchogue-8514322-usa-noaa",
    "records": [
+    "noaa:8514322",
     "patchogue-8514322-usa-noaa"
    ],
    "registry": [
@@ -52186,7 +52148,8 @@
    "records": [
     "johnston-052-usa-uhslc_fd",
     "johnston-052a-usa-uhslc_rq",
-    "johnston_atoll-1619000-usa-noaa"
+    "johnston_atoll-1619000-usa-noaa",
+    "noaa:1619000"
    ],
    "registry": [
     "T8f2868d"
@@ -52867,6 +52830,7 @@
   "OTC-b4627d5c": {
    "founder": "sand_island-1619910-usa-noaa",
    "records": [
+    "noaa:1619910",
     "sand_island-1619910-usa-noaa"
    ],
    "registry": [
@@ -55005,8 +54969,7 @@
   "OTC-bbdc88b7": {
    "founder": "charlotte_amalie-255a-usa-uhslc_rq",
    "records": [
-    "charlotte_amalie-255a-usa-uhslc_rq",
-    "noaa:9751639"
+    "charlotte_amalie-255a-usa-uhslc_rq"
    ],
    "registry": [
     "Tb4e978c"
@@ -58013,8 +57976,7 @@
   "OTC-c5e60080": {
    "founder": "christiansted_vi-258a-usa-uhslc_rq",
    "records": [
-    "christiansted_vi-258a-usa-uhslc_rq",
-    "noaa:9751364"
+    "christiansted_vi-258a-usa-uhslc_rq"
    ],
    "registry": [
     "T0057184"
@@ -61294,12 +61256,6 @@
     "T3e220ca"
    ]
   },
-  "OTC-d17e7128": {
-   "founder": "noaa:9467701",
-   "records": [
-    "noaa:9467701"
-   ]
-  },
   "OTC-d17f3cc9": {
    "founder": "noaa-currents:DEB2132",
    "records": [
@@ -61499,7 +61455,8 @@
   "OTC-d257f5bd": {
    "founder": "nantucket_island-8449130-usa-noaa",
    "records": [
-    "nantucket_island-8449130-usa-noaa"
+    "nantucket_island-8449130-usa-noaa",
+    "noaa:8449130"
    ],
    "registry": [
     "T105b2c2"
@@ -62863,7 +62820,8 @@
   "OTC-d7280cee": {
    "founder": "charlotte_amalie-9751639-usa-noaa",
    "records": [
-    "charlotte_amalie-9751639-usa-noaa"
+    "charlotte_amalie-9751639-usa-noaa",
+    "noaa:9751639"
    ],
    "registry": [
     "Tf417cd4"
@@ -63176,12 +63134,6 @@
    ],
    "registry": [
     "Tfcb31b3"
-   ]
-  },
-  "OTC-d7f8b7d9": {
-   "founder": "noaa:8675761",
-   "records": [
-    "noaa:8675761"
    ]
   },
   "OTC-d7fa78ae": {
@@ -65393,12 +65345,6 @@
    "founder": "bayonnepontblanctg_05minute-bay-fra-cmems",
    "records": [
     "bayonnepontblanctg_05minute-bay-fra-cmems"
-   ]
-  },
-  "OTC-df5fba39": {
-   "founder": "noaa:8514322",
-   "records": [
-    "noaa:8514322"
    ]
   },
   "OTC-df601421": {
@@ -69118,6 +69064,7 @@
   "OTC-ebb89aba": {
    "founder": "provorotni_island-9451936-usa-noaa",
    "records": [
+    "noaa:9451936",
     "provorotni_island-9451936-usa-noaa"
    ]
   },
@@ -73293,7 +73240,8 @@
    "founder": "new_london-8461490-usa-noaa",
    "records": [
     "new_london-8461490-usa-noaa",
-    "new_london_ct-744a-usa-uhslc_rq"
+    "new_london_ct-744a-usa-uhslc_rq",
+    "noaa:8461490"
    ],
    "registry": [
     "Tbfad8c3"
@@ -73522,7 +73470,6 @@
   "OTC-fa8eaee2": {
    "founder": "st_augustine_fl-262a-usa-uhslc_rq",
    "records": [
-    "noaa:8720587",
     "st_augustine_fl-262a-usa-uhslc_rq"
    ],
    "registry": [
@@ -74540,8 +74487,7 @@
    "founder": "midway-050-usa-uhslc_fd",
    "records": [
     "midway-050-usa-uhslc_fd",
-    "midway-050a-usa-uhslc_rq",
-    "noaa:1619910"
+    "midway-050a-usa-uhslc_rq"
    ],
    "registry": [
     "Tc78b9c3"
@@ -75001,12 +74947,6 @@
    "founder": "noaa-currents:UNI1024",
    "records": [
     "noaa-currents:UNI1024"
-   ]
-  },
-  "OTC-ff528d70": {
-   "founder": "noaa:8729108",
-   "records": [
-    "noaa:8729108"
    ]
   },
   "OTC-ff60ee01": {
