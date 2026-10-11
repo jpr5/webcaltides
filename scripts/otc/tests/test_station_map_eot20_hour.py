@@ -78,3 +78,28 @@ def test_disputed_reasons_from_the_audit():
             "d": {"time_base_status": "disputed", "time_base_code": "disputed"},
             "e": {"time_base_status": "disputed", "disputed_reason": "comparators_disagree eot20_whole_hour"}}
     assert disputed_reasons_of(rows) == {"a": WH, "b": WH, "e": "comparators_disagree eot20_whole_hour"}
+
+
+# --- release integration: SR-ACC short records publish now, and the whole-hour rule must see them ---------------
+
+def _short_and_long(table):  # noqa: F811
+    from test_format_1_0 import SHORT_HOURS, doc, fit_dict, short_calibration
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    short = doc(table, rid="r1-nor-test", fit=f, calibration=short_calibration(f, rid="r1-nor-test"))
+    return [doc(table, rid="r0-nor-test"), short]
+
+
+def test_a_short_record_with_a_whole_hour_eot20_lag_is_never_published(table):  # noqa: F811
+    docs = _short_and_long(table)
+    one = {d["record_id"]: "OTC-ONE" for d in docs}
+    release, report = gr.build_release(docs, **{**_kw(table, docs, one, {}), "disputed_reasons": {}})
+    assert sorted(report.published) == ["r0-nor-test", "r1-nor-test"]   # the short set publishes as an alternate
+    release, report = gr.build_release(docs, **{**_kw(table, docs, one, {}), "disputed_reasons": {"r1-nor-test": WH}})
+    assert [c["source_record_id"] for c in release["stations"][0]["constant_sets"]] == ["r0-nor-test"]
+    (r,) = report.refused
+    assert r["reason"] == "eot20_whole_hour_unresolved" and r["record"] == "r1-nor-test"
+    # its own station, the short set alone: the station is withheld, not published with an hours-wrong set
+    other = {"r0-nor-test": "OTC-0", "r1-nor-test": "OTC-1"}
+    release, report = gr.build_release(docs, **{**_kw(table, docs, other, {}), "disputed_reasons": {"r1-nor-test": WH}})
+    assert [s["station_id"] for s in release["stations"]] == ["OTC-0"]
+    assert report.counts() == {"eot20_whole_hour_unresolved": 1} and report.published == ["r0-nor-test"]
