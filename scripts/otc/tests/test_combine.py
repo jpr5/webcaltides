@@ -258,13 +258,25 @@ def test_a_joined_station_recommends_the_official_set_and_keeps_its_gesla_sets()
     assert st["recommended_set_id"] == "OTC-aaaaaaaa/noaa/8443970"
     assert st["constant_sets"][0]["set_id"] == "OTC-aaaaaaaa/noaa/8443970"
     assert st["constant_sets"][1:] == old["constant_sets"]                 # byte-equal, same order
-    assert {k: st[k] for k in ("name", "lat", "lon", "timezone", "country", "type")} == \
-        {k: old[k] for k in ("name", "lat", "lon", "timezone", "country", "type")}
+    # G2: Boston holds NOAA's own gauge (boston-8443970-usa-noaa): the station shows NOAA's name and position
+    assert (st["name"], st["lat"], st["lon"]) == ("Harbor", 42.3551, -71.05)
+    assert {k: st[k] for k in ("country", "type")} == {k: old[k] for k in ("country", "type")}
+    assert rep.joined[0]["same_gauge"] and rep.joined[0]["gesla_place"] == {
+        "name": "Boston", "lat": 42.355, "lon": -71.05, "timezone": "America/New_York"}
     assert st["aliases"] == {"gesla": ["boston-8443970-usa-noaa"], "noaa": "8443970"}
     assert st["constant_sets"][0]["provenance"]["build"] == {"build_commit": "1234567"}
     assert out["stations"][1] == before["stations"][1] and out["stations"][-1] == before["stations"][-1]
     assert rep.joined[0]["was_recommended"] == old["recommended_set_id"]
     assert rep.sources["noaa"]["joined"] == 1
+
+
+def test_a_station_joined_by_distance_keeps_its_gesla_name_and_position():
+    ids = {**IDS, "noaa:7777777": "OTC-bbbbbbbb"}
+    out, rep = combine.merge(gesla_release(), {"noaa": agency(ref("7777777", 40.004, -70.0))}, station_ids=ids,
+                             build_commit="1234567", table_id=TABLE, canaries={"noaa": PASS})
+    st = next(s for s in out["stations"] if s["station_id"] == "OTC-bbbbbbbb")
+    assert (st["name"], st["lat"], st["lon"]) == ("Far", 40.0, -70.0) and not rep.joined[0]["same_gauge"]
+    assert st["recommended_set_id"] == "OTC-bbbbbbbb/noaa/7777777"
 
 
 def test_new_stations_subordinates_and_release_level_rows():

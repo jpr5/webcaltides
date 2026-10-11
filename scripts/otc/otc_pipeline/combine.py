@@ -21,9 +21,11 @@ the TICON-4 carry, unchanged) and then merges the official agency sets into it (
   a string), so of two agency records of one alias system that would join one station, the better one (M2, then
   distance) joins and the other gets its own station;
 - recommendation (decision 2): official sets first, as gesla_release.recommend() ranks them (the tier step;
-  REC-SKILL replaces it later). At a joined station the GESLA and TICON-4 sets stay exactly as built (their dicts,
-  the station's name, position, time zone and aliases): the agency set is recommended and written first, then the
-  station's sets in their built order; the agency alias is added;
+  REC-SKILL replaces it later). At a joined station the GESLA and TICON-4 sets stay exactly as built (their dicts
+  and the station's aliases): the agency set is recommended and written first, then the station's sets in their
+  built order; the agency alias is added. A station joined by the same-gauge rule publishes the agency's official
+  gauge name, position and time zone (G2); the GESLA ones stay in the build report (agency.joined gesla_place)
+  and the GESLA record ids in aliases.gesla. Other joined stations keep the GESLA name and position;
 - subordinates: `reference_source_record_id` -> the station that holds the source's reference set in this release;
   a subordinate whose reference is not published is refused (reported);
 - canaries (D8; D11 as decided for this release: every INCLUDED source passes its canary, else the build stops):
@@ -506,15 +508,28 @@ def merge(release: dict, agency: Mapping[str, AgencySource], *, station_ids: Map
             was = st["recommended_set_id"]
             st["recommended_set_id"] = win.cs["set_id"]
             st["aliases"] = dict(sorted({**(st.get("aliases") or {}), **aliases}.items()))
+            built_place = {k: st[k] for k in ("name", "lat", "lon", "timezone")}
+            # G2: a station that holds the agency's own gauge (the same-gauge rule) publishes the agency's official
+            # gauge position and name; the GESLA ones stay in its aliases (the records) and in the build report
+            here = Place(sid, float(st["lat"]), float(st["lon"]), None, tuple((st.get("aliases") or {}).get("gesla", ())))
+            gauge = [(a, ss, cs) for a, ss, cs, _ in items if cs is win.cs
+                     and _same_id(a.source, upstream_id(ss, a.alias_system), here)]
+            if gauge:
+                h = gauge[0][1].station_hint
+                st.update({"name": h["name"], "lat": h["lat"], "lon": h["lon"], "timezone": h["timezone"]})
             for a, ss, cs, _ in items:
                 rid = record_id(a.source, upstream_id(ss, a.alias_system))
                 counts[a.source]["joined"] += 1
                 counts[a.source]["published"] += 1
+                counts[a.source]["official_position"] += bool(gauge and ss is gauge[0][1])
                 rep.joined.append({"record": rid, "station_id": sid, "set_id": cs["set_id"],
                                    "decided_by": how["decided_by"], "was_recommended": was,
+                                   "same_gauge": bool(gauge and ss is gauge[0][1]),
+                                   "gesla_place": built_place,
                                    "distance_km": round(distance_km(float(ss.station_hint["lat"]),
                                                                     float(ss.station_hint["lon"]),
-                                                                    float(st["lat"]), float(st["lon"])), 4)})
+                                                                    float(built_place["lat"]),
+                                                                    float(built_place["lon"])), 4)})
             continue
         if sid in by_id:
             raise CombineError(f"{sid}: a removed station (tombstone) of this release; agency records cannot use it")
