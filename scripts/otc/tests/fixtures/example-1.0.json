@@ -6,7 +6,7 @@
     "min_reader_version": "1.0",
     "fit_min_good_hours": 360,
     "concept_doi": null,
-    "source_versions": { "gesla": "4.1", "kartverket": "20991231", "noaa": "20991231" }
+    "source_versions": { "gesla": "4.1", "kartverket": "20991231", "noaa": "20991231", "ticon": "4", "eot20": "2021" }
   },
   "conventions": [
     {
@@ -30,6 +30,24 @@
     },
     {
       "convention_id": "noaa-greenwich-schureman-v1",
+      "phase_reference": "greenwich_utc",
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "astro_table_id": "tcd-20251228",
+      "canary": { "status": "not_applicable" }
+    },
+    {
+      "convention_id": "ticon4-greenwich-schureman-v1",
+      "phase_reference": "greenwich_utc",
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "astro_table_id": "tcd-20251228",
+      "canary": { "status": "not_applicable" }
+    },
+    {
+      "convention_id": "eot20-greenwich-schureman-v1",
       "phase_reference": "greenwich_utc",
       "v0_model": "schureman_tcd",
       "nodal_handling": "f_u_at_prediction",
@@ -69,6 +87,20 @@
       "commercial_use": false,
       "restriction": "Non-commercial use only: the GESLA licence page lists CMEMS records for research use; commercial use needs the data owner's permission.",
       "terms_url": "https://gesla787883612.wordpress.com/license/"
+    },
+    {
+      "licence_id": "ticon-4",
+      "spdx": "CC-BY-4.0",
+      "provider": "TICON-4",
+      "attribution": "Example attribution text.",
+      "commercial_use": true
+    },
+    {
+      "licence_id": "eot20",
+      "spdx": "CC-BY-4.0",
+      "provider": "EOT20 (DGFI-TUM)",
+      "attribution": "Example attribution text.",
+      "commercial_use": true
     },
     {
       "licence_id": "rws",
@@ -757,7 +789,7 @@
       "lon": -5.5,
       "timezone": "Europe/London",
       "type": "reference",
-      "aliases": { "gesla": ["example-uk-file-id"] },
+      "aliases": { "gesla": ["example-uk-file-id", "example-uk-file-id-2"], "ticon": ["example-uk-file-id-2"] },
       "recommended_set_id": "OTC-EXAMPLE-0011/gesla-fit",
       "constant_sets": [
         {
@@ -796,6 +828,44 @@
             "evidence": [{ "comparator_kind": "model", "comparator_id": "eot20", "distance_km": 1.0, "lag_min": 0.3 }]
           },
           "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "only eligible record", "decision": { "tier": "rule", "outcome": "accept" } }
+        },
+        {
+          "set_id": "OTC-EXAMPLE-0011/ticon-4",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "example-uk-file-id-2",
+          "source_version": "4",
+          "record_span": { "start": "1993-01-01T00:00:00Z", "end": "2020-12-31T23:00:00Z", "good_hours": 201000 },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4",
+          "qc_status": "flagged",
+          "qc_flags": [
+            { "flag": "source_quality_note", "reason": "The publisher reports 18% of the record's hours missing.", "values": { "missing_pct": 18.0 } }
+          ],
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 1.69, "phase_deg": 141.0, "amp_uncertainty_m": 0.004, "phase_uncertainty_deg": 0.2 },
+            { "name": "S2", "speed_deg_per_hour": 30.0, "amplitude_m": 0.57, "phase_deg": 141.0, "amp_uncertainty_m": 0.004, "phase_uncertainty_deg": 0.4 },
+            { "name": "N2", "speed_deg_per_hour": 28.4397295, "amplitude_m": 0.32, "phase_deg": 83.0, "amp_uncertainty_m": 0.004, "phase_uncertainty_deg": 0.7 },
+            { "name": "K2", "speed_deg_per_hour": 30.0821373, "amplitude_m": 0.16, "phase_deg": 139.0, "amp_uncertainty_m": 0.004, "phase_uncertainty_deg": 1.4 }
+          ],
+          "time_base": {
+            "code": "corrected",
+            "reason": "declared utc_instant corrected to utc_plus_1 by the sibling record example-uk-file-id and EOT20",
+            "declared": "utc_instant",
+            "published": "utc_plus_1",
+            "correction": { "from": "utc_instant", "to": "utc_plus_1" },
+            "decided_in": "20991231",
+            "evidence": [
+              { "comparator_kind": "sibling_record", "comparator_id": "gesla:example-uk-file-id", "distance_km": 0.0, "lag_min": 59.8 },
+              { "comparator_kind": "model", "comparator_id": "eot20", "distance_km": 1.0, "lag_min": 60.4 }
+            ]
+          },
+          "provenance": {
+            "build": { "build_commit": "0000000" },
+            "selection_reason": "the record's licence does not allow publishing an OTC fit, so the publisher's constants are used",
+            "modified": "phases corrected for the record's time base (utc_plus_1, declared utc_instant): each phase changed by the constituent's speed times one hour"
+          }
         }
       ]
     },
@@ -1236,6 +1306,147 @@
             "evidence": [{ "comparator_kind": "model", "comparator_id": "eot20", "distance_km": 1.0, "lag_min": 0.5 }]
           },
           "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "example of one datum shape", "decision": { "tier": "rule", "outcome": "accept" } }
+        }
+      ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0017",
+      "status": "active",
+      "name": "Example Point, analysis and model only (illustrative values, not data)",
+      "country": "IRL",
+      "lat": 51.6,
+      "lon": -9.9,
+      "timezone": "Europe/Dublin",
+      "type": "reference",
+      "aliases": { "gesla": ["example-ie-file-id"], "ticon": ["example-ie-file-id"] },
+      "recommended_set_id": "OTC-EXAMPLE-0017/ticon-4",
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0017/ticon-4",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "example-ie-file-id",
+          "source_version": "4",
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4",
+          "qc_status": "ok",
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 1.18, "phase_deg": 128.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 0.2 },
+            { "name": "S2", "speed_deg_per_hour": 30.0, "amplitude_m": 0.41, "phase_deg": 166.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 0.5 },
+            { "name": "K1", "speed_deg_per_hour": 15.0410686, "amplitude_m": 0.07, "phase_deg": 98.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 2.1 },
+            { "name": "O1", "speed_deg_per_hour": 13.9430356, "amplitude_m": 0.06, "phase_deg": 335.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 2.6 }
+          ],
+          "time_base": {
+            "code": "verified",
+            "reason": "declared utc_instant confirmed by EOT20",
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "decided_in": "20991231",
+            "evidence": [{ "comparator_kind": "model", "comparator_id": "eot20", "distance_km": 1.0, "lag_min": 0.6 }]
+          },
+          "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "the record's licence does not allow publishing an OTC fit, so the publisher's constants are used" }
+        },
+        {
+          "set_id": "OTC-EXAMPLE-0017/eot20",
+          "source": "eot20",
+          "source_type": "model",
+          "quantity": "water_level",
+          "source_record_id": "51.60,-9.90",
+          "source_version": "2021",
+          "convention_id": "eot20-greenwich-schureman-v1",
+          "licence_id": "eot20",
+          "qc_status": "ok",
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 1.15, "phase_deg": 127.0 },
+            { "name": "S2", "speed_deg_per_hour": 30.0, "amplitude_m": 0.4, "phase_deg": 165.0 },
+            { "name": "K1", "speed_deg_per_hour": 15.0410686, "amplitude_m": 0.07, "phase_deg": 97.0 },
+            { "name": "O1", "speed_deg_per_hour": 13.9430356, "amplitude_m": 0.06, "phase_deg": 334.0 }
+          ],
+          "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "model constants at the station point" }
+        }
+      ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0018",
+      "status": "active",
+      "name": "Example Quay, a short gauge fit and a longer analysis (illustrative values, not data)",
+      "country": "IRL",
+      "lat": 53.3,
+      "lon": -6.1,
+      "timezone": "Europe/Dublin",
+      "type": "reference",
+      "aliases": { "gesla": ["example-ie-quay-new", "example-ie-quay-old"], "ticon": ["example-ie-quay-old"] },
+      "recommended_set_id": "OTC-EXAMPLE-0018/ticon-4",
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0018/gesla-fit",
+          "source": "gesla-fit",
+          "source_type": "gauge",
+          "quantity": "water_level",
+          "source_record_id": "example-ie-quay-new",
+          "source_version": "4.1",
+          "record_span": { "start": "2024-03-01T00:00:00Z", "end": "2024-04-10T00:00:00Z", "good_samples": 940, "good_hours": 940 },
+          "convention_id": "otc-greenwich-schureman-v1",
+          "licence_id": "gesla-derived",
+          "qc_status": "flagged",
+          "qc_flags": [
+            { "flag": "short_record", "reason": "39.2 days of good data: P1, K2 and T2 cannot be separated from K1 and S2" }
+          ],
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 1.3, "phase_deg": 325.0 },
+            { "name": "S2", "speed_deg_per_hour": 30.0, "amplitude_m": 0.38, "phase_deg": 12.0 },
+            { "name": "N2", "speed_deg_per_hour": 28.4397295, "amplitude_m": 0.25, "phase_deg": 302.0 },
+            { "name": "K1", "speed_deg_per_hour": 15.0410686, "amplitude_m": 0.08, "phase_deg": 190.0 },
+            { "name": "O1", "speed_deg_per_hour": 13.9430356, "amplitude_m": 0.07, "phase_deg": 45.0 }
+          ],
+          "dropped_constituents": [
+            { "name": "P1", "dropped_reason": "rayleigh", "not_separable_from": "K1" },
+            { "name": "K2", "dropped_reason": "rayleigh", "not_separable_from": "S2" },
+            { "name": "T2", "dropped_reason": "rayleigh", "not_separable_from": "S2" }
+          ],
+          "expected_accuracy": { "cut_to_days": 39, "calibration_records": 25, "amp_uncertainty_m": 0.012, "phase_uncertainty_deg": 2.5, "time_mae_min": 9.0, "height_mae_m": 0.05 },
+          "time_base": {
+            "code": "verified",
+            "reason": "declared utc_instant confirmed by EOT20",
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "decided_in": "20991231",
+            "evidence": [{ "comparator_kind": "model", "comparator_id": "eot20", "distance_km": 1.0, "lag_min": 0.4 }]
+          },
+          "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "only eligible record" }
+        },
+        {
+          "set_id": "OTC-EXAMPLE-0018/ticon-4",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "example-ie-quay-old",
+          "source_version": "4",
+          "record_span": { "start": "1995-01-01T00:00:00Z", "end": "2018-12-31T23:00:00Z", "good_hours": 190000 },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4",
+          "qc_status": "ok",
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 1.31, "phase_deg": 325.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 0.2 },
+            { "name": "S2", "speed_deg_per_hour": 30.0, "amplitude_m": 0.38, "phase_deg": 13.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 0.5 },
+            { "name": "N2", "speed_deg_per_hour": 28.4397295, "amplitude_m": 0.25, "phase_deg": 302.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 0.7 },
+            { "name": "K2", "speed_deg_per_hour": 30.0821373, "amplitude_m": 0.1, "phase_deg": 8.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 1.8 },
+            { "name": "K1", "speed_deg_per_hour": 15.0410686, "amplitude_m": 0.08, "phase_deg": 191.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 2.0 },
+            { "name": "O1", "speed_deg_per_hour": 13.9430356, "amplitude_m": 0.07, "phase_deg": 45.0, "amp_uncertainty_m": 0.003, "phase_uncertainty_deg": 2.4 }
+          ],
+          "time_base": {
+            "code": "verified",
+            "reason": "declared utc_instant confirmed by the sibling record example-ie-quay-new and EOT20",
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "decided_in": "20991231",
+            "evidence": [
+              { "comparator_kind": "sibling_record", "comparator_id": "gesla:example-ie-quay-new", "distance_km": 0.0, "lag_min": 0.5 },
+              { "comparator_kind": "model", "comparator_id": "eot20", "distance_km": 1.0, "lag_min": 0.3 }
+            ]
+          },
+          "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "the record's licence does not allow publishing an OTC fit, so the publisher's constants are used; the station's gauge fit is a short record with fewer good hours" }
         }
       ]
     }

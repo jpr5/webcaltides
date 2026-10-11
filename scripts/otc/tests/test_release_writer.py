@@ -281,14 +281,15 @@ def test_csv_layout(release, tmp_path):
     rows = read_csv(path)
     types = [r["record_type"] for r in rows]
     assert types == _expected_types(release)
-    assert types[:9] == ["convention", "convention", "convention",
-                         "station", "constant_set", "constituent", "constituent", "constituent", "constituent"]
-    station = rows[3]
+    nc = len(release["conventions"])          # one row per convention first (5 in the 23aedbe example)
+    assert types[:nc + 6] == ["convention"] * nc + \
+        ["station", "constant_set", "constituent", "constituent", "constituent", "constituent"]
+    station = rows[nc]
     assert station["station_id"] == "OTC-EXAMPLE-0001"
     assert station["name"] == "Example Harbour (illustrative values, not data)"
     assert json.loads(station["aliases"]) == {"gesla": ["example-file-id"], "kartverket": "EXA"}
     assert station["amplitude_m"] == ""
-    cset = rows[4]
+    cset = rows[nc + 1]
     gesla = first_set(release)
     assert cset["set_id"] == "OTC-EXAMPLE-0001/gesla-fit" and cset["station_id"] == "OTC-EXAMPLE-0001"
     assert json.loads(cset["provenance"]) == gesla["provenance"]
@@ -298,11 +299,11 @@ def test_csv_layout(release, tmp_path):
     assert json.loads(cset["datum_named"]) == gesla["datum"]["named"]
     assert json.loads(cset["datum_basis"]) == gesla["datum"]["basis"]
     assert cset["datum_zero"] == "gauge_zero" and cset["datum_msl_offset_m"] == "1.0"
-    m2 = rows[5]
+    m2 = rows[nc + 2]
     assert (m2["set_id"], m2["name"], m2["amplitude_m"], m2["phase_deg"]) == \
         ("OTC-EXAMPLE-0001/gesla-fit", "M2", "0.5", "100.0")
     assert m2["station_id"] == "OTC-EXAMPLE-0001"
-    kv = rows[types.index("constant_set", 5)]
+    kv = rows[types.index("constant_set", nc + 2)]
     assert kv["set_id"] == "OTC-EXAMPLE-0001/kartverket" and kv["datum_chart_datum"] == "cd"
     tomb = rows[types.index("tombstone")]
     assert (tomb["station_id"], tomb["status"], tomb["removed_in"]) == ("OTC-EXAMPLE-0002", "removed", D)
@@ -373,7 +374,8 @@ def test_parquet_matches_csv(release, tmp_path):
     assert table.num_rows == len(rows)
     assert table.column("record_type").to_pylist() == [r["record_type"] for r in rows]
     amps = table.column("amplitude_m").to_pylist()
-    assert amps[5] == 0.5 and amps[3] is None
+    nc = len(release["conventions"])
+    assert amps[nc + 2] == 0.5 and amps[nc] is None
     assert str(table.schema.field("amplitude_m").type) == "double"
     assert str(table.schema.field("good_samples").type) == "int64"
 

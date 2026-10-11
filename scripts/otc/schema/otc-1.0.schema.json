@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://opentideconstants.org/schema/otc-1.0.schema.json",
   "title": "OpenTideConstants release document",
-  "description": "format_version 1.0. Schema for OTC_{YYYYMMDD}.json. Each line of OTC_{YYYYMMDD}.jsonl (and of the optional OTC_{YYYYMMDD}.jsonl.gz) is one station document, valid against #/$defs/station. OTC_{YYYYMMDD}.meta.json is the same document without `stations`, valid against #/$defs/meta, so a .jsonl reader can get the conventions, licences, constituent table and release metadata. Units: metres, metres per second (current amplitudes), degrees, degrees per hour, UTC. Every anchored pattern of a value ends with $(?![\\s\\S]) so that a validator whose $ also matches before a final newline (Python re) still rejects one. Cross-references (convention_id, licence_id, recommended_set_id, constituent names, astro_table_id, datum.chart_datum, default_current_bin, current_offsets reference_station_id and reference_bin) must resolve inside the same release, alias ids must be unique within each alias system across the release, and bin numbers must be unique within a set's current_bins and within a station's current_offsets. JSON Schema cannot express these, so the release build checks them separately. The build also checks: (1) a no_constants set with too_short has fewer than release.fit_min_good_hours hours of good data, and every set with constants fitted from a record has at least that many; good_hours is never more than the hours between record_span start and end; (2) a station's recommended set is never a no_constants set, never a short_record set when the station has a set of the same quantity with constants and more good_hours, and always has the quantity of the station's kind; (3) a time_base correction has from different from to, its from equals declared and its to equals published, and an unverified or disputed time_base has published equal to declared; (4) a tombstone's merged_into names an active station whose aliases include every alias id the removed station had; (5) provenance.carried_from_release is earlier than the release datestamp and names a release that held the same set_id, and a carried set's convention_id and licence_id exist in this release; (6) recommended_set_id is null on a reference station only when every set of the station is no_constants (the schema checks this too), and a subordinate station has constant sets, subordinate_offsets or current_offsets (the schema checks this too); (7) every constituent of every set with constants has a row in its convention's astro table, each row's speed equals the set's speed and the constituents table speed within 1e-7 degrees per hour, every v0u_deg and f array has last_year - first_year + 1 entries, and a convention's tables_sha256, when present, equals its astro table's; (8) datum.chart_datum names a key of datum.named; (9) datum.basis and datum.named have the same keys; (10) a key starting with otc_ has kind computed or observed and exists only when the same key without the prefix is published on the same set; (11) a datum basis control.station_id and control.set_id resolve to a set in the release, and for an observed level that set has a 19-year determination over the same epoch of every control level that the method's formulas use: the standard method MTL, MSL, DTL (when the set writes DTL), the mean range (MHW, MLW) and the inequalities (MHHW, MLLW); the modified range ratio method MTL, DTL, MSL, the mean range and the great diurnal range (MHHW, MLLW); the direct method MHW and MHHW; so a 19-year determination with only MHW and MHHW (truncated lows) is a control for the direct method only; (12) per station: when any set of a station has a published chart datum, no set of that station has a computed or observed chart datum. Published means published by the station's chart-datum publisher: in the Baltic and the Kattegat the charting authority, and also the charting authority for the Baltic gauge operators' (FMI, SMHI, DMI, WSV) gauges outside them (for example DMI's Esbjerg); elsewhere the source that states it (NOAA, Kartverket, LINZ, JMA, PEGELONLINE, Marine Institute); and, outside the Baltic and Kattegat, a GESLA record or SHOM REFMAR gauge whose stated zero is the chart datum (zero chart_datum, published cd = 0; a record stating BSCD2000 follows the charting authority). An older pre-BSCD2000 datum counts. Another set there has the publisher's datum, re-expressed above its own zero, or no chart datum; (13) every datum date is a real calendar date, and every datum epoch and data_span has start <= end; (14) a first_reduction with the flag no_qualified_control has an epoch equal to its data_span, covers whole years when it has 12 or more months, and does not have a primary's coverage (at least 216 counted months inside the OTC datum epoch with every calendar month counted in at least 17 of the 19 years); one without it (a 19-year determination) has its data_span inside the OTC datum epoch and every calendar month counted in at least 17 of the 19 years; and data_span.months is never more than the calendar months from data_span start to end.",
+  "description": "format_version 1.0. Schema for OTC_{YYYYMMDD}.json. Each line of OTC_{YYYYMMDD}.jsonl (and of the optional OTC_{YYYYMMDD}.jsonl.gz) is one station document, valid against #/$defs/station. OTC_{YYYYMMDD}.meta.json is the same document without `stations`, valid against #/$defs/meta, so a .jsonl reader can get the conventions, licences, constituent table and release metadata. Units: metres, metres per second (current amplitudes), degrees, degrees per hour, UTC. Every anchored pattern of a value ends with $(?![\\s\\S]) so that a validator whose $ also matches before a final newline (Python re) still rejects one. Cross-references (convention_id, licence_id, recommended_set_id, constituent names, astro_table_id, datum.chart_datum, default_current_bin, current_offsets reference_station_id and reference_bin) must resolve inside the same release, alias ids must be unique within each alias system across the release, and bin numbers must be unique within a set's current_bins and within a station's current_offsets. JSON Schema cannot express these, so the release build checks them separately. The build also checks: (1) a no_constants set with too_short has fewer than release.fit_min_good_hours hours of good data, and every gauge set with constants has at least that many; good_hours is never more than the hours between record_span start and end; (2) a station's recommended set is never a no_constants set, never a short_record set when the station has a set of the same quantity with constants and more good_hours, whatever their source types, and always has the quantity of the station's kind; (3) a time_base correction has from different from to, its from equals declared and its to equals published, and an unverified or disputed time_base has published equal to declared; (4) a tombstone's merged_into names an active station whose aliases include every alias id the removed station had; (5) provenance.carried_from_release is earlier than the release datestamp and names a release that held the same set_id, and a carried set's convention_id and licence_id exist in this release; (6) recommended_set_id is null on a reference station only when every set of the station is no_constants (the schema checks this too), and a subordinate station has constant sets, subordinate_offsets or current_offsets (the schema checks this too); (7) every constituent of every set with constants has a row in its convention's astro table, each row's speed equals the set's speed and the constituents table speed within 1e-7 degrees per hour, every v0u_deg and f array has last_year - first_year + 1 entries, and a convention's tables_sha256, when present, equals its astro table's; (8) datum.chart_datum names a key of datum.named; (9) datum.basis and datum.named have the same keys; (10) a key starting with otc_ has kind computed or observed and exists only when the same key without the prefix is published on the same set; (11) a datum basis control.station_id and control.set_id resolve to a set in the release, and for an observed level that set has a 19-year determination over the same epoch of every control level that the method's formulas use: the standard method MTL, MSL, DTL (when the set writes DTL), the mean range (MHW, MLW) and the inequalities (MHHW, MLLW); the modified range ratio method MTL, DTL, MSL, the mean range and the great diurnal range (MHHW, MLLW); the direct method MHW and MHHW; so a 19-year determination with only MHW and MHHW (truncated lows) is a control for the direct method only; (12) per station: when any set of a station has a published chart datum, no set of that station has a computed or observed chart datum. Published means published by the station's chart-datum publisher: in the Baltic and the Kattegat the charting authority, and also the charting authority for the Baltic gauge operators' (FMI, SMHI, DMI, WSV) gauges outside them (for example DMI's Esbjerg); elsewhere the source that states it (NOAA, Kartverket, LINZ, JMA, PEGELONLINE, Marine Institute); and, outside the Baltic and Kattegat, a GESLA record or SHOM REFMAR gauge whose stated zero is the chart datum (zero chart_datum, published cd = 0; a record stating BSCD2000 follows the charting authority). An older pre-BSCD2000 datum counts. Another set there has the publisher's datum, re-expressed above its own zero, or no chart datum; (13) every datum date is a real calendar date, and every datum epoch and data_span has start <= end; (14) a first_reduction with the flag no_qualified_control has an epoch equal to its data_span, covers whole years when it has 12 or more months, and does not have a primary's coverage (at least 216 counted months inside the OTC datum epoch with every calendar month counted in at least 17 of the 19 years); one without it (a 19-year determination) has its data_span inside the OTC datum epoch and every calendar month counted in at least 17 of the 19 years; and data_span.months is never more than the calendar months from data_span start to end.",
   "type": "object",
   "required": ["format_version", "release", "conventions", "licences", "constituents", "stations"],
   "additionalProperties": false,
@@ -327,7 +327,7 @@
           }
         },
         "recommended_set_id": {
-          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, or for a station whose every set is no_constants. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. A set flagged short_record never outranks a set of the same quantity at the same station that has constants and more hours of good data (record_span.good_hours). The release build checks these.",
+          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, or for a station whose every set is no_constants. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. A set flagged short_record never outranks a set of the same quantity at the same station that has constants and more hours of good data (record_span.good_hours), whatever their source types. The release build checks these.",
           "type": ["string", "null"]
         },
         "constant_sets": { "type": "array", "items": { "$ref": "#/$defs/constant_set" } },
@@ -367,8 +367,8 @@
         "set_id": { "type": "string", "minLength": 1 },
         "source": { "description": "e.g. gesla-fit, noaa, kartverket.", "type": "string", "pattern": "^[a-z0-9-]+$(?![\\s\\S])" },
         "source_type": {
-          "description": "official: constants published by the agency that runs the gauge; gauge: an OTC fit to gauge observations; model: interpolated from a global tide model.",
-          "enum": ["official", "gauge", "model"]
+          "description": "official: constants published by the agency that runs the gauge; gauge: an OTC fit to gauge observations; analysis: constants published by a third party from gauge observations: not the gauge operator, not an OTC fit; model: interpolated from a global tide model. A station's recommended set ranks them in this order.",
+          "enum": ["official", "gauge", "analysis", "model"]
         },
         "quantity": {
           "description": "What the constants predict. A station's kind comes from its recommended set, or from its reference station's recommended set if it is subordinate.",
@@ -385,7 +385,7 @@
             "end": { "type": "string", "format": "date-time" },
             "good_samples": { "type": "integer", "minimum": 0 },
             "good_hours": {
-              "description": "Hours of good data in the record, after quality control. Required on every set fitted from a gauge record. This is the record length that decides which constituents can be fitted, whether constants are fitted at all, and how a set ranks. start and end give the span.",
+              "description": "Hours of good data in the record, after quality control. Required on every gauge set; an analysis set has it when its publisher states it. This is the record length that decides which constituents can be fitted, whether constants are fitted at all, and how a set ranks. start and end give the span.",
               "type": "number",
               "minimum": 0
             }
@@ -401,7 +401,7 @@
         "convention_id": { "type": "string", "minLength": 1 },
         "licence_id": { "type": "string", "minLength": 1 },
         "qc_status": {
-          "description": "ok: constants are published and qc_flags is empty. flagged: constants are published and qc_flags says what to know about them. no_constants: the set is listed but no constants were fitted; no_constants_reason says why, and qc_flags has at least one flag. No status marks a record as removed: every record stays listed. A set carried over from an earlier release has the carried_over flag and provenance.carried_from_release.",
+          "description": "ok: constants are published and qc_flags is empty. flagged: constants are published and qc_flags says what to know about them. no_constants: the set is listed but no constants were fitted; no_constants_reason says why, and qc_flags has at least one flag. No status marks a record as removed: every record stays listed, except that a third-party analysis (TICON-4) of a record whose time base OTC disputes is not carried. A set carried over from an earlier release has the carried_over flag and provenance.carried_from_release.",
           "enum": ["ok", "flagged", "no_constants"]
         },
         "qc_flags": { "type": "array", "items": { "$ref": "#/$defs/qc_flag" } },
@@ -476,9 +476,30 @@
           "else": { "not": { "required": ["current_bins"] } }
         },
         {
-          "description": "Every set fitted from a gauge record carries a time-base annotation and its hours of good data.",
+          "description": "Every gauge set (an OTC fit) carries a time-base annotation and its hours of good data.",
           "if": { "properties": { "source_type": { "const": "gauge" } } },
           "then": { "required": ["time_base", "record_span"], "properties": { "record_span": { "required": ["good_hours"] } } }
+        },
+        {
+          "description": "Every analysis set carries the annotation of OTC's time-base audit of the same gauge record. verified or unverified: the constants are as published. corrected: OTC applied the correction to the publisher's phases, and provenance.modified says so. disputed: the set is not carried, so no analysis set has it. Hours of good data are optional.",
+          "if": { "properties": { "source_type": { "const": "analysis" } } },
+          "then": {
+            "required": ["time_base"],
+            "properties": { "time_base": { "properties": { "code": { "not": { "const": "disputed" } } } } },
+            "if": { "properties": { "time_base": { "required": ["code"], "properties": { "code": { "const": "corrected" } } } } },
+            "then": { "required": ["provenance"], "properties": { "provenance": { "required": ["modified"] } } },
+            "else": { "properties": { "provenance": { "not": { "required": ["modified"] } } } }
+          },
+          "else": { "properties": { "provenance": { "not": { "required": ["modified"] } } } }
+        },
+        {
+          "description": "The source names its source type: ticon-4 is an analysis, gesla-fit is a gauge fit. The ticon-4 licence goes with the ticon-4 source, and only with it.",
+          "allOf": [
+            { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "source_type": { "const": "analysis" } } } },
+            { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "licence_id": { "const": "ticon-4" } } } },
+            { "if": { "properties": { "licence_id": { "const": "ticon-4" } }, "required": ["licence_id"] }, "then": { "required": ["source"], "properties": { "source": { "const": "ticon-4" } } } },
+            { "if": { "properties": { "source": { "const": "gesla-fit" } }, "required": ["source"] }, "then": { "properties": { "source_type": { "const": "gauge" } } } }
+          ]
         },
         {
           "description": "ok: constants and no flags.",
@@ -560,6 +581,11 @@
           "then": { "required": ["time_base"], "properties": { "time_base": { "properties": { "code": { "enum": ["unverified", "disputed"] } } } } }
         },
         {
+          "description": "A source_quality_note flag is only on an analysis set.",
+          "if": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "source_quality_note" } } } } } },
+          "then": { "required": ["source_type"], "properties": { "source_type": { "const": "analysis" } } }
+        },
+        {
           "description": "A carried-over set has the carried_over flag, and the flag has the release it came from. A gate fallback is a carry-over.",
           "if": { "required": ["provenance"], "properties": { "provenance": { "required": ["carried_from_release"] } } },
           "then": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "carried_over" } } } } } }
@@ -596,7 +622,7 @@
       "pattern": "^(utc_instant|utc_mean_start60|utc_(plus|minus)_[1-9][0-9]?|local_dst:[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+)+|step:[0-9]{4}-[0-9]{2}-[0-9]{2}(,[0-9]{4}-[0-9]{2}-[0-9]{2})*)$(?![\\s\\S])"
     },
     "time_base_annotation": {
-      "description": "The time-base annotation of the record behind a set. verified: the evidence confirms the declared time base. corrected: the evidence shows another class, and the constants are fitted after the correction; this needs positive evidence. unverified: no comparator gives a verdict, so the declared time base (GESLA's, for a GESLA record) is kept. disputed: the evidence disagrees with the declared time base but no class explains it, so the declared time base is kept.",
+      "description": "The time-base annotation of the record behind a set. On an analysis set, it is OTC's audit of the same record, and corrected means that OTC applied the correction to the publisher's phases. verified: the evidence confirms the declared time base. corrected: the evidence shows another class, and the constants are fitted after the correction; this needs positive evidence. unverified: no comparator gives a verdict, so the declared time base (GESLA's, for a GESLA record) is kept. disputed: the evidence disagrees with the declared time base but no class explains it, so the declared time base is kept.",
       "type": "object",
       "required": ["code", "reason", "declared", "published", "decided_in"],
       "additionalProperties": false,
@@ -766,18 +792,18 @@
       }
     },
     "qc_flag": {
-      "description": "Something a user of the set needs to know. time_base: the time base is unverified or disputed (see the set's time_base). broken_record: see record_issues. short_record: the record is too short to resolve every candidate constituent; see record_span.good_hours, dropped_constituents and expected_accuracy. carried_over: the source failed a check in this build, so the set keeps its constants from provenance.carried_from_release.",
+      "description": "Something a user of the set needs to know. time_base: the time base is unverified or disputed (see the set's time_base). broken_record: see record_issues. short_record: the record is too short to resolve every candidate constituent; see record_span.good_hours, dropped_constituents and expected_accuracy. carried_over: the source failed a check in this build, so the set keeps its constants from provenance.carried_from_release. source_quality_note: on an analysis set only, a quality note that its publisher gives with the constants, for example a high share of missing data; values holds the publisher's numbers.",
       "type": "object",
       "required": ["flag", "reason"],
       "additionalProperties": false,
       "properties": {
-        "flag": { "enum": ["time_base", "broken_record", "microtidal", "non_tidal_signal", "short_record", "sibling_disagreement", "carried_over"] },
+        "flag": { "enum": ["time_base", "broken_record", "microtidal", "non_tidal_signal", "short_record", "sibling_disagreement", "carried_over", "source_quality_note"] },
         "reason": { "description": "One line for people, not blank.", "type": "string", "pattern": "\\S" },
         "values": { "description": "The numbers behind the flag: each value a number or null. No key may name a status.", "type": "object", "propertyNames": { "not": { "$ref": "#/$defs/status_like_name" } }, "additionalProperties": { "type": ["number", "null"] } }
       }
     },
     "provenance": {
-      "description": "Where the set came from and what was done to it. A closed list of keys: qc_status is the only status of a set, so no provenance key can carry one. A new source-specific key is added here first. Keys for every set: adapter_version, input_sha256, tcd_sha256, selection_reason, decision, carried_from_release, build (the build-only fields, required on every set). JMA: owner, redistribution, phase_reference_longitude_deg, jma_station_code, analysis_years, source_constituents_not_published. LINZ: member, position, header_dropped.",
+      "description": "Where the set came from and what was done to it. A closed list of keys: qc_status is the only status of a set, so no provenance key can carry one. A new source-specific key is added here first. Keys for every set: adapter_version, input_sha256, tcd_sha256, selection_reason, decision, carried_from_release, build (the build-only fields, required on every set). Analysis sets: modified. JMA: owner, redistribution, phase_reference_longitude_deg, jma_station_code, analysis_years, source_constituents_not_published. LINZ: member, position, header_dropped.",
       "type": "object",
       "required": ["build"],
       "additionalProperties": false,
@@ -862,6 +888,11 @@
               "reason": { "type": "string", "pattern": "\\S" }
             }
           }
+        },
+        "modified": {
+          "description": "Analysis sets only, and exactly when the set's time_base code is corrected: one line saying what OTC changed in the publisher's constants, for example the phases moved by the time-base correction. This is the indication of changes that a CC BY 4.0 licence asks for.",
+          "type": "string",
+          "pattern": "\\S"
         },
         "carried_from_release": {
           "description": "The datestamp of the earlier release whose constants this set keeps, because its source failed a check in this build. Goes with the carried_over flag.",

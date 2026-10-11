@@ -57,9 +57,9 @@ __all__ = [
     "assemble_release", "assert_contract", "check_contract", "is_relative_inside", "sha256_file",
 ]
 
-SourceType = Literal["official", "gauge", "model"]
+SourceType = Literal["official", "gauge", "analysis", "model"]
 Quantity = Literal["water_level", "current"]
-SOURCE_TYPES = ("official", "gauge", "model")
+SOURCE_TYPES = ("official", "gauge", "analysis", "model")
 QUANTITIES = ("water_level", "current")
 STATION_HINT_KEYS = ("name", "country", "lat", "lon", "type", "timezone", "aliases")
 OPTIONAL_HINT_KEYS = ("default_current_bin",)

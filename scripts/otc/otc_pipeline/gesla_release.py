@@ -69,7 +69,7 @@ def gesla_convention(table_id: str, table: TcdTable) -> dict:
             "tables_sha256": table.tcd_sha256, "astro_table_id": table_id}
 
 
-TIER = {"official": 0, "gauge": 1, "model": 2}
+TIER = {"official": 0, "gauge": 1, "analysis": 2, "model": 3}   # format 1.0 source_type order (23aedbe)
 RANK_STEPS = ("tier", "time_base", "short_record", "instantaneous", "sub_hourly", "current", "originator", "commercial",
               "epoch_hours", "recency", "research_quality", "record_id")
 CURRENT_S = 2 * 365.25 * 86400     # "current": ends within 2 years of the newest set
