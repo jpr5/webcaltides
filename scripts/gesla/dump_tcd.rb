@@ -7,10 +7,13 @@
 # (equilibrium_for_year and node_factor_for_year, with the TCD's first year), so the
 # GESLA fit uses the engine's own values. The output records the TCD SHA-256.
 #
-#   ruby scripts/gesla/dump_tcd.rb [--tcd PATH] --out PATH [--require M2,EP2,...]
+#   ruby scripts/gesla/dump_tcd.rb [--tcd PATH] --out PATH [--require M2,EP2,...] [--years 1700-2100]
 #
 # --require checks that each listed name maps to a TCD constituent (TICON spellings
 # are mapped as in tcd_constituent_name); an unknown name exits non-zero.
+#
+# --years FIRST-LAST dumps another span (default 1900-2100, the fit's dump). The release's
+# astro tables (KP0b, the run under scripts/otc/tools) dump 1700-2100, the TCD's whole range.
 
 require 'bundler/setup'
 require 'digest'
@@ -34,6 +37,18 @@ module GeslaTcdDump
 
     module_function
 
+    # The tcd gem (1.0.2) reads the speed, equilibrium and node-factor tables as one bit stream, but
+    # libtcd byte-aligns each table. The two agree only when the constituent count n is a multiple of 8
+    # (n x 31 and n x years x 15 bits are then whole bytes); otherwise every value after the speeds is
+    # read misaligned, silently. The XTide TCD in use has 176 = 22 x 8. Raises for any other count.
+    def check_gem_alignment(n_constituents, tcd_path)
+        return if (n_constituents % 8).zero?
+
+        raise ArgumentError, "#{tcd_path}: #{n_constituents} constituents, not a multiple of 8: the tcd gem " \
+                             'misreads the equilibrium and node-factor tables of such a file (it does not ' \
+                             'byte-align each table as libtcd writes it), so its V0+u and f would be wrong'
+    end
+
     # Returns the TCD name for a constituent name, mapping the TICON spellings.
     # Raises when the TCD does not define the name.
     def tcd_constituent_name(raw_name, tcd_names)
@@ -53,6 +68,7 @@ module GeslaTcdDump
                 raise ArgumentError, "TCD years #{db.year_range} do not cover #{years}"
             end
 
+            check_gem_alignment(db.constituents.size, tcd_path)
             first_year = db.year_range.first
             db.constituents.to_h do |c|
                 [c.name, { 'f' => years.map { |y| c.node_factor_for_year(y, first_year) },
@@ -69,16 +85,26 @@ module GeslaTcdDump
           'years' => [years.first, years.last] }
     end
 
+    # Returns the year range for a --years value 'FIRST-LAST'. Raises unless FIRST <= LAST.
+    def parse_years(value)
+        m = /\A(\d{1,4})-(\d{1,4})\z/.match(value.to_s)
+        raise ArgumentError, "--years #{value.inspect} is not FIRST-LAST" unless m && m[1].to_i <= m[2].to_i
+
+        (m[1].to_i..m[2].to_i)
+    end
+
     def main(argv)
-        opts = { tcd: DEFAULT_TCD, require: [] }
+        opts = { tcd: DEFAULT_TCD, require: [], years: YEARS }
         OptionParser.new do |o|
             o.on('--tcd PATH') { |v| opts[:tcd] = v }
             o.on('--out PATH') { |v| opts[:out] = v }
             o.on('--require NAMES', Array) { |v| opts[:require] = v }
+            o.on('--years FIRST-LAST') { |v| opts[:years] = v }
         end.parse!(argv)
-        abort 'usage: dump_tcd.rb [--tcd PATH] --out PATH [--require NAMES]' unless opts[:out]
+        abort 'usage: dump_tcd.rb [--tcd PATH] --out PATH [--require NAMES] [--years FIRST-LAST]' unless opts[:out]
 
-        table = dump(opts[:tcd])
+        years = opts[:years].is_a?(Range) ? opts[:years] : parse_years(opts[:years])
+        table = dump(opts[:tcd], years: years)
         opts[:require].each { |n| tcd_constituent_name(n, table['constituents'].keys) }
 
         tmp = "#{opts[:out]}.tmp.#{$$}"

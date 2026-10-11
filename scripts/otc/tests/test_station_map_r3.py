@@ -478,7 +478,7 @@ def test_a_station_whose_every_set_has_a_clock_offset_flag_is_refused_and_report
 
 
 def _kw(table, docs, station_ids, flags):  # noqa: F811
-    from astro_from_tcd import astro_table
+    from synthetic_congen import congen_run, kp0b_tables
     from test_format_1_0 import LICENCE, SPEEDS, TABLE_ID
     return dict(table=table, table_id=TABLE_ID, datestamp="20261010", created="2026-10-10T00:00:00Z",
                 build_commit="abcdef0", station_ids=station_ids, licences=[LICENCE],
@@ -487,7 +487,7 @@ def _kw(table, docs, station_ids, flags):  # noqa: F811
                 contributor_roles={d["contributor"]: "originator" for d in docs}, sibling_flags=flags, tombstones=[],
                 station_map_inputs={"fit_run_results_sha256": "f" * 64}, fit_run_results_sha256="f" * 64, disputed_reasons={},
                 sampling_s={d["record_id"]: 3600 for d in docs},
-                astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)])
+                astro_tables=kp0b_tables(congen_run(table), SPEEDS, TABLE_ID), congen_run=congen_run(table))
 
 
 # --- fix-r5: EOT20 picks the side of a refused clock offset only on a clear verdict ---------------

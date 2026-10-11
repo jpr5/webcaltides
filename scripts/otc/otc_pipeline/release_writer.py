@@ -35,7 +35,9 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, ValidationError, validators
 
-__all__ = ["CSV_COLUMNS", "FORMAT_VERSION", "SCHEMA_SHA256", "SchemaPinError", "check_release_dir",
+from otc_pipeline.astro_tables import CongenRun, astro_table_errors, release_table_errors
+
+__all__ = ["BuiltRelease", "CSV_COLUMNS", "FORMAT_VERSION", "SCHEMA_SHA256", "SchemaPinError", "check_release_dir",
            "next_datestamp", "pinned_schema", "validate_release", "write_release"]
 
 # Use with fullmatch: in Python `$` also matches before a trailing "\n".
@@ -469,7 +471,8 @@ def _current_station_errors(st: dict, where: str, by_id: dict, licences: dict,
 def validate_release(release: dict) -> list[str]:
     """Errors against the pinned schema (pinned_schema: raises SchemaPinError off the pin; no other
     schema can be passed) + cross-reference errors (convention_id, licence_id,
-    recommended_set_id, reference_station_id) + duplicate alias ids + name maxLength. Empty list = valid."""
+    recommended_set_id, reference_station_id, astro_table_id) + duplicate alias ids + name maxLength
+    + build check 7 (astro_tables.astro_table_errors). Empty list = valid."""
     schema = pinned_schema()
     if not isinstance(release, dict):
         return [f"(root): release must be a JSON object, not {type(release).__name__}"]
@@ -484,6 +487,7 @@ def validate_release(release: dict) -> list[str]:
             schema_errors.add((tuple(str(p) for p in e.absolute_path), f"{_path(e.absolute_path)}: {e.message}"))
     errors += [msg for _, msg in sorted(schema_errors)]
     errors += _cross_reference_errors(release)
+    errors += astro_table_errors(release)
     return errors
 
 
@@ -626,8 +630,15 @@ def _parquet_bytes(rows: list[dict]) -> bytes:
 
 # --- writing -----------------------------------------------------------------------
 
+class BuiltRelease(dict):
+    """A release document made by a release build (gesla_release.build_release). It is a plain dict for
+    every reader and serialises exactly like one; the type is the marker, never written. write_release
+    refuses congen_run=None for it, so a built release's astro tables are always checked against the
+    congen run before they are written. Copies keep it (copy.deepcopy); dict(release) drops it."""
+
+
 def write_release(release: dict, out_dir: Path, *, datestamp: str,
-                  app_export: list[dict] | None, parquet: bool = False,
+                  app_export: list[dict] | None, congen_run: CongenRun | None, parquet: bool = False,
                   jsonl_gz: bool = False) -> list[Path]:
     """Writes OTC_{D}.json, .json.gz, .jsonl, .meta.json, .csv (RFC 4180, UTF-8, LF, record_type column),
     optional .parquet, optional .app.json, then OTC_{D}.sha256 last. Refuses if validate_release is non-empty.
@@ -635,6 +646,12 @@ def write_release(release: dict, out_dir: Path, *, datestamp: str,
 
     `jsonl_gz=True` also writes the optional OTC_{D}.jsonl.gz. Every file is built in memory first and
     then linked into place without replacing anything; on any failure the files of this call are removed.
+    `congen_run` (required): the congen run (astro_tables.load_congen_run) the release's astro tables
+    come from. Every table is checked against it again here (astro_tables.release_table_errors), so a
+    table changed after build_release is not written. None is only for a document that is not a release
+    build's (the schema example, test fixtures): its tables are then checked by validate_release only.
+    A BuiltRelease (a document from build_release) with congen_run=None is refused.
+
     Raises ValueError (invalid release or arguments) or FileExistsError (the stem is already used).
     """
     out_dir = Path(out_dir)
@@ -643,6 +660,16 @@ def write_release(release: dict, out_dir: Path, *, datestamp: str,
     errors = validate_release(release)
     if errors:
         raise ValueError(f"release is not valid ({len(errors)} errors):\n  " + "\n  ".join(errors))
+    if congen_run is None and isinstance(release, BuiltRelease):
+        raise ValueError("this release was made by a release build: write it with congen_run (its congen run), "
+                         "so its astro tables are checked again; congen_run=None is only for other documents")
+    if congen_run is not None:
+        if not isinstance(congen_run, CongenRun):
+            raise ValueError(f"congen_run must be astro_tables.load_congen_run's CongenRun, not {type(congen_run).__name__}")
+        bad_tables = [e for t in release.get("astro_tables", []) for e in release_table_errors(t, *congen_run)]
+        if bad_tables:
+            raise ValueError(f"the astro tables are not the congen run's ({len(bad_tables)} errors): "
+                             + "; ".join(bad_tables[:10]))
     if release["release"]["datestamp"] != datestamp:
         raise ValueError(f"release.datestamp {release['release']['datestamp']!r} != datestamp {datestamp!r}")
     if app_export is not None:

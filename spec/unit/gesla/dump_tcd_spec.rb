@@ -42,6 +42,27 @@ RSpec.describe GeslaTcdDump do
         end
     end
 
+    describe '.check_gem_alignment' do
+        it 'accepts a constituent count that is a multiple of 8, as the TCD in use (176) is' do
+            expect(dump['constituents'].size).to eq(176)
+            expect { described_class.check_gem_alignment(176, 'x.tcd') }.not_to raise_error
+        end
+
+        it 'refuses any other count, naming the tcd gem misalignment' do
+            [177, 175, 1].each do |n|
+                expect { described_class.check_gem_alignment(n, 'x.tcd') }
+                    .to raise_error(ArgumentError, /x\.tcd: #{n} constituents, not a multiple of 8: the tcd gem misreads/)
+            end
+        end
+
+        it 'stops .dump on a TCD with 177 constituents before reading any value' do
+            db = double('TCD', year_range: (1700..2100), constituents: Array.new(177) { double('c') })
+            allow(TCD).to receive(:open).with('g177.tcd').and_yield(db)
+            expect { described_class.dump('g177.tcd', years: (2020..2022)) }
+                .to raise_error(ArgumentError, /177 constituents, not a multiple of 8/)
+        end
+    end
+
     describe '.tcd_constituent_name' do
         let(:tcd_names) { dump['constituents'].keys }
 
@@ -69,6 +90,34 @@ RSpec.describe GeslaTcdDump do
                 end
                 expect(outs[0]).to eq(outs[1])
                 expect(JSON.parse(outs[0])['constituents']).to eq(JSON.parse(JSON.generate(dump['constituents'])))
+            end
+        end
+
+        it 'dumps another span with --years, with the same values in the years both dumps hold' do
+            Dir.mktmpdir do |dir|
+                out = File.join(dir, 'full.json')
+                _, err, status = Open3.capture3('ruby', script, '--tcd', tcd_path, '--out', out, '--years', '1700-2100')
+                expect(status).to be_success, err
+                full = JSON.parse(File.binread(out))
+                expect(full['years']).to eq([1700, 2100])
+                expect(full['tcd_sha256']).to eq(dump['tcd_sha256'])
+                %w[M2 K1 SA].each do |name|
+                    c = full['constituents'].fetch(name)
+                    expect([c['v0u'].size, c['f'].size]).to eq([401, 401])
+                    expect(c['v0u'][200..]).to eq(dump['constituents'][name]['v0u'])
+                    expect(c['f'][200..]).to eq(dump['constituents'][name]['f'])
+                end
+            end
+        end
+
+        it 'stops with a non-zero exit on a --years value that is not FIRST-LAST' do
+            Dir.mktmpdir do |dir|
+                %w[2100-1700 1700 x-2100].each do |bad|
+                    _, err, status = Open3.capture3('ruby', script, '--tcd', tcd_path, '--out', File.join(dir, 'x.json'),
+                                                    '--years', bad)
+                    expect(status).not_to be_success, bad
+                    expect(err).to match(/--years/)
+                end
             end
         end
 

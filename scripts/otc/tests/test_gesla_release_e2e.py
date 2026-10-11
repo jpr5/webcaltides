@@ -12,10 +12,12 @@ Skips unless these are set (local caches; no GESLA data is in git):
   OTC_AUDIT_DIR     an audit output dir that passes check_audit_outputs; or
   OTC_TIMEBASE_CSV  the rows of an audit made before the crash check (G04-int full-3), which the gate
                     refuses: the test puts them in a stub audit dir (audit_stub)
-and the verified GESLA cache and the TCD dump are in $OTC_WORK.
+and the verified GESLA cache and the TCD dump are in $OTC_WORK, and a congen_tables.sh run is in
+$OTC_CONGEN_RUN (default $OTC_WORK/astro/congen-1.7-r2).
 
-Station ids and the astro table are test inputs: their slots (the station map, KP0b) are not done.
-The licences are the real per-contributor ones (L-NC, otc_pipeline.gesla_licences). The astro table holds the TCD dump's own values (astro_from_tcd).
+Station ids are test inputs: their slot (the station map) is not done for this test.
+The licences are the real per-contributor ones (L-NC, otc_pipeline.gesla_licences). The astro table is KP0b's,
+from the congen run (astro_tables.astro_table).
 """
 import hashlib
 import json
@@ -30,12 +32,12 @@ from gesla.select_constituents import CANDIDATES
 from gesla.timebase_verdict import boxcar_response
 
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
+from otc_pipeline.astro_tables import astro_table, load_congen_run
 from otc_pipeline.gesla_release import build_release
 from otc_pipeline.gesla_sets import (FitIntegrityError, docs_from_fit_run, fit_records, load_audit, load_tcd_dump,
                                      needs_stamp, published_correction)
 from otc_pipeline.release_writer import SCHEMA_SHA256, check_release_dir, validate_release, write_release
 
-from astro_from_tcd import astro_table
 from audit_stub import stub_audit
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,7 +74,10 @@ def inputs(tmp_path_factory):
         pytest.skip(f"no verified GESLA cache: {e}")
     dump = load_tcd_dump(otc_work() / "tcd_table.json")
     roles = load_contributor_roles(REPO / "data/gesla/contributor_roles.csv")
-    return run, audit_dir, rel, dump, roles
+    congen_run = Path(os.environ.get("OTC_CONGEN_RUN", otc_work() / "astro" / "congen-1.7-r2"))
+    if not (congen_run / "PROVENANCE.json").is_file():
+        pytest.skip(f"needs a congen_tables.sh run in {congen_run}")
+    return run, audit_dir, rel, dump, roles, load_congen_run(congen_run)
 
 
 def choose(run: Path, tb: dict) -> tuple[list[str], list[str], str]:
@@ -110,7 +115,8 @@ def choose(run: Path, tb: dict) -> tuple[list[str], list[str], str]:
 
 
 def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
-    run, audit_dir, rel, dump, roles = inputs
+    run, audit_dir, rel, dump, roles, crun = inputs
+    congen, tcd = crun
     tb = load_audit(audit_dir).rows
     instant, mean60, short = choose(run, tb)
     # the pre-stamp run is not a source: its fit files are not bound to its manifest
@@ -128,11 +134,10 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
         epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in docs},
         sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
         fit_run_results_sha256="f" * 64, disputed_reasons={},
-        astro_tables=[astro_table(dump.table, names, table_id=TABLE_ID, first_year=dump.table.first_year,
-                                  last_year=dump.table.last_year)])
+        astro_tables=[astro_table(congen, tcd, names, table_id=TABLE_ID)], congen_run=crun)
     assert report.counts() == {"short_record": 1} and report.refused[0]["record"] == short
     assert sorted(report.published) == sorted(instant + mean60)
-    write_release(release, tmp_path, datestamp="20261010", app_export=None)
+    write_release(release, tmp_path, datestamp="20261010", app_export=None, congen_run=crun)
     assert check_release_dir(tmp_path) == []
     assert hashlib.sha256(SCHEMA_BYTES).hexdigest() == SCHEMA_SHA256
 
@@ -171,7 +176,7 @@ def test_the_gate_refuses_the_real_pre_crash_check_audit():
 
 def test_the_partial_corrected_run_is_refused(inputs):
     # G04-int fit-2/out refitted only the 11 hourly-mean records, with the out-of-tree driver: partial, unstamped
-    run, audit_dir, rel, dump, _ = inputs
+    run, audit_dir, rel, dump, _, _ = inputs
     partial = _env("OTC_FIT_PARTIAL_RUN")
     with pytest.raises(FitIntegrityError, match="status 'partial'"):
         docs_from_fit_run(partial, dump, rel, ["bhvalterleuchtturm-4990010-deu-wsv"], audit_dir=audit_dir)

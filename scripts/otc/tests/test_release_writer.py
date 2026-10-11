@@ -39,6 +39,7 @@ def first_set(doc):
 
 def write(release, out_dir, datestamp=D, **kw):
     kw.setdefault("app_export", None)
+    kw.setdefault("congen_run", None)   # the schema example and fixtures: not a release build's tables
     return write_release(release, out_dir, datestamp=datestamp, **kw)
 
 

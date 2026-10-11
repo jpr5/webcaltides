@@ -21,7 +21,7 @@ from otc_pipeline.gesla_sets import (FitIntegrityError, NotPublishable, fit_docu
                                      time_base_annotation)
 from otc_pipeline.release_writer import SCHEMA_SHA256, SchemaPinError, validate_release, write_release
 
-from astro_from_tcd import astro_table
+from synthetic_congen import congen_run, kp0b_tables
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "schema" / "otc-1.0.schema.json"
@@ -93,7 +93,7 @@ def build(table, docs, **over):
               contributor_roles={d["contributor"]: "originator" for d in docs},
               sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
               fit_run_results_sha256="f" * 64, disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in docs},
-              astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)])
+              astro_tables=kp0b_tables(congen_run(table), SPEEDS, TABLE_ID), congen_run=congen_run(table))
     kw.update(over)
     release, _report = build_release(docs, **kw)
     return release
@@ -114,7 +114,7 @@ def test_a_schema_copy_off_the_pin_stops_the_build(table, tmp_path, monkeypatch,
     release = build(table, [doc(table)])
     monkeypatch.setattr(release_writer, "SCHEMA_SHA256", "0" * 64)
     with pytest.raises(SchemaPinError):
-        write_release(release, tmp_path, datestamp=D, app_export=None)
+        write_release(release, tmp_path, datestamp=D, app_export=None, congen_run=congen_run(table))
     assert list(tmp_path.iterdir()) == []
     path = tmp_path / "doc.json"
     path.write_text(json.dumps(release))
@@ -180,7 +180,7 @@ def test_a_gesla_release_validates_against_1_0(table, tmp_path):
     assert release["format_version"] == "1.0" and release["release"]["min_reader_version"] == "1.0"
     assert jsonschema_errors(release) == []
     assert validate_release(release) == []
-    written = write_release(release, tmp_path, datestamp=D, app_export=None)
+    written = write_release(release, tmp_path, datestamp=D, app_export=None, congen_run=congen_run(table))
     on_disk = json.loads((tmp_path / f"OTC_{D}.json").read_text())
     assert on_disk == release and jsonschema_errors(on_disk) == []
     meta = json.loads((tmp_path / f"OTC_{D}.meta.json").read_text())

@@ -25,7 +25,7 @@ from otc_pipeline.gesla_sets import (CUT, REASON_MAX, FitIntegrityError, NotPubl
                                      write_fits)
 from otc_pipeline.release_writer import SchemaPinError, check_release_dir, validate_release, write_release
 
-from astro_from_tcd import astro_table
+from synthetic_congen import congen_run, kp0b_tables
 from audit_stub import stub_audit
 from test_format_1_0 import (D, LICENCE, META, SPEEDS, TABLE_ID, build, doc, fit_dict, stamped, tb_row)
 
@@ -219,7 +219,7 @@ def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(tab
               contributor_roles={"TEST": "originator"},
               sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
               fit_run_results_sha256="f" * 64, disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in good + [short]},
-              astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)])
+              astro_tables=kp0b_tables(congen_run(table), SPEEDS, TABLE_ID), congen_run=congen_run(table))
     fit_stage = [{"record": "tiny-1-nor-test", "reason": "too_short", "message": "100 good hours", "good_hours": 100.0}]
     release, report = build_release(good + [short], refused=fit_stage, **kw)
     assert [s["constant_sets"][0]["source_record_id"] for s in release["stations"]] == ["good-0-nor-test", "good-1-nor-test"]
@@ -249,7 +249,7 @@ def test_a_withheld_licence_is_refused_and_reported_never_published(table, tmp_p
               contributor_roles={"TEST": "originator"},
               sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
               fit_run_results_sha256="f" * 64, disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in [good] + held},
-              astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)], refused=[])
+              astro_tables=kp0b_tables(congen_run(table), SPEEDS, TABLE_ID), congen_run=congen_run(table), refused=[])
     reason = "BODC: no data or products to third parties without prior consent"
     release, report = build_release([good] + held, withheld={"gesla-bodc-nc": reason}, **kw)
     assert report.published == ["good-0-nor-test"]
@@ -343,7 +343,7 @@ def test_write_fits_is_atomic_and_never_mixes_doc_sets(table, tmp_path, monkeypa
 
 def test_an_interrupted_release_write_is_detected(table, tmp_path):
     release = build(table, [doc(table)])
-    write_release(release, tmp_path, datestamp=D, app_export=None)
+    write_release(release, tmp_path, datestamp=D, app_export=None, congen_run=congen_run(table))
     assert check_release_dir(tmp_path) == []
     (tmp_path / f".OTC_{D}.2.csv.0123456789abcdef.tmp").write_bytes(b"partial")
     (tmp_path / f"OTC_{D}.2.json").write_bytes(b"{}")

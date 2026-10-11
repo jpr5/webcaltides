@@ -11,7 +11,7 @@ from otc_pipeline import ticon_sets as ts
 from otc_pipeline.gesla_sets import time_base_annotation
 from otc_pipeline.release_writer import validate_release
 
-from astro_from_tcd import astro_table
+from synthetic_congen import congen_run, kp0b_tables
 from test_format_1_0 import D, LICENCE, SPEEDS, TABLE_ID, doc, table, tb_row  # noqa: F401  (table: fixture)
 
 HEAD = ("lat,lon,con,amp,pha,amp_std,pha_std,missing_obs,no_of_obs,years_of_obs,start_date,end_date,gesla_source,"
@@ -58,7 +58,7 @@ def kw(table, docs, ids, lic_ids, **over):
              contributor_roles={"TEST": "originator"}, sibling_flags={}, tombstones=[],
              station_map_inputs={"fit_run_results_sha256": "f" * 64}, fit_run_results_sha256="f" * 64,
              disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in docs},
-             astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)])
+             astro_tables=kp0b_tables(congen_run(table), SPEEDS, TABLE_ID), congen_run=congen_run(table))
     k.update(over)
     return k
 

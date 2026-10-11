@@ -1,9 +1,9 @@
-"""TEST ONLY: an astro table straight from the TCD dump, so that a test can build a whole valid
-format 1.0 document before the pipeline writes its own tables.
+"""TEST ONLY: an astro table straight from the TCD dump, so that a synthetic test can build a whole
+valid format 1.0 document from a small made-up dump.
 
-The release's per-year tables are KP0b's (prediction spec: congen for 1700-2100, checked equal to
-the TCD, with the astro-table build checks). Nothing in otc_pipeline imports this module; the
-values are the TCD dump's own V0+u and f, rounded as the schema describes, never invented.
+The release's per-year tables are KP0b's: otc_pipeline.astro_tables.astro_table, from a congen run
+(scripts/otc/tools/congen_tables.sh, 1700-2100) checked equal to the TCD. Nothing in otc_pipeline
+imports this module, and a release never uses it.
 """
 from __future__ import annotations
 

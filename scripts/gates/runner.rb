@@ -19,7 +19,7 @@ eng = Harmonics::Engine.new(Logger.new(nil), cache)
 eng.stations
 SC = eng.stations_cache
 CONV = { 'feet' => 30.48, 'ft' => 30.48, 'm' => 100.0, 'meters' => 100.0 }.freeze
-NMAP = { 'LAM2' => 'LDA2', 'RHO' => 'RHO1', 'SIGMA1' => 'SIG1' }.freeze
+NMAP = { 'LAM2' => 'LDA2', 'RHO' => 'RHO1', 'SIGMA1' => 'SIG1', 'THETA1' => 'THE1' }.freeze   # = otc_pipeline.astro_tables.NAME_TO_TCD
 
 jobs = srcs&.first&.start_with?('@') ? JSON.parse(File.read(srcs.first[1..])) : Eval.reference_set(srcs)
 if mode == 'rn'

@@ -15,9 +15,14 @@ recommended (recommend()). The pieces another slot owns come in as arguments, ne
 - `withheld` (licence id -> reason, gesla_licences.withheld_licences; required, {} for none): records
   under these licences are left out until the owner permits, each refused with the reason; a station
   left with no published set is reported in BuildReport.withheld_stations.
-- `astro_tables`: the per-year V0+u and f tables (KP0b). Format 1.0 requires them whenever a
-  convention predicts with f and u, and the gesla-fit convention does, so a release cannot be
-  built without them.
+- `astro_tables` and `congen_run`: the per-year V0+u and f tables (KP0b: astro_tables.astro_table)
+  and the congen run they come from (astro_tables.load_congen_run's CongenRun, the only accepted
+  form). The release holds deep copies of the tables; write_release checks them against the run again.
+  Format 1.0 requires the tables whenever a convention predicts with f and u, and the gesla-fit
+  convention does, so a release cannot be built without them. Every table must be exactly that run's
+  table (astro_tables.release_table_errors: the generator, 1700-2100, every value), so a hand-edited,
+  stale or TEST-ONLY table stops the build. The build runs check 7 (astro_tables.astro_table_errors)
+  on the document it makes and stops on an error.
 - `ticon` (ticon_sets.TiconCarry, optional): the TICON-4 fallback. A withheld record whose TICON-4 record
   (same file name, else a site within 1 km) can be carried is published as a TICON-4 analysis set at the
   record's station (ticon_sets.ticon_set); the OTC fit itself stays withheld and is used only for the
@@ -25,11 +30,12 @@ recommended (recommend()). The pieces another slot owns come in as arguments, ne
 - datums beyond Z0 (DT4a/DT5f/DT5g/DT6): `gesla_sets.source_set` writes only `msl_offset_m`.
 
 The build checks the schema cannot express (its top description, checks 1-14) are not all here:
-`release_writer.validate_release` runs the cross-reference checks; the astronomical-table checks
-are KP0b's and the datum checks 9-13 are DT7's.
+`release_writer.validate_release` runs the cross-reference checks and check 7 (the astronomical
+tables); the datum checks 9-13 are DT7's.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import secrets
@@ -40,9 +46,10 @@ from typing import Iterable, Mapping
 
 from gesla.tcd_table import TcdTable
 
+from otc_pipeline.astro_tables import CongenRun, astro_table_errors, release_table_errors
 from otc_pipeline.gesla_sets import (CONVENTION_ID, FIT_MIN_GOOD_HOURS, SOURCE, FitIntegrityError, NotPublishable,
                                      licence_of, refusal, source_set)
-from otc_pipeline.release_writer import FORMAT_VERSION
+from otc_pipeline.release_writer import FORMAT_VERSION, BuiltRelease
 from otc_pipeline import ticon_sets as ts
 
 __all__ = ["BuildReport", "Candidate", "build_release", "gesla_convention", "rank", "recommend", "set_order",
@@ -350,6 +357,7 @@ class BuildReport:
 def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, datestamp: str, created: str,
                   build_commit: str, station_ids: Mapping[str, str], licences: list[dict],
                   licence_ids: Mapping[str, str], withheld: Mapping[str, str], astro_tables: list[dict] | None,
+                  congen_run: CongenRun,
                   refused: Iterable[Mapping], epoch_hours: Mapping[str, Mapping],
                   sibling_flags: Mapping[str, Mapping], tombstones: Iterable[Mapping],
                   station_map_inputs: Mapping[str, str], fit_run_results_sha256: str,
@@ -382,10 +390,28 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
     decides the originator rank step. Raises ValueError when an input the build needs is missing (astro
     tables, a record with no station id, no licence id: no licence is assumed, or no epoch hours, or
     epoch hours counted from another member), and FitIntegrityError when a document was fitted with
-    another TCD than `table` or carries an unstamped attenuated fit."""
+    another TCD than `table` or carries an unstamped attenuated fit. Check 7
+    (astro_tables.astro_table_errors: a row for every published constituent, speeds, array lengths,
+    tables_sha256) runs on the document; an error raises ValueError. So does an astro table that is not
+    exactly `congen_run`'s (release_table_errors), and a congen run checked against another TCD than
+    `table` raises FitIntegrityError. The release is a release_writer.BuiltRelease, so write_release
+    will not write it without its congen run."""
     if not astro_tables:
         raise ValueError("astro_tables is required: the gesla-fit convention predicts with f and u "
                          "(format 1.0, astro_tables_when_used); the per-year tables come from KP0b")
+    if not isinstance(congen_run, CongenRun):
+        raise ValueError(f"congen_run must be astro_tables.load_congen_run's CongenRun (a checked congen run), "
+                         f"not {type(congen_run).__name__}")
+    congen, run_tcd = congen_run
+    astro_tables = copy.deepcopy(list(astro_tables))   # the release owns its tables: later caller edits cannot reach it
+    if run_tcd.tcd_sha256 != table.tcd_sha256:
+        raise FitIntegrityError(f"the congen run was checked against TCD {run_tcd.tcd_sha256}, the fit's TCD is "
+                                f"{table.tcd_sha256}")
+    for t in astro_tables:
+        bad = release_table_errors(t, congen, run_tcd)
+        if bad:
+            raise ValueError(f"astro table {t.get('astro_table_id')!r} is not the congen run's table "
+                             f"({len(bad)} errors): " + "; ".join(bad[:10]))
     lic_by_id = {lic["licence_id"]: lic for lic in licences}
     if contributor_roles is None:
         from gesla.read_gesla import load_contributor_roles
@@ -561,7 +587,7 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
             raise ValueError(f"TICON-4 fails its convention check against OTC's own fits: {canary}")
         conventions.append(ts.ticon_convention(table_id, table, canary))
         source_versions["ticon"] = ts.SOURCE_VERSION
-    release = {
+    release = BuiltRelease({
         "format_version": FORMAT_VERSION,
         "release": {"datestamp": datestamp, "created": created, "min_reader_version": FORMAT_VERSION,
                     "fit_min_good_hours": FIT_MIN_GOOD_HOURS, "concept_doi": None,
@@ -570,9 +596,12 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         "licences": licence_rows,
         "constituents": [{"constituent_table_version": table_id, "name": n, "speed_deg_per_hour": table.speed(n)}
                          for n in sorted(used_names)],
-        "astro_tables": list(astro_tables),
+        "astro_tables": astro_tables,
         "stations": stations,
-    }
+    })
+    astro = astro_table_errors(release)
+    if astro:
+        raise ValueError(f"build check 7 (astro tables): {len(astro)} errors: " + "; ".join(astro[:10]))
     return release, report
 
 

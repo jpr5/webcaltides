@@ -22,7 +22,7 @@ puts '## per-source mean time MAE (gated), R1 / R2 (B) / R2b (B2) / R2c (B3), he
              "  real #{r2.count { |r| r['class'] == 'real' }}/#{r2b.count { |r| r['class'] == 'real' }}/#{rs.count { |r| r['class'] == 'real' }}"
     end
 end
-NM = { 'LAM2' => 'LDA2', 'RHO' => 'RHO1' }
+NM = { 'LAM2' => 'LDA2', 'RHO' => 'RHO1', 'SIGMA1' => 'SIG1', 'THETA1' => 'THE1' }.freeze   # = otc_pipeline.astro_tables.NAME_TO_TCD
 def ref_missing(id, ref)
     p = "#{H}/refs/noaa/harcon/harcon_#{ref}.json"
     return nil unless File.exist?(p)
