@@ -10,6 +10,7 @@ Inputs (none of them is in git; each is checked where it is read):
   map was minted from (build_release checks the pin).
 - FINAL: the newest finished time-base audit (the final verdicts). Its disputed reasons (disputed_reasons_of) decide
   what is never published (FIX-DISP, the whole-hour EOT20 rule), and it annotates the TICON-4 sets' time bases.
+  Its reviewed withholds must be exactly the committed list (check_reviewed_withhold), else the build stops.
   The fit documents keep the annotation of AUDIT, the audit the fit used.
 - AUDIT's weak inputs (EOT20 at each gauge, sha256-checked against its manifest): every fit is screened for a sign
   inversion (gesla_sets.screen_inverted).
@@ -123,6 +124,28 @@ def audit_dump(audit_dir: Path, dump) -> dict:
             "rows_not_read": sorted(set(mine["constituents"]) - set(data["constituents"]))}
 
 
+def check_reviewed_withhold(verdicts_dir: Path, final: gs.Audit, withhold_path: Path | None = None) -> dict:
+    """The final verdicts carry exactly the committed reviewed-withhold list (gesla.timebase_audit.WITHHOLD_PATH):
+    their manifest records the list it applied (inputs.reviewed_withhold) with the committed file's SHA-256, and the
+    records the audit disputed on reviewer evidence are exactly the listed records it has rows for, each disputed so.
+    Anything else stops the build: verdicts older or newer than the committed list would publish a withheld record
+    unlabelled, or withhold one the list no longer holds. Returns the binding for provenance."""
+    from gesla.timebase_audit import REVIEWER_DISPUTED, WITHHOLD_PATH, load_withhold
+    path = Path(withhold_path or WITHHOLD_PATH)
+    want = _sha256(path)
+    m = json.loads((Path(verdicts_dir) / "timebase_manifest.json").read_text())
+    got = ((m.get("inputs") or {}).get("reviewed_withhold") or {}).get("sha256")
+    listed = {e["file_id"] for e in load_withhold(path)}
+    disputed = {f for f, r in final.rows.items() if r.get("time_base_code") == REVIEWER_DISPUTED}
+    missing = sorted((listed & set(final.rows)) - disputed)
+    extra = sorted(disputed - listed)
+    if got != want or missing or extra:
+        raise SystemExit(f"{verdicts_dir}: the verdicts' reviewed withholds are not the committed list {path} ({want}): "
+                         f"the audit applied {got}; listed but not disputed on reviewer evidence: {missing}; disputed "
+                         f"on reviewer evidence but not listed: {extra}. Build with verdicts made on the committed list")
+    return {"path": str(path), "sha256": want, "records": len(listed), "disputed": len(disputed)}
+
+
 @dataclass
 class BuildParts:
     """What build_parts makes: the release and its report, the congen run and provenance (build's result), and
@@ -162,6 +185,8 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
         raise SystemExit(f"{tcd_path}: a dump of TCD {table.tcd_sha256}; the release is built on the OTC TCD "
                          f"{TABLE_ID} ({TCD_SHA256}): fit and build with its dump (the congen run's tcd-1900-2100.json)")
     audit_dumps = {"audit": audit_dump(audit_dir, dump), "verdicts": audit_dump(verdicts_dir, dump)}
+    final = gs.load_audit(verdicts_dir)
+    withhold = check_reviewed_withhold(verdicts_dir, final)
     results = (fit_run / "results.jsonl").read_bytes()      # one read: hashed (the station map pin), then parsed
     rows = [json.loads(x) for x in results.decode("utf-8").splitlines() if x.strip()]
     fitted = sorted(r["record"] for r in rows if r["outcome"] == "fitted")
@@ -177,7 +202,6 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
     licences, licence_ids = gesla_licences(docs)
     smap = sm.load()
     audit = gs.load_audit(audit_dir)
-    final = gs.load_audit(verdicts_dir)
     carry = ts.TiconCarry.from_audit(ts.load_ticon(ticon_csv), final, rel.metadata(), references_path=ticon_refs)
     names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table) | set(extra_names)
     try:
@@ -207,7 +231,8 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
         "fit_run": fit_identity,
         "overlay_run": _run_identity(overlay_run) if overlay_run is not None else None,
         "audit": {**_audit_identity(audit_dir, audit), "tcd_dump": audit_dumps["audit"]},
-        "verdicts": {**_audit_identity(verdicts_dir, final), "tcd_dump": audit_dumps["verdicts"]},
+        "verdicts": {**_audit_identity(verdicts_dir, final), "tcd_dump": audit_dumps["verdicts"],
+                     "reviewed_withhold": withhold},
         "calibration": {"path": _path(calibration_dir), "sha256": cal["_sha256"]},
         "congen_run": {"path": _path(crun.run_dir), "provenance_sha256": _sha256(crun.run_dir / "PROVENANCE.json")},
         "tcd": {"path": _path(dump.path), "sha256": dump.sha256},

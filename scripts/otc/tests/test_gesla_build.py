@@ -76,7 +76,9 @@ def _inputs(tmp_path):
     put("overlay/timebase_manifest.json", '{"overlay": 1}')
     same = {"tcd_table": {"path": str(tmp_path / "tcd.json"), "sha256": "d" * 64}}   # the dump load_tcd_dump fakes
     put("audit/timebase_manifest.json", json.dumps({"audit": 1, "inputs": same}))
-    put("final/timebase_manifest.json", json.dumps({"final": 1, "inputs": same}))
+    from gesla.timebase_audit import WITHHOLD_PATH
+    rw = {"reviewed_withhold": {"path": str(WITHHOLD_PATH), "sha256": _sha(WITHHOLD_PATH)}}   # the committed list
+    put("final/timebase_manifest.json", json.dumps({"final": 1, "inputs": {**same, **rw}}))
     put("congen/PROVENANCE.json", '{"congen": 1}')
     put("ticon.csv", "ticon\n")
     put("refs.json", "{}")
@@ -152,7 +154,9 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(gb, "load_congen_run", load_congen_run)
     monkeypatch.setattr(gb, "astro_table", lambda congen, tcd, names, table_id: {"names": list(names)})
     monkeypatch.setattr(gr, "build_release", build_release)
-    return SimpleNamespace(seen=seen, audits=audits, cal=cal, crun=crun, doc=doc, paths=paths)
+    from gesla.timebase_audit import WITHHOLD_PATH, load_withhold
+    withhold = {"path": str(WITHHOLD_PATH), "sha256": _sha(WITHHOLD_PATH), "records": len(load_withhold()), "disputed": 0}
+    return SimpleNamespace(seen=seen, audits=audits, cal=cal, crun=crun, doc=doc, paths=paths, withhold=withhold)
 
 
 def _build(fakes, **over):
@@ -275,6 +279,37 @@ def test_an_audit_on_the_rows_of_the_build_dump_is_recorded(fakes):
         _build(fakes)
 
 
+def _final_manifest(fakes, sha):
+    p = fakes.paths["verdicts_dir"] / "timebase_manifest.json"
+    m = json.loads(p.read_text())
+    m["inputs"]["reviewed_withhold"] = None if sha is None else {"path": "x", "sha256": sha}
+    p.write_text(json.dumps(m))
+
+
+def test_verdicts_made_on_another_reviewed_withhold_list_stop_the_build(fakes):
+    # INT-2 D1: verdicts older than the committed list (FIX-LST r6 before FIX-LST-6) publish its new records unlabelled
+    for sha in ("a" * 64, None):
+        _final_manifest(fakes, sha)
+        with pytest.raises(SystemExit, match="not the committed list"):
+            _build(fakes)
+        assert "docs_from_fit_run" not in fakes.seen
+
+
+def test_a_listed_record_the_verdicts_do_not_dispute_stops_the_build(fakes):
+    from gesla.timebase_audit import REVIEWER_DISPUTED, load_withhold
+    listed = load_withhold()[0]["file_id"]
+    fakes.audits["final"].rows[listed] = {"time_base_status": "unverified", "time_base_code": "unverified"}
+    with pytest.raises(SystemExit, match=f"listed but not disputed on reviewer evidence: \\['{listed}'\\]"):
+        _build(fakes)
+    fakes.audits["final"].rows[listed] = {"time_base_status": "disputed", "time_base_code": REVIEWER_DISPUTED}
+    fakes.audits["final"].rows["z-1-xxx-yy"] = {"time_base_status": "disputed", "time_base_code": REVIEWER_DISPUTED}
+    with pytest.raises(SystemExit, match="disputed on reviewer evidence but not listed: \\['z-1-xxx-yy'\\]"):
+        _build(fakes)
+    del fakes.audits["final"].rows["z-1-xxx-yy"]
+    *_, prov = _build(fakes)
+    assert prov["verdicts"]["reviewed_withhold"]["disputed"] == 1
+
+
 def test_build_records_the_identity_of_every_input(fakes):
     p = fakes.paths
     *_, prov = _build(fakes)
@@ -290,7 +325,8 @@ def test_build_records_the_identity_of_every_input(fakes):
         assert prov[key] == {"path": str(p[name].resolve()),
                              "manifest_sha256": _sha(p[name] / "timebase_manifest.json"),
                              "timebase_csv_sha256": csv_sha, "commit": commit,
-                             "tcd_dump": {"path": str(p["tcd_path"]), "sha256": "d" * 64, "relation": "same"}}, key
+                             "tcd_dump": {"path": str(p["tcd_path"]), "sha256": "d" * 64, "relation": "same"},
+                             **({"reviewed_withhold": fakes.withhold} if key == "verdicts" else {})}, key
     assert prov["calibration"] == {"path": str(p["calibration_dir"].resolve()), "sha256": "c" * 64}
     assert prov["congen_run"] == {"path": str(p["congen_run"].resolve()),
                                   "provenance_sha256": _sha(p["congen_run"] / "PROVENANCE.json")}
