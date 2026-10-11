@@ -1,0 +1,59 @@
+{
+ "about": "Reviewed withholds (FIX-LST-4): records a review found published with a wrong time base that no general rule of the time-base audit reaches. timebase_audit.apply_reviewed_withhold makes each listed record disputed (code disputed:reviewer_evidence, reason 'reviewer_evidence: <short>'), never corrected. A listed id not in the inventory, or a listed record a strong comparator (official, harcon, sibling series) verified, stops the audit. Add an entry only with a review's evidence; remove it when the record's own evidence changes.",
+ "entries": [
+  {
+   "file_id": "wcoco_t_navd88-wcoco-usa-sfwmd",
+   "short": "leads 3 NOAA stations by 234-409 min; a damped canal site cannot lead",
+   "reason": "SFWMD West Cocohatchee canal gauge (M2 6 cm, damped to 0.27 of the coast) leads every NOAA station within 11-15 km by about -234 to -409 min. A damped inland site lags the open water; it cannot lead it by hours. Same provider and pattern as the 33 SFWMD records disputed on EST stamps.",
+   "evidence": {"reviewer": "TB-SIB gate C re-run (data reviewer)",
+                "report": "scratchpad/gateC-tbsib-7q3/ (sfwmd-harcon.txt, flags2.txt); otc-impl/ledger.md 2026-10-11 Gate C re-run",
+                "numbers": "NOAA 8725283 Little Hickory Island 11.3 km M2 -281 (ratio 0.27); 8725114 Naples Bay 14.8 km -268; 8725319 Coconut Point 15.4 km; range -234..-409 min"},
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "calahootchieriver_s79_t-s79_t-usa-sfwmd",
+   "short": "K1/O1 -440 min against USGS at the S-79 structure and NOAA Fort Myers",
+   "reason": "SFWMD S-79 tailwater gauge: K1 and O1 put it about 440 min early against both USGS gauges at the same structure (0.2 and 1.0 km) and against NOAA Fort Myers (19 km). The semidiurnal is aliased across the lock; the diurnals agree within 10 min.",
+   "evidence": {"reviewer": "TB-SIB gate C re-run (data reviewer)",
+                "report": "scratchpad/gateC-tbsib-7q3/sfwmd-harcon.txt; FIX-LST/report.md (FIX-LST-3 s79_t row)",
+                "numbers": "USGS caloosahatchee_river_at_s_79 0.2 km K1/O1 -441; USGS telegraph_creek 1.0 km -435; NOAA 8725520 Fort Myers 19.4 km K1 -421, O1 -421"},
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "burgassouth-bur-bgr-cmems",
+   "short": "inverted and shifted against EOT20; Black Sea controls agree with EOT20",
+   "reason": "CMEMS Burgas South: the series is inverted (sign) and shifted, so its constants predict the tide worse than nothing in a 2-cm sea. EOT20 is valid there: the IOC gauges at Igneada, Constanta (csta2) and Mangalia agree with it within 0.4 h.",
+   "evidence": {"reviewer": "FIX-LP data confirmation (R2) and TB-SIB gate C re-run",
+                "report": "otc-impl/ledger.md 2026-10-11 FIX-LP data confirmation; FIX-LST/report.md (FIX-LST-3 burgassouth row)",
+                "numbers": "against EOT20: semidiurnal -955 min, diurnal -646 min (not one shift); controls ioc_igne +8, ioc_csta2 -1.5, ioc_mang semidiurnal within 24 min"},
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "crms0590-crms0590-usa-crms",
+   "short": "inland marsh gauge leads the open coast by 57-82 min",
+   "reason": "CRMS 0590 is inland of the coast, yet it leads the open-coast NOAA stations by 57-82 min; an inland site lags. Its 15-km NOAA reference (8767095) is itself inland water lagging the coast by about +221 min, against which it leads by 279 min.",
+   "evidence": {"reviewer": "FIX-LST false-positive review (adversary)",
+                "report": "scratchpad/rev43/crmscoast.txt, crms15.txt",
+                "numbers": "8766072 Freshwater Canal Locks 66 km -57.5 (ratio 0.77); 8768094 Calcasieu Pass 53 km -82.5 (0.75); 8764314 Eugene Island 153 km -78.0 (0.98); 8767095 8.2 km -279"},
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "crms0511-crms0511-usa-crms",
+   "short": "lags the open coast by only -4..+21 min though inland of a bay that lags +200-250",
+   "reason": "CRMS 0511 sits inland of a bay whose NOAA station (8765148) lags the open coast by +258 min and whose neighbouring records lag about +186, yet it lags the open coast by only -4 to +21 min. That is about 3.5-4 h too early for its water: a clock offset, not a tide.",
+   "evidence": {"reviewer": "FIX-LST false-positive review (adversary)",
+                "report": "scratchpad/rev43/crmscoast.txt, crms15.txt",
+                "numbers": "8766072 49 km +21.0 (ratio 0.82); 8768094 132 km -4.0; 8764314 82 km +1.0; 8765148 14.9 km -239.5 (bay lag +258); neighbours +186"},
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "crms0531-crms0531-usa-crms",
+   "short": "lags the open coast by only +10..+36 min though inland of a bay that lags +200-250",
+   "reason": "CRMS 0531 sits inland of the same bay (NOAA 8765148 lags the open coast by +258 min, neighbouring records about +186), yet it lags the open coast by only +10 to +36 min: about 3-4 h too early for its water.",
+   "evidence": {"reviewer": "FIX-LST false-positive review (adversary)",
+                "report": "scratchpad/rev43/crmscoast.txt, crms15.txt",
+                "numbers": "8766072 48 km +36.0 (ratio 0.44); 8768094 135 km +9.5; 8764314 77 km +19.5; 8765148 10.8 km -216.0 (bay lag +258); neighbours +186"},
+   "date": "2026-10-11"
+  }
+ ]
+}

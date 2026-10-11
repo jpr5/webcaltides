@@ -1186,7 +1186,7 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
           weak: WeakConfig | None = None, declared: Mapping[str, int] | None = None,
           sibling: SiblingConfig | None = None, out_of_pool: bool = False,
           provider_class: Sequence[str] = (), agency_refs: "Sequence[tag.AgencyRef] | None" = None,
-          log=None) -> AuditResult:
+          withhold: Sequence[dict] = (), log=None) -> AuditResult:
     """Audit the candidates and their siblings in the plan's order (module docstring).
     declared: GESLA's TIME ZONE HOURS by record (missing = 0, UTC: GESLA's declaration for all but
     one 4.1 record); weak: the weak evidence's inputs (None: records without a comparator verdict
@@ -1195,10 +1195,12 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
     first; never inherits: the provider rule is the pool's); sibling: the intra-site constants comparison and the
     provider-family rule on pass 1 (timebase_sibling; apply_sibling). provider_class: the contributors of the owner
     switch D-O3 (provider_class_inherit; main passes PROVIDER_CLASS_INHERIT). With sibling, the agency constants
-    (timebase_agency; apply_agency) follow the sibling step; agency_refs None: A-NOAA's harcon cache."""
+    (timebase_agency; apply_agency) follow the sibling step; agency_refs None: A-NOAA's harcon cache.
+    withhold: the reviewed withholds (load_withhold), applied last (apply_reviewed_withhold)."""
     log = log or (lambda *_: None)
     transforms = dict(transforms or {})
     inv = dict(inv)
+    check_withhold(withhold, inv)        # an unknown id stops the audit before any work
     lost = sorted({src for rid, (src, _) in transforms.items() if rid not in inv and src not in inv})
     if lost:
         raise ValueError(f"transform source(s) not in the inventory: {', '.join(lost)}")
@@ -1461,6 +1463,8 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                 sib_counts["two_source"] = apply_two_source(rows, inv, sibling, weak, dec, transforms, sp_,
                                                             tag.RefIndex(agency_refs), log, lags=lags)
                 sib_counts["regional"] = apply_regional(rows, inv, sibling, weak, dec, transforms, sp_, log)
+    if withhold:
+        sib_counts["reviewed_withhold"] = apply_reviewed_withhold(rows, withhold, inv, log)
     for f in allf:
         annotate(rows[f], dec[f])
     final_counts(providers, rows, inv)
@@ -2017,6 +2021,79 @@ def apply_regional(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg
         counts["already_disputed" if row.status == "residue" else "disputed"] += 1
         _sib_dispute(row, REGIONAL_DISPUTED, why)
     log("EOT20 regional: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    return counts
+
+
+# --- reviewed withholds (FIX-LST-4) -------------------------------------------------------------------------------------
+
+REVIEWER_DISPUTED = "disputed:reviewer_evidence"
+WITHHOLD_PATH = Path(__file__).resolve().parent / "timebase_reviewed_withhold.json"
+WITHHOLD_FIELDS = ("file_id", "short", "reason", "evidence", "date")
+WITHHOLD_EVIDENCE = ("reviewer", "report", "numbers")
+
+
+class WithholdError(ValueError):
+    """The reviewed-withhold list is unusable: the audit stops (never a silent override)."""
+
+
+def load_withhold(path: str | Path = WITHHOLD_PATH) -> list[dict]:
+    """The committed reviewed-withhold list: entries with file_id, short, reason, evidence {reviewer, report, numbers}
+    and date (YYYY-MM-DD). A missing field, a bad date or a repeated id raises WithholdError."""
+    d = json.loads(Path(path).read_text())
+    out, seen = [], set()
+    for i, e in enumerate(d.get("entries", [])):
+        miss = [k for k in WITHHOLD_FIELDS if not e.get(k)] + [f"evidence.{k}" for k in WITHHOLD_EVIDENCE
+                                                                if not (e.get("evidence") or {}).get(k)]
+        if miss:
+            raise WithholdError(f"{path}: entry {i} ({e.get('file_id', '?')}) lacks {', '.join(miss)}")
+        try:
+            dt.date.fromisoformat(e["date"])
+        except ValueError as x:
+            raise WithholdError(f"{path}: entry {i} ({e['file_id']}): date {e['date']!r}: {x}") from x
+        if e["file_id"] in seen:
+            raise WithholdError(f"{path}: {e['file_id']} listed twice")
+        seen.add(e["file_id"])
+        out.append(dict(e))
+    return out
+
+
+def check_withhold(withhold: Sequence[dict], inv: Mapping[str, RecordInfo]) -> None:
+    """Every listed id must be an inventory record (a typo never withholds nothing silently)."""
+    lost = [e["file_id"] for e in withhold if e["file_id"] not in inv]
+    if lost:
+        raise WithholdError(f"reviewed withhold: {len(lost)} id(s) not in the inventory: {', '.join(lost)}")
+
+
+def apply_reviewed_withhold(rows: dict[str, AuditRow], withhold: Sequence[dict], inv: Mapping[str, RecordInfo],
+                            log) -> dict:
+    """Each listed record with a row becomes disputed (REVIEWER_DISPUTED, reason "reviewer_evidence: <short>"), never
+    corrected; a record already disputed takes this code too (the review is its explicit reason), its earlier reason
+    kept after it. A listed record a strong comparator verified or corrected (official, harcon, sibling series) stops
+    the audit: the list never overrides strong evidence."""
+    check_withhold(withhold, inv)
+    strong = [e["file_id"] for e in withhold if e["file_id"] in rows and rows[e["file_id"]].status == "used"
+              and rows[e["file_id"]].comparator_kind in ("b", "c", "a")]
+    if strong:
+        raise WithholdError("reviewed withhold: listed record(s) a strong comparator verified: "
+                            + ", ".join(f"{f} ({rows[f].comparator_kind}: {rows[f].comparator_id})" for f in strong))
+    counts = {"listed": len(withhold), "applied": 0, "was_disputed": 0, "not_in_run": 0}
+    for e in withhold:
+        row = rows.get(e["file_id"])
+        if row is None:
+            counts["not_in_run"] += 1
+            continue
+        was = row.reason if row.status == "residue" else ""
+        counts["was_disputed"] += row.status == "residue"
+        row.status, row.verdict, row.base = "residue", "unexplained", "unexplained"
+        row.correction, row.comparator_kind, row.comparator_id = NOT_USABLE, "w", REVIEWER_DISPUTED
+        row.months_bad = []
+        row.reason = (f"reviewer_evidence: {e['short']}" + (f"; was disputed: {was}" if was else ""))[:REASON_MAX * 2]
+        row.agency = {**(row.agency or {}), "reviewed_withhold": {k: e[k] for k in WITHHOLD_FIELDS},
+                      "summary": "; ".join(x for x in ((row.agency or {}).get("summary"),
+                                                       f"reviewed withhold ({e['date']}, {e['evidence']['reviewer']}): "
+                                                       f"{e['short']}") if x)}
+        counts["applied"] += 1
+    log("reviewed withhold: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
     return counts
 
 
@@ -2688,6 +2765,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help=f"turn the owner switch {PROVIDER_CLASS_ID} off (PROVIDER_CLASS_INHERIT {PROVIDER_CLASS_INHERIT})")
     ap.add_argument("--fit-results", help="pass 1 for the intra-site constants comparison (TB-SIB): a complete "
                     "gesla.fit_run results.jsonl of every record fitted with its published time base; needs --weak-inputs")
+    ap.add_argument("--withhold", default=str(WITHHOLD_PATH),
+                    help="the reviewed-withhold list (FIX-LST-4); applied with --fit-results")
     a = ap.parse_args(argv)
     argv = list(sys.argv[1:] if argv is None else argv)
     if a.weak_inputs and not a.candidates:
@@ -2750,7 +2829,8 @@ def main(argv: Sequence[str] | None = None) -> int:
               "weak_inputs": a.weak_inputs, "served": a.served if a.weak_inputs else None,
               "tcd_table": table_path, "previous_providers": a.previous_providers,
               "fit_results": a.fit_results,
-              "fit_results_manifest": (Path(a.fit_results).parent / MANIFEST) if a.fit_results else None}
+              "fit_results_manifest": (Path(a.fit_results).parent / MANIFEST) if a.fit_results else None,
+              "reviewed_withhold": a.withhold if a.fit_results else None}
     gates = Path(a.gates_dir)
     inputs.update({"gates_harmonics_stations": gates / "evid/testplan/harmonics_stations.json",
                    "gates_nearest_ref": gates / "evid/testplan/nearest_ref.json",
@@ -2769,7 +2849,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     res = audit(inv, cands, release_root=release.root, table_path=table_path, gates_dir=a.gates_dir,
                 workers=a.workers, previous_providers=prev, version=a.version, weak=weak, declared=declared,
                 sibling=sibling, out_of_pool=weak is not None and not a.only,
-                provider_class=() if a.no_provider_class_inherit else PROVIDER_CLASS_INHERIT, log=_log)
+                provider_class=() if a.no_provider_class_inherit else PROVIDER_CLASS_INHERIT,
+                withhold=load_withhold(a.withhold) if a.fit_results else (), log=_log)
     write_csv(res.rows, out / "timebase.csv")
     write_providers(res.providers, out / "timebase_providers.csv")
     if weak is not None:
