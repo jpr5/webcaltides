@@ -356,3 +356,33 @@ def test_run_canary_reads_only_the_cache(tmp_path):
     engine = lambda inp, wd: {"events": [{"type": "slack", "time": "2026-10-09T00:01:00Z", "velocity": 0.0}]}  # noqa: E731
     r = cc.run_canary(sets, tmp_path, n=3, engine=engine)
     assert r["gauges"] == 2 and r["status"] == "fail" and any("no cached" in x for x in r["reasons"])
+
+
+# --- the GESLA-comparator canaries (build_otc) --------------------------------------------------------
+
+def test_canaries_compare_only_sets_with_the_four_constituents(monkeypatch):
+    from types import SimpleNamespace
+    from otc_pipeline import build_otc as bo
+
+    def four(rid, m2=(1.0, 100.0), drop=()):
+        cs = [{"name": n, "amplitude_m": a, "phase_deg": g, "speed_deg_per_hour": 1.0}
+              for n, a, g in (("M2", *m2), ("S2", 0.3, 130.0), ("K1", 0.2, 50.0), ("O1", 0.1, 40.0)) if n not in drop]
+        return cs
+
+    docs = [{"record_id": f"g{i}", "time_base": {"code": "verified"}} for i in range(6)]
+    docs[4]["time_base"]["code"] = "disputed"
+    parts = SimpleNamespace(docs=docs, disputed_reasons={"g3": "x"}, sibling_flags={"g2": [{}]})
+
+    def comparator(d):
+        i = int(d["record_id"][1:])
+        return SourceSet({"lat": 40.0 + i, "lon": -70.0, "country": "USA"},
+                         {"source_record_id": d["record_id"], "constituents": four(d["record_id"], drop=("O1",) if i == 1 else ())})
+    monkeypatch.setattr(bo.gs, "comparator_set", comparator)
+    comp = bo.gesla_comparators(parts)
+    assert [c.constant_set["source_record_id"] for c in comp] == ["g0", "g5"]   # g1 lacks O1; g2-g4 flagged/disputed
+    a = agency(*(SourceSet({"lat": lat, "lon": -70.0, "country": "USA", "type": "reference", "aliases": {}},
+                           {"source_record_id": rid, "constituents": four(rid, drop=drop)})
+                 for rid, lat, drop in (("n0", 40.0, ()), ("n5", 45.0, ()), ("n9", 49.0, ()), ("nk", 40.0, ("K1",)))))
+    conv, full = bo.run_canaries({"noaa": a}, comp + [comparator({"record_id": "g9"})], None, log=lambda m: None)
+    assert conv["noaa"]["status"] == "pass" and conv["noaa"]["gauges"] == 3
+    assert full["noaa"]["not_compared_missing_constituents"] == [{"source_record_id": "nk", "missing": ["K1"]}]

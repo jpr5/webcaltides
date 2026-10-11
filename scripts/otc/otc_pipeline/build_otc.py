@@ -34,36 +34,50 @@ from otc_pipeline import gesla_build as gb
 from otc_pipeline import gesla_sets as gs
 from otc_pipeline import station_map as sm
 from otc_pipeline.astro_tables import TABLE_ID
-from otc_pipeline.canary import canary
+from otc_pipeline.canary import CANARY_CONSTITUENTS, canary
 from otc_pipeline.release_writer import validate_release, write_release
 
 GESLA_CANARY_SOURCES = ("kartverket", "linz", "jma", "noaa")
 
 
+def _has_canary_constituents(ss) -> bool:
+    return set(CANARY_CONSTITUENTS) <= {c["name"] for c in (ss.constant_set or {}).get("constituents") or []}
+
+
 def gesla_comparators(parts: gb.BuildParts) -> list:
     """COMPARATOR ONLY (gesla_sets.comparator_set): this build's GESLA fits with a time base the final audit does
-    not dispute and no station-map flag; a fit that cannot be a comparator (refused, short and uncalibrated) is
-    skipped."""
+    not dispute, no station-map flag, and all four canary constituents (M2, S2, K1, O1: a fit without one, a short
+    record's Rayleigh drop or a microtidal gauge, cannot be compared); a fit that cannot be a comparator (refused,
+    short and uncalibrated) is skipped."""
     out = []
     for d in parts.docs:
         rid = d["record_id"]
         if d["time_base"]["code"] == "disputed" or rid in parts.disputed_reasons or parts.sibling_flags.get(rid):
             continue
         try:
-            out.append(gs.comparator_set(d))
+            ss = gs.comparator_set(d)
         except (gs.NotPublishable, gs.FitIntegrityError):
             continue
+        if _has_canary_constituents(ss):
+            out.append(ss)
     return out
 
 
 def run_canaries(agency: dict, comparators: list, currents_cache: Path, *, start: str = cc.START,
                  log=print) -> tuple[dict, dict]:
-    """(source -> convention.canary object, source -> full result) for every included source."""
+    """(source -> convention.canary object, source -> full result) for every included source. A source set that
+    does not publish all four canary constituents is not compared (listed in the result as
+    `not_compared_missing_constituents`); canary.canary checks every pair it makes as it always does."""
     conv, full = {}, {}
     for src, a in agency.items():
         if src in GESLA_CANARY_SOURCES:
-            r = canary(src, a.sets, comparators)
+            lacking = [ss for ss in a.sets if ss.constant_set is not None and not _has_canary_constituents(ss)]
+            r = canary(src, [ss for ss in a.sets if ss not in lacking], comparators)
             conv[src], full[src] = r.convention_canary(), r.to_dict()
+            full[src]["not_compared_missing_constituents"] = [
+                {"source_record_id": ss.constant_set["source_record_id"],
+                 "missing": sorted(set(CANARY_CONSTITUENTS) - {c["name"] for c in ss.constant_set["constituents"]})}
+                for ss in lacking]
         elif src == "noaa-currents":
             r = cc.run_canary(a.sets, currents_cache, start=start)
             conv[src], full[src] = cc.convention_canary(r), r
