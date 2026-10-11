@@ -70,7 +70,7 @@ CSV_COLUMNS = [
     # the licence's commercial_use (true/false), on every row that has a licence_id (L-NC)
     "commercial_use",
     # station
-    "country", "lat", "lon", "timezone", "type", "aliases", "recommended_set_id",
+    "country", "lat", "lon", "timezone", "type", "aliases", "recommended_set_id", "recommended_is_fallback",
     "default_current_bin",
     # tombstone
     "removed_in", "removed_reason", "merged_into", "detail",
@@ -89,7 +89,7 @@ CSV_COLUMNS = [
     "source", "source_type", "quantity", "source_record_id", "source_version",
     "record_span_start", "record_span_end", "good_samples", "good_hours",
     "qc_status", "qc_flags", "no_constants_reason", "time_base", "record_issues", "fit_segment",
-    "expected_accuracy", "dropped_constituents", "provenance",
+    "expected_accuracy", "dropped_constituents", "provenance", "fallback",
     # constituent
     "source_name", "doodson", "speed_deg_per_hour", "amplitude_m", "phase_deg",
     "amp_uncertainty_m", "phase_uncertainty_deg", "kept_reason",
@@ -106,7 +106,7 @@ CSV_COLUMNS = [
 
 JSON_COLUMNS = {"aliases", "datum_named", "datum_basis", "qc_flags", "dropped_constituents", "provenance",
                 "nodal_formula_ids", "canary", "previous_release", "time_base", "record_issues",
-                "fit_segment", "expected_accuracy"}
+                "fit_segment", "expected_accuracy", "fallback"}
 FLOAT_COLUMNS = {"lat", "lon", "time_offset_high_min", "time_offset_low_min", "height_offset_high",
                  "height_offset_low", "datum_msl_offset_m", "speed_deg_per_hour", "amplitude_m",
                  "phase_deg", "amp_uncertainty_m", "phase_uncertainty_deg", "utc_offset_hours",
@@ -123,7 +123,7 @@ INT_COLUMNS = {"good_samples", "missed_events", "extra_events", "default_current
 # Keys handled specially (children, split objects) are listed in _CHILD_KEYS.
 _ROW_KEYS = {
     "station": ["station_id", "status", "name", "country", "lat", "lon", "timezone", "type",
-                "aliases", "recommended_set_id", "default_current_bin"],
+                "aliases", "recommended_set_id", "recommended_is_fallback", "default_current_bin"],
     "tombstone": ["station_id", "status", "name", "removed_in", "removed_reason", "merged_into", "detail"],
     "offset": ["reference_station_id", "time_offset_high_min", "time_offset_low_min",
                "height_offset_high", "height_offset_low", "height_adjusted_type", "licence_id"],
@@ -139,7 +139,7 @@ _ROW_KEYS = {
     "constant_set": ["set_id", "source", "source_type", "quantity", "source_record_id",
                      "source_version", "convention_id", "licence_id", "qc_status", "qc_flags",
                      "no_constants_reason", "time_base", "record_issues", "fit_segment",
-                     "expected_accuracy", "dropped_constituents", "provenance"],
+                     "expected_accuracy", "dropped_constituents", "provenance", "fallback"],
     "constituent": ["name", "source_name", "doodson", "speed_deg_per_hour", "amplitude_m",
                     "phase_deg", "amp_uncertainty_m", "phase_uncertainty_deg", "kept_reason"],
     "convention": ["convention_id", "phase_reference", "utc_offset_hours", "v0_model",
@@ -158,9 +158,9 @@ _CHILD_KEYS = {
 
 FORMAT_VERSION = "1.0"
 SCHEMA_NAME = f"otc-{FORMAT_VERSION}.schema.json"
-# SHA-256 of the site's src/schema/otc-1.0.schema.json at the commit sync_schema.sh pins (23aedbe,
-# PR #48). sync_schema.sh holds the same value; a test keeps the two equal.
-SCHEMA_SHA256 = "36d6c579c33089c40231e0539b5ebe890eba33399b87f8dc8406d49ea1096b1b"
+# SHA-256 of the site's src/schema/otc-1.0.schema.json at the commit sync_schema.sh pins
+# (ed10d6c, approved labelled publication fallback contract). sync_schema.sh holds the same value; a test keeps the two equal.
+SCHEMA_SHA256 = "d03e887cf122dfe5f693d0816e4261825f242923dc1d78039ea86bc840c62534"
 _MISSING = object()  # "key not present"; never equal to a value read from JSON
 
 
@@ -320,8 +320,10 @@ def _cross_reference_errors(release: dict) -> list[str]:
         where = f"stations/{si} ({sid})"
         if st.get("status") != "active":
             continue
+        station_sets = _dicts(st.get("constant_sets"))
+        own_by_id = {cs["set_id"]: cs for cs in station_sets if isinstance(cs.get("set_id"), str)}
         own_sets = set()
-        for ki, cs in enumerate(_dicts(st.get("constant_sets"))):
+        for ki, cs in enumerate(station_sets):
             sw = f"{where} constant_sets/{ki} ({cs.get('set_id')})"
             set_id = cs.get("set_id")
             if isinstance(set_id, str):
@@ -329,6 +331,13 @@ def _cross_reference_errors(release: dict) -> list[str]:
                     errors.append(f"duplicate set_id {set_id!r}")
                 set_ids.add(set_id)
                 own_sets.add(set_id)
+            fallback = cs.get("fallback")
+            preferred_id = fallback.get("preferred_set_id") if isinstance(fallback, dict) else None
+            if isinstance(preferred_id, str):
+                preferred = own_by_id.get(preferred_id)
+                if preferred is None or "fallback" in preferred:
+                    errors.append(f"{sw}: fallback preferred_set_id {preferred_id!r} must name a "
+                                  "non-fallback set of this station")
             conv_id = cs.get("convention_id")
             conv = conventions.get(conv_id) if isinstance(conv_id, str) else None
             if isinstance(conv_id, str) and conv is None:
@@ -367,6 +376,12 @@ def _cross_reference_errors(release: dict) -> list[str]:
                               "subordinate_offsets or current_offsets (it cannot be predicted)")
         elif isinstance(rec, str) and rec not in own_sets:
             errors.append(f"{where}: recommended_set_id {rec!r} is not a set of this station")
+        recommended = own_by_id.get(rec) if isinstance(rec, str) else None
+        if recommended is not None and "fallback" in recommended:
+            if st.get("recommended_is_fallback") is not True:
+                errors.append(f"{where}: recommended_is_fallback must be true for a fallback recommendation")
+        elif "recommended_is_fallback" in st:
+            errors.append(f"{where}: recommended_is_fallback must be omitted for a non-fallback recommendation")
         if isinstance(off, dict):
             ref = off.get("reference_station_id")
             target = by_id.get(ref) if isinstance(ref, str) else None

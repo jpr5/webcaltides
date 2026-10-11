@@ -1449,6 +1449,239 @@
           "provenance": { "build": { "build_commit": "0000000" }, "selection_reason": "the record's licence does not allow publishing an OTC fit, so the publisher's constants are used; the station's gauge fit is a short record with fewer good hours" }
         }
       ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0019",
+      "status": "active",
+      "name": "Example labelled publication fallback below a normal model set (illustrative values, not data)",
+      "country": "IRL",
+      "lat": 51.6,
+      "lon": -9.9,
+      "timezone": "Europe/Dublin",
+      "type": "reference",
+      "recommended_set_id": "OTC-EXAMPLE-0019/eot20",
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0019/ticon-4",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "example-ie-file-id",
+          "source_version": "4",
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4",
+          "qc_status": "flagged",
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 1.18,
+              "phase_deg": 128.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 0.2
+            },
+            {
+              "name": "S2",
+              "speed_deg_per_hour": 30.0,
+              "amplitude_m": 0.41,
+              "phase_deg": 166.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 0.5
+            },
+            {
+              "name": "K1",
+              "speed_deg_per_hour": 15.0410686,
+              "amplitude_m": 0.07,
+              "phase_deg": 98.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 2.1
+            },
+            {
+              "name": "O1",
+              "speed_deg_per_hour": 13.9430356,
+              "amplitude_m": 0.06,
+              "phase_deg": 335.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 2.6
+            }
+          ],
+          "time_base": {
+            "code": "disputed",
+            "reason": "illustrative comparator findings disagree",
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "decided_in": "20991231",
+            "evidence": [
+              {
+                "comparator_kind": "model",
+                "comparator_id": "eot20",
+                "distance_km": 1.0,
+                "lag_min": 0.6
+              }
+            ]
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "0000000"
+            },
+            "selection_reason": "the record's licence does not allow publishing an OTC fit, so the publisher's constants are used"
+          },
+          "fallback": {
+            "reason": "reliability_withheld",
+            "basis": "original published constants retained for inspection",
+            "otc_finding": "illustrative disputed time-base finding",
+            "preferred_set_id": "OTC-EXAMPLE-0019/eot20"
+          },
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base disputed"
+            },
+            {
+              "flag": "fallback:reliability_withheld",
+              "reason": "illustrative disputed time-base finding"
+            }
+          ]
+        },
+        {
+          "set_id": "OTC-EXAMPLE-0019/eot20",
+          "source": "eot20",
+          "source_type": "model",
+          "quantity": "water_level",
+          "source_record_id": "51.60,-9.90",
+          "source_version": "2021",
+          "convention_id": "eot20-greenwich-schureman-v1",
+          "licence_id": "eot20",
+          "qc_status": "ok",
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 1.15,
+              "phase_deg": 127.0
+            },
+            {
+              "name": "S2",
+              "speed_deg_per_hour": 30.0,
+              "amplitude_m": 0.4,
+              "phase_deg": 165.0
+            },
+            {
+              "name": "K1",
+              "speed_deg_per_hour": 15.0410686,
+              "amplitude_m": 0.07,
+              "phase_deg": 97.0
+            },
+            {
+              "name": "O1",
+              "speed_deg_per_hour": 13.9430356,
+              "amplitude_m": 0.06,
+              "phase_deg": 334.0
+            }
+          ],
+          "provenance": {
+            "build": {
+              "build_commit": "0000000"
+            },
+            "selection_reason": "model constants at the station point"
+          }
+        }
+      ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0020",
+      "status": "active",
+      "name": "Example labelled publication fallback only (illustrative values, not data)",
+      "country": "IRL",
+      "lat": 51.6,
+      "lon": -9.9,
+      "timezone": "Europe/Dublin",
+      "type": "reference",
+      "recommended_set_id": "OTC-EXAMPLE-0020/ticon-4",
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0020/ticon-4",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "example-ie-file-id",
+          "source_version": "4",
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4",
+          "qc_status": "flagged",
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 1.18,
+              "phase_deg": 128.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 0.2
+            },
+            {
+              "name": "S2",
+              "speed_deg_per_hour": 30.0,
+              "amplitude_m": 0.41,
+              "phase_deg": 166.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 0.5
+            },
+            {
+              "name": "K1",
+              "speed_deg_per_hour": 15.0410686,
+              "amplitude_m": 0.07,
+              "phase_deg": 98.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 2.1
+            },
+            {
+              "name": "O1",
+              "speed_deg_per_hour": 13.9430356,
+              "amplitude_m": 0.06,
+              "phase_deg": 335.0,
+              "amp_uncertainty_m": 0.003,
+              "phase_uncertainty_deg": 2.6
+            }
+          ],
+          "time_base": {
+            "code": "disputed",
+            "reason": "illustrative comparator findings disagree",
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "decided_in": "20991231",
+            "evidence": [
+              {
+                "comparator_kind": "model",
+                "comparator_id": "eot20",
+                "distance_km": 1.0,
+                "lag_min": 0.6
+              }
+            ]
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "0000000"
+            },
+            "selection_reason": "the record's licence does not allow publishing an OTC fit, so the publisher's constants are used"
+          },
+          "fallback": {
+            "reason": "reliability_withheld",
+            "basis": "original published constants retained for inspection",
+            "otc_finding": "illustrative disputed time-base finding"
+          },
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base disputed"
+            },
+            {
+              "flag": "fallback:reliability_withheld",
+              "reason": "illustrative disputed time-base finding"
+            }
+          ]
+        }
+      ],
+      "recommended_is_fallback": true
     }
   ]
 }

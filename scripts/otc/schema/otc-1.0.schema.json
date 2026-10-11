@@ -327,9 +327,10 @@
           }
         },
         "recommended_set_id": {
-          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, or for a station whose every set is no_constants. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. A set flagged short_record never outranks a set of the same quantity at the same station that has constants and more hours of good data (record_span.good_hours), whatever their source types. The release build checks these.",
+          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, or for a station whose every set is no_constants. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. Non-fallbacks rank before fallbacks; the other criteria apply within each group. A set flagged short_record never outranks a set of the same quantity at the same station and in the same fallback group that has constants and more hours of good data (record_span.good_hours), whatever their source types. The release build checks these.",
           "type": ["string", "null"]
         },
+        "recommended_is_fallback": { "description": "True exactly when recommended_set_id selects a fallback; otherwise omitted. The release checker verifies this cross-reference.", "type": "boolean" },
         "constant_sets": { "type": "array", "items": { "$ref": "#/$defs/constant_set" } },
         "subordinate_offsets": { "$ref": "#/$defs/subordinate_offsets" },
         "default_current_bin": {
@@ -359,6 +360,44 @@
         ]
       }
     },
+    "fallback": {
+      "description": "Retained values with a finding. This is not a carry-over from an earlier release. preferred_set_id names a non-fallback set at the same station; the release checker verifies it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "basis",
+        "otc_finding"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "time_base_disputed",
+            "time_base_unresolved",
+            "refused_fit",
+            "short_record_uncalibrated",
+            "short_record_long_period",
+            "published_full_list",
+            "reliability_withheld",
+            "licence_reading",
+            "datum_gate_failed",
+            "not_in_otc_input"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "otc_finding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "preferred_set_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "constant_set": {
       "type": "object",
       "required": ["set_id", "source", "source_type", "quantity", "source_record_id", "source_version", "convention_id", "licence_id", "qc_status", "constituents", "provenance"],
@@ -367,7 +406,7 @@
         "set_id": { "type": "string", "minLength": 1 },
         "source": { "description": "e.g. gesla-fit, noaa, kartverket.", "type": "string", "pattern": "^[a-z0-9-]+$(?![\\s\\S])" },
         "source_type": {
-          "description": "official: constants published by the agency that runs the gauge; gauge: an OTC fit to gauge observations; analysis: constants published by a third party from gauge observations: not the gauge operator, not an OTC fit; model: interpolated from a global tide model. A station's recommended set ranks them in this order.",
+          "description": "official: constants published by the agency that runs the gauge; gauge: an OTC fit to gauge observations; analysis: constants published by a third party from gauge observations: not the gauge operator, not an OTC fit; model: interpolated from a global tide model. A station's recommended set ranks non-fallbacks first, then source types in this order.",
           "enum": ["official", "gauge", "analysis", "model"]
         },
         "quantity": {
@@ -401,10 +440,11 @@
         "convention_id": { "type": "string", "minLength": 1 },
         "licence_id": { "type": "string", "minLength": 1 },
         "qc_status": {
-          "description": "ok: constants are published and qc_flags is empty. flagged: constants are published and qc_flags says what to know about them. no_constants: the set is listed but no constants were fitted; no_constants_reason says why, and qc_flags has at least one flag. No status marks a record as removed: every record stays listed, except that a third-party analysis (TICON-4) of a record whose time base OTC disputes is not carried. A set carried over from an earlier release has the carried_over flag and provenance.carried_from_release.",
+          "description": "ok: constants are published and qc_flags is empty. flagged: constants are published and qc_flags says what to know about them. no_constants: the set is listed but no constants were fitted; no_constants_reason says why, and qc_flags has at least one flag. No status marks a record as removed: every record stays listed. A disputed third-party analysis is retained only with a matching labelled fallback. A set carried over from an earlier release has the carried_over flag and provenance.carried_from_release.",
           "enum": ["ok", "flagged", "no_constants"]
         },
         "qc_flags": { "type": "array", "items": { "$ref": "#/$defs/qc_flag" } },
+        "fallback": { "$ref": "#/$defs/fallback" },
         "time_base": { "$ref": "#/$defs/time_base_annotation" },
         "record_issues": {
           "description": "What is wrong with a broken record. The set stays listed. When a usable segment exists, fit_segment names it and the constants are fitted to it; when none exists, qc_status is no_constants.",
@@ -464,6 +504,27 @@
       },
       "dependentRequired": { "fit_segment": ["record_issues"] },
       "allOf": [
+        {"description":"A retained fallback is flagged and keeps its matching reason flag.","if":{"required":["fallback"]},"then":{"required":["qc_flags"],"properties":{"qc_status":{"const":"flagged"}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"time_base_disputed"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:time_base_disputed"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:time_base_disputed"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"time_base_disputed"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"time_base_unresolved"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:time_base_unresolved"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:time_base_unresolved"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"time_base_unresolved"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"refused_fit"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:refused_fit"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:refused_fit"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"refused_fit"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"short_record_uncalibrated"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:short_record_uncalibrated"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:short_record_uncalibrated"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"short_record_uncalibrated"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"short_record_long_period"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:short_record_long_period"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:short_record_long_period"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"short_record_long_period"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"published_full_list"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:published_full_list"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:published_full_list"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"published_full_list"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"reliability_withheld"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:reliability_withheld"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:reliability_withheld"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"reliability_withheld"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"licence_reading"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:licence_reading"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:licence_reading"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"licence_reading"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"datum_gate_failed"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:datum_gate_failed"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:datum_gate_failed"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"datum_gate_failed"}}}}}},
+        {"if":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"not_in_otc_input"}}}}},"then":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:not_in_otc_input"}}}}}}},
+        {"if":{"required":["qc_flags"],"properties":{"qc_flags":{"contains":{"required":["flag"],"properties":{"flag":{"const":"fallback:not_in_otc_input"}}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"required":["reason"],"properties":{"reason":{"const":"not_in_otc_input"}}}}}},
         {
           "description": "A current set has current_bins (unless no_constants) and no water-level constituents; a water-level set has no current_bins.",
           "if": { "properties": { "quantity": { "const": "current" } } },
@@ -481,11 +542,11 @@
           "then": { "required": ["time_base", "record_span"], "properties": { "record_span": { "required": ["good_hours"] } } }
         },
         {
-          "description": "Every analysis set carries the annotation of OTC's time-base audit of the same gauge record. verified or unverified: the constants are as published. corrected: OTC applied the correction to the publisher's phases, and provenance.modified says so. disputed: the set is not carried, so no analysis set has it. Hours of good data are optional.",
+          "description": "Every analysis set carries the annotation of OTC's time-base audit of the same gauge record. verified or unverified: the constants are as published. corrected: OTC applied the correction to the publisher's phases, and provenance.modified says so. disputed: retained only as a labelled time_base_disputed, time_base_unresolved or reliability_withheld fallback. Hours of good data are optional.",
           "if": { "properties": { "source_type": { "const": "analysis" } } },
           "then": {
             "required": ["time_base"],
-            "properties": { "time_base": { "properties": { "code": { "not": { "const": "disputed" } } } } },
+            "allOf": [{"if":{"required":["time_base"],"properties":{"time_base":{"required":["code"],"properties":{"code":{"const":"disputed"}}}}},"then":{"required":["fallback"],"properties":{"fallback":{"properties":{"reason":{"enum":["time_base_disputed","time_base_unresolved","reliability_withheld"]}}}}}}],
             "if": { "properties": { "time_base": { "required": ["code"], "properties": { "code": { "const": "corrected" } } } } },
             "then": { "required": ["provenance"], "properties": { "provenance": { "required": ["modified"] } } },
             "else": { "properties": { "provenance": { "not": { "required": ["modified"] } } } }
@@ -555,13 +616,13 @@
           "then": { "required": ["record_issues"] }
         },
         {
-          "description": "A short record states its length, and its expected accuracy unless no constants were fitted.",
+          "description": "A short record retains good_hours and dropped-constituent evidence. Expected accuracy is required unless no constants were fitted or it is labelled short_record_uncalibrated.",
           "if": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "short_record" } } } } } },
           "then": {
             "required": ["record_span"],
             "properties": { "record_span": { "required": ["good_hours"] } },
             "if": { "properties": { "qc_status": { "const": "no_constants" } } },
-            "else": { "required": ["expected_accuracy", "dropped_constituents"], "properties": { "dropped_constituents": { "minItems": 1 } } }
+            "else": {"required":["dropped_constituents"],"properties":{"dropped_constituents":{"minItems":1}},"if":{"required":["fallback"],"properties":{"fallback":{"properties":{"reason":{"const":"short_record_uncalibrated"}}}}},"else":{"required":["expected_accuracy"]}}
           }
         },
         {
@@ -797,7 +858,7 @@
       "required": ["flag", "reason"],
       "additionalProperties": false,
       "properties": {
-        "flag": { "enum": ["time_base", "broken_record", "microtidal", "non_tidal_signal", "short_record", "sibling_disagreement", "carried_over", "source_quality_note"] },
+        "flag": { "enum": ["time_base", "broken_record", "microtidal", "non_tidal_signal", "short_record", "sibling_disagreement", "carried_over", "source_quality_note", "fallback:time_base_disputed", "fallback:time_base_unresolved", "fallback:refused_fit", "fallback:short_record_uncalibrated", "fallback:short_record_long_period", "fallback:published_full_list", "fallback:reliability_withheld", "fallback:licence_reading", "fallback:datum_gate_failed", "fallback:not_in_otc_input"] },
         "reason": { "description": "One line for people, not blank.", "type": "string", "pattern": "\\S" },
         "values": { "description": "The numbers behind the flag: each value a number or null. No key may name a status.", "type": "object", "propertyNames": { "not": { "$ref": "#/$defs/status_like_name" } }, "additionalProperties": { "type": ["number", "null"] } }
       }

@@ -19,11 +19,11 @@
 # same schema SHA-256 (SCHEMA_SHA256) and refuses a copy that does not match it.
 set -euo pipefail
 
-SITE_COMMIT=23aedbe83161790518d9c3a1eeb9a82b8a9c3f18   # merge of PR #48 (source_type analysis, source_quality_note, provenance.modified)
+SITE_COMMIT=ed10d6cacdab460103ce9f67b9fc56b9456d1f15   # approved labelled publication fallback contract
 SCHEMA_SRC=src/schema/otc-1.0.schema.json
-SCHEMA_SHA256=36d6c579c33089c40231e0539b5ebe890eba33399b87f8dc8406d49ea1096b1b
+SCHEMA_SHA256=d03e887cf122dfe5f693d0816e4261825f242923dc1d78039ea86bc840c62534
 EXAMPLE_SRC=src/schema/example.json
-EXAMPLE_SHA256=3738e6e0cfbb277da267bd1449f3d8a57e797ae91e7ffe158054614a3e700cb5
+EXAMPLE_SHA256=21ae241d2ec622dd7ef5315840415c4277297de07f943cde76eb36de52c4e461
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 schema_dst="$here/schema/otc-1.0.schema.json"

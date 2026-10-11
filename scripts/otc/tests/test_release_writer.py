@@ -9,14 +9,21 @@ import gzip
 import hashlib
 import io
 import json
+import os
+import stat
 from datetime import date
 from pathlib import Path
 
+import pyarrow.parquet as pq
 import pytest
 from jsonschema import Draft202012Validator
 
+import otc_pipeline.release_writer as rw
+from otc_pipeline.astro_tables import load_congen_run
 from otc_pipeline.release_writer import (
     CSV_COLUMNS,
+    check_release_dir,
+    main,
     next_datestamp,
     validate_release,
     write_release,
@@ -47,6 +54,100 @@ def write(release, out_dir, datestamp=D, **kw):
 
 def test_example_is_valid(release):
     assert validate_release(release) == []
+
+
+def test_fallback_real_release_roundtrip(tmp_path):
+    real_path = os.environ.get("OTC_FALLBACK_REAL_RELEASE")
+    report_path = os.environ.get("OTC_FALLBACK_BUILD_REPORT")
+    if not real_path or not report_path:
+        pytest.skip("requires the pinned actual build evidence")
+    doc = json.loads(Path(real_path).read_text())
+    report = json.loads(Path(report_path).read_text())
+    run = load_congen_run(
+        Path(report["provenance"]["congen_run"]["path"]),
+        tcd_sha256=report["provenance"]["otc_tcd"]["sha256"],
+    )
+    assert validate_release(doc) == []
+    paths = write_release(doc, tmp_path, datestamp=doc["release"]["datestamp"],
+                          congen_run=run, app_export=None, parquet=True, jsonl_gz=True)
+    stem = "OTC_" + doc["release"]["datestamp"]
+    sid = "OTC-000cb5d3"
+    set_id = "OTC-000cb5d3/ticon-4/funafuti-67440-tuv-bom"
+    expected_st = _station(doc, sid)
+    expected_cs = next(c for c in expected_st["constant_sets"] if c["set_id"] == set_id)
+    for suffix in (".json", ".json.gz", ".jsonl", ".jsonl.gz"):
+        raw = (tmp_path / (stem + suffix)).read_bytes()
+        if suffix.endswith(".gz"):
+            raw = gzip.decompress(raw)
+        if ".jsonl" in suffix:
+            stations = [json.loads(line) for line in raw.splitlines()]
+        else:
+            back = json.loads(raw)
+            assert back == doc
+            stations = back["stations"]
+        assert stations == doc["stations"]
+        st = next(s for s in stations if s["station_id"] == sid)
+        cs = next(c for c in st["constant_sets"] if c["set_id"] == set_id)
+        assert st["recommended_is_fallback"] is True
+        assert cs == expected_cs
+    with (tmp_path / (stem + ".csv")).open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    parquet_rows = pq.read_table(tmp_path / (stem + ".parquet")).to_pylist()
+    for table_rows in (rows, parquet_rows):
+        st = next(r for r in table_rows if r["record_type"] == "station" and r["station_id"] == sid)
+        cs = next(r for r in table_rows if r["record_type"] == "constant_set" and r["set_id"] == set_id)
+        assert st["recommended_is_fallback"] == "true"
+        assert json.loads(cs["fallback"]) == expected_cs["fallback"]
+        assert json.loads(cs["qc_flags"]) == expected_cs["qc_flags"]
+    assert "stations" not in json.loads((tmp_path / (stem + ".meta.json")).read_text())
+    assert check_release_dir(tmp_path) == []
+    assert any(p.suffix == ".parquet" for p in paths)
+
+
+def _fallback_station(release):
+    st = release["stations"][0]
+    cs = st["constant_sets"][0]
+    cs["fallback"] = {"reason": "refused_fit", "basis": "retained fitted values",
+                      "otc_finding": "illustrative quality refusal",
+                      "preferred_set_id": st["constant_sets"][1]["set_id"]}
+    cs["qc_status"] = "flagged"
+    cs.setdefault("qc_flags", []).append({"flag": "fallback:refused_fit", "reason": "quality refusal"})
+    st["recommended_set_id"] = cs["set_id"]
+    st["recommended_is_fallback"] = True
+    return st, cs
+
+
+@pytest.mark.parametrize("preferred", ["OTC-EXAMPLE-0003/gesla-fit", "OTC-X/absent", "self"])
+def test_fallback_preferred_set_must_be_same_station_and_non_fallback(release, preferred):
+    st, cs = _fallback_station(release)
+    cs["fallback"]["preferred_set_id"] = cs["set_id"] if preferred == "self" else preferred
+    errors = validate_release(release)
+    assert any("preferred_set_id" in e and "non-fallback set of this station" in e for e in errors), errors
+
+
+@pytest.mark.parametrize("marker", [None, False])
+def test_fallback_recommendation_requires_true_marker(release, marker):
+    st, _cs = _fallback_station(release)
+    if marker is None:
+        st.pop("recommended_is_fallback")
+    else:
+        st["recommended_is_fallback"] = marker
+    errors = validate_release(release)
+    assert any("recommended_is_fallback must be true" in e for e in errors), errors
+
+
+@pytest.mark.parametrize("marker", [True, False])
+def test_normal_recommendation_requires_absent_marker(release, marker):
+    release["stations"][0]["recommended_is_fallback"] = marker
+    errors = validate_release(release)
+    assert any("recommended_is_fallback must be omitted" in e for e in errors), errors
+
+
+def test_fallback_semantics_does_not_rerank_or_mutate(release):
+    _fallback_station(release)
+    original = copy.deepcopy(release)
+    assert validate_release(release) == []
+    assert release == original
 
 
 def test_missing_convention_id_is_rejected(release):
@@ -367,7 +468,6 @@ def test_csv_rfc4180_quoting(release, tmp_path):
 
 
 def test_parquet_matches_csv(release, tmp_path):
-    pq = pytest.importorskip("pyarrow.parquet")
     write(release, tmp_path, parquet=True)
     table = pq.read_table(tmp_path / f"OTC_{D}.parquet")
     assert table.column_names == CSV_COLUMNS
@@ -477,7 +577,6 @@ def test_validate_reports_non_finite_numbers(release, where, bad):
 
 
 def test_failed_write_removes_its_files(release, tmp_path, monkeypatch):
-    import otc_pipeline.release_writer as rw
     real_link = rw.os.link
 
     def link(src, dst):
@@ -569,7 +668,6 @@ def test_subordinate_with_null_recommended_set_needs_offsets(release):
 
 
 def test_fsync_failure_leaves_no_files(release, tmp_path, monkeypatch):
-    import otc_pipeline.release_writer as rw
     real_fsync = rw.os.fsync
     calls = []
 
@@ -586,7 +684,6 @@ def test_fsync_failure_leaves_no_files(release, tmp_path, monkeypatch):
 
 
 def test_temp_unlink_failure_after_link_rolls_back(release, tmp_path, monkeypatch):
-    import otc_pipeline.release_writer as rw
     real_unlink = Path.unlink
     state = {"failed": False}
 
@@ -604,7 +701,6 @@ def test_temp_unlink_failure_after_link_rolls_back(release, tmp_path, monkeypatc
 
 
 def test_stale_temp_file_with_same_pid_does_not_block_a_write(release, tmp_path):
-    import os
     for name in (f"OTC_{D}.json", f"OTC_{D}.csv", f"OTC_{D}.sha256"):
         (tmp_path / f".{name}.tmp-{os.getpid()}").write_bytes(b"stale")
     paths = write(release, tmp_path)
@@ -612,9 +708,6 @@ def test_stale_temp_file_with_same_pid_does_not_block_a_write(release, tmp_path)
 
 
 def test_link_order_sha256_last_and_directory_fsynced(release, tmp_path, monkeypatch):
-    import os
-    import stat
-    import otc_pipeline.release_writer as rw
     events = []
     real_link, real_fsync = rw.os.link, rw.os.fsync
 
@@ -642,7 +735,6 @@ def test_link_order_sha256_last_and_directory_fsynced(release, tmp_path, monkeyp
 
 
 def test_cli_validate_bad_json_and_missing_file(tmp_path, capsys):
-    from otc_pipeline.release_writer import main
     bad = tmp_path / "bad.json"
     bad.write_text("{bad")
     assert main(["validate", str(bad)]) != 0
@@ -653,7 +745,6 @@ def test_cli_validate_bad_json_and_missing_file(tmp_path, capsys):
 
 
 def test_cli_validate_reports_wrong_types(tmp_path, capsys):
-    from otc_pipeline.release_writer import main
     doc = json.loads(EXAMPLE.read_text())
     doc["stations"] = 5
     p = tmp_path / "doc.json"
@@ -663,7 +754,6 @@ def test_cli_validate_reports_wrong_types(tmp_path, capsys):
 
 
 def test_cli_validate_valid_example(capsys):
-    from otc_pipeline.release_writer import main
     assert main(["validate", str(EXAMPLE)]) == 0
     assert "valid" in capsys.readouterr().out
 
