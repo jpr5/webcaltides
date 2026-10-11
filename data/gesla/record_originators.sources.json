@@ -1,0 +1,13 @@
+{
+ "generator": "otc_pipeline.gesla_originators build",
+ "gesla_metadata": {
+  "file": "GESLA4-1_ALL.csv",
+  "sha256": "92fd88dcdf8a57d7551870aabdd90d13a1751311e2895837dc271a159b42ab48"
+ },
+ "uhslc_metadata_snapshot": {
+  "source": "https://uhslc.soest.hawaii.edu/rqds/metadata_yaml/<code>meta.yaml",
+  "files": 716,
+  "sha256": "8eaacf41840de1de490c1d8cdd960f6219a20a28832f1f21650a12f3d09f464e"
+ },
+ "csv_sha256": "953c7422cecc74215ece9eeab0ebe1bd80c84a982f3591ff79eb72228e364e23"
+}

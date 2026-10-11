@@ -14,8 +14,8 @@ Skips unless these are set (local caches; no GESLA data is in git):
                     refuses: the test puts them in a stub audit dir (audit_stub)
 and the verified GESLA cache and the TCD dump are in $OTC_WORK.
 
-Station ids, the licence object and the astro table are test inputs: their slots (the station map,
-L-NC, KP0b) are not done. The astro table holds the TCD dump's own values (astro_from_tcd).
+Station ids and the astro table are test inputs: their slots (the station map, KP0b) are not done.
+The licences are the real per-contributor ones (L-NC, otc_pipeline.gesla_licences). The astro table holds the TCD dump's own values (astro_from_tcd).
 """
 import hashlib
 import json
@@ -29,6 +29,7 @@ from gesla.read_gesla import otc_work
 from gesla.select_constituents import CANDIDATES
 from gesla.timebase_verdict import boxcar_response
 
+from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline.gesla_release import build_release
 from otc_pipeline.gesla_sets import (FitIntegrityError, docs_from_fit_run, fit_records, load_audit, load_tcd_dump,
                                      needs_stamp, published_correction)
@@ -42,8 +43,6 @@ REPO = ROOT.parents[1]
 SCHEMA_BYTES = (ROOT / "schema" / "otc-1.0.schema.json").read_bytes()
 SCHEMA = json.loads(SCHEMA_BYTES)
 TABLE_ID = "tcd-20251228"   # data/latest-xtide.tcd -> harmonics-dwf-20251228-free.tcd
-LICENCE = {"licence_id": "gesla-derived", "spdx": "LicenseRef-GESLA-Research", "provider": "TEST ONLY",
-           "attribution": "TEST ONLY", "commercial_use": True}
 # one record per audit outcome (and per evidence kind), plus records outside the pool
 WANT = ["verified:official", "verified:sibling", "verified:harcon", "verified:provider",
         "unverified:weak_insufficient", "unverified:eot20_only_served_dependent",
@@ -121,10 +120,11 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
     assert refused == []
     names = {n for d in docs for n in d["fit"]["constituents"]}
     records = [d["record_id"] for d in docs]
+    licences, licence_ids = gesla_licences(docs)
     release, report = build_release(
         docs, table=dump.table, table_id=TABLE_ID, datestamp="20261010", created="2026-10-10T00:00:00Z",
         build_commit="c6f2fac", station_ids={r: f"OTC-WR10-{i:04d}" for i, r in enumerate(records)},
-        licences=[LICENCE], licence_ids={r: "gesla-derived" for r in records}, refused=refused,
+        licences=licences, licence_ids=licence_ids, withheld=withheld_licences(), refused=refused,
         epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in docs},
         sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
         fit_run_results_sha256="f" * 64, disputed_reasons={},

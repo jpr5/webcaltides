@@ -65,6 +65,8 @@ CSV_COLUMNS = [
     "record_type",
     # keys shared by several row types
     "station_id", "set_id", "name", "status", "convention_id", "licence_id",
+    # the licence's commercial_use (true/false), on every row that has a licence_id (L-NC)
+    "commercial_use",
     # station
     "country", "lat", "lon", "timezone", "type", "aliases", "recommended_set_id",
     "default_current_bin",
@@ -555,6 +557,13 @@ def _csv_rows(release: dict) -> list[dict]:
                     rows.append(_row("current_constituent", c, {**ids, "bin": b["bin"]}))
         for v in st.get("validation", []):
             rows.append(_row("validation", v, {"station_id": sid}))
+    commercial = {lic["licence_id"]: lic["commercial_use"] for lic in release["licences"]}
+    for row in rows:
+        if "licence_id" in row:
+            if row["licence_id"] not in commercial:
+                raise ValueError(f"{row.get('set_id') or row.get('station_id')}: licence_id {row['licence_id']!r} "
+                                 "is not defined in licences")
+            row["commercial_use"] = commercial[row["licence_id"]]
     return rows
 
 

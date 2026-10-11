@@ -28,6 +28,9 @@ Conventions for a `SourceSet` (the build assigns OTC ids, adapters never do):
   noaa-currents source uses the `noaa` system). Every id is unique and has a
   watch key.
 - `provenance.input_sha256`, when given, names fetched files (checked against their bytes).
+- Licences: `licence()` returns the adapter's one licence. A source whose records carry different
+  licences (GESLA: one per contributor, L-NC) defines `licences()` instead, returning every licence
+  object it uses; each set's `licence_id` must be one of them (ids unique).
 - A gauge adapter's `record_id` is `<source>:<upstream id>`.
 - `check_contract` calls only the accessor the registry names for the source: `records()` for
   gauge observation sources, `sets()` for every other source. Any exception an adapter raises
@@ -142,7 +145,7 @@ class Adapter(Protocol):
 
     def fetch(self, cache_dir: Path, only: list[str] | None = None) -> FetchResult: ...
     def convention(self) -> dict: ...                # OTC `convention` object
-    def licence(self) -> dict: ...                   # OTC `licence` object
+    def licence(self) -> dict: ...                   # OTC `licence` object (or `licences()`, see above)
     def watch_keys(self, fetched: FetchResult) -> dict[str, str]: ...   # record id -> normalised-content SHA-256
     def records(self, fetched: FetchResult) -> Iterable[GaugeRecord]: ...  # gauge observation sources only
     def sets(self, fetched: FetchResult) -> Iterable[SourceSet]: ...        # every other source
@@ -198,6 +201,55 @@ def _call(errors: list[str], adapter, name: str, *args, materialise: bool = Fals
         return _FAILED
 
 
+BOTH_LICENCE_METHODS = "the adapter defines both licence() and licences(): define one"
+
+
+def _defines(adapter, name: str) -> bool:
+    """True when the adapter itself defines `name` (on the instance or a class in its MRO), not when it
+    only inherits the Adapter Protocol's stub."""
+    if name in getattr(adapter, "__dict__", {}):
+        return callable(adapter.__dict__[name])
+    for klass in type(adapter).__mro__:
+        if name in vars(klass):
+            return klass is not Adapter and callable(vars(klass)[name])
+    return False
+
+
+def _defines_both(adapter) -> bool:
+    return _defines(adapter, "licences") and _defines(adapter, "licence")
+
+
+def adapter_licences(adapter) -> list[dict]:
+    """The adapter's licence objects: `licences()` when it defines one, else `[licence()]`. An adapter
+    that defines both raises ValueError (licence() is never silently ignored)."""
+    if _defines_both(adapter):
+        raise ValueError(BOTH_LICENCE_METHODS)
+    if callable(getattr(adapter, "licences", None)):
+        return list(adapter.licences() or ())
+    return [adapter.licence()]
+
+
+def _licences(errors: list[str], adapter):
+    """adapter_licences, or _FAILED with the reason recorded as a contract error."""
+    if _defines_both(adapter):
+        errors.append(BOTH_LICENCE_METHODS)
+        return _FAILED
+    name = "licences" if callable(getattr(adapter, "licences", None)) else "licence"
+    got = _call(errors, adapter, name, materialise=(name == "licences"))
+    if got is _FAILED:
+        return _FAILED
+    lics = got if name == "licences" else [got]
+    if not lics or not all(isinstance(x, dict) for x in lics):
+        errors.append(f"{name}() must return {'one or more licence objects' if name == 'licences' else 'a licence object'}")
+        return _FAILED
+    ids = [x.get("licence_id") for x in lics]
+    dup = sorted({i for i in ids if ids.count(i) > 1}, key=str)
+    if dup:
+        errors.append(f"licences() lists licence_id {dup} more than once")
+        return _FAILED
+    return lics
+
+
 def _station_id(i: int) -> str:
     return f"OTC-CONTRACT-{i:05d}"
 
@@ -207,7 +259,7 @@ def assemble_release(adapter, sets: list[SourceSet], fetched: FetchResult,
     """A one-source release around the adapter's sets, as the build would lay it out, so the F1
     validator can check it. Without `constituent_table`, the table is the sets' own constituents."""
     conv = adapter.convention()
-    lic = adapter.licence()
+    lics = adapter_licences(adapter)
     source = _attr(adapter, "source")
     upstream_sid: dict[str, str] = {}
     for i, ss in enumerate(sets, 1):
@@ -261,7 +313,7 @@ def assemble_release(adapter, sets: list[SourceSet], fetched: FetchResult,
         "release": {"datestamp": "20000101", "created": "2000-01-01T00:00:00Z", "concept_doi": None,
                     "min_reader_version": FORMAT_VERSION, "fit_min_good_hours": CONTRACT_FIT_MIN_GOOD_HOURS,
                     "source_versions": {source if isinstance(source, str) else "?": fetched.source_version}},
-        "conventions": [conv], "licences": [lic], "constituents": rows, "stations": stations,
+        "conventions": [conv], "licences": lics, "constituents": rows, "stations": stations,
     }
 
 
@@ -322,7 +374,7 @@ def _set_id(ss: SourceSet, alias_system) -> tuple[str, object]:
     return "station_hint.aliases", aliases.get(alias_system) if isinstance(aliases, dict) else None
 
 
-def _set_errors(attrs, fetched, sets, keys, conv, lic, good_sha: set[str], errors: list[str]) -> None:
+def _set_errors(attrs, fetched, sets, keys, conv, lics, good_sha: set[str], errors: list[str]) -> None:
     source = attrs["source"]
     alias_system = attrs.get("alias_system") or source
     seen: set[str] = set()
@@ -371,9 +423,10 @@ def _set_errors(attrs, fetched, sets, keys, conv, lic, good_sha: set[str], error
             if "convention_id" in cs and cs["convention_id"] != conv.get("convention_id"):
                 errors.append(f"{where}: convention_id {cs['convention_id']!r} is not the adapter's "
                               f"convention {conv.get('convention_id')!r}")
-            if "licence_id" in cs and cs["licence_id"] != lic.get("licence_id"):
-                errors.append(f"{where}: licence_id {cs['licence_id']!r} is not the adapter's "
-                              f"licence {lic.get('licence_id')!r}")
+            lic_ids = [x.get("licence_id") for x in lics]
+            if "licence_id" in cs and cs["licence_id"] not in lic_ids:
+                errors.append(f"{where}: licence_id {cs['licence_id']!r} is not one of the adapter's "
+                              f"licences {lic_ids!r}")
             prov = cs.get("provenance")
             if not isinstance(prov, dict) or prov.get("adapter_version") != attrs["adapter_version"]:
                 errors.append(f"{where}: provenance.adapter_version must be {attrs['adapter_version']!r}")
@@ -499,10 +552,10 @@ def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = Non
             errors.append(f"watch key {k!r}: {v!r} is not a lower-case SHA-256")
 
     conv = _call(errors, adapter, "convention")
-    lic = _call(errors, adapter, "licence")
-    conv_ok, lic_ok = conv is not _FAILED, lic is not _FAILED
+    lics = _licences(errors, adapter)
+    conv_ok, lic_ok = conv is not _FAILED, lics is not _FAILED
     conv = conv if isinstance(conv, dict) else {}
-    lic = lic if isinstance(lic, dict) else {}
+    lics = lics if lics is not _FAILED else []
     sets: list = []
     records: list = []
     if _expected_output(attrs["source"], attrs["source_type"]) == "records":
@@ -518,13 +571,13 @@ def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = Non
             sets = got
             if not sets:
                 errors.append("no sets: the fetch produced no SourceSet")
-        _set_errors(attrs, fetched, sets, keys, conv, lic, good_sha, errors)
+        _set_errors(attrs, fetched, sets, keys, conv, lics, good_sha, errors)
         _speed_errors(sets, errors)
     if conv_ok and lic_ok:
         class _Fixed:   # the convention and licence already fetched (each adapter method runs once)
             source = attrs["source"]
             convention = staticmethod(lambda: conv)
-            licence = staticmethod(lambda: lic)
+            licences = staticmethod(lambda: lics)
         release = assemble_release(_Fixed, sets, fetched, constituent_table)
         rel_errors = [f"release: {e}" for e in
                       validate_release(release)]

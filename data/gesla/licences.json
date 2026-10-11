@@ -1,0 +1,418 @@
+{
+ "about": "The licences of the GESLA-fit constant sets (L-NC). contributor_roles.csv names one licence_id per GESLA contributor; otc_pipeline.gesla_licences maps each record to it (data/gesla/licence_overrides.csv overrides single records) and refuses a contributor or licence id it does not know. `licences` rows are format 1.0 `licence` objects, validated against the pinned schema. `sources` records, per licence, what sets it and when it was checked.",
+ "sources": {
+  "gesla-bodc-nc": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quotes verbatim from the URL. RESTRICTED. BODC data licence (https://www.bodc.ac.uk/data/documents/nodb/267795/): 'The use or reproduction of data for commercial purposes might require additional permission from the data source and may incur a charge. ... Users should not give any data or products to third parties without prior consent from BODC.' NOC = BODC everywhere (orchestrator decision, round 8): every record whose GESLA ORIGINATOR or UHSLC Data_Source names BODC, the National Oceanography Centre or the Proudman Oceanographic Laboratory is withheld under this switch, on any channel (NOC, CMEMS, UHSLC). Records with no stated originator (UHSLC fast delivery 'Unspecified', DA_IDH 'Ivan D. Haigh') at a BODC gauge (same STMAP station, a shared registry id, or within 100 m) are withheld too: Plymouth (Devonport) and Port Erin CMEMS copies share registry ids with the BODC records (UK National Tide Gauge Network, https://ntslf.org/tides/uk-network; BODC: 'BODC has a special responsibility for the remote monitoring and retrieval of sea level data from the network'). NOC lineage (orchestrator decision, round 9): the NERC Vocabulary Server's BODC organisation history for POL (https://vocab.nerc.ac.uk/collection/C75/current/POL/3/) lists 'Institute of Oceanographic Sciences Bidston Laboratory(1973-01-01 to 1989-03-31)', 'Proudman Oceanographic Laboratory(1989-04-01 to 2010-03-31)' and 'National Oceanography Centre, Liverpool(2010-04-01 to 2017-06-14)'; BODC's history (https://bodc.ac.uk/about/what_is_bodc/our_history): 'NOC was formed on 01 April 2010 from the Proudman Oceanographic Laboratory and the National Oceanography Centre, Southampton (NOCS).' So IOS Bidston, POL and NOC records are withheld here: Port Louis 103A and 103B and Port Victoria 111A (UHSLC Data_Source 'Institute of Oceanographic Sciences (IOS) Bidston Observatory').",
+  "gesla-bom-nc": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quotes verbatim from the URL. RESTRICTED. The ABSLMP data page (https://www.bom.gov.au/oceanography/projects/abslmp/data/index.shtml) states no licence. The BOM copyright page: 'If there are no stated terms of use: Unless we state otherwise, you can download, copy and use our content for personal use, or use within your organisation. You must not supply it to any other person or use it for any commercial purpose.' An AIMS-hosted ABSLMP metadata copy carries CC BY-NC 3.0 AU. Withheld (orchestrator rule, round 5): 'You must not supply it to any other person'. Also withheld by originator: the 56 UHSLC_RQ records whose GESLA ORIGINATOR names the National Tidal Centre, Bureau of Meteorology (54 name it alone; 2 name it for the present period after CSIRO), and their UHSLC fast-delivery twins (licence_overrides.csv).",
+  "gesla-cdwr-nc": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quotes verbatim from the URL. UNCLEAR. CDEC (https://cdec.water.ca.gov/intro.html) and the DWR Conditions of Use hold a privacy notice and a reliability disclaimer only; no licence found; CDEC republishes several operators' data. Non-commercial until confirmed.",
+  "gesla-chs-withheld": "Basis (orchestrator round 8, final-confirm-C W-CHS): DFO terms (https://www.dfo-mpo.gc.ca/terms-avis/terms-conditions-avis-eng.htm), the page the MEDS archive links to: 'If you wish to reproduce Canadian Hydrographic Service navigational charts, publications, data or other hydrographic products, please contact CHS directly'. MEDS records are CHS data: the MEDS archive page (https://meds-sdmm.dfo-mpo.gc.ca/isdm-gdsi/twl-mne/index-eng.htm): 'Observations from the CHS Permanent Water Level Network are added on a daily to monthly basis. Data are also exchanged annually with the Water Survey of Canada.' The CHS licence agreement (https://www.tides.gc.ca/en/licence-agreement) covers 'the CHS Data delivered via CHS' website': it keeps CHS's copyright ('The copyrights of CHS in the Data remain the property of CHS and shall not be sold, licensed, leased, assigned or given to a third party'), excludes derivative products for commercial purposes, and allows not-for-profit derivative products with a set notice ('This product is not to be used for navigation ... contains intellectual property (Data) of the Canadian Hydrographic Service'): if CHS records are ever published, that notice is required. CHS copyright page (https://www.charts.gc.ca/copyright-droitdauteur/index-eng.html): tide data 'free for non-navigational and non-commercial use', '$25 per station for constituent sets'. The Open Government Licence record (https://open.canada.ca/data/en/dataset/87b08750-4180-4d31-9414-a9470eba9b42) attaches OGL-Canada 2.0 to the station inventory, not to the observation archive (round-3 OGL claim withdrawn). Also withheld by originator: UHSLC records whose GESLA ORIGINATOR or UHSLC Data_Source is the Marine Environmental Data Service, DFO (licence_overrides.csv).",
+  "gesla-cmems-nc": "GESLA licence page, checked 2026-10-10: CMEMS 'Research (for consultancy contact data owners directly)'. Owner decision 2026-10-08: keep, mark non-commercial (CC BY-NC 4.0). The CMEMS licence (https://marine.copernicus.eu/user-corner/service-commitments-and-licence) asks for the credit 'Generated using E.U. Copernicus Marine Service Information; insert DOIs links here'. Product and DOI: the GESLA-4.1 metadata gives every CMEMS record a product_id INSITU_GLO_NRT_OBSERVATIONS_013_<n> with n counting up from 030 row by row (717 different values), which we read as a spreadsheet fill of INSITU_GLO_NRT_OBSERVATIONS_013_030 (our reading, not stated by GESLA). That product's archive record (https://sextant.ifremer.fr/geonetwork/srv/api/records/d1cc8137-d8ca-4aa2-b87d-79ef2607ece1) cites DOI 10.48670/moi-00036, which resolves to its successor INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030 (checked 2026-10-10).",
+  "gesla-cv-nc": "GESLA licence page, checked 2026-10-10: CV 'Research (for consultancy contact data owners directly)'. Owner decision 2026-10-08.",
+  "gesla-ieo-nc": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quotes verbatim from the URL. UNCLEAR. No IEO data licence found; terms_url is the GESLA licence page, which sets the record's GESLA class. Non-commercial until confirmed.",
+  "gesla-ispra": "ISPRA RMN distribution record (https://dati.isprambiente.it/ld/rmn/distribution/nt): dcterms:license <https://w3id.org/italia/controlled-vocabulary/licences/A21_CCBY40> (CC BY 4.0). ISPRA Note legali (https://www.isprambiente.gov.it/it/note-legali): 'Salvo ove diversamente indicato, i dati pubblicati sul presente sito sono messi a disposizione con licenza CC-BY 4.0 ... liberamente accessibili, distribuibili e riutilizzabili, a patto che sia sempre citata la fonte'. (The licence line on the LOD dataset page is the portal footer, confirm-C #7.) GESLA's ISPRA website is https://mareografico.it, which shows no separate terms.",
+  "gesla-jodc-nc": "JODC_JMA, JODC_PAHB, JODC_JCG and JODC_GIAJ all come through J-DOSS (GESLA contributor 'Japan Oceanographic Data Center', website https://jdoss1.jodc.go.jp/vpage/tide.html). J-DOSS (https://www.jodc.go.jp/jodcweb/JDOSS/index.html): 'Not to reproduce the data and provide it to the third party without permission'; footer 'No reproduction or republication without written permission.' J-DOSS also addresses products: 'To include a description regarding the data source or acknowledge it in your articles, publications or other products in which the data downloaded from JODC site was used, and please send a copy of the publication or product to JODC.' With the footer's ban on republication, withholding stays the conservative reading (orchestrator rule, round 5). JMA's own Public Data License covers JMA website content, not the JODC copy. The ORIGINATOR decides (orchestrator decisions, rounds 7-8): JODC-family records are withheld on the JODC channel, and so are UHSLC records whose GESLA ORIGINATOR or UHSLC Data_Source names the Japan Oceanographic Data Center (including Wakkanai 360A: 'and for data prior to 2011 Japan Oceanographic Data Center') and their fast-delivery copies whose span the JODC version covers (licence_overrides.csv). JMA-originated records outside the JODC portal are not withheld (gesla-uhslc-jma-nc); a JODC_JMA record is withheld on its channel and does not withhold other copies of its gauge.",
+  "gesla-noaa": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quoted verbatim from the URL. NOAA CO-OPS (https://tidesandcurrents.noaa.gov/disclaimers.html): 'The information on government servers are in the public domain, unless specifically annotated otherwise, and may be used freely by the public.' / 'This information shall not be modified in content and then presented as official government material.' / 'NOS requests that attribution be given whenever NOS material is reproduced and re-disseminated.'",
+  "gesla-refmar": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quoted verbatim from the URL. SHOM RONIM record (https://services.data.shom.fr/geonetwork/srv/api/records/OBSERVATION_NIVEAU_MER_REFMAR_RONIM.xml): 'Data may be freely used providing that the source is mentioned as follows \"REFMAR. http://dx.doi.org/10.17183/REFMAR#RONIM\". Open licence Etalab v. 2.0 avril 2017.' Partner gauges (https://services.data.shom.fr/geonetwork/srv/api/records/OBSERVATION_NIVEAU_MER_REFMAR_PARTENAIRES.xml): 'Data may be freely used providing that the source is mentioned as follows \"REFMAR. http://dx.doi.org/10.17183/REFMAR#PARTENAIRES \". Open licence Etalab v. 2.0 avril 2017.' GESLA's originator field is the same for all REFMAR records, so partner gauges cannot be told apart: the attribution cites both DOIs (confirm-C #6). Commercial use holds for both networks.",
+  "gesla-rws": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quoted verbatim from the URL. The GESLA RWS contributor (distinct from RWS_HIST, gesla-rws-hist). https://rijkswaterstaatdata.nl/waterdata/: 'Op de inhoud van de WaterWebservices is de Creative Commons zero verklaring (CC0) van toepassing. Dit houdt in dat hergebruik van de inhoud van deze service is toegestaan, tenzij bij een bepaald onderdeel staat aangegeven dat een auteursrechtelijke uitzondering van toepassing is.'",
+  "gesla-rws-hist": "GESLA metadata: RWS_HIST = Rijkswaterstaat, website https://waterinfo.rws.nl/ (bulk download). https://rijkswaterstaatdata.nl/waterdata/, checked 2026-10-10: 'Op de inhoud van de WaterWebservices is de Creative Commons zero verklaring (CC0) van toepassing' (reuse allowed unless a part states a copyright exception; none stated for water levels).",
+  "gesla-sanho-nc": "SANHO-owned records, selected by ORIGINATOR (licence_overrides.csv, 25 records): the 12 UHSLC_RQ records whose GESLA ORIGINATOR is 'South Africa Navy Hydrographic Office (SANHO)' (11 in South Africa and Walvis Bay, Namibia), their 12 UHSLC fast-delivery twins (same STMAP 4f955dd station, or the same UHSLC station number), and Marion Island 920 (fast delivery only; UHSLC lists it as a South African station under its SANHO notice). UHSLC portal (https://uhslc.soest.hawaii.edu/data/): 'The South African Navy Hydrographic Office (SANHO) is the owner and copyright holder of the sea level data you are downloading. SANHO requests that anyone downloading this data request permission to use and/or reproduce the information.' UHSLC RQ metadata (https://uhslc.soest.hawaii.edu/rqds/metadata_yaml/220Ameta.yaml): 'SANHO is the owner and copyright holder of the sea level data. Anyone downloading the information is to contact SANHO to request permission to use or reproduce the data.' UHSLC metadata for 702A and 704A records: '2019-01-30: SANHO orders removal of SANHO sets from UHSLC'.",
+  "gesla-smhi": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quoted verbatim from the URL. SMHI (https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning): 'Med våra öppna data följer licensvillkoren Creative commons Erkännande 4.0 SE. ... Detta är tillåtet även för kommersiella ändamål. Du ska ange SMHI som källa och även ange om du har ändrat i licensmaterialet.'",
+  "gesla-ttw": "GESLA metadata: TTW = Toitu Te Whenua (LINZ), website https://www.linz.govt.nz/products-services/data/types-linz-data/sea-level-data/sea-level-data-downloads. That page, checked 2026-10-10: 'This work is licensed under a Creative Commons Attribution 3.0 New Zealand License. In essence, you are free to copy, distribute and adapt the work, as long as you attribute the work to Land Information New Zealand'. SPDX has no CC-BY-3.0-NZ id, hence LicenseRef.",
+  "gesla-uhslc-jma-nc": "UHSLC records whose originator is the Japan Meteorological Agency (GESLA ORIGINATOR, and UHSLC metadata Data_Source 'Japan Meteorological Agency'), and their fast-delivery twins (licence_overrides.csv). Orchestrator decisions, rounds 7-8: the ORIGINATOR decides; JMA's terms (https://www.jma.go.jp/jma/en/copyright.html): information on the JMA website 'may be used in accordance with the terms and conditions of use stipulated in Public Data License (Version 1.0)', with the source cited and, for edited content, a statement that it was edited; PDL 1.0 (https://www.digital.go.jp/en/resources/open_data/public_data_license_v1.0): 'Commercial use of \"This Content\" is also permitted.' The UHSLC metadata of these stations says the data were downloaded from the JMA website (Legal Notice http://www.jma.go.jp/jma/en/copyright.html). Non-commercial only because UHSLC's own terms are unclear. Wakkanai 360A is not here: its UHSLC Data_Source adds 'for data prior to 2011 Japan Oceanographic Data Center', so it is withheld under gesla-jodc-nc (a 2011+ refit is on the backlog).",
+  "gesla-uhslc-nc": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quotes verbatim from the URL. UNCLEAR. JASL/NCEI record (https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0019568): 'Some of the data in this dataset is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License' (some, not all). UHSLC pages carry 'All Rights Reserved' and no data licence; national originators (about 45 countries) not checked one by one. Non-commercial until confirmed (orchestrator decision 2026-10-10). JMA-originated UHSLC records have their own licence, gesla-uhslc-jma-nc (JMA PDL 1.0 attribution). Malakal 007 and Saipan 028 fast delivery are UHSLC-operated series (they start with 007B/028B, UHSLC Data_Source 'UH Sea Level Center'), not the 1926-1940 JODC versions, so they stay here.",
+  "gesla-uhslc-ntf-nc": "UHSLC records whose station metadata names the National Tidal Facility (Flinders University of South Australia) as a source, and that no withheld switch takes (licence_overrides.csv; orchestrator decision, round 9: NTF is not BOM, so they stay published). The UHSLC metadata (for example https://uhslc.soest.hawaii.edu/rqds/metadata_yaml/063Ameta.yaml) carries NTF's conditions: 'When any data supplied by the National Tidal Facility is used in any publication or report, the origin of such data shall be acknowledged in that publication or report in the following approved form ... by the National Tidal Facility, The Flinders University of South Australia, Copyright reserved.' The attribution carries that acknowledgement. Non-commercial only because UHSLC's own terms are unclear.",
+  "gesla-unam-nc": "UNAM (50 fit-4 records) and UNAM_HIST (35): GESLA metadata names the Servicio Mareografico Nacional (SMN), Instituto de Geofisica, UNAM, for both. The GESLA page lists UNAM as 'Research and consultancy' and does not list UNAM_HIST. The SMN site footer (https://www.mareografico.unam.mx/index.php/informacion/, checked 2026-10-10) reads: 'Todos los derechos reservados (2022). Esta pagina y sus contenidos pueden ser reproducidos con fines no lucrativos, siempre y cuando no se mutile, se cite la fuente completa y su direccion electronica, de otra forma, se requiere permiso previo por escrito de la Institucion.' The owner's own term (non-profit reuse only) sets the licence: non-commercial (review C1). The footer covers 'this page and its contents'; its scope over data sent on request is not explicit (LIC-TERMS). The SMN data request form (https://www.mareografico.unam.mx/wp-content/uploads/2022/09/formato_solicitud_datos.pdf) asks for the intended use and a citation.",
+  "gesla-unchecked-nc": "Not yet checked (each below 0.9% of the records): SFWMD, NCDEM, MI_C, NHS, DA_SAT, CCO, FMI, NWFWMD, MI_R, NOC, ESEAS, BfG, DA_IDH, DA_MM, DMI, GLOSS, ICG. GESLA lists them as 'Research and consultancy'; non-commercial until each originator's own terms are checked (orchestrator decision 2026-10-10).",
+  "gesla-unlisted-nc": "GESLA licence page, checked 2026-10-10: CRMS, HCT and CM are not in its table. Owner decision 2026-10-08: non-commercial until GESLA answers (LIC-TERMS).",
+  "gesla-usgs": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quoted verbatim from the URL. USGS (https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits): 'USGS-authored or produced data and information are considered to be in the U.S. Public Domain.' USGS asks that 'proper credit be given'.",
+  "gesla-uz-nc": "GESLA licence page, checked 2026-10-10: UZ 'Research (for consultancy contact data owners directly)'. Owner decision 2026-10-08.",
+  "gesla-wsv": "Originator-terms check 2026-10-10 (cr/otc-impl/L-NC/originator-terms.md), quoted verbatim from the URL. PEGELONLINE (https://www.pegelonline.wsv.de/gast/nutzungsbedingungen): DL-DE->Zero-2.0; 'Die bereitgestellten Daten und Metadaten dürfen für die kommerzielle und nicht kommerzielle Nutzung insbesondere vervielfältigt, ... verändert, bearbeitet sowie an Dritte übermittelt werden'. No attribution required. Operator check 2026-10-10: all 142 GESLA WSV records match PEGELONLINE stations (stations.json, by site code) whose agency is a WSV office (WSA 'Standort ...', Bremen, Bremerhaven, Wilhelmshaven); none is a station of Hamburg Port Authority, Rijkswaterstaat or the other non-WSV agencies PEGELONLINE also shows. Evidence: cr/otc-impl/L-NC/fix-r5/pegelonline-stations-20261010.json."
+ },
+ "unlisted_open": {
+  "_why": "GESLA 'unlisted' contributors whose own publisher documents an open licence: TTW (LINZ, CC BY 3.0 NZ) and RWS_HIST (Rijkswaterstaat, CC0); see sources. Only these contributor -> licence pairs may give an unlisted record a commercial licence. The owner decision of 2026-10-08 also has UNAM_HIST follow its publisher, whose terms are non-commercial (gesla-unam-nc), so it is not listed here.",
+  "RWS_HIST": "gesla-rws-hist",
+  "TTW": "gesla-ttw"
+ },
+ "withheld": {
+  "_why": "One switch per licence: the records under a licence listed here are left out of the release until the data owner grants permission. Rule (orchestrator, round 5): an originator whose own terms forbid supplying, reproducing or giving the data (or products) to third parties without permission is withheld, by ORIGINATOR, not by channel: copies of its records redistributed by CMEMS, UHSLC or another channel carry the same licence (licence_overrides.csv). JMA is not withheld outside the JODC portal: its own terms are the Public Data License 1.0 (round 7). The build refuses each record with the reason and reports any station left with no published set. To lift one, delete its entry. Each switch lists the originator_patterns of its agency: the build stops if a record whose GESLA ORIGINATOR or UHSLC Data_Source (data/gesla/record_originators.csv) matches one does not get a withheld licence. JMA alone is never matched: JMA-originated records outside the JODC portal are published (gesla-uhslc-jma-nc).",
+  "gesla-bodc-nc": {
+   "reason": "BODC data licence: 'Users should not give any data or products to third parties without prior consent from BODC'; withheld until BODC consents.",
+   "evidence": [
+    "https://www.bodc.ac.uk/data/documents/nodb/267795/",
+    "https://vocab.nerc.ac.uk/collection/C75/current/POL/3/",
+    "https://bodc.ac.uk/about/what_is_bodc/our_history"
+   ],
+   "originator_patterns": [
+    "British Oceanographic Data Cent",
+    "\\bBODC\\b",
+    "National Oceanography Cent",
+    "Proudman",
+    "\\bPOL\\b",
+    "Institute of Oceanographic Sciences",
+    "IOS Bidston",
+    "Bidston"
+   ]
+  },
+  "gesla-bom-nc": {
+   "reason": "BOM copyright terms for content without stated terms: 'You must not supply it to any other person or use it for any commercial purpose'; withheld until BOM permits.",
+   "evidence": [
+    "https://www.bom.gov.au/other/copyright.shtml"
+   ],
+   "originator_patterns": [
+    "Bureau of Meteorology",
+    "National Tidal Centre"
+   ]
+  },
+  "gesla-chs-withheld": {
+   "reason": "DFO terms: 'If you wish to reproduce Canadian Hydrographic Service navigational charts, publications, data or other hydrographic products, please contact CHS directly'; withheld until CHS permits.",
+   "evidence": [
+    "https://www.dfo-mpo.gc.ca/terms-avis/terms-conditions-avis-eng.htm",
+    "https://www.tides.gc.ca/en/licence-agreement",
+    "https://www.charts.gc.ca/copyright-droitdauteur/index-eng.html"
+   ],
+   "originator_patterns": [
+    "Marine Environmental Data Se",
+    "Fisheries and Oceans",
+    "Canadian Hydrographic"
+   ]
+  },
+  "gesla-jodc-nc": {
+   "reason": "JODC J-DOSS terms: 'Not to reproduce the data and provide it to the third party without permission'; withheld until JODC permits.",
+   "evidence": [
+    "https://www.jodc.go.jp/jodcweb/JDOSS/index.html"
+   ],
+   "originator_patterns": [
+    "Japan Oceanographic Data Cent",
+    "Japan Coast Guard",
+    "Geospatial Information Authority",
+    "Ports and Harbours Bureau"
+   ]
+  },
+  "gesla-sanho-nc": {
+   "reason": "SANHO notice on the UHSLC portal: 'SANHO requests that anyone downloading this data request permission to use and/or reproduce the information'; withheld until SANHO permits.",
+   "evidence": [
+    "https://uhslc.soest.hawaii.edu/data/",
+    "https://uhslc.soest.hawaii.edu/rqds/metadata_yaml/220Ameta.yaml"
+   ],
+   "originator_patterns": [
+    "SANHO",
+    "South Africa(n)? Navy"
+   ]
+  }
+ },
+ "licences": [
+  {
+   "licence_id": "gesla-bodc-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "British Oceanographic Data Centre (BODC) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "This uses data provided by the British Oceanographic Data Centre, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'.",
+   "terms_url": "https://www.bodc.ac.uk/data/documents/nodb/267795/"
+  },
+  {
+   "licence_id": "gesla-bom-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Bureau of Meteorology (BOM, ABSLMP) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the Bureau of Meteorology, © Commonwealth of Australia, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only, and withheld: the Bureau of Meteorology states no licence for these sea level data, and its copyright terms for content without stated terms say: 'You must not supply it to any other person or use it for any commercial purpose'; other use needs its permission.",
+   "terms_url": "https://www.bom.gov.au/other/copyright.shtml"
+  },
+  {
+   "licence_id": "gesla-cdwr-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "California Department of Water Resources (CDWR, CDEC) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains water level data from the California Department of Water Resources (CDEC), via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the originating agency's terms for these records are not documented or do not clearly cover derived constants; commercial use needs the data owner's permission.",
+   "terms_url": "https://cdec.water.ca.gov/intro.html"
+  },
+  {
+   "licence_id": "gesla-chs-withheld",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Canadian Hydrographic Service (CHS), Fisheries and Oceans Canada, via MEDS and GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains water level data owned by the Canadian Hydrographic Service, Fisheries and Oceans Canada, via MEDS and GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only, and withheld: DFO's terms say 'If you wish to reproduce Canadian Hydrographic Service navigational charts, publications, data or other hydrographic products, please contact CHS directly'; CHS owns the copyright in the data, and its licence agreement for website-delivered data excludes derivative products for commercial purposes.",
+   "terms_url": "https://www.dfo-mpo.gc.ca/terms-avis/terms-conditions-avis-eng.htm"
+  },
+  {
+   "licence_id": "gesla-cmems-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Copernicus Marine Service (CMEMS) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Generated using E.U. Copernicus Marine Service Information; https://doi.org/10.48670/moi-00036, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the GESLA licence page lists CMEMS records for research use; commercial use needs the data owner's permission.",
+   "terms_url": "https://gesla787883612.wordpress.com/license/"
+  },
+  {
+   "licence_id": "gesla-cv-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "City of Venice, Tide Forecasts and Reporting Center (CV) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the City of Venice, Tide Forecasts and Reporting Center, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the GESLA licence page lists CV records for research use; commercial use needs the data owner's permission.",
+   "terms_url": "https://gesla787883612.wordpress.com/license/"
+  },
+  {
+   "licence_id": "gesla-ieo-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Instituto Español de Oceanografía (IEO) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the Instituto Español de Oceanografía, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the originating agency's terms for these records are not documented or do not clearly cover derived constants; commercial use needs the data owner's permission.",
+   "terms_url": "https://gesla787883612.wordpress.com/license/"
+  },
+  {
+   "licence_id": "gesla-ispra",
+   "spdx": "CC-BY-4.0",
+   "provider": "ISPRA (Rete Mareografica Nazionale) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains data from ISPRA, Rete Mareografica Nazionale (CC BY 4.0), via GESLA-4.1; tidal constants fitted by OpenTideConstants.",
+   "url": "https://dati.isprambiente.it/ld/rmn/dataset",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-jodc-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Japan Oceanographic Data Center (JODC, J-DOSS): Japan Meteorological Agency, Ports and Harbours Bureau, Japan Coast Guard and Geospatial Information Authority of Japan records, via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the Japan Oceanographic Data Center (originators: Japan Meteorological Agency; Ports and Harbours Bureau; Japan Coast Guard; Geospatial Information Authority of Japan), via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only, and withheld: the JODC J-DOSS terms say 'Not to reproduce the data and provide it to the third party without permission', and its footer 'No reproduction or republication without written permission.'",
+   "terms_url": "https://www.jodc.go.jp/jodcweb/JDOSS/index.html"
+  },
+  {
+   "licence_id": "gesla-noaa",
+   "spdx": "LicenseRef-PublicDomain-USGov",
+   "provider": "NOAA National Ocean Service (CO-OPS) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Tidal constants fitted by OpenTideConstants from NOAA National Ocean Service (CO-OPS) water level records, via GESLA-4.1; not official government material.",
+   "url": "https://tidesandcurrents.noaa.gov/disclaimers.html",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-refmar",
+   "spdx": "etalab-2.0",
+   "provider": "SHOM (REFMAR) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "REFMAR. http://dx.doi.org/10.17183/REFMAR#RONIM and REFMAR. http://dx.doi.org/10.17183/REFMAR#PARTENAIRES (SHOM and REFMAR partners, Licence Ouverte Etalab 2.0), via GESLA-4.1; tidal constants fitted by OpenTideConstants.",
+   "url": "https://www.data.gouv.fr/pages/legal/licences/etalab-2.0",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-rws",
+   "spdx": "CC0-1.0",
+   "provider": "Rijkswaterstaat (RWS) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains Rijkswaterstaat water level data (CC0 1.0), via GESLA-4.1; tidal constants fitted by OpenTideConstants.",
+   "url": "https://rijkswaterstaatdata.nl/waterdata/",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-rws-hist",
+   "spdx": "CC0-1.0",
+   "provider": "Rijkswaterstaat (historical records, RWS_HIST) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains historical Rijkswaterstaat water level data, via GESLA-4.1 (CC0 1.0).",
+   "url": "https://rijkswaterstaatdata.nl/waterdata/",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-sanho-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "South African Navy Hydrographic Office (SANHO) via UHSLC and GESLA",
+   "citation": "Caldwell, P. C., M. A. Merrifield, P. R. Thompson (2015), Sea level measured by tide gauges from global oceans - the Joint Archive for Sea Level holdings (NCEI Accession 0019568), Version 5.5, NOAA National Centers for Environmental Information, Dataset, doi:10.7289/V5V40S7W; Fast Delivery data obtained (via GESLA-4.1) through 2026-04-30; Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data owned by the South African Navy Hydrographic Office, via UHSLC and GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the UHSLC portal states that SANHO is the owner and copyright holder of these sea level data and 'SANHO requests that anyone downloading this data request permission to use and/or reproduce the information'.",
+   "terms_url": "https://uhslc.soest.hawaii.edu/data/"
+  },
+  {
+   "licence_id": "gesla-smhi",
+   "spdx": "CC-BY-4.0",
+   "provider": "SMHI via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Source: SMHI, via GESLA-4.1 (CC BY 4.0); modified: harmonic constants fitted by OpenTideConstants.",
+   "url": "https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-ttw",
+   "spdx": "LicenseRef-CC-BY-3.0-NZ",
+   "provider": "Toitū Te Whenua Land Information New Zealand (TTW) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "This work is based on Toitū Te Whenua Land Information New Zealand sea level data, via GESLA-4.1, licensed by Land Information New Zealand under the Creative Commons Attribution 3.0 New Zealand licence.",
+   "url": "https://creativecommons.org/licenses/by/3.0/nz/",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-uhslc-jma-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Japan Meteorological Agency (JMA) via the University of Hawaii Sea Level Center (UHSLC) and GESLA",
+   "citation": "Caldwell, P. C., M. A. Merrifield, P. R. Thompson (2015), Sea level measured by tide gauges from global oceans - the Joint Archive for Sea Level holdings (NCEI Accession 0019568), Version 5.5, NOAA National Centers for Environmental Information, Dataset, doi:10.7289/V5V40S7W; Fast Delivery data obtained (via GESLA-4.1) through 2026-04-30; Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Source: Japan Meteorological Agency (JMA) tide observations (https://www.data.jma.go.jp/kaiyou/db/tide/genbo/index.php), via the University of Hawaii Sea Level Center (UHSLC) and GESLA-4.1. Edited: harmonic constants fitted by OpenTideConstants. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: JMA's own terms (Public Data License 1.0) are open, but UHSLC, which supplied these records, publishes no data licence; commercial use needs UHSLC's confirmation.",
+   "terms_url": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0019568"
+  },
+  {
+   "licence_id": "gesla-uhslc-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "University of Hawaii Sea Level Center (UHSLC, research quality and fast delivery) and its national originators, via GESLA",
+   "citation": "Caldwell, P. C., M. A. Merrifield, P. R. Thompson (2015), Sea level measured by tide gauges from global oceans - the Joint Archive for Sea Level holdings (NCEI Accession 0019568), Version 5.5, NOAA National Centers for Environmental Information, Dataset, doi:10.7289/V5V40S7W; Fast Delivery data obtained (via GESLA-4.1) through 2026-04-30; Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the University of Hawaii Sea Level Center and its originating agencies, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the originating agency's terms for these records are not documented or do not clearly cover derived constants; commercial use needs the data owner's permission.",
+   "terms_url": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0019568"
+  },
+  {
+   "licence_id": "gesla-uhslc-ntf-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "National Tidal Facility (NTF), The Flinders University of South Australia, via the University of Hawaii Sea Level Center (UHSLC) and GESLA",
+   "citation": "Caldwell, P. C., M. A. Merrifield, P. R. Thompson (2015), Sea level measured by tide gauges from global oceans - the Joint Archive for Sea Level holdings (NCEI Accession 0019568), Version 5.5, NOAA National Centers for Environmental Information, Dataset, doi:10.7289/V5V40S7W; Fast Delivery data obtained (via GESLA-4.1) through 2026-04-30; Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Sea level data for these stations are supplied by the National Tidal Facility, The Flinders University of South Australia, Copyright reserved; via the University of Hawaii Sea Level Center (UHSLC) and GESLA-4.1; harmonic constants fitted by OpenTideConstants. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: UHSLC, which supplied these records, publishes no data licence; the National Tidal Facility asks for its acknowledgement, carried in the attribution.",
+   "terms_url": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0019568"
+  },
+  {
+   "licence_id": "gesla-unam-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "Servicio Mareográfico Nacional, Instituto de Geofísica, UNAM (UNAM and UNAM_HIST records) via GESLA",
+   "citation": "SMN: Universidad Nacional Autónoma de México, Instituto de Geofísica, Servicio Mareográfico Nacional, México, https://www.mareografico.unam.mx; Haigh, I.D., et al. (2023), GESLA Version 3, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the Servicio Mareográfico Nacional (UNAM), https://www.mareografico.unam.mx, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the Servicio Mareográfico Nacional (UNAM) allows reproduction of its contents for non-profit purposes only (con fines no lucrativos); any other use needs its prior written permission.",
+   "terms_url": "https://www.mareografico.unam.mx/index.php/informacion/"
+  },
+  {
+   "licence_id": "gesla-unchecked-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "GESLA contributors whose own terms are not yet checked (see the licence's sources) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from GESLA-4.1 contributors (each record's contributor is named in its source_record_id). CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the originating agency's terms for these records are not documented or do not clearly cover derived constants; commercial use needs the data owner's permission.",
+   "terms_url": "https://gesla787883612.wordpress.com/license/"
+  },
+  {
+   "licence_id": "gesla-unlisted-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "CRMS (Louisiana), Harris County Texas (HCT) and California county gauges (CM) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from CRMS, Harris County Texas and California county gauges, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the GESLA licence page does not list CRMS, HCT or CM records; non-commercial until GESLA confirms their terms.",
+   "terms_url": "https://gesla787883612.wordpress.com/license/"
+  },
+  {
+   "licence_id": "gesla-usgs",
+   "spdx": "LicenseRef-PublicDomain-USGov",
+   "provider": "U.S. Geological Survey (USGS) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Tidal constants fitted by OpenTideConstants from U.S. Geological Survey water level records, via GESLA-4.1; not official government material.",
+   "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+   "commercial_use": true
+  },
+  {
+   "licence_id": "gesla-uz-nc",
+   "spdx": "CC-BY-NC-4.0",
+   "provider": "University of Zagreb (UZ) via GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains sea level data from the University of Zagreb, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+   "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+   "commercial_use": false,
+   "restriction": "Non-commercial use only: the GESLA licence page lists UZ records for research use; commercial use needs the data owner's permission.",
+   "terms_url": "https://gesla787883612.wordpress.com/license/"
+  },
+  {
+   "licence_id": "gesla-wsv",
+   "spdx": "DL-DE-ZERO-2.0",
+   "provider": "Wasserstraßen- und Schifffahrtsverwaltung des Bundes (WSV) via PEGELONLINE and GESLA",
+   "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+   "attribution": "Contains water level data of the Wasserstraßen- und Schifffahrtsverwaltung des Bundes via PEGELONLINE (dl-de/zero-2-0), via GESLA-4.1; tidal constants fitted by OpenTideConstants.",
+   "url": "https://www.pegelonline.wsv.de/gast/nutzungsbedingungen",
+   "commercial_use": true
+  }
+ ],
+ "originators": {
+  "_why": "A per-record override may move a record to a commercial licence only when the record's own originator field (record_originators.csv: GESLA ORIGINATOR or UHSLC Data_Source) names one of these documented originators of that licence, and its reason quotes the GESLA ORIGINATOR.",
+  "gesla-noaa": [
+   "National Ocean Service",
+   "National Oceanic and Atmospheric Administration"
+  ],
+  "gesla-usgs": [
+   "Geological Survey"
+  ],
+  "gesla-rws": [
+   "Rijkswaterstaat"
+  ],
+  "gesla-rws-hist": [
+   "Rijkswaterstaat"
+  ],
+  "gesla-wsv": [
+   "Wasserstraßen",
+   "Federal Waterway and Shipping Administration"
+  ],
+  "gesla-refmar": [
+   "Réseaux de référence des observations marégraphiques",
+   "REFMAR",
+   "SHOM"
+  ],
+  "gesla-smhi": [
+   "SMHI",
+   "Swedish Meteorological"
+  ],
+  "gesla-ispra": [
+   "ISPRA",
+   "Protezione e la Ricerca Ambiental"
+  ],
+  "gesla-ttw": [
+   "Toitu Te Whenua",
+   "Land Information New Zealand"
+  ]
+ },
+ "originator_licences": {
+  "_why": "A record of these contributors whose originator (record_originators.csv) matches, and that no withheld switch takes, must carry this licence, or the build stops: the JMA-originated UHSLC records need the JMA PDL 1.0 attribution.",
+  "gesla-uhslc-jma-nc": {
+   "contributors": [
+    "UHSLC_RQ",
+    "UHSLC_FD"
+   ],
+   "originator_patterns": [
+    "Japan Meteorological Agency"
+   ]
+  }
+ },
+ "backlog": [
+  "NOAA stations outside US territory (Suva, Praia, Esperanza, Chuuk, Bermuda, Diego Garcia, Fare Ute, Kwajalein): GESLA names NOAA as originator and NOAA's public-domain statement covers its servers, but host-country partner rights are not documented (final-confirm-C N1).",
+  "USGS: per-site NWIS agency codes not checked; some NWIS sites carry cooperator data that is not USGS's (final-confirm-C N2).",
+  "gesla-ispra url is the RMN dataset page, not the CC BY 4.0 legalcode (final-confirm-C N3).",
+  "The licence_overrides.csv derivation (fix-r8/derive_r8.py, fix-r9) lives outside the repo; record_originators.csv is regenerated in-repo (otc_pipeline.gesla_originators), the overrides are not (final-confirm-A #9).",
+  "Wakkanai 360A: refit on 2011+ data only (JMA-originated) so it can be published under gesla-uhslc-jma-nc.",
+  "Lagos 233C is withheld (GESLA ORIGINATOR NOC) although its UHSLC Data_Source names the Nigerian Institute for Oceanographic and Marine Research; stricter, recorded like Abashiri 347A (r8-confirm #6)."
+ ]
+}

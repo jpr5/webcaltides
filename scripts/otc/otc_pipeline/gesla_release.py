@@ -12,6 +12,9 @@ recommended (recommend()). The pieces another slot owns come in as arguments, ne
   (data/otc/gesla_epoch_hours.csv), a ranking input; counted from the same GESLA member.
 - `licences` and `licence_ids` (record id -> licence id): the per-contributor licences (L-NC).
   Required for every record: a record with no licence id stops the build (no default licence).
+- `withheld` (licence id -> reason, gesla_licences.withheld_licences; required, {} for none): records
+  under these licences are left out until the owner permits, each refused with the reason; a station
+  left with no published set is reported in BuildReport.withheld_stations.
 - `astro_tables`: the per-year V0+u and f tables (KP0b). Format 1.0 requires them whenever a
   convention predicts with f and u, and the gesla-fit convention does, so a release cannot be
   built without them.
@@ -298,12 +301,15 @@ class BuildReport:
     published: list[str] = field(default_factory=list)
     refused: list[dict] = field(default_factory=list)
     recommendations: list[dict] = field(default_factory=list)
+    # station id -> reason: stations not published because every record they hold is withheld
+    withheld_stations: dict[str, str] = field(default_factory=dict)
 
     def counts(self) -> dict[str, int]:
         return dict(sorted(Counter(r["reason"] for r in self.refused).items()))
 
     def as_dict(self) -> dict:
         return {"published": len(self.published), "refused": len(self.refused), "refused_by_reason": self.counts(),
+                "withheld_stations": dict(sorted(self.withheld_stations.items())),
                 "records": {"published": sorted(self.published),
                             "refused": sorted(self.refused, key=lambda r: r["record"])},
                 "recommendations": [r for r in self.recommendations if r["decided_by"] != "single"]}
@@ -328,7 +334,7 @@ class BuildReport:
 
 def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, datestamp: str, created: str,
                   build_commit: str, station_ids: Mapping[str, str], licences: list[dict],
-                  licence_ids: Mapping[str, str], astro_tables: list[dict] | None,
+                  licence_ids: Mapping[str, str], withheld: Mapping[str, str], astro_tables: list[dict] | None,
                   refused: Iterable[Mapping], epoch_hours: Mapping[str, Mapping],
                   sibling_flags: Mapping[str, Mapping], tombstones: Iterable[Mapping],
                   station_map_inputs: Mapping[str, str], fit_run_results_sha256: str,
@@ -378,7 +384,11 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         with open(INVENTORY_PATH, newline="") as fh:
             sampling_s = {r["file_id"]: int(r["interval_s"]) for r in _csv.DictReader(fh)}
     suspects = sibling_flags
+    for lid in withheld:
+        if lid not in lic_by_id:
+            raise ValueError(f"withheld licence {lid!r} is not in licences")
     report = BuildReport(refused=[dict(r) for r in refused])
+    withheld_sids: dict[str, list[str]] = {}
     by_station, used_names, versions = {}, set(), set()
     for doc in sorted(docs, key=lambda d: d["record_id"]):
         rid = doc["record_id"]
@@ -390,6 +400,13 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         if doc["tcd_sha256"] != table.tcd_sha256:
             raise FitIntegrityError(f"{rid}: fitted with TCD {doc['tcd_sha256']}, the release's tables are "
                                     f"{table.tcd_sha256}")
+        if lic_id in withheld:
+            report.refused.append(refusal(rid, "withheld", f"{rid}: licence {lic_id} is withheld: {withheld[lic_id]}",
+                                          doc.get("good_hours")))
+            reasons = withheld_sids.setdefault(station_ids[rid], [])
+            if withheld[lic_id] not in reasons:
+                reasons.append(withheld[lic_id])
+            continue
         ep = epoch_hours.get(rid)
         if ep is None:
             raise ValueError(f"{rid}: no epoch hours (data/otc/gesla_epoch_hours.csv)")
@@ -473,6 +490,7 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
                          "recommended_set_id": win.cs["set_id"] if win else None,
                          "constant_sets": [c.cs for c in set_order(win, [c for c, _ in cands])]})
     active = {st["station_id"] for st in stations}
+    report.withheld_stations = {sid: "; ".join(why) for sid, why in withheld_sids.items() if sid not in active}
     for t in tombstones:
         if t["merged_into"] not in active:
             raise ValueError(f"tombstone {t['station_id']}: merged_into {t['merged_into']} is not a station of this "

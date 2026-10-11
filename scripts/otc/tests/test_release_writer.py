@@ -724,3 +724,22 @@ def test_csv_current_rows(release, tmp_path):
             o["flood_amp_ratio"]) == ("OTC-EXAMPLE-0004", "OTC-EXAMPLE-0003", "1", "", "1.2")
     st = next(r for r in rows if r["record_type"] == "station" and r["station_id"] == "OTC-EXAMPLE-0003")
     assert st["default_current_bin"] == "1"
+
+
+def test_csv_commercial_use_follows_the_licence(release, tmp_path):
+    # L-NC: every row with a licence_id carries that licence's commercial_use (the CMEMS set is false)
+    release["stations"].insert(1, subordinate({
+        "reference_station_id": "OTC-EXAMPLE-0001", "height_adjusted_type": "A", "licence_id": "gesla-cmems-nc"}))
+    write(release, tmp_path)
+    assert CSV_COLUMNS.index("commercial_use") == CSV_COLUMNS.index("licence_id") + 1
+    rows = read_csv(tmp_path / f"OTC_{D}.csv")
+    commercial = {lic["licence_id"]: lic["commercial_use"] for lic in release["licences"]}
+    with_lic = [r for r in rows if r["licence_id"]]
+    assert {r["record_type"] for r in with_lic} == {"constant_set", "offset", "current_offset"}
+    for r in with_lic:
+        assert r["commercial_use"] == ("true" if commercial[r["licence_id"]] else "false"), r["set_id"]
+    assert all(r["commercial_use"] == "" for r in rows if not r["licence_id"])
+    sets = {r["set_id"]: r for r in rows if r["record_type"] == "constant_set"}
+    assert sets["OTC-EXAMPLE-0005/gesla-fit-b"]["commercial_use"] == "false"
+    assert sets["OTC-EXAMPLE-0005/gesla-fit-a"]["commercial_use"] == "true"
+    assert next(r for r in rows if r["record_type"] == "offset")["commercial_use"] == "false"

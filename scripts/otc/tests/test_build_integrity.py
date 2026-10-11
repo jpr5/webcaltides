@@ -214,7 +214,7 @@ def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(tab
     short = doc(table, rid="short-1-nor-test", fit=fit_dict(rayleigh_kept=[n for n in CANDIDATES if n != "T2"]))
     kw = dict(table=table, table_id=TABLE_ID, datestamp=D, created="2026-10-10T00:00:00Z", build_commit="abcdef0",
               station_ids={d["record_id"]: f"OTC-T{i:04d}" for i, d in enumerate(good + [short])}, licences=[LICENCE],
-              licence_ids={d["record_id"]: "gesla-derived" for d in good + [short]},
+              licence_ids={d["record_id"]: "gesla-derived" for d in good + [short]}, withheld={},
               epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in good + [short]},
               contributor_roles={"TEST": "originator"},
               sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
@@ -231,6 +231,55 @@ def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(tab
     assert out["published"] == 2 and out["refused"] == 2 and out["refused_by_reason"] == {"short_record": 1, "too_short": 1}
     with pytest.raises(ValueError, match="no record is publishable"):
         build_release([short], refused=[], **kw)
+
+
+def test_a_withheld_licence_is_refused_and_reported_never_published(table, tmp_path):
+    # L-NC round 4: records whose licence is withheld (no data or products to third parties without consent)
+    # are refused with the reason, and a station with only withheld sets is reported, not published
+    good = doc(table, rid="good-0-nor-test", row=tb_row())
+    held = [doc(table, rid=f"held-{i}-gbr-bodc", row=tb_row()) for i in range(2)]
+    nc = {**LICENCE, "licence_id": "gesla-bodc-nc", "spdx": "CC-BY-NC-4.0", "commercial_use": False,
+          "restriction": "Non-commercial use only: test.", "terms_url": "https://example.org/terms"}
+    ids = {"good-0-nor-test": "OTC-T0000", "held-0-gbr-bodc": "OTC-T0001", "held-1-gbr-bodc": "OTC-T0001"}
+    kw = dict(table=table, table_id=TABLE_ID, datestamp=D, created="2026-10-10T00:00:00Z", build_commit="abcdef0",
+              station_ids=ids, licences=[LICENCE, nc],
+              licence_ids={"good-0-nor-test": "gesla-derived", "held-0-gbr-bodc": "gesla-bodc-nc",
+                           "held-1-gbr-bodc": "gesla-bodc-nc"},
+              epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in [good] + held},
+              contributor_roles={"TEST": "originator"},
+              sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
+              fit_run_results_sha256="f" * 64, disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in [good] + held},
+              astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)], refused=[])
+    reason = "BODC: no data or products to third parties without prior consent"
+    release, report = build_release([good] + held, withheld={"gesla-bodc-nc": reason}, **kw)
+    assert report.published == ["good-0-nor-test"]
+    assert [s["station_id"] for s in release["stations"]] == ["OTC-T0000"]
+    assert [x["licence_id"] for x in release["licences"]] == ["gesla-derived"]
+    assert sorted((r["record"], r["reason"]) for r in report.refused) == \
+        [("held-0-gbr-bodc", "withheld"), ("held-1-gbr-bodc", "withheld")]
+    assert all(reason in r["message"] for r in report.refused)
+    assert report.withheld_stations == {"OTC-T0001": reason}
+    out = json.loads(report.write(tmp_path / "BUILD_REPORT.json").read_text())
+    assert out["refused_by_reason"] == {"withheld": 2} and out["withheld_stations"] == {"OTC-T0001": reason}
+    assert validate_release(release) == []
+    # a station with a published and a withheld record is published, never reported withheld; a station with
+    # records under two withheld licences reports both reasons (confirm-A #6)
+    mixed = doc(table, rid="good-1-gbr-test", row=tb_row())
+    jodc = doc(table, rid="held-2-jpn-jodc", row=tb_row())
+    nc2 = {**nc, "licence_id": "gesla-jodc-nc"}
+    kw2 = {**kw, "licences": [LICENCE, nc, nc2],
+           "station_ids": {**ids, "good-1-gbr-test": "OTC-T0001", "held-2-jpn-jodc": "OTC-T0002", "held-1-gbr-bodc": "OTC-T0002"},
+           "licence_ids": {**kw["licence_ids"], "good-1-gbr-test": "gesla-derived", "held-2-jpn-jodc": "gesla-jodc-nc"},
+           "epoch_hours": {d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in [good, mixed, jodc] + held},
+           "sampling_s": {d["record_id"]: 3600 for d in [good, mixed, jodc] + held}}
+    r2 = "JODC: not to provide the data to a third party without permission"
+    release2, report2 = build_release([good, mixed, jodc] + held, withheld={"gesla-bodc-nc": reason, "gesla-jodc-nc": r2}, **kw2)
+    assert sorted(s["station_id"] for s in release2["stations"]) == ["OTC-T0000", "OTC-T0001"]
+    assert report2.withheld_stations == {"OTC-T0002": f"{reason}; {r2}"}
+    with pytest.raises(TypeError):        # withheld is required: no build forgets it
+        build_release([good], **kw)
+    with pytest.raises(ValueError, match="withheld licence 'gesla-nope' is not in licences"):
+        build_release([good], withheld={"gesla-nope": reason}, **kw)
 
 
 def test_a_disputed_record_is_flagged(table):

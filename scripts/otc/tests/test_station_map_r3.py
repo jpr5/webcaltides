@@ -482,7 +482,7 @@ def _kw(table, docs, station_ids, flags):  # noqa: F811
     from test_format_1_0 import LICENCE, SPEEDS, TABLE_ID
     return dict(table=table, table_id=TABLE_ID, datestamp="20261010", created="2026-10-10T00:00:00Z",
                 build_commit="abcdef0", station_ids=station_ids, licences=[LICENCE],
-                licence_ids={d["record_id"]: "gesla-derived" for d in docs}, refused=[],
+                licence_ids={d["record_id"]: "gesla-derived" for d in docs}, withheld={}, refused=[],
                 epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 1} for d in docs},
                 contributor_roles={d["contributor"]: "originator" for d in docs}, sibling_flags=flags, tombstones=[],
                 station_map_inputs={"fit_run_results_sha256": "f" * 64}, fit_run_results_sha256="f" * 64, disputed_reasons={},
