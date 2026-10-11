@@ -630,3 +630,135 @@ def test_the_reference_is_the_nearest_long_record_in_the_same_water_within_3_km(
     assert r == {"record": "near", "km": 2.22, "lines": {"MM": [0.02, 5.0], "MF": [0.01, 5.0], "MSF": None}}
     assert sa.long_period_reference(f, 40.0, -74.0, [longs[0]]) is None
     assert sa.long_period_reference(f, 40.0, -74.0, []) is None
+
+
+# --- binding to the fit runs (FIX-SRCAL) ----------------------------------------------------------------
+
+def _run(root, name, results, manifest=None):
+    d = root / name
+    (d / "fits").mkdir(parents=True)
+    (d / "results.jsonl").write_text(results)
+    if manifest is not None:
+        (d / "timebase_manifest.json").write_text(json.dumps(manifest))
+    return d
+
+
+def test_a_calibration_binds_to_the_fit_runs_it_was_made_from(tmp_path):
+    run = _run(tmp_path, "run", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
+    over = _run(tmp_path, "over", '{"record": "b"}\n', {"fits_sha256": {"b": "2" * 64}})
+    cal = {"inputs": {"fit_runs": [sa.run_identity(run), sa.run_identity(over)]}}
+    sa.check_bound(cal, [run, over])
+    copy = _run(tmp_path, "copy", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
+    sa.check_bound({"inputs": {"fit_runs": [sa.run_identity(copy)]}}, [run])     # the bytes, not the path
+    with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
+        sa.check_bound(cal, [run])                                                # the overlay left out
+    with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
+        sa.check_bound(cal, [over, run])                                          # the order: the overlay wins
+    with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
+        sa.check_bound({"inputs": {}}, [run])                                     # a calibration naming none
+
+
+def test_a_refit_breaks_the_binding_by_its_results_or_its_fits(tmp_path):
+    run = _run(tmp_path, "run", '{"record": "a", "rms_m": 0.1}\n', {"fits_sha256": {"a": "1" * 64}})
+    cal = {"inputs": {"fit_runs": [sa.run_identity(run)]}}
+    refit = _run(tmp_path, "refit", '{"record": "a", "rms_m": 0.2}\n', {"fits_sha256": {"a": "1" * 64}})
+    with pytest.raises(ValueError, match="the build uses"):
+        sa.check_bound(cal, [refit])
+    same_rows = _run(tmp_path, "same-rows", '{"record": "a", "rms_m": 0.1}\n', {"fits_sha256": {"a": "3" * 64}})
+    with pytest.raises(ValueError, match="the build uses"):
+        sa.check_bound(cal, [same_rows])                                          # one fit document changed
+
+
+def test_the_calibration_takes_the_tcd_dump_the_fit_runs_name(tmp_path):
+    dump = tmp_path / "otc-dump.json"
+    dump.write_text('{"otc": 1}')
+    t = {"path": str(dump), "sha256": sa.sha256_file(dump)}
+    run = _run(tmp_path, "run", "", {"inputs": {"tcd_table": t}})
+    over = _run(tmp_path, "over", "", {"inputs": {"tcd_table": t}})
+    assert sa.fit_runs_tcd([run, over]) == dump
+    other = tmp_path / "xtide-dump.json"
+    other.write_text('{"xtide": 1}')
+    mixed = _run(tmp_path, "mixed", "", {"inputs": {"tcd_table": {"path": str(other), "sha256": sa.sha256_file(other)}}})
+    with pytest.raises(ValueError, match="different TCD dumps"):
+        sa.fit_runs_tcd([run, mixed])
+    with pytest.raises(ValueError, match="names no TCD dump"):
+        sa.fit_runs_tcd([_run(tmp_path, "bare", "")])
+    dump.write_text('{"otc": 2}')
+    with pytest.raises(ValueError, match="not the TCD dump the fit runs name"):
+        sa.fit_runs_tcd([run])
+
+
+def test_a_gate_written_into_a_calibration_names_its_commit(tmp_path):
+    tab = fake_table()
+    sa.write_calibration(_cal(tab, _fit(tab, 40.5)) | {"config": {}}, tmp_path)
+    cell = {"verdict": "pass", "amp_share_over": 0.5, "phase_share_over": 0.5}
+    res = {"groups": {b: {"pooled": cell} for b in ("<=30", "31-90", "91-182", "183-364")}, "band": [0.35, 0.65],
+           "failed_cells": [], "passed": True, "records": 0, "comparators": {}}
+    cal = sa.apply_gate(tmp_path, res, commit="abc1234")
+    assert cal["config"]["gates"][-1]["commit"] == "abc1234"
+    assert sa.read_calibration(tmp_path)["config"]["gates"][-1]["commit"] == "abc1234"
+
+
+def test_a_fit_whose_selection_is_not_rebuilt_stops_r8_and_the_plan():
+    # FIX-SRCAL: a fit made with another TCD's dump (or rule) was quietly left out of the long set and the pools
+    tab = fake_table()
+    rows, fits = {}, {}
+    for i in range(30):
+        rows[f"L{i}"] = {"lat": 30.0 + i * 0.1, "lon": -90.0}
+        fits[f"L{i}"] = _fit(tab, 400, {"M2": 0.01, "K1": 0.05})
+    fits["L7"] = {**fits["L7"], "rayleigh_kept": fits["L7"]["rayleigh_kept"][:-1]}
+    with pytest.raises(sa.SelectionMismatch, match="1 fits' Rayleigh selection is not rebuilt") as e:
+        sa.run_implausible(rows, fits, tab)
+    assert list(e.value.mismatch) == ["L7"]
+    fits["L9"] = {**fits["L9"], "candidate_list": "no-such-list"}
+    meta = {r: {"TIME ZONE HOURS": "0"} for r in rows}
+    full = {r: {**rows[r], "data_hours": 800 * 24.0, "time_base": "utc_instant", "months_dropped": 0} for r in rows}
+    with pytest.raises(sa.SelectionMismatch) as e:
+        sa.plan(full, fits, tab, meta)
+    assert sorted(e.value.mismatch) == ["L7", "L9"]
+
+
+def test_a_donor_is_cut_with_its_own_candidate_list():
+    from gesla.select_constituents import CANDIDATE_LISTS
+    assert sa.station_candidates({}) == CANDIDATE_LISTS["base"]
+    assert sa.station_candidates({"candidate_list": "base"}) == CANDIDATE_LISTS["base"]
+    assert sa.station_candidates({"candidate_list": "extended"}) == CANDIDATE_LISTS["extended"]
+    with pytest.raises(ValueError, match="not one of"):
+        sa.station_candidates({"candidate_list": "nope"})
+
+
+def test_the_station_job_refits_cuts_with_the_donors_list(tmp_path, monkeypatch):
+    from gesla.select_constituents import CANDIDATE_LISTS
+    tab = fake_table()
+    t = T2019 + np.arange(400 * 24, dtype=np.int64) * HOUR
+    s = Series("donor", t, synth(tab, TRUTH, t), {})
+    full = _fit(tab, 400) | {"candidate_list": "extended",
+                             "constituents": {c: {"amp_m": a, "phase_deg": g} for c, (a, g) in TRUTH.items()}}
+    (tmp_path / "fits").mkdir()
+    (tmp_path / "fits" / "donor.json").write_text(json.dumps(full))
+    hours = sa.series_hours(s)
+    seen = []
+
+    class A:
+        def consts(self):
+            return {c: (a, g) for c, (a, g) in TRUTH.items()}
+
+    def analyse(table, series, *, candidates=None):
+        seen.append(candidates)
+        return A()
+    monkeypatch.setattr(sa, "analyse", analyse)
+    monkeypatch.setattr(sa, "_fit_window", lambda rid: s)
+    monkeypatch.setattr(sa, "cut_shifts", lambda sh, th, seed: [(1, hours[: 30 * 24])])
+    monkeypatch.setitem(sa._W, "table", tab)
+    monkeypatch.setitem(sa._W, "fit_dirs", [tmp_path])
+    monkeypatch.setitem(sa._W, "masks", {"t": hours[: 30 * 24]})
+    sa._station_job("donor", ["t"])
+    assert seen == [CANDIDATE_LISTS["extended"]]
+
+
+def test_a_calibration_made_on_another_tcd_dump_is_not_bound(tmp_path):
+    run = _run(tmp_path, "run", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
+    cal = {"inputs": {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": "e" * 64}}
+    sa.check_bound(cal, [run], tcd_table_sha256="e" * 64)
+    with pytest.raises(ValueError, match="made on the TCD dump e+, the build uses 7+"):
+        sa.check_bound(cal, [run], tcd_table_sha256="7" * 64)

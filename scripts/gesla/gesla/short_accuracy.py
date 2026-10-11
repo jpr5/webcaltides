@@ -98,6 +98,17 @@ IMPLAUSIBLE = "implausible_fit"
 INCONSISTENT = "inconsistent_record"
 
 
+class SelectionMismatch(ValueError):
+    """Fits whose Rayleigh selection this code does not rebuild on the TCD dump given (drops_of_fit): the
+    calibration and R8 stop, naming every one, rather than leave them out of the pools and the long set."""
+
+    def __init__(self, mismatch: Mapping[str, str]):
+        self.mismatch = dict(mismatch)
+        head = "; ".join(f"{r}: {w[:200]}" for r, w in sorted(mismatch.items())[:3])
+        super().__init__(f"{len(mismatch)} fits' Rayleigh selection is not rebuilt on this TCD dump (wrong dump, or "
+                         f"another rule): {head}{' ...' if len(mismatch) > 3 else ''}")
+
+
 # --- regime -------------------------------------------------------------------------------------------
 
 def main_amps(fit: Mapping) -> dict[str, float]:
@@ -337,11 +348,12 @@ def restate(t: Mapping, *, limits: Sequence[Mapping] = (), validation: Mapping[s
             "worst": {"amp": wa, "phase": wp}, "notes": notes}
 
 
-def apply_gate(cal_dir: Path, res: Mapping) -> dict:
+def apply_gate(cal_dir: Path, res: Mapping, *, commit: str | None = None) -> dict:
     """Write an R6 gate result into a calibration: every failed cell becomes a claim limit (its constituent's
     amplitude or phase, or every constituent's for a failed pooled cell, on the records of its group), every length
     band whose pooled cell passed is validated, and each target is restated (restate). The limits and validation
-    are recorded in config with the gate's own summary; MANIFEST.json is rewritten."""
+    are recorded in config with the gate's own summary (and the commit that applied it, when given);
+    MANIFEST.json is rewritten."""
     cal = read_calibration(cal_dir)
     cal.pop("_sha256", None)
     limits = list(cal["config"].get("claim_limits", []))
@@ -366,7 +378,10 @@ def apply_gate(cal_dir: Path, res: Mapping) -> dict:
         v.update(restate(v, limits=limits, validation=validation))
     cal["config"]["claim_limits"] = limits
     cal["config"]["validation"] = validation
-    cal["config"].setdefault("gates", []).append({k: res[k] for k in ("failed_cells", "passed", "records", "comparators")})
+    entry = {k: res[k] for k in ("failed_cells", "passed", "records", "comparators")}
+    if commit is not None:
+        entry["commit"] = commit
+    cal["config"].setdefault("gates", []).append(entry)
     write_calibration(cal, cal_dir)
     return cal
 
@@ -588,17 +603,20 @@ def own_u_exceeds(fit: Mapping, by_constituent: Mapping[str, Mapping]) -> str | 
 def run_implausible(rows: Mapping[str, Mapping], fits: Mapping[str, Mapping], table: TcdTable) -> dict[str, dict]:
     """R8 on a whole fit run, with no calibration: record id -> {reason, detail} (implausible). rows: the run's
     fitted rows (lat, lon); fits: their RecordFit.to_dict(). Long records are those whose selection keeps every
-    candidate; a fit whose selection this code does not rebuild is not a long record."""
+    candidate. A fit whose selection this code does not rebuild on `table` (another TCD's dump, another rule) is
+    an error (ValueError naming every one), never a record quietly left out of the long set."""
     ids = sorted(rows)
     clusters = cosite_clusters(ids, [float(rows[r]["lat"]) for r in ids], [float(rows[r]["lon"]) for r in ids])
-    recs, long_ids = [], set()
+    recs, long_ids, mismatch = [], set(), {}
     for r in ids:
         recs.append({"record": r, "lat": float(rows[r]["lat"]), "lon": float(rows[r]["lon"]), "amps": main_amps(fits[r])})
         try:
             if not drops_of_fit(table, fits[r]):
                 long_ids.add(r)
-        except (ValueError, KeyError, TypeError):
-            pass
+        except (ValueError, KeyError, TypeError) as e:
+            mismatch[r] = f"{type(e).__name__}: {e}"
+    if mismatch:
+        raise SelectionMismatch(mismatch)
     return implausible(recs, long_ids, clusters)
 
 
@@ -774,13 +792,13 @@ def fit_document_v3_fields(table: TcdTable, fit: Mapping, *, record_id: str, goo
 _W: dict = {}
 
 
-def _init_worker(fit_dirs: Sequence[str], masks_path: str | None) -> None:
-    from .read_gesla import GeslaRelease, load_contributor_roles, otc_work
+def _init_worker(fit_dirs: Sequence[str], masks_path: str | None, tcd_path: str) -> None:
+    from .read_gesla import GeslaRelease, load_contributor_roles
     repo = Path(__file__).resolve().parents[3]
     rel = GeslaRelease()
     rel.metadata()
     _W.update(rel=rel, roles=load_contributor_roles(repo / "data/gesla/contributor_roles.csv"),
-              table=TcdTable.load(otc_work() / "tcd_table.json"), fit_dirs=[Path(d) for d in fit_dirs])
+              table=TcdTable.load(Path(tcd_path)), fit_dirs=[Path(d) for d in fit_dirs])
     if masks_path:
         with np.load(masks_path) as z:
             _W["masks"] = {k: z[k] for k in z.files}
@@ -817,6 +835,15 @@ def _mask_job(rid: str) -> tuple[str, np.ndarray | None, str | None]:
         return rid, None, f"{type(e).__name__}: {str(e)[:300]}"
 
 
+def station_candidates(fit: Mapping) -> tuple[str, ...]:
+    """The candidate list a station's cuts are refitted with: the one its full fit used (its candidate_list,
+    "base" when absent), so a cut differs from the full fit by its data only."""
+    name = fit.get("candidate_list", "base")
+    if name not in CANDIDATE_LISTS:
+        raise ValueError(f"candidate_list {name!r} is not one of {sorted(CANDIDATE_LISTS)}")
+    return CANDIDATE_LISTS[name]
+
+
 def _station_job(station: str, targets: Sequence[str]) -> dict:
     """Every cut of one station for its targets (target id -> cuts)."""
     from .fit import FitError
@@ -824,6 +851,7 @@ def _station_job(station: str, targets: Sequence[str]) -> dict:
     table = _W["table"]
     full_fit = json.loads(_fit_path(station).read_text())
     full = {c: (v["amp_m"], v["phase_deg"]) for c, v in full_fit["constituents"].items() if c in MAIN}
+    cands = station_candidates(full_fit)
     win = _fit_window(station)
     sh = series_hours(win)
     out = {}
@@ -833,7 +861,7 @@ def _station_job(station: str, targets: Sequence[str]) -> dict:
             s = subset_hours(win, hours)
             row = {"k": k, "n": len(s), "target_n": int(len(_W["masks"][tid]))}
             try:
-                a = analyse(table, s)
+                a = analyse(table, s, candidates=cands)
             except FitError as e:
                 row.update(errors=None, error=f"FitError: {str(e)[:200]}")
             else:
@@ -844,6 +872,57 @@ def _station_job(station: str, targets: Sequence[str]) -> dict:
             cuts.append(row)
         out[tid] = cuts
     return {"station": station, "full_sha256": fit_sha256(full_fit), "cuts": out, "secs": round(time.time() - t0, 2)}
+
+
+def fit_runs_tcd(fit_runs: Sequence[Path]) -> Path:
+    """The TCD dump the fit runs were made with (each run's timebase_manifest.json inputs.tcd_table): the
+    calibration replays their Rayleigh selection and refits their cuts with it. Every run must name one, all
+    the same, and the file must still have that sha256, else ValueError (a calibration on another TCD's
+    dump would not be the fits' own)."""
+    seen = {}
+    for d in fit_runs:
+        m = d / "timebase_manifest.json"
+        t = json.loads(m.read_text()).get("inputs", {}).get("tcd_table") if m.exists() else None
+        if not t or not t.get("path") or not t.get("sha256"):
+            raise ValueError(f"{d}: the fit run names no TCD dump (timebase_manifest.json inputs.tcd_table)")
+        seen[str(d)] = t
+    shas = {t["sha256"] for t in seen.values()}
+    if len(shas) != 1:
+        raise ValueError(f"the fit runs were made with different TCD dumps: {seen}")
+    t = next(iter(seen.values()))
+    p = Path(t["path"])
+    if not p.exists() or sha256_file(p) != t["sha256"]:
+        raise ValueError(f"{p}: not the TCD dump the fit runs name (sha256 {t['sha256']})")
+    return p
+
+
+def run_identity(d: Path) -> dict:
+    """A fit run as a calibration names it in inputs.fit_runs."""
+    return {"dir": str(d), "results_jsonl_sha256": sha256_file(d / "results.jsonl"),
+            "manifest_sha256": sha256_file(d / "timebase_manifest.json")
+            if (d / "timebase_manifest.json").exists() else None}
+
+
+def check_bound(cal: Mapping, fit_runs: Sequence[Path], *, tcd_table_sha256: str | None = None) -> None:
+    """A build must use the calibration made from the fit runs it builds (the run, then the overlay): their
+    results.jsonl and timebase_manifest.json (which names every fit's sha256) must be the ones the calibration
+    names, in order, and (when tcd_table_sha256 is given) the build's TCD dump must be the one the calibration was
+    made on, else ValueError naming each difference. Its targets are keyed to those fits (fit_sha256): with any
+    other run the short records it would refuse are not uncalibrated but calibrated on other fits, so the build
+    stops."""
+    inputs = cal.get("inputs", {})
+    want = [{k: r.get(k) for k in ("results_jsonl_sha256", "manifest_sha256")} for r in inputs.get("fit_runs", [])]
+    have = [{k: r[k] for k in ("results_jsonl_sha256", "manifest_sha256")} for r in map(run_identity, fit_runs)]
+    why = []
+    if not want or want != have:
+        named = [r.get("dir") for r in inputs.get("fit_runs", [])]
+        why.append(f"the calibration was made from the fit runs {named} {want}, the build uses "
+                   f"{[str(d) for d in fit_runs]} {have}")
+    if tcd_table_sha256 is not None and inputs.get("tcd_table_sha256") != tcd_table_sha256:
+        why.append(f"the calibration was made on the TCD dump {inputs.get('tcd_table_sha256')}, the build uses "
+                   f"{tcd_table_sha256}")
+    if why:
+        raise ValueError("; ".join(why) + ": re-run gesla.short_accuracy on the build's fit runs")
 
 
 def load_rows(fit_runs: Sequence[Path]) -> tuple[dict[str, dict], dict[str, Path]]:
@@ -878,13 +957,15 @@ def plan(rows: Mapping[str, dict], fits: Mapping[str, dict], table: TcdTable, me
         recs.append({"record": r, "lat": float(rows[r]["lat"]), "lon": float(rows[r]["lon"]), "amps": amps})
         try:
             drops = drops_of_fit(table, f)
-        except ValueError as e:
-            unfit[r] = f"the fit's Rayleigh selection is not this code's ({e})"
+        except (ValueError, KeyError, TypeError) as e:
+            unfit[r] = f"{type(e).__name__}: {e}"
             continue
         if drops:
             short[r] = amps
         else:
             long_ids.add(r)
+    if unfit:                                   # a fit left out of the pools and the long set would bias both
+        raise SelectionMismatch(unfit)
     refused = implausible(recs, long_ids, clusters)
     by_id = {x["record"]: x for x in recs}
     pool_ok = {}
@@ -1009,12 +1090,12 @@ def holdout_check(plan_: Mapping, cuts: Mapping[str, Mapping], amps: Mapping[str
 
 def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed: int = 0,
               holdout_n: int = HOLDOUT_N) -> dict:
-    from .read_gesla import GeslaRelease, otc_work
+    from .read_gesla import GeslaRelease
     t_start = time.time()
     commit = _git(["rev-parse", "HEAD"])
     if _git(["status", "--porcelain", "--untracked-files=no"]):
         raise RuntimeError("the checkout has uncommitted changes: a calibration names the commit that made it")
-    tcd_path = otc_work() / "tcd_table.json"
+    tcd_path = fit_runs_tcd(fit_runs)
     table = TcdTable.load(tcd_path)
     rel = GeslaRelease()
     meta = rel.metadata()
@@ -1027,7 +1108,7 @@ def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed
     log(f"fitted {len(rows)}, short {len(p['short'])}, targets {len(live)} (+{len(p['targets']) - len(live)} not "
         f"calibratable), refused implausible {len(p['refused'])}, selection-mismatch {len(p['unfit'])}, "
         f"stations {len(p['stations'])}, hold-out {len(p['holdout'])}, workers {workers}")
-    init = (tuple(str(d) for d in fit_runs), None)
+    init = (tuple(str(d) for d in fit_runs), None, str(tcd_path))
     masks, mask_err = {}, {}
     mask_ids = sorted(set(live))
     with ProcessPoolExecutor(max_workers=workers, initializer=_init_worker, initargs=init) as ex:
@@ -1081,7 +1162,8 @@ def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed
         t0 = last = time.time()
         n = 0
         with ProcessPoolExecutor(max_workers=workers, initializer=_init_worker,
-                                 initargs=(tuple(str(d) for d in fit_runs), str(out_dir / MASKS_FILE))) as ex, \
+                                 initargs=(tuple(str(d) for d in fit_runs), str(out_dir / MASKS_FILE),
+                                           str(tcd_path))) as ex, \
                 open(out_dir / CUTS_FILE, "a") as f:
             futs = {ex.submit(_station_job, s_, sorted(ts)): s_ for s_, ts in sorted(todo.items())}
             for fu in as_completed(futs):
@@ -1147,9 +1229,7 @@ def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed
         targets[t] = {**base, **info, **claim}
     amps = {r: main_amps(fits[r]) for r in p["holdout"]}
     hc = holdout_check(p, cuts, amps, fits)
-    run_inputs = [{"dir": str(d), "results_jsonl_sha256": sha256_file(d / "results.jsonl"),
-                   "manifest_sha256": sha256_file(d / "timebase_manifest.json")
-                   if (d / "timebase_manifest.json").exists() else None} for d in fit_runs]
+    run_inputs = [run_identity(d) for d in fit_runs]
     cal = {"cal_version": CAL_VERSION, "made_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "code": {"commit": commit, "dirty": False},
            "run_seconds": round(time.time() - t_start, 1),
@@ -1160,7 +1240,8 @@ def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed
                       "sanity_m2_max_m": SANITY_M2_MAX_M, "sanity_ratio": SANITY_RATIO,
                       "sanity_neighbours": SANITY_NEIGHBOURS, "holdout_n": holdout_n, "seed": seed,
                       "unclaimed": list(UNCLAIMED), "unclaimed_reason": UNCLAIMED_REASON},
-           "inputs": {"fit_runs": run_inputs, "tcd_table_sha256": sha256_file(tcd_path), "tcd_sha256": table.tcd_sha256,
+           "inputs": {"fit_runs": run_inputs, "tcd_table": str(tcd_path), "tcd_table_sha256": sha256_file(tcd_path),
+                      "tcd_sha256": table.tcd_sha256,
                       "gesla_version": rel.version, "gesla_manifest_sha256": sha256_file(Path(rel.root) / "MANIFEST.json")},
            "stations": len(p["stations"]), "station_errors": errors, "refused": p["refused"],
            "selection_mismatch": p["unfit"], "holdout": {h: v["mask_of"] for h, v in p["holdout"].items()},

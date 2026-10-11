@@ -21,6 +21,11 @@ The stated values are a calibration's: per constituent (calibration version 2: b
 published pair for every constituent (version 1), so the gate also measures what was published before.
 
     uv run python -m gesla.short_accuracy_gate --calibration DIR --fit-run DIR [--overlay-run DIR] [--out FILE]
+        [--apply | --until-pass]
+--apply writes the failed cells into the calibration as claim limits once and gates again; --until-pass repeats
+that until no claimed cell fails (a new limit can expose a failing cell elsewhere: S2 phase on 183-364, then on
+coastal, then on all), at most MAX_PASSES times, and stops with exit 6 when a pass adds no limit. Both name the
+commit in each gate entry and need a checkout with no uncommitted changes.
 Exit 0: no claimed group fails; 6: a claimed group fails.
 """
 from __future__ import annotations
@@ -44,6 +49,7 @@ MIN_RECORDS = 20
 GAPPY = 0.20
 NOAA_ONE_YEAR = re.compile(r"one year analys", re.I)
 GROUPS = ("all", "coastal", "gappy", "microtidal", "<=30", "31-90", "91-182", "183-364")
+MAX_PASSES = 10
 
 
 def _wrap(d: float) -> float:
@@ -198,7 +204,7 @@ def render(res: Mapping) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     from .read_gesla import otc_work
-    from .short_accuracy import CAL_FILE, CAL_VERSION, load_rows, read_calibration
+    from .short_accuracy import CAL_FILE, CAL_VERSION, _git, load_rows, read_calibration
     ap = argparse.ArgumentParser(prog="python -m gesla.short_accuracy_gate")
     ap.add_argument("--calibration", required=True, type=Path)
     ap.add_argument("--fit-run", required=True, type=Path)
@@ -207,7 +213,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--apply", action="store_true", help="write the failed cells as claim limits and the validated "
                     "bands into the calibration (short_accuracy.apply_gate), then gate again")
+    ap.add_argument("--until-pass", action="store_true", help="--apply, repeated until no claimed cell fails "
+                    f"(at most {MAX_PASSES} passes)")
     a = ap.parse_args(argv)
+    commit = None
+    if a.apply or a.until_pass:
+        if _git(["status", "--porcelain", "--untracked-files=no"]):
+            raise SystemExit("the checkout has uncommitted changes: a gate written into a calibration names its commit")
+        commit = _git(["rev-parse", "HEAD"])
     raw = json.loads((a.calibration / CAL_FILE).read_text())
     cal = read_calibration(a.calibration) if raw.get("cal_version") == CAL_VERSION else raw   # v1: the old file
     runs = [a.fit_run] + ([a.overlay_run] if a.overlay_run else [])
@@ -220,15 +233,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.out:
         a.out.write_text(json.dumps({"gate": res, "rows": comp}, indent=1, sort_keys=True) + "\n")
     print(render(res), flush=True)
-    if a.apply:
+    if a.apply or a.until_pass:
         from .short_accuracy import apply_gate
-        cal = apply_gate(a.calibration, res)
-        res = gate(comparisons(cal, rows, fits, a.noaa_cache))
-        print(f"applied: claim limits {cal['config']['claim_limits']}, validation {cal['config']['validation']}", flush=True)
-        if a.out:
-            a.out.with_suffix(".applied.json").write_text(json.dumps({"gate": res, "rows": comparisons(cal, rows, fits, a.noaa_cache)},
-                                                                      indent=1, sort_keys=True) + "\n")
-        print(render(res), flush=True)
+        for n in range(1, (MAX_PASSES if a.until_pass else 1) + 1):
+            before = len(cal.get("config", {}).get("claim_limits", []))
+            cal = apply_gate(a.calibration, res, commit=commit)
+            res = gate(comparisons(cal, rows, fits, a.noaa_cache))
+            added = len(cal["config"]["claim_limits"]) - before
+            print(f"applied (pass {n}): {added} new claim limits; claim limits {cal['config']['claim_limits']}, "
+                  f"validation {cal['config']['validation']}", flush=True)
+            if a.out:
+                sfx = ".applied.json" if n == 1 else f".applied-{n}.json"
+                a.out.with_suffix(sfx).write_text(json.dumps({"gate": res, "rows": comparisons(cal, rows, fits, a.noaa_cache)},
+                                                             indent=1, sort_keys=True) + "\n")
+            print(render(res), flush=True)
+            if res["passed"] or added == 0:
+                break
     return 0 if res["passed"] else 6
 
 
