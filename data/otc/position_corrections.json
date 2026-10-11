@@ -1,0 +1,111 @@
+{
+ "format": 1,
+ "note": "Position corrections the combined build applies to agency stations (otc_pipeline.combine.apply_corrections). Each row applies only while the source still serves the published position; when the source changes it, the build stops so the row is reviewed. Found by A-NOAA (tide) and A-NOAAC (currents): the published position puts the station in the wrong country or ocean.",
+ "corrections": [
+  {
+   "source": "noaa",
+   "upstream_id": "TPT2891",
+   "published": {
+    "lat": -19.03333333333299,
+    "lon": 169.91666666667007
+   },
+   "corrected": {
+    "lat": -19.03333333333299,
+    "lon": -169.91666666667007
+   },
+   "timezone": "Pacific/Niue",
+   "country": "NIU",
+   "reason": "Niue Island (N.Z.): NOAA's longitude has the wrong sign; 169.92 E is in the sea west of Vanuatu, Niue is at 169.92 W"
+  },
+  {
+   "source": "noaa",
+   "upstream_id": "TPT2893",
+   "published": {
+    "lat": -18.65,
+    "lon": 6.016666666670088
+   },
+   "corrected": {
+    "lat": -18.65,
+    "lon": -173.9833333333299
+   },
+   "timezone": "Pacific/Tongatapu",
+   "country": "TON",
+   "reason": "Neiafu, Vava'u, Tonga: NOAA gives 6.0167 E (in the Atlantic), which is 180 - 173.9833; Neiafu is at 173 deg 59 min W"
+  },
+  {
+   "source": "noaa",
+   "upstream_id": "TPT2897",
+   "published": {
+    "lat": -20.26666666666667,
+    "lon": 174.79
+   },
+   "corrected": {
+    "lat": -20.26666666666667,
+    "lon": -174.79
+   },
+   "timezone": "Pacific/Tongatapu",
+   "country": "TON",
+   "reason": "Nomuka, Tonga: NOAA's longitude has the wrong sign; 174.79 E is near Fiji, Nomuka is at 174.79 W"
+  },
+  {
+   "source": "noaa",
+   "upstream_id": "TWC0279",
+   "published": {
+    "lat": 1.25,
+    "lon": 78.83300018310547
+   },
+   "corrected": {
+    "lat": 1.25,
+    "lon": -78.83300018310547
+   },
+   "timezone": "America/Guayaquil",
+   "country": "ECU",
+   "reason": "San Lorenzo, Ecuador: NOAA's longitude has the wrong sign; 78.83 E is in the Indian Ocean, San Lorenzo is at 78.83 W"
+  },
+  {
+   "source": "noaa-currents",
+   "upstream_id": "SAV2304",
+   "published": {
+    "lat": 32.04090118408203,
+    "lon": 80.84850311279297
+   },
+   "corrected": {
+    "lat": 32.04090118408203,
+    "lon": -80.84850311279297
+   },
+   "timezone": "America/New_York",
+   "country": "USA",
+   "reason": "Savannah River Approach, Georgia: NOAA's longitude has the wrong sign; 80.85 E is in Tibet, the station is at 80.85 W off the Savannah River entrance"
+  },
+  {
+   "source": "noaa-currents",
+   "upstream_id": "SAV2305",
+   "published": {
+    "lat": 32.03499984741211,
+    "lon": 80.87319946289062
+   },
+   "corrected": {
+    "lat": 32.03499984741211,
+    "lon": -80.87319946289062
+   },
+   "timezone": "America/New_York",
+   "country": "USA",
+   "reason": "Cockspur Island, NE of, Georgia: NOAA's longitude has the wrong sign; the station is at 80.87 W in the Savannah River entrance"
+  },
+  {
+   "source": "noaa-currents",
+   "upstream_id": "SAV2326",
+   "published": {
+    "lat": 31.947399139404297,
+    "lon": 81.06510162353516
+   },
+   "corrected": {
+    "lat": 31.947399139404297,
+    "lon": -81.06510162353516
+   },
+   "timezone": "America/New_York",
+   "country": "USA",
+   "reason": "Butter Bean Beach, Skidaway River, Georgia: NOAA's longitude has the wrong sign; the station is at 81.07 W south of Savannah"
+  }
+ ]
+}
