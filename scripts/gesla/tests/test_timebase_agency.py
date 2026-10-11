@@ -235,3 +235,130 @@ def test_load_noaa_refs_reads_the_harcon_cache_and_names_a_bad_file(tmp_path):
     refs, skipped = tag.load_noaa_refs(tmp_path)
     assert [(r.id, dict(r.consts)) for r in refs] == [("1", {"M2": (0.5, 10.0), "K1": (0.2, 20.0)})]
     assert len(skipped) == 1 and "feet" in skipped[0]
+
+
+# --- two independent sources (FIX-LST-2) -----------------------------------------------------------
+
+def _setup2(spec: dict, eots: dict | None = None, gt: dict | None = None):
+    """spec: id -> (minutes late against REF, row spec, lat offset km); contributors from the id suffix."""
+    inv, rows, fits = {}, {}, {}
+    for f, (mins, (status, kind, corr), km) in spec.items():
+        lat = 10.0 + km * KM
+        inv[f] = RecordInfo(f, f.rsplit("-", 1)[-1].upper(), 3600, lat, 20.0, 0, 10 ** 9)
+        fits[f] = {"record": f, "outcome": "fitted", "lat": lat, "lon": 20.0, "gauge_type": (gt or {}).get(f, "Coastal"),
+                   "time_base": "utc_instant", "main": {k: [a, g, 0.0] for k, (a, g) in cons(mins).items()}}
+        rows[f] = AuditRow(f, True, inv[f].contributor, 3600, status, corr.label if corr.usable else "no_comparator",
+                           corr.label, corr, None, kind, "", reason="r")
+    wk = WeakConfig(WeakInputs({f: {"eot": eot(spec[f][0], (eots or {}).get(f)), "zone": None} for f in spec}), {}, {})
+    return inv, rows, SiblingConfig(fits, {}), wk
+
+
+def _apply2(inv, rows, cfg, wk, refs=()):
+    dec = {f: 0 for f in rows}
+    return ta.apply_two_source(rows, inv, cfg, wk, dec, {}, SP, tag.RefIndex(list(refs)), lambda *_: None)
+
+
+def test_eot20_and_another_contributors_sets_on_one_lead_dispute_a_river_record():
+    # Tennesseehaven (RWS, River): EOT20 -59, the CMEMS and RWS_HIST sets at Hoek van Holland 2.4-2.6 km say -56
+    spec = {"tennesseehaven-ten-nld-rws": (-59.0, UNV, 0.0), "hoekvh-hoe-nld-cmems": (0.0, UNV, 2.5),
+            "hoek-hoekvhld-nld-rws_hist": (0.0, UNV, 2.4)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"tennesseehaven-ten-nld-rws": -59.0, "hoekvh-hoe-nld-cmems": 0.0,
+                                             "hoek-hoekvhld-nld-rws_hist": 0.0},
+                                 gt={"tennesseehaven-ten-nld-rws": "River"})
+    counts = _apply2(inv, rows, cfg, wk)
+    r = rows["tennesseehaven-ten-nld-rws"]
+    assert r.status == "residue" and r.comparator_id == ta.TWO_SOURCE_DISPUTED and counts["disputed"] == 1
+    assert r.agency["two_source"]["agree"] == ["E", "S"] and r.agency["two_source"]["sign"] == -1
+    ta.annotate(r, 0)
+    assert r.annotation_code == "disputed:two_source_offset" and not r.correction.usable
+    assert rows["hoekvh-hoe-nld-cmems"].status == "unverified"          # its own E is 0 and its S is +59 alone
+
+
+def test_one_source_is_never_enough_and_a_lag_needs_the_sets():
+    # San Felipe 307a: EOT20 +58 and nothing else
+    inv, rows, cfg, wk = _setup2({"san_felipe-307a-mex-uhslc_rq": (58.0, UNV, 0.0)},
+                                 eots={"san_felipe-307a-mex-uhslc_rq": 58.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["san_felipe-307a-mex-uhslc_rq"].status == "unverified"
+    # a lag both open-water sources see (EOT20 +60, agency +60) without a set: an inland gauge, not flagged
+    inv, rows, cfg, wk = _setup2({"aiw-1-usa-usgs": (60.0, UNV, 0.0)}, eots={"aiw-1-usa-usgs": 60.0})
+    _apply2(inv, rows, cfg, wk, [ref("A", 13.8)])
+    assert rows["aiw-1-usa-usgs"].status == "unverified"
+
+
+def test_the_lead_and_lag_limits_are_the_calibrated_ones():
+    spec = {"a-1-x-c1": (-44.0, UNV, 0.0), "b-2-x-c2": (0.0, UNV, 1.0)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -44.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["a-1-x-c1"].status == "unverified"                    # 44 < TS_LEAD_MIN
+    # Naples Bay City Dock: +45 against EOT20 and +48.5 against a set: a harbour lag below TS_LAG_MIN
+    spec = {"naples-1-usa-usgs": (48.5, UNV, 0.0), "pier-2-usa-noaa": (0.0, UNV, 1.5)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"naples-1-usa-usgs": 45.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["naples-1-usa-usgs"].status == "unverified"
+    spec = {"mol-1-ita-cmems": (80.0, UNV, 0.0), "tr-2-ita-ispra": (0.0, UNV, 0.7)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"mol-1-ita-cmems": 80.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["mol-1-ita-cmems"].status == "residue"
+
+
+def test_signs_must_agree_sets_must_be_another_contributor_and_offset_sets_are_no_reference():
+    spec = {"a-1-x-c1": (-60.0, UNV, 0.0), "b-2-x-c1": (0.0, UNV, 1.0)}             # same contributor
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -60.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["a-1-x-c1"].status == "unverified"
+    # Boynton Beach NOAA against SFWMD s41_t (EST, disputed for it): never a reference
+    dis = ("residue", "w", NOT_USABLE)
+    spec = {"boynton-8722706-usa-noaa": (0.0, UNV, 0.0), "s41_t-s41_t-usa-sfwmd": (-280.0, dis, 1.4)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"boynton-8722706-usa-noaa": 110.0})
+    rows["s41_t-s41_t-usa-sfwmd"].comparator_id = ta.AGENCY_DISPUTED
+    _apply2(inv, rows, cfg, wk)
+    assert rows["boynton-8722706-usa-noaa"].status == "unverified"
+    spec = {"a-1-x-c1": (-60.0, UNV, 0.0), "b-2-x-c2": (0.0, UNV, 1.0)}               # EOT20 the other way
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": 60.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["a-1-x-c1"].status == "unverified"
+
+
+def test_a_verified_or_corrected_record_is_not_judged_and_a_disputed_one_keeps_its_code():
+    spec = {"a-1-x-c1": (-60.0, ("used", "w", Correction("utc_instant")), 0.0), "b-2-x-c2": (0.0, UNV, 1.0),
+            "c-3-x-c3": (-60.0, ("residue", "w", NOT_USABLE), 20.0), "d-4-x-c4": (0.0, UNV, 21.0)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -60.0, "c-3-x-c3": -60.0})
+    rows["c-3-x-c3"].comparator_id = "disputed:served_stations_disagree"
+    counts = _apply2(inv, rows, cfg, wk)
+    assert rows["a-1-x-c1"].status == "used"
+    assert rows["c-3-x-c3"].comparator_id == "disputed:served_stations_disagree" and counts["already_disputed"] == 1
+    assert "two independent sources" in rows["c-3-x-c3"].reason
+
+
+def test_a_diurnal_tide_is_judged_on_k1_and_o1():
+    # Alicante DA_MM: M2 0.018 m; K1/O1 1 h early against CMEMS at the same site and EOT20
+    small = {"M2": (0.018, 100.0), "S2": (0.01, 140.0), "K1": (0.036, 200.0), "O1": (0.023, 180.0)}
+    late = lambda m: {k: (a, (g + SP[k] * m / 60.0) % 360.0) for k, (a, g) in small.items()}
+    assert tag.joint_shift(late(-60.0), late(0.0), SP, ratio=tag.TS_SET_RATIO, resid=15.0)[0] == pytest.approx(-60, abs=1)
+    assert tag.joint_shift(late(-60.0), late(0.0), SP, ratio=tag.TS_SET_RATIO, resid=15.0)[1] == "diurnal"
+    big = {k: (a * 10, g) for k, (a, g) in late(0.0).items()}
+    assert tag.joint_shift(late(-60.0), big, SP, ratio=tag.TS_SET_RATIO, resid=15.0) is None     # K1 ratio 0.1
+    odd = dict(late(-60.0))
+    odd["O1"] = (odd["O1"][0], (odd["O1"][1] + SP["O1"] * 40 / 60.0) % 360.0)                     # O1 40 min off K1
+    assert tag.joint_shift(odd, late(0.0), SP, ratio=tag.TS_SET_RATIO, resid=15.0) is None
+    semi = dict(late(-60.0), M2=(0.5, 100.0))                                                     # a semidiurnal: no fallback
+    assert tag.joint_shift(semi, dict(late(0.0), M2=(0.05, 100.0)), SP, ratio=tag.TS_SET_RATIO, resid=15.0) is None
+
+
+def test_a_diurnal_fallback_needs_both_diurnals_and_the_sets_must_be_near():
+    small = {"M2": (0.018, 100.0), "S2": (0.01, 140.0), "K1": (0.036, 200.0), "O1": (0.012, 180.0)}   # O1 1.2 cm
+    assert tag.joint_shift(small, small, SP, ratio=tag.TS_SET_RATIO, resid=15.0) is None
+    spec = {"a-1-x-c1": (-60.0, UNV, 0.0), "b-2-x-c2": (0.0, UNV, 3.5)}                              # 3.5 km off
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -60.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["a-1-x-c1"].status == "unverified"
+
+
+def test_the_sets_source_is_their_median():
+    # two sets on UTC say -60, a third shares the record's clock (0): the median is -60
+    spec = {"a-1-x-c1": (-60.0, UNV, 0.0), "b-2-x-c2": (0.0, UNV, 1.0), "c-3-x-c3": (0.0, UNV, 1.5),
+            "d-4-x-c4": (-60.0, UNV, 2.0)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -60.0})
+    _apply2(inv, rows, cfg, wk)
+    assert rows["a-1-x-c1"].status == "residue" and rows["a-1-x-c1"].agency["two_source"]["S"]["tau"] == -60.0

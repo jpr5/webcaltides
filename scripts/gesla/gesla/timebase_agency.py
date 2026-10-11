@@ -196,3 +196,68 @@ def classify(sh: dict | None, eot_lag: float | None) -> dict:
            + ("" if kind == "lead" else ", the same offset"))
     return {"kind": kind, "hours": n if whole else None, "why": why,
             "same_ref": min(same, key=lambda q: q["km"])["ref"] if whole else None}
+
+
+# --- two independent sources (FIX-LST-2) ------------------------------------------------------------
+#
+# A dispute-only rule, judged per record: the record is disputed when at least two independent sources put it off by
+# the same sign, each by TS_LEAD_MIN (a lead) or TS_LAG_MIN (a lag) or more. The sources:
+#   E  EOT20 at the record (cell <= timebase_weak.E_MAX_KM; M2 ratio TS_EOT_RATIO; every constituent within
+#      TS_EOT_RESID_MIN of the joint shift);
+#   S  published sets of OTHER contributors within TS_SITE_KM in the same water (M2 ratio TS_SET_RATIO, every
+#      constituent within TS_SET_RESID_MIN), each fitted on the base it publishes, none itself disputed for an offset
+#      (TS_OFFSET_CODES), of ANY gauge type: sets at one river site share its river lag, so a River record is not exempt;
+#      the median of their shifts is one source;
+#   H  the agency shift (shift() above), when its references agree in sign.
+# When the record or a reference has no semidiurnal constituent of 2 cm, K1 and O1 alone give the shift (both >= 2 cm,
+# K1 ratio in the same limits): a diurnal tide (Alicante, M2 0.02 m).
+# A lag needs S among the agreeing sources: EOT20 and the agency stations both see the open water, which an inland gauge
+# lags alike (the AIW case above). It never corrects: corrections keep the full standard (classify, pass 2).
+#
+# Thresholds (calibrated on fit-4 / full-lst before the overlay run; FIX-LST calib3): of 1,289 strongly verified or
+# corrected records, 502 have two or more sources. With the rule they flag none. Their largest second-largest same-sign
+# shifts: +45.0 (Naples Bay City Dock: EOT20 +45.0, sets +48.5, the known 48.5-min harbour lag), +42.5 (Corte Madera
+# Creek), then -10.5 (Peace River). So a lead of 45 min leaves 34 min, and a lag needs 55 min (10 above Naples Bay).
+# Without TS_OFFSET_CODES, Boynton Beach NOAA (verified) is flagged against SFWMD s41_t, an EST record: an offset record
+# is never a reference.
+TS_LEAD_MIN = 45.0
+TS_LAG_MIN = 55.0
+TS_SITE_KM = 3.0
+TS_EOT_RATIO = (0.80, 1.25)
+TS_EOT_RESID_MIN = 30.0
+TS_SET_RATIO = (0.75, 1.33)
+TS_SET_RESID_MIN = 15.0
+TS_OFFSET_CODES = ("agency_constants_offset", "eot20_whole_hour", "sibling_constants_offset", "eot20_family_offset",
+                   "two_source_offset")
+DIURNAL = ("K1", "O1")
+
+
+def joint_shift(a: Mapping[str, tuple[float, float]], b: Mapping[str, tuple[float, float]], speeds: Mapping[str, float],
+                *, ratio: tuple[float, float], resid: float) -> tuple[float, str] | None:
+    """(tau min, "all" | "diurnal") of a against b, or None outside the limits (see above)."""
+    c = tw.phase_check(a, b, speeds, ratio=ratio, resid=resid, band=0.0)
+    if "tau" in c and not c.get("why", "").startswith("constituent lags disagree"):
+        return float(c["tau"]), "all"
+    if "tau" in c or "ratio" in c:
+        return None                      # a semidiurnal pair exists and failed its gate: no diurnal fallback
+    big = lambda k: k in a and k in b and a[k][0] >= tw.MIN_AMP and b[k][0] >= tw.MIN_AMP
+    if not all(big(k) for k in DIURNAL):
+        return None
+    r = a["K1"][0] / b["K1"][0]
+    if not ratio[0] <= r <= ratio[1]:
+        return None
+    dg = {k: tw._wrap(a[k][1] - b[k][1]) for k in DIURNAL}
+    tau, res = tw.lag_est(dg, {k: b[k][0] for k in DIURNAL}, speeds)
+    if max(abs(v) for v in res.values()) > resid:
+        return None
+    return float(tau), "diurnal"
+
+
+def two_sources(sources: Mapping[str, float]) -> tuple[int, list[str]] | None:
+    """(sign, the agreeing sources) when two or more put the record off by the same sign (a lag: S among them)."""
+    for sign in (-1, 1):
+        lim = TS_LEAD_MIN if sign < 0 else TS_LAG_MIN
+        agree = sorted(k for k, v in sources.items() if v * sign >= lim)
+        if len(agree) >= 2 and (sign < 0 or "S" in agree):
+            return sign, agree
+    return None

@@ -135,6 +135,7 @@ from .timebase_measure import Samples, monthly_lags, samples
 from .timebase_weak import (ORIGIN_VERIFIED, Lineage, Served, WeakInputs, assess, fit_features, load_served,
                             served_kind, sha256_file)
 from .timebase_weak import speeds as weak_speeds
+from .timebase_weak import E_MAX_KM as tw_E_MAX_KM
 from .timebase_verdict import (BAND_MIN, LAG_CLASSES, MAX_BAD_FRACTION, MEAN60_LAG, NOT_USABLE, Correction, Verdict,
                                boxcar_response, evaluate, isolated, month_key)
 
@@ -1451,6 +1452,9 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                                               tag.RefIndex(agency_refs), log)
                 sib_crashes = sib_crashes + ag_crashes
                 sib_counts["agency"] = ac
+                sib_counts["two_source"] = apply_two_source(rows, inv, sibling, weak, dec, transforms,
+                                                            weak_speeds(TcdTable.load(table_path)),
+                                                            tag.RefIndex(agency_refs), log)
     for f in allf:
         annotate(rows[f], dec[f])
     final_counts(providers, rows, inv)
@@ -1745,6 +1749,88 @@ def apply_agency(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: 
             counts["corrected"] += 1
     log("agency constants: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
     return crashes, counts
+
+
+TWO_SOURCE_DISPUTED = "disputed:two_source_offset"
+
+
+def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
+                     dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float],
+                     index: "tag.RefIndex", log) -> dict:
+    """The two-source dispute rule (timebase_agency.two_sources; FIX-LST-2), after apply_agency. Dispute only, per
+    record: a record that publishes its declared base (unverified or disputed; a verified or corrected one is not
+    judged here), fitted on the base it publishes, whose EOT20, other contributors'
+    sets within TS_SITE_KM and agency shift put it off by the same sign (two of them at least) is disputed
+    (TWO_SOURCE_DISPUTED; a record already disputed keeps its code, the evidence is added to its reason). The
+    references are judged as they stand before this step, so one record's dispute never makes another's."""
+    counts = {"bound": 0, "with_two_sources": 0, "disputed": 0, "already_disputed": 0}
+    bound: dict[str, dict] = {}
+    for f, r in cfg.fits.items():
+        row = rows.get(f)
+        if row is None or r.get("outcome") != "fitted" or not r.get("main") or f not in inv:
+            continue
+        if r.get("time_base") == _published_now(row, dec[f]).label:
+            bound[f] = {k: (float(v[0]), float(v[1])) for k, v in r["main"].items()}
+    offset = {f for f, row in rows.items()
+              if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)}
+    cell: dict[tuple[int, int], list[str]] = defaultdict(list)
+    for f in bound:
+        cell[(math.floor(inv[f].lat * 30), math.floor(inv[f].lon * 30))].append(f)
+    hits = []
+    for f in sorted(bound):
+        row = rows[f]
+        if row.status == "used":
+            continue                     # verified or corrected stays as it is: this rule only withholds the declared base
+        counts["bound"] += 1
+        a, info = bound[f], inv[f]
+        src: dict[str, float] = {}
+        ev: dict = {}
+        e = weak.inputs.eot(transforms.get(f, (f,))[0])
+        if e and e.get("dist_km") is not None and float(e["dist_km"]) <= tw_E_MAX_KM:
+            x = tag.joint_shift(a, {k: tuple(e[k]) for k in tag.tw.CORE if k in e}, sp, ratio=tag.TS_EOT_RATIO,
+                                resid=tag.TS_EOT_RESID_MIN)
+            if x is not None:
+                src["E"], ev["E"] = x[0], {"tau": round(x[0], 1), "how": x[1], "dist_km": e["dist_km"]}
+        sets = []
+        ci, cj = math.floor(info.lat * 30), math.floor(info.lon * 30)
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for g in cell.get((ci + di, cj + dj), ()):
+                    if g == f or g in offset or inv[g].contributor == info.contributor:
+                        continue
+                    km = tag.haversine_km(info.lat, info.lon, inv[g].lat, inv[g].lon)
+                    if km > tag.TS_SITE_KM:
+                        continue
+                    x = tag.joint_shift(a, bound[g], sp, ratio=tag.TS_SET_RATIO, resid=tag.TS_SET_RESID_MIN)
+                    if x is not None:
+                        sets.append({"set": g, "km": round(km, 2), "tau": round(x[0], 1), "how": x[1]})
+        if sets:
+            src["S"] = statistics.median(s_["tau"] for s_ in sets)
+            ev["S"] = {"tau": round(src["S"], 1), "sets": sorted(sets, key=lambda s_: (s_["km"], s_["set"]))[:6]}
+        sh = tag.shift(a, index.near(info.lat, info.lon), sp) if len(index) else None
+        if sh is not None and not sh["mixed"]:
+            src["H"], ev["H"] = sh["tau"], {"tau": round(sh["tau"], 1), "refs": [q["ref"] for q in sh["refs"][:4]]}
+        got = tag.two_sources(src)
+        if got is None:
+            continue
+        counts["with_two_sources"] += 1
+        hits.append((f, got, ev))
+    names = {"E": "EOT20", "S": "other contributors' sets", "H": "agency constants"}
+    for f, (sign, agree), ev in hits:
+        row = rows[f]
+        why = (f"two independent sources put the record {'early' if sign < 0 else 'late'}: "
+               + "; ".join(f"{names[k]} {ev[k]['tau']:+.1f} min" + (f" ({', '.join(x['set'] for x in ev['S']['sets'][:3])})"
+                                                                    if k == 'S' else '') for k in agree)
+               + "; disputed, never corrected on it")
+        row.agency = {**(row.agency or {}), "two_source": {"sign": sign, "agree": agree, **ev}, "summary":
+                      "; ".join(x for x in ((row.agency or {}).get("summary"), why) if x)}
+        if row.status == "residue":
+            counts["already_disputed"] += 1
+        else:
+            counts["disputed"] += 1
+        _sib_dispute(row, TWO_SOURCE_DISPUTED, why)
+    log("two sources: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    return counts
 
 
 def inherited_hours(corr: Correction) -> int | None:
