@@ -18,7 +18,9 @@ at least 3 gauges, no gauge missing a constituent), read for events:
   although the medians hold.
 Like the other canaries, the bar is on medians, not on single events. Events one side lists and the other does
 not (NOAA leaves out weak events: a max ebb of a few cm/s between two slacks, a 0.1 cm/s reversal) are counted
-per station in the result (`unmatched_noaa`, `unmatched_engine`) and do not fail the canary.
+per station in the result (`unmatched_noaa`, `unmatched_engine`) and do not fail the canary. Each station in the
+result says `canary` pass or fail under these rules, with its `reasons` (failures) and `notes` (unmatched events,
+current_proof's stricter all-events bar: not failures).
 
     uv run python -m otc_pipeline.currents_canary fetch --agency-cache ROOT --cache DIR   # NOAA, 1 request/s
     uv run python -m otc_pipeline.currents_canary run --agency-cache ROOT --cache DIR     # offline
@@ -102,19 +104,11 @@ def judge(comparisons: list[cp.Comparison], unavailable: list[str], *, min_gauge
         reasons.append(f"{len(comparisons)} station(s) compared, at least {min_gauges} needed")
     for u in unavailable:
         reasons.append(f"{u}: no cached NOAA prediction")
+    stations = []
     for c in comparisons:
-        if not c.dt_min:
-            reasons.append(f"{c.station} bin {c.bin}: no paired event")
-            continue
-        if c.noaa_peaks and len(c.dv_ms) < STATION_MIN_PEAK_SHARE * c.noaa_peaks:
-            reasons.append(f"{c.station} bin {c.bin}: {len(c.dv_ms)} of {c.noaa_peaks} NOAA max flood/ebb events "
-                           f"paired (at least {STATION_MIN_PEAK_SHARE:g} needed): flood and ebb swapped?")
-        if max(c.dt_min) > STATION_MAX_DT_MIN:
-            reasons.append(f"{c.station} bin {c.bin}: a paired event {max(c.dt_min):.1f} min off "
-                           f"(limit {STATION_MAX_DT_MIN:g} min)")
-        if c.dv_ms and max(c.dv_ms) > STATION_MAX_DV_MS:
-            reasons.append(f"{c.station} bin {c.bin}: a paired peak {max(c.dv_ms):.3f} m/s off "
-                           f"(limit {STATION_MAX_DV_MS} m/s)")
+        own = station_reasons(c)
+        reasons += own
+        stations.append(station_result(c, own))
     if mdt is not None and not mdt <= tol_dt_min:
         reasons.append(f"median |dt| {mdt:.2f} min exceeds {tol_dt_min:.2f} min")
     if mdv is not None and not mdv <= tol_dv_ms:
@@ -125,7 +119,42 @@ def judge(comparisons: list[cp.Comparison], unavailable: list[str], *, min_gauge
             "tol_dt_min": round(tol_dt_min, 3), "tol_dv_ms": tol_dv_ms, "min_gauges": min_gauges,
             "events_paired": len(dts), "unmatched_noaa": sum(c.missed for c in comparisons),
             "unmatched_engine": sum(c.extra for c in comparisons), "reasons": reasons,
-            "stations": [c.to_dict() for c in comparisons]}
+            "stations": stations}
+
+
+def station_reasons(c: cp.Comparison) -> list[str]:
+    """The station's failures of the canary's per-station rules (module text); any one fails the canary."""
+    if not c.dt_min:
+        return [f"{c.station} bin {c.bin}: no paired event"]
+    out = []
+    if c.noaa_peaks and len(c.dv_ms) < STATION_MIN_PEAK_SHARE * c.noaa_peaks:
+        out.append(f"{c.station} bin {c.bin}: {len(c.dv_ms)} of {c.noaa_peaks} NOAA max flood/ebb events "
+                   f"paired (at least {STATION_MIN_PEAK_SHARE:g} needed): flood and ebb swapped?")
+    if max(c.dt_min) > STATION_MAX_DT_MIN:
+        out.append(f"{c.station} bin {c.bin}: a paired event {max(c.dt_min):.1f} min off (limit {STATION_MAX_DT_MIN:g} min)")
+    if c.dv_ms and max(c.dv_ms) > STATION_MAX_DV_MS:
+        out.append(f"{c.station} bin {c.bin}: a paired peak {max(c.dv_ms):.3f} m/s off (limit {STATION_MAX_DV_MS} m/s)")
+    return out
+
+
+def station_result(c: cp.Comparison, reasons: list[str]) -> dict:
+    """One station in the report: `canary` is the station's result under the canary's rules (fail: `reasons`, which
+    fail the canary). `notes` are not failures: events one side lists and the other does not (NOAA leaves out weak
+    events, the engine lists one maximum of a double ebb), and slack times beyond current_proof's own stricter
+    bar; current_proof's all-events verdict is kept as `current_proof_all_events_pass`."""
+    d = c.to_dict()
+    strict = d.pop("passed")
+    notes = []
+    if c.missed:
+        notes.append(f"{c.missed} NOAA event(s) with no engine event of the same type within "
+                     f"{cp.MATCH_WINDOW_MIN:g} min ({c.noaa_peaks - len(c.dv_ms)} of them max flood/ebb)")
+    if c.extra:
+        notes.append(f"{c.extra} engine event(s) NOAA does not list")
+    if c.max_dt_slack_min > cp.TOL_SLACK_MIN:
+        notes.append(f"a slack {c.max_dt_slack_min:.2f} min off (current_proof's bar {cp.TOL_SLACK_MIN:g} min; "
+                     f"the canary's {STATION_MAX_DT_MIN:g} min)")
+    return {**d, "canary": "fail" if reasons else "pass", "reasons": reasons, "notes": notes,
+            "current_proof_all_events_pass": strict}
 
 
 def run_canary(sets: Sequence[SourceSet], cache: Path, *, start: str = START, days: int = DAYS, n: int = SAMPLE,
@@ -162,8 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=Path, required=True, help="the predictions cache")
     ap.add_argument("--start", default=START)
     ap.add_argument("--days", type=int, default=DAYS)
+    ap.add_argument("--tcd", type=Path, help="the TCD dump of the release (default gesla.tcd_table.dump_path())")
     a = ap.parse_args(argv)
-    sets = load_agency(a.agency_cache, ("noaa-currents",), jma_year=0)["noaa-currents"].sets
+    from gesla.tcd_table import dump_path
+    sets = load_agency(a.agency_cache, ("noaa-currents",), jma_year=0, tcd_path=a.tcd or dump_path())["noaa-currents"].sets
     if a.cmd == "fetch":
         t0 = datetime.strptime(a.start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         fetch(a.cache, sample(sets), t0, a.days)

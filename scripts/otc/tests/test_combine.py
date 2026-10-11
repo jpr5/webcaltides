@@ -385,6 +385,24 @@ def test_a_station_whose_floods_and_ebbs_do_not_pair_fails():
     assert cc.judge(ok, [])["status"] == "pass"
 
 
+def test_each_station_says_canary_pass_or_fail_and_unmatched_events_are_notes():
+    # INT-2 C1: current_proof's all-events verdict (passed=false on a weak unmatched event) read as a failure while
+    # the canary passed; a station now carries its own canary result, its failures and its notes
+    ok = [comparison(s) for s in "ABCD"]
+    weak = Comparison("E", 1, 45, 42, 41, 4, 1, 0.6, 0.9, 0.001, 0, 0, 0, 0, (0.3,) * 41, (0.001,) * 22, 25)
+    r = cc.judge(ok + [weak], [])
+    e = r["stations"][-1]
+    assert r["status"] == "pass" and e["canary"] == "pass" and e["reasons"] == [] and "passed" not in e
+    assert e["current_proof_all_events_pass"] is False
+    assert e["notes"] == ["4 NOAA event(s) with no engine event of the same type within 90 min (3 of them max flood/ebb)",
+                          "1 engine event(s) NOAA does not list"]
+    swapped = Comparison("E", 1, 54, 54, 27, 27, 27, 0.5, 0, 0, 0, 0, 0, 0, (0.3,) * 27, (), 27)
+    r = cc.judge(ok + [swapped], [])
+    e = r["stations"][-1]
+    assert r["status"] == "fail" and e["canary"] == "fail" and e["reasons"] == r["reasons"]
+    assert all(s["canary"] == "pass" for s in r["stations"][:-1])
+
+
 def test_the_sample_is_fixed_whatever_the_order():
     sets = [ref(f"ACT{i}", 30.0, -80.0, quantity="current") for i in range(40)]
     s = cc.sample(sets)
