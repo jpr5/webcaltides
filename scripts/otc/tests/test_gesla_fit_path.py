@@ -77,7 +77,8 @@ def test_a_mean60_record_publishes_m2_with_the_boxcar_factor_divided_out(table, 
                       licence_class="A", lat=53.5, lon=8.6, gauge_type="Coastal", sampling="mean", interval_min=60,
                       declared_time_base=None, member_sha256="a" * 64, times_s=t, heights_m=hourly_means(table, t),
                       good=np.ones(len(t), dtype=bool))
-    meta = {"FILE NAME": rid, "SITE NAME": "Synthetic", "COUNTRY": "DEU", "LATITUDE": "53.5", "LONGITUDE": "8.6",
+    # COUNTRY outside the FIX-CONST scope: the window-A rule refuses an in-scope record on the XTide TCD's dump
+    meta = {"FILE NAME": rid, "SITE NAME": "Synthetic", "COUNTRY": "NLD", "LATITUDE": "53.5", "LONGITUDE": "8.6",
             "TIME ZONE HOURS": "0", "CONTRIBUTOR (ABBREVIATED)": "TEST"}
     row = {"file_id": rid, "time_base_status": "corrected", "published_time_base": "utc_mean_start60", "months_bad": "",
            "comparator_kind": "a", "comparator": "synthetic-2-deu-test~corrected", "lag_median": "-30.0",
@@ -108,8 +109,8 @@ def test_an_instant_record_is_unchanged_by_the_division(table, tmp_path):
                       licence_class="A", lat=60.4, lon=5.3, gauge_type="Coastal", sampling="instantaneous",
                       interval_min=60, declared_time_base=None, member_sha256="a" * 64, times_s=t,
                       heights_m=hourly_means(table, t), good=np.ones(len(t), dtype=bool))
-    meta = {"FILE NAME": rid, "SITE NAME": "Synthetic", "COUNTRY": "NOR", "LATITUDE": "60.4", "LONGITUDE": "5.3",
-            "TIME ZONE HOURS": "0"}
+    meta = {"FILE NAME": rid, "SITE NAME": "Synthetic", "COUNTRY": "GBR", "LATITUDE": "60.4", "LONGITUDE": "5.3",
+            "TIME ZONE HOURS": "0"}                  # outside the FIX-CONST scope (see the test above)
     (d,), _ = fit_records(table, FakeRelease(rec, meta), [rid], audit_dir=stub_audit(tmp_path, []))
     raw = fit_record(table, clean(rec, Correction("utc_instant"))).to_dict()["constituents"]
     assert {n: c["amp_m"] for n, c in d["fit"]["constituents"].items()} == {n: c["amp_m"] for n, c in raw.items()}
