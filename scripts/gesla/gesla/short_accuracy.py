@@ -1316,16 +1316,16 @@ def record_method(cal_dir: Path) -> dict:
         raise ValueError(f"{cal_dir}: the calibration already records its method {cal['config']['method']}")
     want = {"commit": cal["code"]["commit"], "tcd_table_sha256": cal["inputs"]["tcd_table_sha256"],
             "seed": cal["config"]["seed"]}
-    rules, n = set(), 0
+    rules, n = [], 0
     for x in (cal_dir / CUTS_FILE).read_text().splitlines():
         st = json.loads(x).get("stamp")
         if st is None or {k: st.get(k) for k in want} != want:
             raise ValueError(f"{cal_dir}/{CUTS_FILE}: row {n + 1} stamp {st} is not the calibration's own {want}")
-        rules.add(st.get("cut_list_rule"))
+        rules.append(st.get("cut_list_rule"))
         n += 1
-    if n == 0 or len(rules) != 1 or next(iter(rules)) not in RULE_METHOD:
-        raise ValueError(f"{cal_dir}/{CUTS_FILE}: cut list rules {sorted(map(str, rules))} over {n} rows name no one method")
-    rule = next(iter(rules))
+    if n == 0 or set(rules) != {rules[0]} or rules[0] not in RULE_METHOD:
+        raise ValueError(f"{cal_dir}/{CUTS_FILE}: cut list rules {sorted(set(map(str, rules)))} over {n} rows name no one method")
+    rule = rules[0]
     cal["config"]["method"] = {"cal_method_version": RULE_METHOD[rule], "cut_list_rule": rule}
     write_calibration(cal, cal_dir)
     return cal["config"]["method"]

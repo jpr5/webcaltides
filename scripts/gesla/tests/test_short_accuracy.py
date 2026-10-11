@@ -656,7 +656,7 @@ def test_a_calibration_binds_to_the_fit_runs_it_was_made_from(tmp_path):
     with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
         sa.check_bound(cal, [over, run])                                          # the order: the overlay wins
     with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
-        sa.check_bound({"inputs": {}}, [run])                                     # a calibration naming none
+        sa.check_bound({"config": {"method": sa.method()}, "inputs": {}}, [run])   # a calibration naming none
 
 
 def test_a_refit_breaks_the_binding_by_its_results_or_its_fits(tmp_path):
