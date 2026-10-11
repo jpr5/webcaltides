@@ -13,7 +13,9 @@ Inputs (none of them is in git; each is checked where it is read):
   The fit documents keep the annotation of AUDIT, the audit the fit used.
 - AUDIT's weak inputs (EOT20 at each gauge, sha256-checked against its manifest): every fit is screened for a sign
   inversion (gesla_sets.screen_inverted).
-- CAL: the short-record calibration (gesla.short_accuracy.read_calibration); R7: its partial overlay refit.
+- CAL: the short-record calibration (gesla.short_accuracy.read_calibration); R7: its partial overlay refit. CAL
+  must have been made from RUN (then R7) on the build's TCD dump (short_accuracy.check_bound), else the build
+  stops: its targets are keyed to their fits, and on other fits every short record it covers would be refused.
 - TICON.csv: the pinned TICON-4 download; refs.json: ticon_refs' official references (its SHA-256 goes into every
   carried set's provenance).
 - CONGEN: a congen_tables.sh run (astro_tables.load_congen_run); the astro table is built from it for every
@@ -45,7 +47,7 @@ import time
 from pathlib import Path
 
 from gesla.read_gesla import GeslaRelease, otc_work
-from gesla.short_accuracy import read_calibration
+from gesla.short_accuracy import check_bound, read_calibration
 
 from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
@@ -107,6 +109,11 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     rows = [json.loads(x) for x in results.decode("utf-8").splitlines() if x.strip()]
     fitted = sorted(r["record"] for r in rows if r["outcome"] == "fitted")
     cal = read_calibration(calibration_dir)
+    try:
+        check_bound(cal, [fit_run] + ([overlay_run] if overlay_run is not None else []),
+                    tcd_table_sha256=dump.sha256)
+    except ValueError as e:
+        raise SystemExit(f"{calibration_dir}: {e}") from None
     docs, refused = gs.docs_from_fit_run(fit_run, dump, rel, fitted, audit_dir=audit_dir, calibration=cal,
                                          overlay_dir=overlay_run, eot20=gs.load_eot20(audit_dir))
     log(f"fit documents: {len(docs)} of {len(fitted)} fitted records ({len(rows)} rows), fit-stage refusals {len(refused)}")

@@ -16,6 +16,7 @@ from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
 from otc_pipeline import station_map as sm
 from otc_pipeline import ticon_sets as ts
+from gesla import short_accuracy as sa
 
 ARGS = ["--fit-run", "r", "--audit-dir", "a", "--verdicts-dir", "v", "--calibration", "c", "--ticon-csv", "t.csv",
         "--ticon-refs", "refs.json", "--congen-run", "g", "--datestamp", "20261011", "--created", "2026-10-11T00:00:00Z"]
@@ -104,7 +105,10 @@ def fakes(tmp_path, monkeypatch):
                                        csv_sha256="2" * 64, decided_build_commit="fin0001")}
     table = SimpleNamespace(tcd_sha256=at.TCD_SHA256)
     crun = _Run()
-    cal = {"cal_version": 6, "_sha256": "c" * 64}
+    paths = _inputs(tmp_path)
+    cal = {"cal_version": 6, "_sha256": "c" * 64,          # made from the run, then the overlay, on the dump (check_bound)
+           "inputs": {"fit_runs": [sa.run_identity(paths["fit_run"]), sa.run_identity(paths["overlay_run"])],
+                      "tcd_table_sha256": "d" * 64}}
     doc = {"record_id": "a", "fit": {"constituents": {"M2": {}}}}
 
     def docs_from_fit_run(run, dump, rel, ids, **kw):
@@ -146,7 +150,7 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(gb, "load_congen_run", load_congen_run)
     monkeypatch.setattr(gb, "astro_table", lambda congen, tcd, names, table_id: {"names": list(names)})
     monkeypatch.setattr(gr, "build_release", build_release)
-    return SimpleNamespace(seen=seen, audits=audits, cal=cal, crun=crun, doc=doc, paths=_inputs(tmp_path))
+    return SimpleNamespace(seen=seen, audits=audits, cal=cal, crun=crun, doc=doc, paths=paths)
 
 
 def _build(fakes, **over):
@@ -177,6 +181,29 @@ def test_a_fit_dump_of_another_tcd_is_refused(fakes, monkeypatch):
     other = SimpleNamespace(table=SimpleNamespace(tcd_sha256=at.SOURCE_TCD_SHA256), sha256="d" * 64, path=Path("x"))
     monkeypatch.setattr(gs, "load_tcd_dump", lambda p: other)
     with pytest.raises(SystemExit, match="the release is built on the OTC TCD otc-tcd-20251228-ma2mb2"):
+        _build(fakes)
+    assert "docs_from_fit_run" not in fakes.seen
+
+
+def test_a_calibration_of_other_fit_runs_stops_the_build(fakes):
+    # FIX-SRCAL: a calibration keyed to other fits would refuse every short record it covers as uncalibrated;
+    # the build stops, naming both runs, before any document is made
+    p = fakes.paths
+    for runs in ([p["fit_run"]], [p["overlay_run"], p["fit_run"]], [p["fit_run"], p["fit_run"]]):
+        fakes.cal["inputs"]["fit_runs"] = [sa.run_identity(r) for r in runs]
+        with pytest.raises(SystemExit, match="the calibration was made from the fit runs .* the build uses"):
+            _build(fakes)
+        assert "docs_from_fit_run" not in fakes.seen
+    fakes.cal["inputs"]["fit_runs"] = [sa.run_identity(p["fit_run"]), sa.run_identity(p["overlay_run"])]
+    (p["fit_run"] / "timebase_manifest.json").write_text('{"run": 2}')        # a refit: other fits, same rows
+    with pytest.raises(SystemExit, match="re-run gesla.short_accuracy on the build's fit runs"):
+        _build(fakes)
+    assert "docs_from_fit_run" not in fakes.seen
+
+
+def test_a_calibration_made_on_another_tcd_dump_stops_the_build(fakes):
+    fakes.cal["inputs"]["tcd_table_sha256"] = "e" * 64          # e.g. the plain XTide dump's
+    with pytest.raises(SystemExit, match="made on the TCD dump e+, the build uses d+"):
         _build(fakes)
     assert "docs_from_fit_run" not in fakes.seen
 
@@ -213,6 +240,7 @@ def test_build_records_the_identity_of_every_input(fakes):
 
 
 def test_no_overlay_is_recorded_as_none(fakes):
+    fakes.cal["inputs"]["fit_runs"] = [sa.run_identity(fakes.paths["fit_run"])]
     *_, prov = _build(fakes, overlay_run=None)
     assert fakes.seen["docs_from_fit_run"]["overlay_dir"] is None and prov["overlay_run"] is None
 
