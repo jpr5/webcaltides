@@ -1,32 +1,42 @@
 #!/usr/bin/env bash
-# Copy the OTC format 0.5 schema and its example document from the site repo
+# Copy the OTC format 1.0 schema and its example document from the site repo
 # (opentideconstants/opentideconstants) at a pinned commit, and check SHA-256.
 #
-#   scripts/otc/sync_schema.sh          copy, then check
-#   scripts/otc/sync_schema.sh --check  only check the copies in this repo
+#   scripts/otc/sync_schema.sh --site-repo DIR  copy from a site checkout, then check
+#   scripts/otc/sync_schema.sh --github         copy from raw.githubusercontent.com, then check
+#   scripts/otc/sync_schema.sh --check          only check the copies in this repo
 #
-# The site repo is read from $OTC_SITE_REPO (default /proj/opentideconstants)
-# with `git show`. If that checkout does not have the pinned commit, the files
-# come from raw.githubusercontent.com at the same commit.
+# The source is always named on the command line; there is no default checkout.
+# --site-repo reads the pinned commit with `git show` and fails if the checkout
+# does not have it; --github downloads the same commit.
 #
 # A downloaded file replaces the copy in this repo only if its SHA-256 matches
 # the pin, and it keeps the mode of that copy. Both files are always checked;
 # the exit status is non-zero if either fails.
 #
 # To move to a new schema commit: change SITE_COMMIT and both SHA-256 values in
-# the same commit as any writer change the new schema needs.
+# the same commit as any writer change the new schema needs. release_writer.py pins the
+# same schema SHA-256 (SCHEMA_SHA256) and refuses a copy that does not match it.
 set -euo pipefail
 
-SITE_COMMIT=b4ff8d1ffa6701d209eec19fc25f9f02aea99c5f   # merge of PR #13 (schema 0.5: mean current, below_chart_datum)
-SCHEMA_SRC=src/schema/otc-0.5.schema.json
-SCHEMA_SHA256=efc42311ee8f3484bb0c66b1985fdf1d55411cc2df7517f28de89488176009e9
+SITE_COMMIT=d90a7a678afd8079494b63daad20e2eace6596ca   # merge of PR #47 (format 1.0 with the datum basis, DT0a)
+SCHEMA_SRC=src/schema/otc-1.0.schema.json
+SCHEMA_SHA256=0e305a6c281d68e7a74c853d43dce0840f456fff0fbd4cf073f5e6a5fad751cf
 EXAMPLE_SRC=src/schema/example.json
-EXAMPLE_SHA256=9842998a497e88d94870ee934dc61e7df6e7fdf07ffd8a4497ba9a963e054ce7
+EXAMPLE_SHA256=ab790908c9a5179ec0e28825043666b73e0ed532ea78242971446cc8b15100df
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-schema_dst="$here/schema/otc-0.5.schema.json"
-example_dst="$here/tests/fixtures/example-0.5.json"
-site_repo="${OTC_SITE_REPO:-/proj/opentideconstants}"
+schema_dst="$here/schema/otc-1.0.schema.json"
+example_dst="$here/tests/fixtures/example-1.0.json"
+mode="" site_repo=""
+case "${1:-}" in
+    --check) mode=check ;;
+    --github) mode=github ;;
+    --site-repo)
+        [[ -n "${2:-}" ]] || { echo "usage: $0 --site-repo DIR | --github | --check" >&2; exit 2; }
+        mode=repo site_repo="$2" ;;
+    *) echo "usage: $0 --site-repo DIR | --github | --check" >&2; exit 2 ;;
+esac
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -45,7 +55,11 @@ check() { # <file> <expected sha256>
 
 fetch() { # <path in site repo> <destination> <expected sha256>
     local tmp="$tmpdir/$(basename "$2")"
-    if git -C "$site_repo" cat-file -e "$SITE_COMMIT:$1" 2>/dev/null; then
+    if [[ "$mode" == repo ]]; then
+        if ! git -C "$site_repo" cat-file -e "$SITE_COMMIT:$1" 2>/dev/null; then
+            echo "FAIL: $site_repo has no $SITE_COMMIT:$1" >&2
+            return 1
+        fi
         git -C "$site_repo" show "$SITE_COMMIT:$1" > "$tmp" || return 1
     else
         curl -fsSL "https://raw.githubusercontent.com/opentideconstants/opentideconstants/$SITE_COMMIT/$1" \
@@ -61,7 +75,7 @@ fetch() { # <path in site repo> <destination> <expected sha256>
 }
 
 status=0
-if [[ "${1:-}" != "--check" ]]; then
+if [[ "$mode" != check ]]; then
     fetch "$SCHEMA_SRC" "$schema_dst" "$SCHEMA_SHA256" || status=1
     fetch "$EXAMPLE_SRC" "$example_dst" "$EXAMPLE_SHA256" || status=1
 fi

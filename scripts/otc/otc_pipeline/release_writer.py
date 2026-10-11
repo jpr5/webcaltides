@@ -1,4 +1,4 @@
-"""OTC release writer and validator (format 0.5).
+"""OTC release writer and validator (format 1.0).
 
 The release files of one release share the stem OTC_{DATESTAMP} (publication
 plan §2.3, §2.4):
@@ -7,7 +7,8 @@ plan §2.3, §2.4):
     .json.gz     gzip of the .json file
     .jsonl       one station document per line
     .jsonl.gz    optional: gzip of the .jsonl file
-    .meta.json   the document without `stations` (valid against #/$defs/meta)
+    .meta.json   the document without `stations` (valid against #/$defs/meta): conventions,
+                 licences, the constituent table and the astro tables
     .csv         one long table with a `record_type` column (RFC 4180, UTF-8, LF)
     .parquet     optional: the CSV table, typed
     .app.json    optional: the webcaltides `app` export
@@ -34,7 +35,8 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, ValidationError, validators
 
-__all__ = ["CSV_COLUMNS", "default_schema_path", "next_datestamp", "validate_release", "write_release"]
+__all__ = ["CSV_COLUMNS", "FORMAT_VERSION", "SCHEMA_SHA256", "SchemaPinError", "check_release_dir",
+           "next_datestamp", "pinned_schema", "validate_release", "write_release"]
 
 # Use with fullmatch: in Python `$` also matches before a trailing "\n".
 DATESTAMP_RE = re.compile(r"[0-9]{8}(\.[2-9]|\.[1-9][0-9]+)?")
@@ -48,6 +50,10 @@ STEM_RE = re.compile(r"^OTC_([0-9]{8})(?:\.([0-9]+))?\.[A-Za-z]")
 # convention, validation. A column that does not
 # apply to a row type is empty. Columns marked JSON hold the value as a compact
 # JSON string with sorted keys (nested data such as provenance).
+#
+# The release-level tables (licences, constituents, astro_tables) are not rows: they are in the
+# .meta.json file. A datum (a constant set's, or subordinate_offsets') is split into the datum_*
+# columns of its row (datums spec §3.7).
 #
 # Row order: every convention (document order), then for each station (document
 # order): its station or tombstone row, its offset row or current_offset rows,
@@ -63,10 +69,12 @@ CSV_COLUMNS = [
     "country", "lat", "lon", "timezone", "type", "aliases", "recommended_set_id",
     "default_current_bin",
     # tombstone
-    "removed_in", "removed_reason",
+    "removed_in", "removed_reason", "merged_into", "detail",
     # offset (subordinate_offsets)
     "reference_station_id", "time_offset_high_min", "time_offset_low_min",
     "height_offset_high", "height_offset_low", "height_adjusted_type",
+    # datum (constant_set and offset rows)
+    "datum_msl_offset_m", "datum_zero", "datum_zero_name", "datum_chart_datum", "datum_named", "datum_basis",
     # current_offset (one per bin of a subordinate current station)
     "bin", "depth_m", "depth_type", "reference_bin", "mean_flood_dir_deg", "mean_ebb_dir_deg",
     "time_adj_max_flood_min", "time_adj_slack_before_ebb_min", "time_adj_max_ebb_min",
@@ -75,9 +83,9 @@ CSV_COLUMNS = [
     "azimuth_deg", "mean_major_ms", "mean_minor_ms",
     # constant_set
     "source", "source_type", "quantity", "source_record_id", "source_version",
-    "record_span_start", "record_span_end", "good_samples",
-    "datum_msl_offset_m", "datum_named", "qc_status", "qc_flags", "dropped_constituents",
-    "provenance",
+    "record_span_start", "record_span_end", "good_samples", "good_hours",
+    "qc_status", "qc_flags", "no_constants_reason", "time_base", "record_issues", "fit_segment",
+    "expected_accuracy", "dropped_constituents", "provenance",
     # constituent
     "source_name", "doodson", "speed_deg_per_hour", "amplitude_m", "phase_deg",
     "amp_uncertainty_m", "phase_uncertainty_deg", "kept_reason",
@@ -85,15 +93,16 @@ CSV_COLUMNS = [
     "major_amplitude_ms", "major_phase_deg", "minor_amplitude_ms", "minor_phase_deg",
     # convention
     "phase_reference", "utc_offset_hours", "v0_model", "nodal_handling", "nodal_formula_ids",
-    "constituent_table_version", "tables_sha256", "canary",
+    "constituent_table_version", "tables_sha256", "astro_table_id", "canary",
     # validation
     "reference_source", "reference_station", "reference_distance_km", "window",
     "time_mae_min", "time_p95_min", "time_bias_min", "height_mae_m", "range_error_m",
     "missed_events", "extra_events", "previous_release",
 ]
 
-JSON_COLUMNS = {"aliases", "datum_named", "qc_flags", "dropped_constituents", "provenance",
-                "nodal_formula_ids", "canary", "previous_release"}
+JSON_COLUMNS = {"aliases", "datum_named", "datum_basis", "qc_flags", "dropped_constituents", "provenance",
+                "nodal_formula_ids", "canary", "previous_release", "time_base", "record_issues",
+                "fit_segment", "expected_accuracy"}
 FLOAT_COLUMNS = {"lat", "lon", "time_offset_high_min", "time_offset_low_min", "height_offset_high",
                  "height_offset_low", "datum_msl_offset_m", "speed_deg_per_hour", "amplitude_m",
                  "phase_deg", "amp_uncertainty_m", "phase_uncertainty_deg", "utc_offset_hours",
@@ -102,7 +111,7 @@ FLOAT_COLUMNS = {"lat", "lon", "time_offset_high_min", "time_offset_low_min", "h
                  "mean_ebb_dir_deg", "time_adj_max_flood_min", "time_adj_slack_before_ebb_min",
                  "time_adj_max_ebb_min", "time_adj_slack_before_flood_min", "flood_amp_ratio",
                  "ebb_amp_ratio", "azimuth_deg", "major_amplitude_ms", "major_phase_deg",
-                 "minor_amplitude_ms", "minor_phase_deg", "mean_major_ms", "mean_minor_ms"}
+                 "minor_amplitude_ms", "minor_phase_deg", "mean_major_ms", "mean_minor_ms", "good_hours"}
 INT_COLUMNS = {"good_samples", "missed_events", "extra_events", "default_current_bin", "bin",
                "reference_bin"}
 
@@ -111,7 +120,7 @@ INT_COLUMNS = {"good_samples", "missed_events", "extra_events", "default_current
 _ROW_KEYS = {
     "station": ["station_id", "status", "name", "country", "lat", "lon", "timezone", "type",
                 "aliases", "recommended_set_id", "default_current_bin"],
-    "tombstone": ["station_id", "status", "name", "removed_in", "removed_reason"],
+    "tombstone": ["station_id", "status", "name", "removed_in", "removed_reason", "merged_into", "detail"],
     "offset": ["reference_station_id", "time_offset_high_min", "time_offset_low_min",
                "height_offset_high", "height_offset_low", "height_adjusted_type", "licence_id"],
     "current_offset": ["bin", "depth_m", "depth_type", "reference_station_id", "reference_bin",
@@ -125,32 +134,55 @@ _ROW_KEYS = {
                             "major_phase_deg", "minor_amplitude_ms", "minor_phase_deg"],
     "constant_set": ["set_id", "source", "source_type", "quantity", "source_record_id",
                      "source_version", "convention_id", "licence_id", "qc_status", "qc_flags",
-                     "dropped_constituents", "provenance"],
+                     "no_constants_reason", "time_base", "record_issues", "fit_segment",
+                     "expected_accuracy", "dropped_constituents", "provenance"],
     "constituent": ["name", "source_name", "doodson", "speed_deg_per_hour", "amplitude_m",
                     "phase_deg", "amp_uncertainty_m", "phase_uncertainty_deg", "kept_reason"],
     "convention": ["convention_id", "phase_reference", "utc_offset_hours", "v0_model",
                    "nodal_handling", "nodal_formula_ids", "constituent_table_version",
-                   "tables_sha256", "canary"],
+                   "tables_sha256", "astro_table_id", "canary"],
     "validation": ["set_id", "reference_source", "reference_station", "reference_distance_km",
                    "window", "time_mae_min", "time_p95_min", "time_bias_min", "height_mae_m",
                    "range_error_m", "missed_events", "extra_events", "previous_release"],
 }
 _CHILD_KEYS = {
     "station": {"constant_sets", "subordinate_offsets", "current_offsets", "validation"},
+    "offset": {"datum"},
     "constant_set": {"constituents", "current_bins", "record_span", "datum"},
     "current_bin": {"constituents"},
 }
 
-FORMAT_VERSION = "0.5"
+FORMAT_VERSION = "1.0"
 SCHEMA_NAME = f"otc-{FORMAT_VERSION}.schema.json"
+# SHA-256 of the site's src/schema/otc-1.0.schema.json at the commit sync_schema.sh pins (d90a7a6,
+# PR #47). sync_schema.sh holds the same value; a test keeps the two equal.
+SCHEMA_SHA256 = "0e305a6c281d68e7a74c853d43dce0840f456fff0fbd4cf073f5e6a5fad751cf"
 _MISSING = object()  # "key not present"; never equal to a value read from JSON
 
 
-def default_schema_path() -> Path:
-    """The schema copy: inside the package in a wheel (force-included), else scripts/otc/schema/."""
+class SchemaPinError(RuntimeError):
+    """The schema copy is not the pinned one: the writer does not validate against it."""
+
+
+def _schema_file() -> Path:
+    """Where the schema copy is: inside the package in a wheel (force-included), else scripts/otc/schema/."""
     here = Path(__file__).resolve().parent
     packaged = here / "schema" / SCHEMA_NAME
     return packaged if packaged.is_file() else here.parent / "schema" / SCHEMA_NAME
+
+
+def pinned_schema() -> dict:
+    """The schema copy, parsed from the same bytes whose SHA-256 is checked against SCHEMA_SHA256 (one
+    read). Raises SchemaPinError otherwise. This is the only schema the writer validates against."""
+    path = _schema_file()
+    try:
+        data = path.read_bytes()
+    except OSError as e:
+        raise SchemaPinError(f"{path}: cannot read the schema copy: {e}") from e
+    got = hashlib.sha256(data).hexdigest()
+    if got != SCHEMA_SHA256:
+        raise SchemaPinError(f"{path} has SHA-256 {got}, the pin is {SCHEMA_SHA256} (run sync_schema.sh)")
+    return json.loads(data.decode("utf-8"))
 
 
 # --- datestamps -----------------------------------------------------------------
@@ -303,18 +335,18 @@ def _cross_reference_errors(release: dict) -> list[str]:
             version = conv.get("constituent_table_version") if conv is not None else None
             _current_bin_errors(cs, sw, version, table, errors)
             names_seen = set()
-            for field in ("constituents", "dropped_constituents"):
-                for c in _dicts(cs.get(field)):
-                    name = c.get("name")
-                    if not isinstance(name, str):
-                        continue
-                    if field == "constituents":
-                        if name in names_seen:
-                            errors.append(f"{sw}: duplicate constituent {name!r}")
-                        names_seen.add(name)
-                    if isinstance(version, str) and (version, name) not in table:
-                        errors.append(f"{sw}: {field} name {name!r} is not in the constituents "
-                                      f"table for constituent_table_version {version!r}")
+            # Only the constituents a set uses need a table row; a dropped one (format 1.0: the
+            # table has the constituents the release uses) is checked by the schema's name rule.
+            for c in _dicts(cs.get("constituents")):
+                name = c.get("name")
+                if not isinstance(name, str):
+                    continue
+                if name in names_seen:
+                    errors.append(f"{sw}: duplicate constituent {name!r}")
+                names_seen.add(name)
+                if isinstance(version, str) and (version, name) not in table:
+                    errors.append(f"{sw}: constituents name {name!r} is not in the constituents "
+                                  f"table for constituent_table_version {version!r}")
         rec = st.get("recommended_set_id", _MISSING)
         off = st.get("subordinate_offsets")
         cur_off = _dicts(st.get("current_offsets"))
@@ -429,16 +461,17 @@ def _current_station_errors(st: dict, where: str, by_id: dict, licences: dict,
                           f"{'current_offsets' if cur_off else 'recommended set'}")
 
 
-def validate_release(release: dict, schema_path: Path) -> list[str]:
-    """JSON Schema (format 0.5) errors + cross-reference errors (convention_id, licence_id,
+def validate_release(release: dict) -> list[str]:
+    """Errors against the pinned schema (pinned_schema: raises SchemaPinError off the pin; no other
+    schema can be passed) + cross-reference errors (convention_id, licence_id,
     recommended_set_id, reference_station_id) + duplicate alias ids + name maxLength. Empty list = valid."""
+    schema = pinned_schema()
     if not isinstance(release, dict):
         return [f"(root): release must be a JSON object, not {type(release).__name__}"]
     errors: list[str] = []
     _non_json_values(release, [], errors)
     if errors:
         return errors
-    schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
     validator = _Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
     schema_errors = set()
     for top in validator.iter_errors(release):
@@ -473,6 +506,21 @@ def _row(record_type: str, record: dict, extra: dict | None = None) -> dict:
     return row
 
 
+_DATUM_COLUMNS = {"msl_offset_m": "datum_msl_offset_m", "zero": "datum_zero", "zero_name": "datum_zero_name",
+                  "chart_datum": "datum_chart_datum", "named": "datum_named", "basis": "datum_basis"}
+
+
+def _datum_cells(datum: dict, extra: dict) -> dict:
+    """A datum object as the datum_* columns of its row; a key with no column raises."""
+    unknown = sorted(set(datum) - set(_DATUM_COLUMNS))
+    if unknown:
+        raise ValueError(f"CSV layout has no column for datum keys {unknown}")
+    for key, col in _DATUM_COLUMNS.items():
+        if key in datum:
+            extra[col] = datum[key]
+    return extra
+
+
 def _csv_rows(release: dict) -> list[dict]:
     rows = [_row("convention", c) for c in release["conventions"]]
     for st in release["stations"]:
@@ -482,21 +530,18 @@ def _csv_rows(release: dict) -> list[dict]:
             continue
         rows.append(_row("station", st))
         if "subordinate_offsets" in st:
-            rows.append(_row("offset", st["subordinate_offsets"], {"station_id": sid}))
+            off = st["subordinate_offsets"]
+            rows.append(_row("offset", off, _datum_cells(off.get("datum", {}), {"station_id": sid})))
         for co in st.get("current_offsets", []):
             rows.append(_row("current_offset", co, {"station_id": sid}))
         for cs in st["constant_sets"]:
             extra = {"station_id": sid}
             span = cs.get("record_span", {})
             for key, col in (("start", "record_span_start"), ("end", "record_span_end"),
-                             ("good_samples", "good_samples")):
+                             ("good_samples", "good_samples"), ("good_hours", "good_hours")):
                 if key in span:
                     extra[col] = span[key]
-            datum = cs.get("datum", {})
-            if "msl_offset_m" in datum:
-                extra["datum_msl_offset_m"] = datum["msl_offset_m"]
-            if "named" in datum:
-                extra["datum_named"] = datum["named"]
+            _datum_cells(cs.get("datum", {}), extra)
             rows.append(_row("constant_set", cs, extra))
             for c in cs["constituents"]:
                 rows.append(_row("constituent", c, {"station_id": sid, "set_id": cs["set_id"]}))
@@ -581,10 +626,9 @@ def write_release(release: dict, out_dir: Path, *, datestamp: str,
     Raises ValueError (invalid release or arguments) or FileExistsError (the stem is already used).
     """
     out_dir = Path(out_dir)
-    schema_path = default_schema_path()
     if not isinstance(datestamp, str) or not DATESTAMP_RE.fullmatch(datestamp):
         raise ValueError(f"datestamp {datestamp!r} is not YYYYMMDD or YYYYMMDD.N (N >= 2)")
-    errors = validate_release(release, schema_path)
+    errors = validate_release(release)
     if errors:
         raise ValueError(f"release is not valid ({len(errors)} errors):\n  " + "\n  ".join(errors))
     if release["release"]["datestamp"] != datestamp:
@@ -649,6 +693,48 @@ def write_release(release: dict, out_dir: Path, *, datestamp: str,
     return written
 
 
+def check_release_dir(out_dir: Path) -> list[str]:
+    """Every way the release files in out_dir are not complete. A stem is complete when its .sha256 exists,
+    names every other file of the stem and matches their bytes; .sha256 is written last, so a stem
+    without it is a write that was killed. A leftover .OTC_*.tmp file (a killed write_release leaves
+    one) is reported too, and so is a directory with no stem. A missing directory raises FileNotFoundError.
+    An uploader runs this first and refuses on any entry. Empty list = complete."""
+    out_dir = Path(out_dir)
+    if not out_dir.is_dir():
+        raise FileNotFoundError(f"{out_dir}: no such release directory")
+    problems: list[str] = []
+    stems: dict[str, list[Path]] = {}
+    for p in sorted(out_dir.iterdir()):
+        if p.name.startswith(".OTC_") and p.name.endswith(".tmp"):
+            problems.append(f"{p.name}: a temp file left by an interrupted write_release")
+            continue
+        m = STEM_RE.match(p.name)
+        if m:
+            stem = f"OTC_{m.group(1)}" + (f".{m.group(2)}" if m.group(2) else "")
+            stems.setdefault(stem, []).append(p)
+    if not stems and not problems:
+        problems.append("no release stem in the directory")
+    for stem, files in sorted(stems.items()):
+        sums = out_dir / f"{stem}.sha256"
+        if not sums.is_file():
+            problems.append(f"{stem}: no {stem}.sha256: the write did not finish")
+            continue
+        listed = {}
+        for line in sums.read_text(encoding="ascii").splitlines():
+            digest, _, name = line.partition("  ")
+            listed[name] = digest
+        for p in files:
+            if p == sums:
+                continue
+            if p.name not in listed:
+                problems.append(f"{p.name}: not in {sums.name}")
+            elif hashlib.sha256(p.read_bytes()).hexdigest() != listed[p.name]:
+                problems.append(f"{p.name}: SHA-256 differs from {sums.name}")
+        for name in sorted(set(listed) - {p.name for p in files}):
+            problems.append(f"{name}: listed in {sums.name} but missing")
+    return problems
+
+
 def _fsync_dir(path: Path) -> None:
     fd = os.open(path, os.O_RDONLY)
     try:
@@ -667,7 +753,11 @@ def main(argv: list[str]) -> int:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         print(f"{argv[1]}: cannot read a JSON document: {e}", file=sys.stderr)
         return 1
-    errors = validate_release(release, default_schema_path())
+    try:
+        errors = validate_release(release)
+    except SchemaPinError as e:
+        print(e, file=sys.stderr)
+        return 2
     for e in errors:
         print(e)
     print(f"{argv[1]}: {'valid' if not errors else f'{len(errors)} errors'}")

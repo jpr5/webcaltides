@@ -16,9 +16,9 @@ def test_wheel_ships_the_schema(tmp_path):
     wheels = list(tmp_path.glob("otc_pipeline-*.whl"))
     assert len(wheels) == 1, wheels
     names = zipfile.ZipFile(wheels[0]).namelist()
-    assert "otc_pipeline/schema/otc-0.5.schema.json" in names, names
-    shipped = zipfile.ZipFile(wheels[0]).read("otc_pipeline/schema/otc-0.5.schema.json")
-    assert shipped == (ROOT / "schema" / "otc-0.5.schema.json").read_bytes()
+    assert "otc_pipeline/schema/otc-1.0.schema.json" in names, names
+    shipped = zipfile.ZipFile(wheels[0]).read("otc_pipeline/schema/otc-1.0.schema.json")
+    assert shipped == (ROOT / "schema" / "otc-1.0.schema.json").read_bytes()
 
 
 def _pyproject(name):

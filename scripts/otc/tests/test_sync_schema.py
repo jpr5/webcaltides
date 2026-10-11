@@ -8,16 +8,18 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-SITE = Path(os.environ.get("OTC_SITE_REPO", "/proj/opentideconstants"))
-PIN = "b4ff8d1ffa6701d209eec19fc25f9f02aea99c5f"
+SITE = Path(os.environ["OTC_SITE_REPO"]) if os.environ.get("OTC_SITE_REPO") else None
+PIN = "d90a7a678afd8079494b63daad20e2eace6596ca"
 
 
 def _site_has_pin():
+    if SITE is None:
+        return False
     return subprocess.run(["git", "-C", str(SITE), "cat-file", "-e", f"{PIN}^{{commit}}"],
                           capture_output=True).returncode == 0
 
 
-pytestmark = pytest.mark.skipif(not _site_has_pin(), reason=f"needs {SITE} with commit {PIN[:7]}")
+pytestmark = pytest.mark.skipif(not _site_has_pin(), reason=f"needs OTC_SITE_REPO, a site checkout with commit {PIN[:7]}")
 
 
 @pytest.fixture
@@ -27,9 +29,9 @@ def tree(tmp_path):
     (t / "schema").mkdir(parents=True)
     (t / "tests" / "fixtures").mkdir(parents=True)
     shutil.copy2(ROOT / "sync_schema.sh", t / "sync_schema.sh")
-    shutil.copy2(ROOT / "schema" / "otc-0.5.schema.json", t / "schema" / "otc-0.5.schema.json")
-    shutil.copy2(ROOT / "tests" / "fixtures" / "example-0.5.json", t / "tests" / "fixtures" / "example-0.5.json")
-    for p in (t / "schema" / "otc-0.5.schema.json", t / "tests" / "fixtures" / "example-0.5.json"):
+    shutil.copy2(ROOT / "schema" / "otc-1.0.schema.json", t / "schema" / "otc-1.0.schema.json")
+    shutil.copy2(ROOT / "tests" / "fixtures" / "example-1.0.json", t / "tests" / "fixtures" / "example-1.0.json")
+    for p in (t / "schema" / "otc-1.0.schema.json", t / "tests" / "fixtures" / "example-1.0.json"):
         p.chmod(0o644)
     tmpdir = tmp_path / "tmpdir"
     tmpdir.mkdir()
@@ -37,7 +39,8 @@ def tree(tmp_path):
 
 
 def run(t, tmpdir, *args):
-    env = dict(os.environ, OTC_SITE_REPO=str(SITE), TMPDIR=str(tmpdir))
+    env = dict(os.environ, TMPDIR=str(tmpdir))
+    args = args or ("--site-repo", str(SITE))
     return subprocess.run(["bash", str(t / "sync_schema.sh"), *args], env=env,
                           capture_output=True, text=True)
 
@@ -46,7 +49,7 @@ def test_sync_ok_keeps_mode_and_leaves_no_temp_files(tree):
     t, tmpdir = tree
     r = run(t, tmpdir)
     assert r.returncode == 0, r.stderr
-    for p in (t / "schema" / "otc-0.5.schema.json", t / "tests" / "fixtures" / "example-0.5.json"):
+    for p in (t / "schema" / "otc-1.0.schema.json", t / "tests" / "fixtures" / "example-1.0.json"):
         assert stat.S_IMODE(p.stat().st_mode) == 0o644, p
     assert list(tmpdir.iterdir()) == []
 
@@ -55,22 +58,30 @@ def test_wrong_pin_does_not_replace_the_committed_copy(tree):
     t, tmpdir = tree
     script = t / "sync_schema.sh"
     text = script.read_text()
-    good = "efc42311ee8f3484bb0c66b1985fdf1d55411cc2df7517f28de89488176009e9"
+    good = "0e305a6c281d68e7a74c853d43dce0840f456fff0fbd4cf073f5e6a5fad751cf"
     assert good in text
     script.write_text(text.replace(good, "0" * 64))
-    schema = t / "schema" / "otc-0.5.schema.json"
+    schema = t / "schema" / "otc-1.0.schema.json"
     schema.write_bytes(b'{"committed": true}\n')
     r = run(t, tmpdir)
     assert r.returncode != 0
     assert schema.read_bytes() == b'{"committed": true}\n'
     # the example is still checked and reported although the schema failed first
-    assert "example-0.5.json" in r.stdout + r.stderr
+    assert "example-1.0.json" in r.stdout + r.stderr
     assert list(tmpdir.iterdir()) == []
 
 
 def test_check_reports_both_files(tree):
     t, tmpdir = tree
-    (t / "schema" / "otc-0.5.schema.json").write_text("{}")
+    (t / "schema" / "otc-1.0.schema.json").write_text("{}")
     r = run(t, tmpdir, "--check")
     assert r.returncode != 0
-    assert "FAIL" in r.stderr and "ok:" in r.stdout and "example-0.5.json" in r.stdout
+    assert "FAIL" in r.stderr and "ok:" in r.stdout and "example-1.0.json" in r.stdout
+
+
+def test_no_source_named_is_refused(tree):
+    t, tmpdir = tree
+    for args in ((), ("--site-repo",)):
+        r = subprocess.run(["bash", str(t / "sync_schema.sh"), *args], env=dict(os.environ, TMPDIR=str(tmpdir)),
+                           capture_output=True, text=True)
+        assert r.returncode == 2 and "usage" in r.stderr

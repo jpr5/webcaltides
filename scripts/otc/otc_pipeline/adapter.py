@@ -13,7 +13,8 @@ responses, and `tests/test_adapter_contract.py` runs it live on every registered
 
 Conventions for a `SourceSet` (the build assigns OTC ids, adapters never do):
 
-- `constant_set` carries no `set_id`; the build sets `<station_id>/<source>`.
+- `constant_set` carries no `set_id` and no `provenance.build`; the build sets `<station_id>/<source>`
+  and the build fields.
 - `subordinate_offsets` names its reference by upstream id, `reference_source_record_id`,
   and carries no `reference_station_id`; the build maps it to the OTC id.
 - `station_hint` has name, country (alpha-3), lat, lon, type, timezone and aliases; a current
@@ -37,7 +38,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
-import json
 import re
 import sys
 from dataclasses import dataclass, field
@@ -47,7 +47,7 @@ from typing import Any, Iterable, Literal, Mapping, Protocol, runtime_checkable
 
 from gesla.record import GaugeRecord
 
-from otc_pipeline.release_writer import FORMAT_VERSION, default_schema_path, validate_release
+from otc_pipeline.release_writer import FORMAT_VERSION, validate_release
 
 __all__ = [
     "Adapter", "ContractError", "FetchResult", "InputFile", "SourceSet",
@@ -63,6 +63,9 @@ OPTIONAL_HINT_KEYS = ("default_current_bin",)
 SOURCE_RE = re.compile(r"[a-z0-9-]+")
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 EMPTY_TABLE_ERROR = "release: constituents: [] should be non-empty"
+# assemble_release's one-source shell is checked, never published: its release fields are fixed.
+CONTRACT_FIT_MIN_GOOD_HOURS = 360
+CONTRACT_BUILD_COMMIT = "0000000"
 
 
 def is_relative_inside(name: object) -> bool:
@@ -121,7 +124,7 @@ class FetchResult:
 @dataclass(frozen=True)
 class SourceSet:
     station_hint: dict          # name, country (alpha-3), lat, lon, type, timezone, aliases
-    constant_set: dict | None   # OTC constant_set (schema 0.3) without set_id; None only for a subordinate
+    constant_set: dict | None   # OTC constant_set (format 1.0) without set_id and provenance.build; None only for a subordinate
     subordinate_offsets: dict | None = None
 
     def __post_init__(self) -> None:
@@ -151,6 +154,18 @@ class ContractError(AssertionError):
         super().__init__(f"adapter {source!r} breaks the contract:\n  " + "\n  ".join(self.errors))
 
 
+def _sources():
+    """otc_pipeline.sources, the source registry. It lives on the adapter branches (A-NOAAC and its
+    siblings) and is not in the GESLA lineage yet: until that merge, the contract check cannot run here."""
+    try:
+        return importlib.import_module("otc_pipeline.sources")
+    except ModuleNotFoundError as e:
+        if e.name != "otc_pipeline.sources":
+            raise
+        raise RuntimeError("the adapter contract needs otc_pipeline.sources (the source registry), which is on "
+                           "the adapter branches; merge blitz/otc-adapters/A-NOAAC to run check_contract") from None
+
+
 def _attr(adapter, name: str):
     """An adapter attribute, or None when it is missing or raises."""
     try:
@@ -160,7 +175,7 @@ def _attr(adapter, name: str):
 
 
 def _expected_output(source, source_type) -> str:
-    from otc_pipeline.sources import EXPECTED
+    EXPECTED = _sources().EXPECTED
     spec = EXPECTED.get(source) if isinstance(source, str) else None
     if spec is not None:
         return spec.output
@@ -213,6 +228,9 @@ def assemble_release(adapter, sets: list[SourceSet], fetched: FetchResult,
         st["recommended_set_id"] = None
         if isinstance(ss.constant_set, dict):
             cs = {**ss.constant_set, "set_id": f"{sid}/{ss.constant_set.get('source', source)}"}
+            if isinstance(cs.get("provenance"), dict) and "build" not in cs["provenance"]:
+                # the build adds provenance.build, as it adds set_id (this shell is a check, not a release)
+                cs["provenance"] = {**cs["provenance"], "build": {"build_commit": CONTRACT_BUILD_COMMIT}}
             st["constant_sets"].append(cs)
             st["recommended_set_id"] = cs["set_id"]
             bins = cs.get("current_bins") if isinstance(cs.get("current_bins"), list) else []
@@ -240,14 +258,15 @@ def assemble_release(adapter, sets: list[SourceSet], fetched: FetchResult,
     rows = constituent_table if constituent_table is not None else [table[n] for n in sorted(table)]
     return {
         "format_version": FORMAT_VERSION,
-        "release": {"datestamp": "20000101", "created": "2000-01-01T00:00:00Z", "doi": None,
-                    "concept_doi": None, "source_versions": {source if isinstance(source, str) else "?": fetched.source_version}},
+        "release": {"datestamp": "20000101", "created": "2000-01-01T00:00:00Z", "concept_doi": None,
+                    "min_reader_version": FORMAT_VERSION, "fit_min_good_hours": CONTRACT_FIT_MIN_GOOD_HOURS,
+                    "source_versions": {source if isinstance(source, str) else "?": fetched.source_version}},
         "conventions": [conv], "licences": [lic], "constituents": rows, "stations": stations,
     }
 
 
 def _attribute_errors(attrs: dict, errors: list[str]) -> None:
-    from otc_pipeline.sources import EXPECTED
+    EXPECTED = _sources().EXPECTED
     source, st, q = attrs["source"], attrs["source_type"], attrs["quantity"]
     if not isinstance(source, str) or not SOURCE_RE.fullmatch(source):
         errors.append(f"source {source!r} must match [a-z0-9-]+")
@@ -452,8 +471,7 @@ class ContractRun:
     keys: dict = field(default_factory=dict)
 
 
-def run_contract(adapter, fetched, *, schema_path: Path | None = None,
-                 constituent_table: list[dict] | None = None) -> ContractRun:
+def run_contract(adapter, fetched, *, constituent_table: list[dict] | None = None) -> ContractRun:
     """`check_contract`, keeping the sets, records and watch keys it checked (each called once)."""
     errors: list[str] = []
     attrs = {k: _attr(adapter, k) for k in
@@ -509,18 +527,16 @@ def run_contract(adapter, fetched, *, schema_path: Path | None = None,
             licence = staticmethod(lambda: lic)
         release = assemble_release(_Fixed, sets, fetched, constituent_table)
         rel_errors = [f"release: {e}" for e in
-                      validate_release(release, schema_path or default_schema_path())]
+                      validate_release(release)]
         if not release["constituents"] and constituent_table is None:
             rel_errors = [e for e in rel_errors if e != EMPTY_TABLE_ERROR]
         errors += rel_errors
     return ContractRun(errors, sets, records, keys)
 
 
-def check_contract(adapter, fetched: FetchResult, *, schema_path: Path | None = None,
-                   constituent_table: list[dict] | None = None) -> list[str]:
+def check_contract(adapter, fetched: FetchResult, *, constituent_table: list[dict] | None = None) -> list[str]:
     """Every way `adapter`'s output for `fetched` breaks the contract. Empty list = passes."""
-    return run_contract(adapter, fetched, schema_path=schema_path,
-                        constituent_table=constituent_table).errors
+    return run_contract(adapter, fetched, constituent_table=constituent_table).errors
 
 
 def assert_contract(adapter, fetched: FetchResult, **kw) -> None:
@@ -548,7 +564,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=Path, required=True)
     ap.add_argument("--only", nargs="+", metavar="ID", help="upstream ids to fetch (at least one)")
     a = ap.parse_args(argv)
-    from otc_pipeline.sources import EXPECTED, SOURCES
+    _src = _sources()
+    EXPECTED, SOURCES = _src.EXPECTED, _src.SOURCES
     if a.adapter in SOURCES:
         cls = SOURCES[a.adapter]
     elif ":" not in a.adapter:

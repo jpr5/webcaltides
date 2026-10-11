@@ -1,0 +1,1158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opentideconstants.org/schema/otc-1.0.schema.json",
+  "title": "OpenTideConstants release document",
+  "description": "format_version 1.0. Schema for OTC_{YYYYMMDD}.json. Each line of OTC_{YYYYMMDD}.jsonl (and of the optional OTC_{YYYYMMDD}.jsonl.gz) is one station document, valid against #/$defs/station. OTC_{YYYYMMDD}.meta.json is the same document without `stations`, valid against #/$defs/meta, so a .jsonl reader can get the conventions, licences, constituent table and release metadata. Units: metres, metres per second (current amplitudes), degrees, degrees per hour, UTC. Every anchored pattern of a value ends with $(?![\\s\\S]) so that a validator whose $ also matches before a final newline (Python re) still rejects one. Cross-references (convention_id, licence_id, recommended_set_id, constituent names, astro_table_id, datum.chart_datum, default_current_bin, current_offsets reference_station_id and reference_bin) must resolve inside the same release, alias ids must be unique within each alias system across the release, and bin numbers must be unique within a set's current_bins and within a station's current_offsets. JSON Schema cannot express these, so the release build checks them separately. The build also checks: (1) a no_constants set with too_short has fewer than release.fit_min_good_hours hours of good data, and every set with constants fitted from a record has at least that many; good_hours is never more than the hours between record_span start and end; (2) a station's recommended set is never a no_constants set, never a short_record set when the station has a set of the same quantity with constants and more good_hours, and always has the quantity of the station's kind; (3) a time_base correction has from different from to, its from equals declared and its to equals published, and an unverified or disputed time_base has published equal to declared; (4) a tombstone's merged_into names an active station whose aliases include every alias id the removed station had; (5) provenance.carried_from_release is earlier than the release datestamp and names a release that held the same set_id, and a carried set's convention_id and licence_id exist in this release; (6) recommended_set_id is null on a reference station only when every set of the station is no_constants (the schema checks this too), and a subordinate station has constant sets, subordinate_offsets or current_offsets (the schema checks this too); (7) every constituent of every set with constants has a row in its convention's astro table, each row's speed equals the set's speed and the constituents table speed within 1e-7 degrees per hour, every v0u_deg and f array has last_year - first_year + 1 entries, and a convention's tables_sha256, when present, equals its astro table's; (8) datum.chart_datum names a key of datum.named; (9) datum.basis and datum.named have the same keys; (10) a key starting with otc_ has kind computed or observed and exists only when the same key without the prefix is published on the same set; (11) a datum basis control.station_id and control.set_id resolve to a set in the release, and for an observed level that set has a 19-year determination over the same epoch of every control level that the method's formulas use: the standard method MTL, MSL, DTL (when the set writes DTL), the mean range (MHW, MLW) and the inequalities (MHHW, MLLW); the modified range ratio method MTL, DTL, MSL, the mean range and the great diurnal range (MHHW, MLLW); the direct method MHW and MHHW; so a 19-year determination with only MHW and MHHW (truncated lows) is a control for the direct method only; (12) per station: when any set of a station has a published chart datum, no set of that station has a computed or observed chart datum. Published means published by the station's chart-datum publisher: in the Baltic and the Kattegat the charting authority, and also the charting authority for the Baltic gauge operators' (FMI, SMHI, DMI, WSV) gauges outside them (for example DMI's Esbjerg); elsewhere the source that states it (NOAA, Kartverket, LINZ, JMA, PEGELONLINE, Marine Institute); and, outside the Baltic and Kattegat, a GESLA record or SHOM REFMAR gauge whose stated zero is the chart datum (zero chart_datum, published cd = 0; a record stating BSCD2000 follows the charting authority). An older pre-BSCD2000 datum counts. Another set there has the publisher's datum, re-expressed above its own zero, or no chart datum; (13) every datum date is a real calendar date, and every datum epoch and data_span has start <= end; (14) a first_reduction with the flag no_qualified_control has an epoch equal to its data_span, covers whole years when it has 12 or more months, and does not have a primary's coverage (at least 216 counted months inside the OTC datum epoch with every calendar month counted in at least 17 of the 19 years); one without it (a 19-year determination) has its data_span inside the OTC datum epoch and every calendar month counted in at least 17 of the 19 years; and data_span.months is never more than the calendar months from data_span start to end.",
+  "type": "object",
+  "required": ["format_version", "release", "conventions", "licences", "constituents", "stations"],
+  "additionalProperties": false,
+  "allOf": [{ "$ref": "#/$defs/astro_tables_when_used" }],
+  "properties": {
+    "format_version": { "description": "Always 1.0 in this schema.", "const": "1.0" },
+    "release": { "$ref": "#/$defs/release" },
+    "conventions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/convention" }
+    },
+    "licences": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/licence" }
+    },
+    "constituents": {
+      "description": "Release-level constituent table: one row per constituent name and constituent_table_version that the release uses.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/constituent_definition" }
+    },
+    "astro_tables": { "$ref": "#/$defs/astro_tables" },
+    "stations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/station" }
+    }
+  },
+  "$defs": {
+    "meta": {
+      "description": "OTC_{YYYYMMDD}.meta.json: the release document without stations.",
+      "type": "object",
+      "required": ["format_version", "release", "conventions", "licences", "constituents"],
+      "additionalProperties": false,
+      "allOf": [{ "$ref": "#/$defs/astro_tables_when_used" }],
+      "properties": {
+        "format_version": { "const": "1.0" },
+        "release": { "$ref": "#/$defs/release" },
+        "conventions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/convention" } },
+        "licences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/licence" } },
+        "constituents": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/constituent_definition" } },
+        "astro_tables": { "$ref": "#/$defs/astro_tables" }
+      }
+    },
+    "astro_tables_when_used": {
+      "description": "astro_tables is required, with at least one table, when any convention has nodal_handling f_u_at_prediction.",
+      "if": {
+        "required": ["conventions"],
+        "properties": { "conventions": { "contains": { "required": ["nodal_handling"], "properties": { "nodal_handling": { "const": "f_u_at_prediction" } } } } }
+      },
+      "then": { "required": ["astro_tables"] }
+    },
+    "astro_tables": {
+      "description": "The predictor's per-year astronomical tables: V0+u and the node factor f for each constituent the release uses, computed with congen (XTide, David Flater) after Schureman, Manual of Harmonic Analysis and Prediction of Tides, US C&GS Special Publication 98. A convention with nodal_handling f_u_at_prediction names its table by astro_table_id. Published under CC BY 4.0.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/astro_table" }
+    },
+    "astro_table": {
+      "type": "object",
+      "required": ["astro_table_id", "v0_model", "tables_sha256", "generator", "first_year", "last_year", "constituents"],
+      "additionalProperties": false,
+      "properties": {
+        "astro_table_id": { "description": "Id that convention.astro_table_id refers to, e.g. tcd-20251228.", "type": "string", "minLength": 1 },
+        "v0_model": { "description": "Astronomical-argument model of the table, as in convention.v0_model, e.g. schureman_tcd.", "type": "string", "minLength": 1 },
+        "tables_sha256": {
+          "description": "SHA-256 of the TCD file whose values the table equals. Same meaning as convention.tables_sha256.",
+          "$ref": "#/$defs/sha256"
+        },
+        "generator": { "description": "What computed the values, e.g. congen (XTide) after Schureman, US C&GS Special Publication 98.", "type": "string", "minLength": 1 },
+        "first_year": { "description": "Year of the first entry of every array.", "type": "integer" },
+        "last_year": { "description": "Year of the last entry of every array. Each array has last_year - first_year + 1 entries; the release build checks this.", "type": "integer" },
+        "constituents": {
+          "description": "One row per constituent the release uses, keyed by OTC canonical name.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/constituent_name" },
+          "additionalProperties": { "$ref": "#/$defs/astro_table_row" }
+        }
+      }
+    },
+    "astro_table_row": {
+      "type": "object",
+      "required": ["speed_deg_per_hour", "v0u_deg", "f"],
+      "additionalProperties": false,
+      "properties": {
+        "speed_deg_per_hour": { "type": "number", "minimum": 0 },
+        "v0u_deg": {
+          "description": "v0u_deg[i] is V0 at (first_year + i)-01-01T00:00:00Z plus u at the middle of that year, in degrees, rounded to 0.01 and reduced to [0, 360). It holds for the whole year and steps at 00:00 UTC on 1 January.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+        },
+        "f": {
+          "description": "f[i] is the node factor at the middle of the year first_year + i, rounded to 0.0001. It holds for the whole year and steps at 00:00 UTC on 1 January.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "format_version": {
+      "description": "MAJOR.MINOR. A new optional field is a minor change. A removed or renamed field, or a changed unit or convention, is a major change. A change to an enum (a new value, or a value that is not valid any more) is a minor change for the schema, but it can change what a reader does with a set, so it raises release.min_reader_version. A deprecated field or value is valid for one more minor version.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$(?![\\s\\S])"
+    },
+    "datestamp": {
+      "description": "Release id: YYYYMMDD in UTC, the day the release was built, with an optional .N counter for a second release on the same day.",
+      "type": "string",
+      "pattern": "^[0-9]{8}(\\.[2-9]|\\.[1-9][0-9]+)?$(?![\\s\\S])"
+    },
+    "release": {
+      "type": "object",
+      "required": ["datestamp", "created", "source_versions", "min_reader_version", "fit_min_good_hours"],
+      "additionalProperties": false,
+      "properties": {
+        "datestamp": { "$ref": "#/$defs/datestamp" },
+        "min_reader_version": {
+          "description": "Always 1.0 in this schema. The oldest format version a reader must understand to use this release safely, MAJOR.MINOR. A reader that supports only an older version must not use the release, and stays on its last release (the latest pointer per format major and OTC_index.json carry the same value).",
+          "const": "1.0"
+        },
+        "fit_min_good_hours": {
+          "description": "The minimum hours of good data this build needs to fit constants (about 15 days, 360 hours). A record with fewer is a no_constants set with no_constants_reason too_short.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "created": { "type": "string", "format": "date-time" },
+        "concept_doi": {
+          "description": "The concept DOI: the one DOI for all Zenodo versions of OpenTideConstants. Cite a release by this DOI and the release datestamp. Null only before the concept DOI exists. A Zenodo version DOI is minted after the release files are fixed, and not every release gets one, so a release file never carries it: the version DOI, when a release has one, is only in OTC_index.json and the latest pointers, as zenodo_version_doi.",
+          "type": ["string", "null"],
+          "pattern": "^10\\.[0-9]{4,9}/\\S+$(?![\\s\\S])"
+        },
+        "source_versions": {
+          "description": "Upstream version per source, e.g. {\"gesla\": \"4.1\", \"noaa\": \"20261008\"}.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "build_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$(?![\\s\\S])" },
+        "changelog_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "convention": {
+      "type": "object",
+      "required": ["convention_id", "phase_reference", "v0_model", "nodal_handling", "constituent_table_version"],
+      "additionalProperties": false,
+      "properties": {
+        "convention_id": { "type": "string", "minLength": 1 },
+        "phase_reference": {
+          "description": "Phase reference of the source data before conversion. Published phases are always Greenwich (UTC).",
+          "enum": ["greenwich_utc", "local"]
+        },
+        "utc_offset_hours": {
+          "description": "Required when phase_reference is local.",
+          "type": "number"
+        },
+        "v0_model": { "description": "Astronomical-argument model, e.g. schureman_tcd or tamura_iho2006.", "type": "string" },
+        "nodal_handling": { "enum": ["f_u_at_prediction", "none"] },
+        "nodal_formula_ids": {
+          "description": "Node-factor formula id per constituent name, when nodal_handling is f_u_at_prediction.",
+          "type": "object",
+          "additionalProperties": { "type": ["string", "integer"] }
+        },
+        "constituent_table_version": { "type": "string" },
+        "tables_sha256": { "$ref": "#/$defs/sha256" },
+        "astro_table_id": {
+          "description": "The astro_tables entry with the V0+u and f for this convention. Required when nodal_handling is f_u_at_prediction. When tables_sha256 is also present, it equals the table's (the release build checks this).",
+          "type": "string",
+          "minLength": 1
+        },
+        "canary": {
+          "description": "Result of the per-source convention check that confirmed this convention.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["pass", "fail", "not_applicable"] },
+            "gauges": { "type": "integer", "minimum": 0 },
+            "median_amp_diff_m": { "type": "number" },
+            "median_phase_diff_deg": { "type": "number" }
+          }
+        }
+      },
+      "if": { "properties": { "phase_reference": { "const": "local" } } },
+      "then": { "required": ["utc_offset_hours"] },
+      "allOf": [
+        {
+          "if": { "properties": { "nodal_handling": { "const": "f_u_at_prediction" } } },
+          "then": { "required": ["astro_table_id"] }
+        }
+      ]
+    },
+    "licence": {
+      "type": "object",
+      "required": ["licence_id", "spdx", "provider", "attribution", "commercial_use"],
+      "additionalProperties": false,
+      "properties": {
+        "licence_id": { "type": "string", "minLength": 1 },
+        "spdx": {
+          "description": "SPDX id, or a LicenseRef- id where SPDX has none (e.g. LicenseRef-PublicDomain-USGov).",
+          "type": "string",
+          "pattern": "^([A-Za-z0-9.+-]+|LicenseRef-[A-Za-z0-9.-]+)$(?![\\s\\S])"
+        },
+        "provider": { "type": "string" },
+        "citation": { "type": "string" },
+        "attribution": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "commercial_use": {
+          "description": "true: the licence allows commercial use, on its own terms (for example attribution). false: non-commercial use only; restriction says why and terms_url gives the upstream terms.",
+          "type": "boolean"
+        },
+        "restriction": {
+          "description": "One line: what use is not allowed and why. Required when commercial_use is false.",
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_url": {
+          "description": "The upstream page that sets the restriction. Required when commercial_use is false.",
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "if": { "required": ["commercial_use"], "properties": { "commercial_use": { "const": false } } },
+      "then": { "required": ["restriction", "terms_url"] }
+    },
+    "constituent_name": {
+      "description": "OTC canonical constituent name. At most 15 characters, so that a C reader can hold it in char[16].",
+      "type": "string",
+      "pattern": "^[A-Z0-9]+$(?![\\s\\S])",
+      "maxLength": 15
+    },
+    "constituent_definition": {
+      "type": "object",
+      "required": ["constituent_table_version", "name", "speed_deg_per_hour"],
+      "additionalProperties": false,
+      "properties": {
+        "constituent_table_version": { "description": "Matches convention.constituent_table_version.", "type": "string" },
+        "name": { "$ref": "#/$defs/constituent_name" },
+        "doodson": { "type": "string", "pattern": "^[0-9]{3} ?[0-9]{3}$(?![\\s\\S])" },
+        "speed_deg_per_hour": { "type": "number", "minimum": 0 },
+        "nodal_formula_id": { "description": "Node-factor formula id, as in convention.nodal_formula_ids.", "type": ["string", "integer"] }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])" },
+    "status_like_name": {
+      "description": "A key name that would carry a status (excluded, removed, status, qc_status, state, suppressed, withheld; any case). qc_status is the only status of a set, so free-form objects (tool_versions, qc_flags values, record_issues values) reject these names.",
+      "type": "string",
+      "pattern": "^([Ee][Xx][Cc][Ll][Uu][Dd][Ee][Dd]?|[Rr][Ee][Mm][Oo][Vv][Ee][Dd]?|([Qq][Cc]_)?[Ss][Tt][Aa][Tt][Uu][Ss]|[Ss][Tt][Aa][Tt][Ee]|[Ss][Uu][Pp][Pp][Rr][Ee][Ss][Ss][Ee][Dd]|[Ww][Ii][Tt][Hh][Hh][Ee][Ll][Dd])$(?![\\s\\S])"
+    },
+    "station": {
+      "type": "object",
+      "required": ["station_id", "status"],
+      "properties": {
+        "station_id": {
+          "description": "Stable id in the OTC namespace. Never changed, never reused.",
+          "type": "string",
+          "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])"
+        },
+        "status": { "enum": ["active", "removed"] }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/active_station" },
+        { "$ref": "#/$defs/tombstone" }
+      ]
+    },
+    "tombstone": {
+      "description": "A station id that is not used any more, because the station was merged into another station or was a duplicate of one. The row keeps the id from being reused and points to the station that holds its records. These are the only reasons: a station is never removed because its records are short, broken or from a source that failed a check. Those records stay as constant sets with their annotations. The release build checks that merged_into is an active station whose aliases include every alias id of the removed station.",
+      "type": "object",
+      "required": ["station_id", "status", "removed_in", "removed_reason", "merged_into"],
+      "additionalProperties": false,
+      "properties": {
+        "station_id": true,
+        "status": { "const": "removed" },
+        "name": { "type": "string" },
+        "removed_in": { "$ref": "#/$defs/datestamp" },
+        "removed_reason": {
+          "description": "merged: the station and another one are the same gauge, and its records now belong to merged_into. duplicate: the station repeated merged_into.",
+          "enum": ["merged", "duplicate"]
+        },
+        "merged_into": { "description": "The OTC station id that holds this station's records.", "type": "string", "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])" },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "active_station": {
+      "type": "object",
+      "required": ["station_id", "status", "name", "country", "lat", "lon", "timezone", "type", "recommended_set_id", "constant_sets"],
+      "additionalProperties": false,
+      "properties": {
+        "station_id": true,
+        "status": { "const": "active" },
+        "name": { "type": "string", "minLength": 1 },
+        "country": { "description": "ISO 3166-1 alpha-3.", "type": "string", "pattern": "^[A-Z]{3}$(?![\\s\\S])" },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "timezone": {
+          "description": "IANA time zone name of the station, e.g. Europe/Oslo, for showing local times. Constants and phases stay in UTC.",
+          "type": "string",
+          "pattern": "^(UTC|[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+)+)$(?![\\s\\S])"
+        },
+        "type": { "enum": ["reference", "subordinate"] },
+        "aliases": {
+          "description": "Ids of the same station in other systems. Within one release an alias id is unique within its system: no two stations share a noaa id, a gesla id, and so on. The release build checks this.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "noaa": { "type": "string" },
+            "gesla": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "ticon": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "xtide": { "type": "string" },
+            "kartverket": { "type": "string" },
+            "slackwater": { "type": "string" },
+            "webcaltides": { "type": "string" },
+            "linz": { "description": "LINZ site id: the prefix of its *_Harm_* file name, e.g. 077NELSON.", "type": "string", "pattern": "^[0-9]{1,4}[A-Z][A-Z0-9]*$(?![\\s\\S])" },
+            "shom": { "description": "SHOM REFMAR tide gauge id (shom_id), e.g. 3 for Brest.", "type": "string", "pattern": "^[0-9]{1,6}$(?![\\s\\S])" },
+            "pegelonline": { "description": "PEGELONLINE station uuid, e.g. aad49293-242a-43ad-a8b1-e91d7792c4b2 for Cuxhaven Steubenhöft. Not the shortname, which can change.", "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$(?![\\s\\S])" },
+            "rws": { "description": "Rijkswaterstaat Waterwebservices location code, e.g. hoekvanholland.", "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$(?![\\s\\S])" },
+            "mi": { "description": "Marine Institute Irish National Tide Gauge Network station_id, e.g. Ballycotton Harbour.", "type": "string", "pattern": "^\\S(.*\\S)?$(?![\\s\\S])" },
+            "dmi": { "description": "DMI oceanObs stationId, e.g. 20002 for Skagen Havn.", "type": "string", "pattern": "^[0-9]{5,7}$(?![\\s\\S])" },
+            "smhi": { "description": "SMHI oceanographic observation station id, e.g. 2545 for Arkö.", "type": "string", "pattern": "^[0-9]{1,6}$(?![\\s\\S])" },
+            "fmi": { "description": "FMI station id (fmisid), e.g. 132310.", "type": "string", "pattern": "^[0-9]{1,7}$(?![\\s\\S])" },
+            "uhslc": { "description": "UHSLC station number, three digits as in the Fast Delivery file name h{NNN}.csv, e.g. 001.", "type": "string", "pattern": "^[0-9]{3}$(?![\\s\\S])" }
+          }
+        },
+        "recommended_set_id": {
+          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, or for a station whose every set is no_constants. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. A set flagged short_record never outranks a set of the same quantity at the same station that has constants and more hours of good data (record_span.good_hours). The release build checks these.",
+          "type": ["string", "null"]
+        },
+        "constant_sets": { "type": "array", "items": { "$ref": "#/$defs/constant_set" } },
+        "subordinate_offsets": { "$ref": "#/$defs/subordinate_offsets" },
+        "default_current_bin": {
+          "description": "Current stations only: the bin to show by default (NOAA currbin). It names a bin of the recommended set's current_bins, or of current_offsets for a subordinate current station.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "current_offsets": {
+          "description": "Subordinate current stations only: one entry per bin, each tied to a bin of a reference current station, as NOAA currentpredictionoffsets gives them.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/current_offset" }
+        },
+        "validation": { "type": "array", "items": { "$ref": "#/$defs/validation" } }
+      },
+      "if": { "properties": { "type": { "const": "reference" } } },
+      "then": {
+        "properties": { "constant_sets": { "minItems": 1 } },
+        "if": { "properties": { "constant_sets": { "contains": { "properties": { "qc_status": { "not": { "const": "no_constants" } } } } } } },
+        "then": { "properties": { "recommended_set_id": { "type": "string" } } }
+      },
+      "else": {
+        "anyOf": [
+          { "required": ["subordinate_offsets"] },
+          { "required": ["current_offsets"] },
+          { "properties": { "constant_sets": { "minItems": 1 } } }
+        ]
+      }
+    },
+    "constant_set": {
+      "type": "object",
+      "required": ["set_id", "source", "source_type", "quantity", "source_record_id", "source_version", "convention_id", "licence_id", "qc_status", "constituents", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "set_id": { "type": "string", "minLength": 1 },
+        "source": { "description": "e.g. gesla-fit, noaa, kartverket.", "type": "string", "pattern": "^[a-z0-9-]+$(?![\\s\\S])" },
+        "source_type": {
+          "description": "official: constants published by the agency that runs the gauge; gauge: an OTC fit to gauge observations; model: interpolated from a global tide model.",
+          "enum": ["official", "gauge", "model"]
+        },
+        "quantity": {
+          "description": "What the constants predict. A station's kind comes from its recommended set, or from its reference station's recommended set if it is subordinate.",
+          "enum": ["water_level", "current"]
+        },
+        "source_record_id": { "type": "string" },
+        "source_version": { "type": "string" },
+        "record_span": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" },
+            "good_samples": { "type": "integer", "minimum": 0 },
+            "good_hours": {
+              "description": "Hours of good data in the record, after quality control. Required on every set fitted from a gauge record. This is the record length that decides which constituents can be fitted, whether constants are fitted at all, and how a set ranks. start and end give the span.",
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "datum": {
+          "description": "A constant set's levels. Method subordinate_offsets is for subordinate_offsets.datum only.",
+          "allOf": [
+            { "$ref": "#/$defs/datum" },
+            { "properties": { "basis": { "additionalProperties": { "properties": { "method": { "not": { "const": "subordinate_offsets" } } } } } } }
+          ]
+        },
+        "convention_id": { "type": "string", "minLength": 1 },
+        "licence_id": { "type": "string", "minLength": 1 },
+        "qc_status": {
+          "description": "ok: constants are published and qc_flags is empty. flagged: constants are published and qc_flags says what to know about them. no_constants: the set is listed but no constants were fitted; no_constants_reason says why, and qc_flags has at least one flag. No status marks a record as removed: every record stays listed. A set carried over from an earlier release has the carried_over flag and provenance.carried_from_release.",
+          "enum": ["ok", "flagged", "no_constants"]
+        },
+        "qc_flags": { "type": "array", "items": { "$ref": "#/$defs/qc_flag" } },
+        "time_base": { "$ref": "#/$defs/time_base_annotation" },
+        "record_issues": {
+          "description": "What is wrong with a broken record. The set stays listed. When a usable segment exists, fit_segment names it and the constants are fitted to it; when none exists, qc_status is no_constants.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/record_issue" }
+        },
+        "fit_segment": {
+          "description": "The part of a broken record that the constants are fitted to. Absent when the whole record is fitted.",
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" },
+            "reason": { "type": "string", "pattern": "\\S" }
+          }
+        },
+        "expected_accuracy": { "$ref": "#/$defs/expected_accuracy" },
+        "no_constants_reason": {
+          "description": "Only with qc_status no_constants. too_short: less than about 15 days of good data (needs the short_record flag). fit_unusable: the record is broken and no segment gives a usable fit; record_issues says what is wrong.",
+          "enum": ["too_short", "fit_unusable"]
+        },
+        "constituents": {
+          "description": "Water-level constituents. Empty for a current set, whose constants are in current_bins, and for a no_constants set.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/constituent" }
+        },
+        "current_bins": {
+          "description": "Current sets only: tidal-current ellipse constants, one entry per depth bin.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/current_bin" }
+        },
+        "dropped_constituents": {
+          "description": "Constituents left out of this set, each with its reason. For a short record these are the constituents the record is too short to separate (rayleigh).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "dropped_reason"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "$ref": "#/$defs/constituent_name" },
+              "dropped_reason": { "enum": ["rayleigh", "noise", "long_period_rule", "non_tidal_rule", "convention", "other"] },
+              "not_separable_from": {
+                "description": "With dropped_reason rayleigh: the kept constituent that the record is too short to separate this one from, e.g. K1 for P1.",
+                "$ref": "#/$defs/constituent_name"
+              },
+              "detail": { "type": "string" }
+            },
+            "if": { "properties": { "dropped_reason": { "const": "rayleigh" } } },
+            "then": { "required": ["not_separable_from"] },
+            "else": { "not": { "required": ["not_separable_from"] } }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      },
+      "dependentRequired": { "fit_segment": ["record_issues"] },
+      "allOf": [
+        {
+          "description": "A current set has current_bins (unless no_constants) and no water-level constituents; a water-level set has no current_bins.",
+          "if": { "properties": { "quantity": { "const": "current" } } },
+          "then": {
+            "properties": { "constituents": { "maxItems": 0 } },
+            "if": { "properties": { "qc_status": { "const": "no_constants" } } },
+            "then": { "not": { "required": ["current_bins"] } },
+            "else": { "required": ["current_bins"] }
+          },
+          "else": { "not": { "required": ["current_bins"] } }
+        },
+        {
+          "description": "Every set fitted from a gauge record carries a time-base annotation and its hours of good data.",
+          "if": { "properties": { "source_type": { "const": "gauge" } } },
+          "then": { "required": ["time_base", "record_span"], "properties": { "record_span": { "required": ["good_hours"] } } }
+        },
+        {
+          "description": "ok: constants and no flags.",
+          "if": { "properties": { "qc_status": { "const": "ok" } } },
+          "then": { "properties": { "qc_flags": { "maxItems": 0 } } }
+        },
+        {
+          "description": "flagged: constants and at least one flag.",
+          "if": { "properties": { "qc_status": { "const": "flagged" } } },
+          "then": { "required": ["qc_flags"], "properties": { "qc_flags": { "minItems": 1 } } }
+        },
+        {
+          "description": "A water-level set with qc_status ok or flagged has constants.",
+          "if": {
+            "properties": { "quantity": { "const": "water_level" }, "qc_status": { "enum": ["ok", "flagged"] } },
+            "required": ["quantity", "qc_status"]
+          },
+          "then": { "properties": { "constituents": { "minItems": 1 } } }
+        },
+        {
+          "description": "no_constants: no constants, a reason, at least one flag, and no expected accuracy. Every other status has no no_constants_reason.",
+          "if": { "properties": { "qc_status": { "const": "no_constants" } } },
+          "then": {
+            "required": ["no_constants_reason", "qc_flags"],
+            "properties": {
+              "constituents": { "maxItems": 0 },
+              "qc_flags": { "minItems": 1 },
+              "provenance": {
+                "not": { "anyOf": [{ "required": ["carried_from_release"] }, { "required": ["decision"], "properties": { "decision": { "required": ["outcome"], "properties": { "outcome": { "const": "fallback" } } } } }] }
+              }
+            },
+            "not": { "anyOf": [{ "required": ["expected_accuracy"] }, { "required": ["fit_segment"] }] }
+          },
+          "else": { "not": { "required": ["no_constants_reason"] } }
+        },
+        {
+          "description": "fit_unusable needs record_issues to say what is wrong.",
+          "if": { "properties": { "no_constants_reason": { "const": "fit_unusable" } }, "required": ["no_constants_reason"] },
+          "then": { "required": ["record_issues"] }
+        },
+        {
+          "description": "too_short is a short record: it has the short_record flag, which brings in good_hours.",
+          "if": { "properties": { "no_constants_reason": { "const": "too_short" } }, "required": ["no_constants_reason"] },
+          "then": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "short_record" } } } } } }
+        },
+        {
+          "description": "record_issues and the broken_record flag go together.",
+          "if": { "required": ["record_issues"] },
+          "then": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "broken_record" } } } } } }
+        },
+        {
+          "if": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "broken_record" } } } } } },
+          "then": { "required": ["record_issues"] }
+        },
+        {
+          "description": "A short record states its length, and its expected accuracy unless no constants were fitted.",
+          "if": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "short_record" } } } } } },
+          "then": {
+            "required": ["record_span"],
+            "properties": { "record_span": { "required": ["good_hours"] } },
+            "if": { "properties": { "qc_status": { "const": "no_constants" } } },
+            "else": { "required": ["expected_accuracy", "dropped_constituents"], "properties": { "dropped_constituents": { "minItems": 1 } } }
+          }
+        },
+        {
+          "description": "An unverified or disputed time base is flagged, so the set is never ok.",
+          "if": {
+            "required": ["time_base"],
+            "properties": { "time_base": { "required": ["code"], "properties": { "code": { "enum": ["unverified", "disputed"] } } } }
+          },
+          "then": {
+            "required": ["qc_flags"],
+            "properties": { "qc_status": { "not": { "const": "ok" } }, "qc_flags": { "contains": { "properties": { "flag": { "const": "time_base" } } } } }
+          }
+        },
+        {
+          "description": "A time_base flag means the set's time base is unverified or disputed.",
+          "if": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "time_base" } } } } } },
+          "then": { "required": ["time_base"], "properties": { "time_base": { "properties": { "code": { "enum": ["unverified", "disputed"] } } } } }
+        },
+        {
+          "description": "A carried-over set has the carried_over flag, and the flag has the release it came from. A gate fallback is a carry-over.",
+          "if": { "required": ["provenance"], "properties": { "provenance": { "required": ["carried_from_release"] } } },
+          "then": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "carried_over" } } } } } }
+        },
+        {
+          "if": { "required": ["qc_flags"], "properties": { "qc_flags": { "contains": { "properties": { "flag": { "const": "carried_over" } } } } } },
+          "then": { "properties": { "provenance": { "required": ["carried_from_release"] } } }
+        },
+        {
+          "if": { "required": ["provenance"], "properties": { "provenance": { "required": ["decision"], "properties": { "decision": { "required": ["outcome"], "properties": { "outcome": { "const": "fallback" } } } } } } },
+          "then": { "properties": { "provenance": { "required": ["carried_from_release"] } } }
+        },
+        {
+          "description": "The JMA provenance keys only on a jma set, and a jma set always states that it may be redistributed.",
+          "if": { "properties": { "source": { "not": { "const": "jma" } } } },
+          "then": { "properties": { "provenance": { "not": { "anyOf": [
+            { "required": ["owner"] }, { "required": ["redistribution"] }, { "required": ["phase_reference_longitude_deg"] },
+            { "required": ["jma_station_code"] }, { "required": ["analysis_years"] }, { "required": ["source_constituents_not_published"] }
+          ] } } } },
+          "else": { "required": ["provenance"], "properties": { "provenance": { "required": ["owner", "redistribution"] } } }
+        },
+        {
+          "description": "The LINZ provenance keys only on a linz set.",
+          "if": { "properties": { "source": { "not": { "const": "linz" } } } },
+          "then": { "properties": { "provenance": { "not": { "anyOf": [
+            { "required": ["member"] }, { "required": ["position"] }, { "required": ["header_dropped"] }
+          ] } } } }
+        }
+      ]
+    },
+    "time_base_label": {
+      "description": "A time-base class: utc_instant; utc_mean_start60 (hourly means stamped at the start of the hour); utc_plus_N or utc_minus_N (UTC plus or minus N whole hours); local_dst:<IANA zone> (local time with daylight saving); step:<date>[,<date>...] (the time base changes at each date).",
+      "type": "string",
+      "pattern": "^(utc_instant|utc_mean_start60|utc_(plus|minus)_[1-9][0-9]?|local_dst:[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+)+|step:[0-9]{4}-[0-9]{2}-[0-9]{2}(,[0-9]{4}-[0-9]{2}-[0-9]{2})*)$(?![\\s\\S])"
+    },
+    "time_base_annotation": {
+      "description": "The time-base annotation of the record behind a set. verified: the evidence confirms the declared time base. corrected: the evidence shows another class, and the constants are fitted after the correction; this needs positive evidence. unverified: no comparator gives a verdict, so the declared time base (GESLA's, for a GESLA record) is kept. disputed: the evidence disagrees with the declared time base but no class explains it, so the declared time base is kept.",
+      "type": "object",
+      "required": ["code", "reason", "declared", "published", "decided_in"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "enum": ["verified", "corrected", "unverified", "disputed"] },
+        "reason": { "description": "One line for people, e.g. 'declared utc_instant corrected to utc_mean_start60 by official predictions (kartverket:EXF)'.", "type": "string", "pattern": "\\S", "maxLength": 800 },
+        "declared": { "description": "The time base the source declares for the record.", "$ref": "#/$defs/time_base_label" },
+        "published": { "description": "The time base the constants were fitted with: declared, unless code is corrected.", "$ref": "#/$defs/time_base_label" },
+        "correction": {
+          "description": "Only with code corrected: the correction applied, from the declared time base to the published one.",
+          "type": "object",
+          "required": ["from", "to"],
+          "additionalProperties": false,
+          "properties": {
+            "from": { "$ref": "#/$defs/time_base_label" },
+            "to": { "$ref": "#/$defs/time_base_label" }
+          }
+        },
+        "months_dropped": {
+          "description": "Isolated bad months left out of the fit (YYYY-MM). A field of the annotation, not a time-base class: it goes with any code.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$(?![\\s\\S])" }
+        },
+        "decided_in": { "description": "Datestamp of the build that decided this annotation. A later build reuses the decision while the evidence is unchanged.", "$ref": "#/$defs/datestamp" },
+        "decided_build_commit": { "description": "The build commit of the build that decided the annotation (decided_in).", "type": "string", "pattern": "^[0-9a-f]{7,40}$(?![\\s\\S])" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/time_base_evidence" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "code": { "const": "corrected" } } },
+          "then": { "required": ["correction", "evidence"], "properties": { "evidence": { "minItems": 1 } } },
+          "else": { "not": { "required": ["correction"] } }
+        },
+        {
+          "description": "verified and disputed rest on evidence; unverified may list what was tried.",
+          "if": { "properties": { "code": { "enum": ["verified", "disputed"] } } },
+          "then": { "required": ["evidence"], "properties": { "evidence": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "time_base_evidence": {
+      "description": "One comparison behind a time-base annotation. comparator_kind: official_predictions (an agency's predictions near the gauge), official_constants (e.g. NOAA harmonic constants for a NOAA record), sibling_record (another record at the same gauge from a different contributor, after its own correction), provider (the verdict of other records from the same provider), model (a global tide model, e.g. EOT20), served_constants (constants already served for the location), dst_selftest (the record's own daylight-saving test).",
+      "type": "object",
+      "required": ["comparator_kind", "comparator_id"],
+      "additionalProperties": false,
+      "properties": {
+        "comparator_kind": { "enum": ["official_predictions", "official_constants", "sibling_record", "provider", "model", "served_constants", "dst_selftest"] },
+        "comparator_id": { "description": "e.g. kartverket:EXA, a GESLA file id, eot20. For dst_selftest, the record's own id.", "type": "string", "minLength": 1 },
+        "distance_km": { "description": "Distance from the gauge to the comparator, or null where it has none (a self-test).", "type": ["number", "null"], "minimum": 0 },
+        "lag_min": { "description": "The measured lag or offset in minutes: the record's time stamp of an event minus the comparator's time of the same event. Negative when the record's stamps are early. An hourly mean stamped at the start of its hour is about -30, and its correction moves the stamps by +30 min.", "type": "number" },
+        "detail": { "description": "Free text for people: what was measured or why a check gave no number.", "type": "string" }
+      }
+    },
+    "record_issue": {
+      "description": "One thing wrong with a record. start and end give where it is (a step has only start).",
+      "type": "object",
+      "required": ["issue", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "issue": { "enum": ["datum_step", "flatline", "spikes", "gaps", "clock_step", "quantised", "out_of_range", "unstable_constituents", "neighbour_disagreement", "no_tide"] },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string", "pattern": "\\S" },
+        "values": { "description": "The numbers behind the issue, e.g. {\"step_m\": -0.31}: each value a number or null. No key may name a status.", "type": "object", "propertyNames": { "not": { "$ref": "#/$defs/status_like_name" } }, "additionalProperties": { "type": ["number", "null"] } }
+      }
+    },
+    "expected_accuracy": {
+      "description": "How accurate a short record's constants are expected to be, measured by cutting long records down to the same length (cut_to_days) and comparing their fits with the full-length fits. Give the amplitude and phase uncertainty, or the expected prediction error, or both.",
+      "type": "object",
+      "required": ["cut_to_days", "calibration_records"],
+      "additionalProperties": false,
+      "properties": {
+        "cut_to_days": { "type": "number", "exclusiveMinimum": 0 },
+        "calibration_records": { "description": "How many long records were cut down.", "type": "integer", "minimum": 1 },
+        "amp_uncertainty_m": { "description": "Expected amplitude error of the main constituents (median over the calibration records).", "type": "number", "minimum": 0 },
+        "phase_uncertainty_deg": { "description": "Expected phase error of the main constituents.", "type": "number", "minimum": 0 },
+        "time_mae_min": { "description": "Expected mean absolute error of high- and low-water times.", "type": "number", "minimum": 0 },
+        "height_mae_m": { "description": "Expected mean absolute error of high- and low-water heights.", "type": "number", "minimum": 0 }
+      },
+      "anyOf": [
+        { "required": ["amp_uncertainty_m", "phase_uncertainty_deg"] },
+        { "required": ["time_mae_min", "height_mae_m"] }
+      ]
+    },
+    "constituent": {
+      "type": "object",
+      "required": ["name", "speed_deg_per_hour", "amplitude_m", "phase_deg"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/constituent_name" },
+        "source_name": {
+          "description": "The source's own name. At most 31 characters, so that a C reader can hold it in char[32].",
+          "type": "string",
+          "maxLength": 31
+        },
+        "doodson": { "type": "string", "pattern": "^[0-9]{3} ?[0-9]{3}$(?![\\s\\S])" },
+        "speed_deg_per_hour": { "type": "number", "minimum": 0 },
+        "amplitude_m": { "type": "number", "minimum": 0 },
+        "phase_deg": { "description": "Greenwich phase lag g.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "amp_uncertainty_m": { "type": "number", "minimum": 0 },
+        "phase_uncertainty_deg": { "type": "number", "minimum": 0 },
+        "kept_reason": { "type": "string" }
+      }
+    },
+    "current_depth_type": {
+      "description": "How depth_m is measured: below_surface (NOAA depthType S), below_chart_datum (NOAA depthType B, which NOAA's metadata API documents as 'below chart datum') or unknown (NOAA depthType U).",
+      "enum": ["below_surface", "below_chart_datum", "unknown"]
+    },
+    "direction_deg": { "description": "Degrees true, clockwise from north.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+    "current_bin": {
+      "description": "Ellipse constants for one depth bin: per constituent, the amplitude and phase of the current along the major axis (azimuth_deg) and along the minor axis, perpendicular to it, as NOAA harcon gives them. Minor-axis velocity is positive toward `azimuth_deg + 90°`, that is, 90° clockwise from the positive major-axis direction (measured against NOAA `speed_dir` predictions).",
+      "type": "object",
+      "required": ["bin", "depth_m", "depth_type", "azimuth_deg", "constituents"],
+      "additionalProperties": false,
+      "properties": {
+        "bin": { "description": "Source bin number (NOAA binNbr).", "type": "integer", "minimum": 1 },
+        "depth_m": { "description": "Bin depth in metres, or null if the source gives none.", "type": ["number", "null"], "minimum": 0 },
+        "depth_type": { "$ref": "#/$defs/current_depth_type" },
+        "azimuth_deg": { "description": "Major-axis direction (NOAA azi).", "$ref": "#/$defs/direction_deg" },
+        "mean_flood_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "mean_ebb_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "mean_major_ms": { "description": "Mean current along the major axis in metres per second, signed: positive toward azimuth_deg. A constant added to the major-axis harmonic sum at every time. NOAA majorMeanSpeed (cm/s) divided by 100. Absent if the source gives none; a reader then adds 0.", "type": "number" },
+        "mean_minor_ms": { "description": "Mean current along the minor axis in metres per second, signed in the same sense as the minor-axis harmonic terms. A constant added to the minor-axis harmonic sum at every time. NOAA minorMeanSpeed (cm/s) divided by 100. Absent if the source gives none; a reader then adds 0.", "type": "number" },
+        "constituents": { "type": "array", "items": { "$ref": "#/$defs/current_constituent" } }
+      }
+    },
+    "current_constituent": {
+      "description": "One constituent of a current bin. Amplitudes in metres per second (NOAA cm/s divided by 100). Phases are Greenwich phase lags under the set's convention (NOAA majorPhaseGMT and minorPhaseGMT). The mean current is not a constituent: it goes in the bin's mean_major_ms and mean_minor_ms, so the name Z0 is not allowed here.",
+      "type": "object",
+      "required": ["name", "speed_deg_per_hour", "major_amplitude_ms", "major_phase_deg", "minor_amplitude_ms", "minor_phase_deg"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "allOf": [{ "$ref": "#/$defs/constituent_name" }, { "not": { "const": "Z0" } }] },
+        "source_name": {
+          "description": "The source's own name. At most 31 characters, so that a C reader can hold it in char[32].",
+          "type": "string",
+          "maxLength": 31
+        },
+        "speed_deg_per_hour": { "description": "Constituent speed, as in the constituent table.", "type": "number", "minimum": 0 },
+        "major_amplitude_ms": { "type": "number", "minimum": 0 },
+        "major_phase_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "minor_amplitude_ms": { "type": "number", "minimum": 0 },
+        "minor_phase_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+      }
+    },
+    "current_offset": {
+      "description": "Offsets for one bin of a subordinate current station. Time adjustments in minutes, added to the reference bin's event times; amplitude ratios multiply the reference bin's speeds. A value the source gives as null stays null.",
+      "type": "object",
+      "required": ["bin", "reference_station_id", "reference_bin", "time_adj_max_flood_min", "time_adj_slack_before_ebb_min", "time_adj_max_ebb_min", "time_adj_slack_before_flood_min", "flood_amp_ratio", "ebb_amp_ratio"],
+      "additionalProperties": false,
+      "properties": {
+        "bin": { "description": "Bin number of this station (the _N suffix of the NOAA id).", "type": "integer", "minimum": 1 },
+        "depth_m": { "type": ["number", "null"], "minimum": 0 },
+        "depth_type": { "$ref": "#/$defs/current_depth_type" },
+        "reference_station_id": { "type": "string", "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])" },
+        "reference_bin": { "description": "NOAA refStationBin.", "type": "integer", "minimum": 1 },
+        "mean_flood_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "mean_ebb_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "time_adj_max_flood_min": { "description": "NOAA mfcTimeAdjMin.", "type": ["number", "null"] },
+        "time_adj_slack_before_ebb_min": { "description": "NOAA sbeTimeAdjMin.", "type": ["number", "null"] },
+        "time_adj_max_ebb_min": { "description": "NOAA mecTimeAdjMin.", "type": ["number", "null"] },
+        "time_adj_slack_before_flood_min": { "description": "NOAA sbfTimeAdjMin.", "type": ["number", "null"] },
+        "flood_amp_ratio": { "description": "NOAA mfcAmpAdj.", "type": ["number", "null"], "minimum": 0 },
+        "ebb_amp_ratio": { "description": "NOAA mecAmpAdj.", "type": ["number", "null"], "minimum": 0 },
+        "licence_id": { "type": "string" }
+      }
+    },
+    "qc_flag": {
+      "description": "Something a user of the set needs to know. time_base: the time base is unverified or disputed (see the set's time_base). broken_record: see record_issues. short_record: the record is too short to resolve every candidate constituent; see record_span.good_hours, dropped_constituents and expected_accuracy. carried_over: the source failed a check in this build, so the set keeps its constants from provenance.carried_from_release.",
+      "type": "object",
+      "required": ["flag", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "flag": { "enum": ["time_base", "broken_record", "microtidal", "non_tidal_signal", "short_record", "sibling_disagreement", "carried_over"] },
+        "reason": { "description": "One line for people, not blank.", "type": "string", "pattern": "\\S" },
+        "values": { "description": "The numbers behind the flag: each value a number or null. No key may name a status.", "type": "object", "propertyNames": { "not": { "$ref": "#/$defs/status_like_name" } }, "additionalProperties": { "type": ["number", "null"] } }
+      }
+    },
+    "provenance": {
+      "description": "Where the set came from and what was done to it. A closed list of keys: qc_status is the only status of a set, so no provenance key can carry one. A new source-specific key is added here first. Keys for every set: adapter_version, input_sha256, tcd_sha256, selection_reason, decision, carried_from_release, build (the build-only fields, required on every set). JMA: owner, redistribution, phase_reference_longitude_deg, jma_station_code, analysis_years, source_constituents_not_published. LINZ: member, position, header_dropped.",
+      "type": "object",
+      "required": ["build"],
+      "additionalProperties": false,
+      "properties": {
+        "analysis_years": {
+          "description": "JMA: the years the agency's analysis used, per period, as the source gives them.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "long_period": { "type": ["string", "null"] }, "short_period": { "type": ["string", "null"] } }
+        },
+        "owner": {
+          "description": "JMA: who owns the station. Always jma in a release file: JMA's licence covers only JMA-owned stations. Stations of other owners (the pipeline's jcg_or_gsi and third_party) are used only as a comparator inside the pipeline; never in the release files.",
+          "const": "jma"
+        },
+        "redistribution": {
+          "description": "JMA: always redistribute in a release file. The pipeline's comparator_only sets are used only as a comparator inside the pipeline; never in the release files.",
+          "const": "redistribute"
+        },
+        "phase_reference_longitude_deg": { "description": "JMA: the longitude whose local meridian the source phases refer to.", "type": "number", "minimum": -180, "maximum": 180 },
+        "jma_station_code": { "description": "JMA tide-table station code, e.g. TK.", "type": "string", "pattern": "^[A-Z0-9]{1,4}$(?![\\s\\S])" },
+        "member": { "description": "LINZ: the *_Harm_* file in the LINZ zip that the set comes from.", "type": "string", "pattern": "\\S" },
+        "header_dropped": { "description": "LINZ: which header fields were not used, and why.", "type": "string", "pattern": "\\S" },
+        "position": {
+          "description": "LINZ: where the station position comes from. from header: the file header; from station_list: the LINZ port list, because the header failed a check (replaced_because). checked false means the check was not run.",
+          "type": "object",
+          "required": ["header_lat", "header_lon", "from"],
+          "additionalProperties": false,
+          "properties": {
+            "header_lat": { "description": "Null when the header position cannot be read (e.g. minutes of 60 or more); the station list then gives the position.", "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+            "header_lon": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+            "list_port": { "description": "LINZ port number on the station list.", "type": "integer", "minimum": 0 },
+            "list_lat": { "type": "number", "minimum": -90, "maximum": 90 },
+            "list_lon": { "type": "number", "minimum": -180, "maximum": 180 },
+            "list_distance_km": { "description": "Distance from the header position to the station-list position.", "type": "number", "minimum": 0 },
+            "from": { "enum": ["header", "station_list"] },
+            "checked": { "type": "boolean" },
+            "replaced_because": { "type": "string", "pattern": "\\S" }
+          },
+          "if": { "properties": { "from": { "const": "station_list" } } },
+          "then": { "required": ["replaced_because", "list_lat", "list_lon"] },
+          "else": { "not": { "required": ["replaced_because"] } },
+          "allOf": [
+            {
+              "description": "A header position that cannot be read (null) is always replaced from the station list.",
+              "if": { "anyOf": [{ "properties": { "header_lat": { "type": "null" } } }, { "properties": { "header_lon": { "type": "null" } } }] },
+              "then": { "properties": { "from": { "const": "station_list" } } }
+            }
+          ]
+        },
+        "build": {
+          "description": "Build-only fields. Every set has this object, with its build_commit. They change on every rebuild, so the release content digest (content_sha256) leaves this whole object out.",
+          "type": "object",
+          "required": ["build_commit"],
+          "additionalProperties": false,
+          "properties": {
+            "build_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$(?![\\s\\S])" },
+            "built_at": { "type": "string", "format": "date-time" },
+            "fetched_at": { "description": "When the inputs were fetched.", "type": "string", "format": "date-time" },
+            "run_id": { "description": "The CI run that built the set.", "type": "string", "pattern": "\\S" },
+            "tool_versions": {
+              "description": "{name: version} of the tools used, e.g. {\"python\": \"3.12.7\"}. A name is lower case; a version starts with a digit (or v and a digit).",
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$(?![\\s\\S])",
+                "not": { "$ref": "#/$defs/status_like_name" }
+              },
+              "additionalProperties": { "type": "string", "pattern": "^v?[0-9][0-9A-Za-z.+_-]{0,63}$(?![\\s\\S])" }
+            }
+          }
+        },
+        "source_constituents_not_published": {
+          "description": "JMA: source constituents that have no OTC name, so they are not in the set.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source_name", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "source_name": { "type": "string", "maxLength": 31 },
+              "speed_deg_per_hour": { "type": ["number", "null"] },
+              "amplitude_m": { "type": "number", "minimum": 0 },
+              "reason": { "type": "string", "pattern": "\\S" }
+            }
+          }
+        },
+        "carried_from_release": {
+          "description": "The datestamp of the earlier release whose constants this set keeps, because its source failed a check in this build. Goes with the carried_over flag.",
+          "$ref": "#/$defs/datestamp"
+        },
+        "tcd_sha256": { "$ref": "#/$defs/sha256" },
+        "adapter_version": { "type": "string" },
+        "input_sha256": { "type": "array", "items": { "$ref": "#/$defs/sha256" } },
+        "selection_reason": { "type": "string" },
+        "decision": {
+          "description": "How the release gate decided the set. outcome fallback means the set is carried over (carried_from_release).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tier": { "enum": ["rule", "review", "fallback"] },
+            "outcome": { "enum": ["accept", "fallback"] },
+            "rule": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "subordinate_offsets": {
+      "type": "object",
+      "required": ["reference_station_id", "height_adjusted_type"],
+      "additionalProperties": false,
+      "properties": {
+        "reference_station_id": { "type": "string", "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])" },
+        "time_offset_high_min": { "type": "number" },
+        "time_offset_low_min": { "type": "number" },
+        "height_offset_high": { "type": "number" },
+        "height_offset_low": { "type": "number" },
+        "height_adjusted_type": { "description": "R = ratio, A = additive (metres), as NOAA gives it.", "enum": ["R", "A"] },
+        "licence_id": { "type": "string" },
+        "datum": {
+          "description": "The subordinate station's own levels: the levels its source publishes for it (method source), and LAT and HAT computed by the offsets (method subordinate_offsets). The offsets carry no constants or gauge record, so no other method is allowed here; a constant set of the same station has its own datum. Its zero is the subordinate station's chart datum as the offsets define it (for NOAA, the subordinate station's MLLW).",
+          "allOf": [
+            { "$ref": "#/$defs/datum" },
+            { "properties": { "basis": { "additionalProperties": { "properties": { "method": { "enum": ["source", "subordinate_offsets"] } } } } } }
+          ]
+        }
+      }
+    },
+    "datum": {
+      "description": "Vertical reference of a constant set, or of a subordinate station's offsets. named holds levels in metres above the zero; basis says, for each level, how it was obtained: published by the source, computed from harmonic constants, or observed from the gauge record.",
+      "type": "object",
+      "additionalProperties": false,
+      "dependentRequired": { "named": ["basis"], "basis": ["named"] },
+      "properties": {
+        "msl_offset_m": { "description": "The mean level (Z0) above the zero, in metres.", "type": "number" },
+        "zero": {
+          "description": "What the zero is. chart_datum: the source's chart datum (e.g. NOAA's MLLW, JMA's tide-table datum); gauge_zero: the gauge's own zero (GESLA fits, PEGELONLINE's PNP); vertical_datum: a national or survey height system such as NAP, RH 2000, N2000, DVR90, NN2000 or OD Malin; msl: mean sea level; unknown: the source does not say.",
+          "enum": ["chart_datum", "gauge_zero", "vertical_datum", "msl", "unknown"]
+        },
+        "zero_name": {
+          "description": "The source's name for the zero, e.g. MLLW, STND, PNP, NAP, RH 2000, OD Malin.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 31
+        },
+        "chart_datum": {
+          "description": "The key in named that is the chart datum, e.g. mllw, lat or tide_table_datum. Absent when there is none. Its basis says whether the agency published it or OTC computed or observed it. A computed or observed chart datum is written only where the station's chart-datum publisher publishes none at that station (build check 12, per station), so it never replaces a published one. chart_datum can name a level OTC computed or observed, so a reader checks basis[chart_datum].kind to tell it from the publisher's official chart datum.",
+          "$ref": "#/$defs/datum_key"
+        },
+        "named": {
+          "description": "Levels in metres above the zero (negative when below). One value per key.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/datum_key" },
+          "additionalProperties": { "type": "number" }
+        },
+        "basis": {
+          "description": "One entry per key of named, saying how that level was obtained. Required with named. The release build checks that basis and named have the same keys (build check 9).",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/datum_key" },
+          "additionalProperties": { "$ref": "#/$defs/datum_basis" }
+        }
+      },
+      "allOf": [
+        {
+          "description": "An otc_ key is OTC's own value next to a published one, so it is never kind published. sampling_assumed is never on msl, mtl, dtl or their otc_ forms: they are means of heights. When low waters are cut off (truncated_lows, by the direct method or a first reduction), only high-water levels are given: a level by the direct method or with truncated_lows is mhw or mhhw (or otc_mhw, otc_mhhw). Keys reach this pattern only after datum_key has accepted them, so its $ needs no newline guard.",
+          "properties": {
+            "basis": {
+              "patternProperties": {
+                "^otc_": { "properties": { "kind": { "enum": ["computed", "observed"] } } },
+                "^(otc_)?(msl|mtl|dtl)$": {
+                  "not": { "required": ["flags"], "properties": { "flags": { "contains": { "const": "sampling_assumed" } } } }
+                },
+                "^(?!(otc_)?(mhw|mhhw)$)": {
+                  "not": {
+                    "anyOf": [
+                      { "required": ["method"], "properties": { "method": { "const": "direct" } } },
+                      { "required": ["flags"], "properties": { "flags": { "contains": { "const": "truncated_lows" } } } }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "Lows from a cut-off record are never trusted: when any level of the datum carries truncated_lows, every basis key other than mhw, mhhw, hat, otc_mhw, otc_mhhw and otc_hat has kind published, so the datum's only computed or observed levels are those six and a published level of any key is kept; named has no other otc_ key (an otc_ key is never published). An unprefixed key in named with no basis entry is left to build check 9.",
+          "if": {
+            "required": ["basis"],
+            "properties": { "basis": { "not": { "additionalProperties": { "not": { "required": ["flags"], "properties": { "flags": { "contains": { "const": "truncated_lows" } } } } } } } }
+          },
+          "then": {
+            "properties": {
+              "basis": { "patternProperties": { "^(?!(otc_)?(mhw|mhhw|hat)$)": { "properties": { "kind": { "const": "published" } } } } },
+              "named": { "propertyNames": { "not": { "pattern": "^otc_(?!(mhw|mhhw|hat)$)" } } }
+            }
+          }
+        }
+      ]
+    },
+    "datum_key": {
+      "description": "A datum name: lower case, at most 31 characters (a C reader holds it in char[32]). mean_level, zero and chart are keywords in the SDKs' API and are not allowed. OTC's own levels use the canonical names lat, hat, msl, mtl, dtl, mhw, mlw, mhhw and mllw; a published level uses the canonical name when the source's definition is the same, and otherwise the source's name in lower case (mhws, stnd, navd88, nap, cd, tide_table_datum). Where a published level holds a canonical key, OTC's value for the same datum on the same set is otc_<key>, e.g. otc_lat next to NOAA's lat (build check 10).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,30}$(?![\\s\\S])",
+      "not": { "enum": ["mean_level", "zero", "chart"] }
+    },
+    "datum_date": {
+      "description": "A calendar date YYYY-MM-DD. The release build also checks that it is a real date (no 2021-02-30; build check 13).",
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$(?![\\s\\S])"
+    },
+    "datum_period": {
+      "description": "A period with inclusive ends. The release build checks start <= end (build check 13).",
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "$ref": "#/$defs/datum_date" },
+        "end": { "$ref": "#/$defs/datum_date" },
+        "name": { "description": "e.g. NTDE 1983-2001, OTC 2002-2020, OTC LAT 2020-2038.", "type": "string", "minLength": 1 }
+      }
+    },
+    "datum_data_span": {
+      "description": "The gauge data an observed level is reduced from: the first and last day, and how many calendar months contributed. The release build checks start <= end (build check 13).",
+      "type": "object",
+      "required": ["start", "end", "months"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "$ref": "#/$defs/datum_date" },
+        "end": { "$ref": "#/$defs/datum_date" },
+        "months": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "datum_basis": {
+      "description": "How one datum level was obtained. kind published: given by the level's publisher (the source, or, for a chart datum in the Baltic and the Kattegat and at the Baltic gauge operators' gauges, the charting authority), unchanged except for units and zero. kind computed: from harmonic constants. kind observed: reduced from the gauge record by the NOAA tidal-datum method. Observed levels refer to the OTC datum epoch 2002-01-01 to 2020-12-31, except a first reduction over the record's own months, which has the flag no_qualified_control and an epoch equal to its data_span.",
+      "type": "object",
+      "required": ["kind", "method"],
+      "additionalProperties": false,
+      "dependentRequired": { "uncertainty_m": ["uncertainty_basis"], "uncertainty_basis": ["uncertainty_m"] },
+      "properties": {
+        "kind": { "enum": ["published", "computed", "observed"] },
+        "method": {
+          "description": "source: as published. harmonic_extremes: the lowest or highest height of the set's harmonic prediction over epoch. subordinate_offsets: the lowest or highest of the reference station's predicted extremes over epoch with the subordinate station's offsets applied. first_reduction: means over data_span with no control. Without the flag no_qualified_control it is a 19-year determination over the OTC datum epoch 2002-01-01 to 2020-12-31: the schema checks at least 216 months and the epoch dates; the release build checks that data_span is inside the epoch and that every calendar month counts in at least 17 of the 19 years (build check 14). With no_qualified_control it is an average over the record's own months (at most 228 months, and never with a primary's coverage), and its epoch equals its data_span (build check 14). standard, modified_range_ratio, direct: comparison with the control station on common tidal days (NOAA CO-OPS methods).",
+          "enum": ["source", "harmonic_extremes", "subordinate_offsets", "first_reduction", "standard", "modified_range_ratio", "direct"]
+        },
+        "source_name": {
+          "description": "The publisher's own name for this level: the source's (e.g. MThw, CD, STND), or the charting authority's for a Baltic or Kattegat chart datum (e.g. Traficom's MSL, Sjöfartsverket's RH 2000).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 31
+        },
+        "epoch": {
+          "description": "The period the level refers to. Observed: the datum epoch it is reduced to, exactly 2002-01-01 to 2020-12-31 (OTC 2002-2020), except a first reduction over the record's own months (no_qualified_control), whose epoch has the same dates as its data_span. Computed: the prediction window, OTC LAT 2020-2038. Published: the source's epoch, when it states one for that level (Kartverket's MSL: 1996-2014). NOAA's LAT and HAT get none: NOAA states a 40-year window, currently 2000-2040, not stated per station (a few stations still carry older values).",
+          "$ref": "#/$defs/datum_period"
+        },
+        "data_span": {
+          "description": "Observed only: the gauge data reduced.",
+          "$ref": "#/$defs/datum_data_span"
+        },
+        "control": {
+          "description": "The control station. For a comparison, station_id and set_id name the OTC station and the set (one gauge record, in its own zero) whose 19-year values the comparison used. For a published level, source_id (required) is the source's own id of its control station: NOAA's ctrlStation is \"id name\" (e.g. \"8443970 Boston, MA\"), and source_id keeps only the id; station_id (optional) is that control station's OTC id when the station is in the release. A station that is its own control (a NOAA primary station) has no control.",
+          "type": "object",
+          "additionalProperties": false,
+          "anyOf": [{ "required": ["station_id"] }, { "required": ["source_id"] }],
+          "properties": {
+            "station_id": { "type": "string", "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])" },
+            "set_id": { "type": "string", "minLength": 1 },
+            "source_id": { "type": "string", "minLength": 1 }
+          }
+        },
+        "uncertainty_m": {
+          "description": "One standard deviation, in metres. Observed and computed: the expected difference from a 19-year determination over the stated epoch. Published: only when the source gives one.",
+          "type": "number",
+          "minimum": 0
+        },
+        "uncertainty_basis": {
+          "description": "source: given by the source; the only basis of a published level. calibrated: from OTC's cut-down experiments and comparisons with published or gauge-computed values, on the tuning partition and on gauges outside all partitions, never on a holdout or reserve gauge. (OTC's validation stations are split by a fixed hash into a tuning partition, used to set methods and thresholds, and a holdout and a reserve, kept apart so that validation is independent.) propagated: from the scatter of the data or the constituent uncertainties. A computed or observed level is calibrated or propagated.",
+          "enum": ["source", "calibrated", "propagated"]
+        },
+        "flags": {
+          "description": "time_base_unverified / time_base_disputed: the set's time-base annotation. sampling_assumed: the sampling class (instantaneous or hourly mean) is the declared one, not verified; the uncertainty includes the possible bias; never on msl, mtl, dtl or their otc_ forms, which are means of heights and do not depend on the sampling class. truncated_lows: low waters are cut off, so the datum's only computed or observed levels are MHW, MHHW and HAT (a published level of any key is kept). gaps: gaps of 3 hours or less were filled, or months were skipped for gaps. segment: the record is split by a datum step, and the value is reduced from one segment of it, on either side of the step (see data_span). short_record: observed, under 12 months of data (an observed level has it exactly then); computed, constants from under one year of good data, so the level does not follow the IHO recommendation for computing LAT and HAT (constants from at least one year of observations). no_qualified_control: no comparison was possible, so this is a first reduction over the record's own months, not adjusted to the OTC datum epoch. microtidal: mean range under 0.1 m. provisional: the source marks the value provisional.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["time_base_unverified", "time_base_disputed", "sampling_assumed", "truncated_lows", "gaps", "segment", "short_record", "no_qualified_control", "microtidal", "provisional"] }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "published" } } },
+          "then": {
+            "properties": { "method": { "const": "source" }, "flags": { "items": { "enum": ["provisional"] } }, "uncertainty_basis": { "const": "source" }, "control": { "required": ["source_id"] } },
+            "not": { "required": ["data_span"] }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "computed" } } },
+          "then": {
+            "required": ["epoch", "uncertainty_m"],
+            "properties": {
+              "method": { "enum": ["harmonic_extremes", "subordinate_offsets"] },
+              "uncertainty_basis": { "enum": ["calibrated", "propagated"] },
+              "flags": { "items": { "enum": ["time_base_unverified", "time_base_disputed", "sampling_assumed", "short_record", "microtidal"] } }
+            },
+            "not": { "anyOf": [{ "required": ["data_span"] }, { "required": ["control"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "observed" } } },
+          "then": {
+            "required": ["epoch", "data_span", "uncertainty_m"],
+            "properties": {
+              "method": { "enum": ["first_reduction", "standard", "modified_range_ratio", "direct"] },
+              "uncertainty_basis": { "enum": ["calibrated", "propagated"] },
+              "flags": { "items": { "not": { "const": "provisional" } } }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "enum": ["standard", "modified_range_ratio", "direct"] } } },
+          "then": { "required": ["control"], "properties": { "control": { "required": ["station_id", "set_id"] }, "epoch": { "properties": { "start": { "const": "2002-01-01" }, "end": { "const": "2020-12-31" } } } } }
+        },
+        {
+          "if": { "properties": { "method": { "const": "first_reduction" } } },
+          "then": { "not": { "required": ["control"] } }
+        },
+        {
+          "description": "Own-month averages are labelled: no_qualified_control goes only with a first reduction of at most 228 months (the latest 19 years at most), and a first reduction without it is a 19-year determination: at least 216 months, over the OTC datum epoch 2002-01-01 to 2020-12-31. Comparisons are reduced to the same epoch.",
+          "if": { "required": ["flags"], "properties": { "flags": { "contains": { "const": "no_qualified_control" } } } },
+          "then": { "properties": { "method": { "const": "first_reduction" }, "data_span": { "properties": { "months": { "maximum": 228 } } } } },
+          "else": {
+            "if": { "properties": { "method": { "const": "first_reduction" } } },
+            "then": { "properties": { "data_span": { "properties": { "months": { "minimum": 216 } } }, "epoch": { "properties": { "start": { "const": "2002-01-01" }, "end": { "const": "2020-12-31" } } } } }
+          }
+        },
+        {
+          "description": "The direct method goes with truncated_lows: low waters are cut off.",
+          "if": { "required": ["method"], "properties": { "method": { "const": "direct" } } },
+          "then": { "required": ["flags"], "properties": { "flags": { "contains": { "const": "truncated_lows" } } } }
+        },
+        {
+          "description": "truncated_lows goes with the direct method or a first reduction (own-month or 19-year), and the direct method always carries it (the rule above); never with another comparison method.",
+          "if": { "required": ["flags"], "properties": { "flags": { "contains": { "const": "truncated_lows" } } } },
+          "then": { "properties": { "method": { "enum": ["direct", "first_reduction"] } } }
+        },
+        {
+          "description": "An observed level has short_record exactly when it comes from under 12 months of data.",
+          "if": { "properties": { "kind": { "const": "observed" } } },
+          "then": {
+            "if": { "required": ["flags"], "properties": { "flags": { "contains": { "const": "short_record" } } } },
+            "then": { "properties": { "data_span": { "properties": { "months": { "maximum": 11 } } } } },
+            "else": { "properties": { "data_span": { "properties": { "months": { "minimum": 12 } } } } }
+          }
+        }
+      ]
+    },
+    "validation": {
+      "type": "object",
+      "required": ["set_id", "reference_source", "window", "time_mae_min", "height_mae_m"],
+      "additionalProperties": false,
+      "properties": {
+        "set_id": { "type": "string" },
+        "reference_source": { "type": "string" },
+        "reference_station": { "type": "string" },
+        "reference_distance_km": { "type": "number", "minimum": 0 },
+        "window": { "type": "string" },
+        "time_mae_min": { "type": "number", "minimum": 0 },
+        "time_p95_min": { "type": "number", "minimum": 0 },
+        "time_bias_min": { "type": "number" },
+        "height_mae_m": { "type": "number", "minimum": 0 },
+        "range_error_m": { "type": "number" },
+        "missed_events": { "type": "integer", "minimum": 0 },
+        "extra_events": { "type": "integer", "minimum": 0 },
+        "previous_release": {
+          "description": "The same metrics for the previous release, or null.",
+          "type": ["object", "null"]
+        }
+      }
+    }
+  }
+}

@@ -37,9 +37,9 @@ allow-direct-references = true   # the gesla file reference above
 packages = ["otc_pipeline"]
 
 # The schema copy lives in scripts/otc/schema/ (sync_schema.sh); a wheel carries it inside the
-# package, where default_schema_path() looks first.
+# package, where release_writer._schema_file() looks first (pinned_schema() checks its SHA-256).
 [tool.hatch.build.targets.wheel.force-include]
-"schema/otc-0.5.schema.json" = "otc_pipeline/schema/otc-0.5.schema.json"
+"schema/otc-1.0.schema.json" = "otc_pipeline/schema/otc-1.0.schema.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,4 +1,4 @@
-"""Tests for the OTC release writer and validator (format 0.5).
+"""Tests for the OTC release writer and validator (format 1.0).
 
 The example document is the site repo's src/schema/example.json, copied at the
 pinned commit by sync_schema.sh.
@@ -23,8 +23,8 @@ from otc_pipeline.release_writer import (
 )
 
 HERE = Path(__file__).resolve().parent
-SCHEMA = HERE.parent / "schema" / "otc-0.5.schema.json"
-EXAMPLE = HERE / "fixtures" / "example-0.5.json"
+SCHEMA = HERE.parent / "schema" / "otc-1.0.schema.json"
+EXAMPLE = HERE / "fixtures" / "example-1.0.json"
 D = "20991231"
 
 
@@ -45,12 +45,12 @@ def write(release, out_dir, datestamp=D, **kw):
 # --- validate_release -------------------------------------------------------
 
 def test_example_is_valid(release):
-    assert validate_release(release, SCHEMA) == []
+    assert validate_release(release) == []
 
 
 def test_missing_convention_id_is_rejected(release):
     first_set(release).pop("convention_id")
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("convention_id" in e for e in errors), errors
 
 
@@ -79,8 +79,6 @@ def test_missing_convention_id_is_rejected(release):
      "licence_id 'nope'"),
     ("constituent not in the release table",
      lambda d: first_set(d)["constituents"][0].__setitem__("name", "Q1"), "Q1"),
-    ("dropped constituent not in the release table",
-     lambda d: first_set(d)["dropped_constituents"][0].__setitem__("name", "Q1"), "Q1"),
     ("duplicate constituent in one set",
      lambda d: first_set(d)["constituents"].append(copy.deepcopy(first_set(d)["constituents"][0])),
      "duplicate constituent"),
@@ -108,7 +106,7 @@ def test_missing_convention_id_is_rejected(release):
 ])
 def test_negative_controls(release, label, mutate, needle):
     mutate(release)
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any(needle in e for e in errors), f"{label}: {errors}"
 
 
@@ -121,26 +119,26 @@ def test_alias_reused_by_another_station_is_rejected(release):
     for v in twin["validation"]:
         v["set_id"] = v["set_id"].replace("0001", "0003")
     release["stations"].append(twin)
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert "duplicate alias kartverket:EXA (OTC-EXAMPLE-0001, OTC-EXAMPLE-0099)" in errors
     assert "duplicate alias gesla:example-file-id (OTC-EXAMPLE-0001, OTC-EXAMPLE-0099)" in errors
 
 
 def test_alias_in_two_systems_is_allowed(release):
     release["stations"][0]["aliases"]["xtide"] = "EXA"
-    assert validate_release(release, SCHEMA) == []
+    assert validate_release(release) == []
 
 
 def test_subordinate_station_with_null_recommended_set(release):
     sub = {
-        "station_id": "OTC-EXAMPLE-0014", "status": "active", "name": "Sub", "country": "NOR",
+        "station_id": "OTC-TEST-0914", "status": "active", "name": "Sub", "country": "NOR",
         "lat": 60.1, "lon": 5.1, "timezone": "Europe/Oslo", "type": "subordinate",
         "recommended_set_id": None, "constant_sets": [],
         "subordinate_offsets": {"reference_station_id": "OTC-EXAMPLE-0001", "height_adjusted_type": "R",
                                 "time_offset_high_min": 5, "height_offset_high": 1.1, "licence_id": "kartverket"},
     }
     release["stations"].append(sub)
-    assert validate_release(release, SCHEMA) == []
+    assert validate_release(release) == []
 
 
 # --- next_datestamp ---------------------------------------------------------
@@ -221,7 +219,7 @@ def test_round_trip_json(release, tmp_path):
     assert release == original, "write_release must not mutate its input"
     back = json.loads((tmp_path / f"OTC_{D}.json").read_text(encoding="utf-8"))
     assert back == original
-    assert validate_release(back, SCHEMA) == []
+    assert validate_release(back) == []
     gz = json.loads(gzip.decompress((tmp_path / f"OTC_{D}.json.gz").read_bytes()))
     assert gz == original
 
@@ -253,6 +251,27 @@ def read_csv(path):
     return list(csv.DictReader(io.StringIO(raw.decode("utf-8"), newline="")))
 
 
+def _expected_types(doc):
+    """The documented row order, computed from the document independently of the writer."""
+    out = ["convention"] * len(doc["conventions"])
+    for st in doc["stations"]:
+        if st["status"] == "removed":
+            out.append("tombstone")
+            continue
+        out.append("station")
+        if "subordinate_offsets" in st:
+            out.append("offset")
+        out += ["current_offset"] * len(st.get("current_offsets", []))
+        for cs in st["constant_sets"]:
+            out.append("constant_set")
+            out += ["constituent"] * len(cs["constituents"])
+            for b in cs.get("current_bins", []):
+                out.append("current_bin")
+                out += ["current_constituent"] * len(b["constituents"])
+        out += ["validation"] * len(st.get("validation", []))
+    return out
+
+
 def test_csv_layout(release, tmp_path):
     write(release, tmp_path)
     path = tmp_path / f"OTC_{D}.csv"
@@ -261,40 +280,42 @@ def test_csv_layout(release, tmp_path):
     assert CSV_COLUMNS[0] == "record_type"
     rows = read_csv(path)
     types = [r["record_type"] for r in rows]
-    assert types[:11] == ["convention", "convention", "convention",
-                          "station", "constant_set", "constituent", "constituent",
-                          "constant_set", "constituent", "validation",
-                          "tombstone"]
-    # the current station (ACT1616) and the subordinate current station
-    assert types[11:15] == ["station", "constant_set", "current_bin", "current_constituent"]
-    assert types[-2:] == ["station", "current_offset"]
-    assert set(types) <= {"station", "constant_set", "constituent", "offset", "convention",
-                          "validation", "tombstone", "current_bin", "current_constituent",
-                          "current_offset"}
+    assert types == _expected_types(release)
+    assert types[:9] == ["convention", "convention", "convention",
+                         "station", "constant_set", "constituent", "constituent", "constituent", "constituent"]
     station = rows[3]
     assert station["station_id"] == "OTC-EXAMPLE-0001"
     assert station["name"] == "Example Harbour (illustrative values, not data)"
     assert json.loads(station["aliases"]) == {"gesla": ["example-file-id"], "kartverket": "EXA"}
     assert station["amplitude_m"] == ""
     cset = rows[4]
+    gesla = first_set(release)
     assert cset["set_id"] == "OTC-EXAMPLE-0001/gesla-fit" and cset["station_id"] == "OTC-EXAMPLE-0001"
-    assert json.loads(cset["provenance"]) == first_set(release)["provenance"]
-    assert cset["record_span_start"] == "2007-01-01T00:00:00Z" and cset["good_samples"] == "160000"
+    assert json.loads(cset["provenance"]) == gesla["provenance"]
+    assert cset["record_span_start"] == "2002-01-01T00:00:00Z" and cset["good_samples"] == "210000"
+    assert cset["good_hours"] == "210000"
+    assert json.loads(cset["time_base"]) == gesla["time_base"]
+    assert json.loads(cset["datum_named"]) == gesla["datum"]["named"]
+    assert json.loads(cset["datum_basis"]) == gesla["datum"]["basis"]
+    assert cset["datum_zero"] == "gauge_zero" and cset["datum_msl_offset_m"] == "1.0"
     m2 = rows[5]
     assert (m2["set_id"], m2["name"], m2["amplitude_m"], m2["phase_deg"]) == \
         ("OTC-EXAMPLE-0001/gesla-fit", "M2", "0.5", "100.0")
     assert m2["station_id"] == "OTC-EXAMPLE-0001"
-    tomb = rows[10]
+    kv = rows[types.index("constant_set", 5)]
+    assert kv["set_id"] == "OTC-EXAMPLE-0001/kartverket" and kv["datum_chart_datum"] == "cd"
+    tomb = rows[types.index("tombstone")]
     assert (tomb["station_id"], tomb["status"], tomb["removed_in"]) == ("OTC-EXAMPLE-0002", "removed", D)
-    assert tomb["removed_reason"].startswith("Example tombstone")
+    assert (tomb["removed_reason"], tomb["merged_into"]) == ("merged", "OTC-EXAMPLE-0001")
+    assert tomb["detail"].startswith("Example tombstone")
     conv = rows[1]
-    assert (conv["convention_id"], conv["phase_reference"], conv["utc_offset_hours"]) == \
-        ("kartverket-utc1-v1", "local", "1")
+    assert (conv["convention_id"], conv["phase_reference"], conv["utc_offset_hours"], conv["astro_table_id"]) == \
+        ("kartverket-utc1-v1", "local", "1", "tcd-20251228")
 
 
 def subordinate(offsets):
     return {
-        "station_id": "OTC-EXAMPLE-0014", "status": "active", "name": "Sub", "country": "NOR",
+        "station_id": "OTC-TEST-0914", "status": "active", "name": "Sub", "country": "NOR",
         "lat": 60.1, "lon": 5.1, "timezone": "Europe/Oslo", "type": "subordinate",
         "recommended_set_id": None, "constant_sets": [], "subordinate_offsets": offsets,
     }
@@ -303,17 +324,17 @@ def subordinate(offsets):
 def test_offset_to_a_subordinate_station_is_rejected(release):
     release["stations"].append(subordinate({"reference_station_id": "OTC-EXAMPLE-0001",
                                             "height_adjusted_type": "R"}))
-    release["stations"].append(subordinate({"reference_station_id": "OTC-EXAMPLE-0014",
+    release["stations"].append(subordinate({"reference_station_id": "OTC-TEST-0914",
                                             "height_adjusted_type": "R"}))
-    release["stations"][-1]["station_id"] = "OTC-EXAMPLE-0015"
-    errors = validate_release(release, SCHEMA)
-    assert any("'OTC-EXAMPLE-0014' is not a reference station" in e for e in errors), errors
+    release["stations"][-1]["station_id"] = "OTC-TEST-0915"
+    errors = validate_release(release)
+    assert any("'OTC-TEST-0914' is not a reference station" in e for e in errors), errors
 
 
 def test_offset_to_itself_is_rejected(release):
-    release["stations"].append(subordinate({"reference_station_id": "OTC-EXAMPLE-0014",
+    release["stations"].append(subordinate({"reference_station_id": "OTC-TEST-0914",
                                             "height_adjusted_type": "R"}))
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("is the station itself" in e for e in errors), errors
 
 
@@ -329,7 +350,7 @@ def test_csv_offset_row(release, tmp_path):
     r = rows[i]
     assert (r["station_id"], r["reference_station_id"], r["height_adjusted_type"],
             r["time_offset_high_min"], r["height_offset_low"], r["time_offset_low_min"]) == \
-        ("OTC-EXAMPLE-0014", "OTC-EXAMPLE-0001", "A", "-12", "0.25", "")
+        ("OTC-TEST-0914", "OTC-EXAMPLE-0001", "A", "-12", "0.25", "")
     assert rows[i - 1]["recommended_set_id"] == ""
 
 
@@ -448,7 +469,7 @@ def test_validate_reports_non_finite_numbers(release, where, bad):
         first_set(release)["constituents"][0]["amplitude_m"] = bad
     else:
         first_set(release)["provenance"]["score"] = bad
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("is not a finite number" in e for e in errors), errors
 
 
@@ -508,7 +529,7 @@ _WRONG_TYPES = [
 @pytest.mark.parametrize("path, value", _WRONG_TYPES, ids=lambda x: str(x))
 def test_validate_returns_errors_for_wrong_types_and_never_raises(release, path, value):
     _set_path(release, path, value)
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert errors and all(isinstance(e, str) for e in errors), errors
 
 
@@ -519,7 +540,7 @@ def test_validate_returns_errors_for_wrong_types_and_never_raises(release, path,
 ])
 def test_trailing_newline_does_not_pass_a_pattern(release, path, value):
     _set_path(release, path, value)
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("does not match" in e for e in errors), errors
 
 
@@ -532,7 +553,7 @@ def test_write_refuses_datestamp_with_trailing_newline(release, tmp_path):
 
 def test_recommended_set_id_absent_string_is_checked(release):
     release["stations"][0]["recommended_set_id"] = "absent"
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("recommended_set_id 'absent' is not a set of this station" in e for e in errors), errors
 
 
@@ -540,7 +561,7 @@ def test_subordinate_with_null_recommended_set_needs_offsets(release):
     sub = subordinate({"reference_station_id": "OTC-EXAMPLE-0001", "height_adjusted_type": "R"})
     del sub["subordinate_offsets"]
     release["stations"].append(sub)
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("recommended_set_id is null" in e and "subordinate_offsets" in e for e in errors), errors
 
 
@@ -654,38 +675,38 @@ def test_current_set_validates(release):
     cur = _station(release, "OTC-EXAMPLE-0003")
     assert cur["constant_sets"][0]["quantity"] == "current"
     assert cur["constant_sets"][0]["constituents"] == []
-    assert validate_release(release, SCHEMA) == []
+    assert validate_release(release) == []
 
 
 def test_current_offsets_reference_bin_must_exist(release):
     _station(release, "OTC-EXAMPLE-0004")["current_offsets"][0]["reference_bin"] = 7
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("reference_bin 7 is not a bin of 'OTC-EXAMPLE-0003'" in e for e in errors), errors
 
 
 def test_current_offsets_reference_must_be_a_station(release):
     _station(release, "OTC-EXAMPLE-0004")["current_offsets"][0]["reference_station_id"] = "OTC-NOPE"
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("'OTC-NOPE' is not an active station" in e for e in errors), errors
 
 
 def test_default_current_bin_must_name_a_bin(release):
     _station(release, "OTC-EXAMPLE-0003")["default_current_bin"] = 9
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("default_current_bin 9 is not a bin of the recommended set" in e for e in errors), errors
 
 
 def test_current_constituent_name_must_be_in_table(release):
     b = _station(release, "OTC-EXAMPLE-0003")["constant_sets"][0]["current_bins"][0]
     b["constituents"][0]["name"] = "MK3"
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("constituent name 'MK3' is not in the constituents table" in e for e in errors), errors
 
 
 def test_duplicate_current_bin_rejected(release):
     cs = _station(release, "OTC-EXAMPLE-0003")["constant_sets"][0]
     cs["current_bins"].append(dict(cs["current_bins"][0]))
-    errors = validate_release(release, SCHEMA)
+    errors = validate_release(release)
     assert any("duplicate current bin 1" in e for e in errors), errors
 
 
