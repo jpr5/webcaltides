@@ -1,0 +1,19 @@
+# Stations with known double high/low waters or a stand (plan 5.4). One case-insensitive
+# name fragment per line; matched against the station name. Edit as reviews add stations.
+Bournemouth
+West Bay
+Portsmouth
+Southampton
+Poole
+Swanage
+Christchurch
+Lymington
+Yarmouth, Isle of Wight
+Cowes
+Calshot
+Hamble
+Weymouth
+Lee-on-the-Solent
+Le Havre
+Den Helder
+Galveston

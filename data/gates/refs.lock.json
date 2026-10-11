@@ -1,0 +1,51 @@
+{
+  "store": "s3://$OTC_WORK_BUCKET/refs/refs-2026-10-07/",
+  "release": "refs-2026-10-07",
+  "private": true,
+  "note": "Official-prediction caches; not redistributable. Fetch with scripts/gates/fetch_refs.rb.",
+  "assets": [
+    {
+      "group": "refs-noaa",
+      "name": "refs-noaa.tar.gz",
+      "size": 74130818,
+      "sha256": "5c962237f67ec826bedf5ef16a3aa183f84d79203b7b8804483a059a159ab108",
+      "entries": [
+        "refs/noaa"
+      ],
+      "files": 12633,
+      "tree_sha256": "d2be8283b1e170e5761540cd125f532841cf3410db5b116ebe421a38ae856620"
+    },
+    {
+      "group": "refs-other",
+      "name": "refs-other.tar.gz",
+      "size": 10825968,
+      "sha256": "cda01c22a604eaba86da425fa2503a5e747e3eda18fac187300dfbfc8e7d7eb1",
+      "entries": [
+        "refs/bsh",
+        "refs/chs",
+        "refs/imi",
+        "refs/kartverket",
+        "refs/linz",
+        "refs/rws"
+      ],
+      "files": 1179,
+      "tree_sha256": "a31840dba193d3f9626b2c588278df11b7a3af6d86856d700fdeecb7e5eb8df7"
+    },
+    {
+      "group": "inputs",
+      "name": "inputs.tar.gz",
+      "size": 12816691,
+      "sha256": "1fba0e5f5ff58ae560c42b4044d9f05854fc9807b5a43cae614121da4f1249e4",
+      "entries": [
+        "evid",
+        "sets",
+        "safety_set.json",
+        "baseline",
+        "b",
+        "builds"
+      ],
+      "files": 125,
+      "tree_sha256": "8f8ae4c8f6375917dad7da88e3ed2dc005d1445cae81f51156f5e675c6a8da92"
+    }
+  ]
+}

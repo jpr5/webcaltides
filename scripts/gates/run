@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Gate harness entry point: score one engine checkout + dataset against the pinned references.
+# Usage: scripts/gates/run <engine worktree> <run> [mode=model|rn] [srcs=noaa|all|csv|@set.json] [windows=W1,W2,W3] [nprocs=8]
+# Env: TICON_FILE (default <worktree>/data/ticon.json), OTC_GATES_DIR (data dir, see paths.rb), KEEP_CACHE=1.
+# Results: $OTC_GATES_DIR/results/<run>/<window>/{events,stations,timing}.csv; manifest entry in $OTC_GATES_DIR/manifest.json.
+set -euo pipefail
+T="$(cd "$(dirname "$0")" && pwd)"
+[ $# -ge 2 ] || { sed -n '2,5p' "$0" >&2; exit 2; }
+ruby "$T/fetch_refs.rb" --check >/dev/null || { echo "references missing or changed: run ruby $T/fetch_refs.rb" >&2; exit 2; }
+exec "$T/run_variant.sh" "$@"
