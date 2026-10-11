@@ -396,3 +396,13 @@ def test_a_constituent_row_that_cannot_be_read_stops_the_read():
     with pytest.raises(ValueError, match="cannot be read"):
         parse_harm(_HEAD + "  11 M2      .08051140   351 0198/1206 55.2125 280.56\n"
                    "  12 S2      .08333334   351 0198/1206 26,1980 336.55\n", "351RANGATIRAPOINT-Harm_1998-2006.txt")
+
+
+@pytest.mark.parametrize("row", ["  12 s2      .08333334   351 0198/1206 26.1980 336.55",
+                                 "  12 S(2)    .08333334   351 0198/1206 26.1980 336.55",
+                                 "  12 S2      .0833333x   351 0198/1206 26.1980 336.55",
+                                 "  12 S2      .08333334"])
+def test_any_numbered_row_that_cannot_be_read_stops_the_read(row):
+    with pytest.raises(ValueError, match="cannot be read"):
+        parse_harm(_HEAD + "  11 M2      .08051140   351 0198/1206 55.2125 280.56\n" + row + "\n",
+                   "351RANGATIRAPOINT-Harm_1998-2006.txt")
