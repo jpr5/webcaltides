@@ -1,0 +1,140 @@
+"""C2a: the one committed entry point of the OTC release build (GESLA + TICON-4 + the official agency sources).
+
+    python -m otc_pipeline.build_otc <gesla_build inputs> --agency-cache ROOT --currents-canary-cache DIR \\
+        --datestamp YYYYMMDD --created ISO8601 --out OUT          (bin/build-otc runs this)
+
+1. The agency sets (combine.load_agency): kartverket, linz, jma, noaa, noaa-currents from ROOT/<source>, with the
+   network blocked, positions corrected (data/otc/position_corrections.json).
+2. The GESLA build (gesla_build.build_parts: every GESLA and TICON-4 gate as gesla_build runs them), with the
+   agency constituent names in the astro table.
+3. The canaries (D8): kartverket, linz, jma and noaa against this build's GESLA fits (canary.canary; comparators:
+   fits with a clean time base that the station map does not flag); noaa-currents against NOAA's published current
+   predictions cached in DIR (currents_canary; fill DIR first with `currents_canary fetch`).
+4. The merge (combine.merge): station ids from the committed map (combine mint assigns them), official sets
+   recommended, subordinates mapped; D11: every included source must pass its canary.
+5. validate_release (0 errors), no set with a disputed time base, then write_release and BUILD_REPORT.json, whose
+   `agency` section lists per source what was published, joined and refused, the canaries and the position
+   corrections, and whose provenance adds each agency cache's MANIFEST.json hash.
+
+The tree must be committed (gesla_build.head_commit); OUT must be empty.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+from otc_pipeline import combine
+from otc_pipeline import currents_canary as cc
+from otc_pipeline import gesla_build as gb
+from otc_pipeline import gesla_sets as gs
+from otc_pipeline import station_map as sm
+from otc_pipeline.astro_tables import TABLE_ID
+from otc_pipeline.canary import canary
+from otc_pipeline.release_writer import validate_release, write_release
+
+GESLA_CANARY_SOURCES = ("kartverket", "linz", "jma", "noaa")
+
+
+def gesla_comparators(parts: gb.BuildParts) -> list:
+    """COMPARATOR ONLY (gesla_sets.comparator_set): this build's GESLA fits with a time base the final audit does
+    not dispute and no station-map flag; a fit that cannot be a comparator (refused, short and uncalibrated) is
+    skipped."""
+    out = []
+    for d in parts.docs:
+        rid = d["record_id"]
+        if d["time_base"]["code"] == "disputed" or rid in parts.disputed_reasons or parts.sibling_flags.get(rid):
+            continue
+        try:
+            out.append(gs.comparator_set(d))
+        except (gs.NotPublishable, gs.FitIntegrityError):
+            continue
+    return out
+
+
+def run_canaries(agency: dict, comparators: list, currents_cache: Path, *, start: str = cc.START,
+                 log=print) -> tuple[dict, dict]:
+    """(source -> convention.canary object, source -> full result) for every included source."""
+    conv, full = {}, {}
+    for src, a in agency.items():
+        if src in GESLA_CANARY_SOURCES:
+            r = canary(src, a.sets, comparators)
+            conv[src], full[src] = r.convention_canary(), r.to_dict()
+        elif src == "noaa-currents":
+            r = cc.run_canary(a.sets, currents_cache, start=start)
+            conv[src], full[src] = cc.convention_canary(r), r
+        else:
+            raise combine.CombineError(f"{src}: no canary is defined")
+        log(f"canary {src}: {conv[src]}")
+    return conv, full
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="otc_pipeline.build_otc", description=(__doc__ or "").split("\n")[0],
+                                 allow_abbrev=False)
+    for name in ("fit-run", "audit-dir", "verdicts-dir", "calibration", "ticon-csv", "ticon-refs", "congen-run",
+                 "agency-cache", "currents-canary-cache", "out"):
+        ap.add_argument(f"--{name}", type=Path, required=True)
+    ap.add_argument("--overlay-run", type=Path)
+    ap.add_argument("--tcd", type=Path, help="the TCD dump (default $OTC_WORK/tcd_table.json)")
+    ap.add_argument("--currents-canary-start", default=cc.START)
+    ap.add_argument("--datestamp", required=True)
+    ap.add_argument("--created", required=True)
+    argv = sys.argv[1:] if argv is None else list(argv)
+    a = ap.parse_args(argv)
+    t0 = time.time()
+
+    def log(msg: str) -> None:
+        gb._log(t0, msg)
+    if a.out.exists() and any(a.out.iterdir()):
+        raise SystemExit(f"{a.out}: not empty")
+    commit = gb.head_commit()
+    log(f"build_commit {commit}")
+    agency = combine.load_agency(a.agency_cache, jma_year=int(a.datestamp[:4]))
+    log("agency sets: " + ", ".join(f"{s} {len(x.sets)}" for s, x in agency.items()))
+    parts = gb.build_parts(fit_run=a.fit_run, audit_dir=a.audit_dir, verdicts_dir=a.verdicts_dir,
+                           calibration_dir=a.calibration, overlay_run=a.overlay_run, ticon_csv=a.ticon_csv,
+                           ticon_refs=a.ticon_refs, congen_run=a.congen_run, datestamp=a.datestamp,
+                           created=a.created, build_commit=commit, tcd_path=a.tcd,
+                           extra_names=combine.agency_names(agency), log=log)
+    log(f"gesla build_release: {parts.report.summary()}")
+    comparators = gesla_comparators(parts)
+    log(f"canary comparators (GESLA fits): {len(comparators)}")
+    conv, full = run_canaries(agency, comparators, a.currents_canary_cache, start=a.currents_canary_start, log=log)
+    release, arep = combine.merge(parts.release, agency, station_ids=sm.load().record_ids(), build_commit=commit,
+                                  table_id=TABLE_ID, canaries=conv)
+    arep.canaries = full
+    log("agency: " + json.dumps(arep.sources, sort_keys=True))
+    errs = validate_release(release)
+    log(f"validate_release: {len(errs)} errors")
+    for e in errs[:20]:
+        print("  ", e)
+    disputed = [cs["set_id"] for st in release["stations"] if st["status"] == "active" for cs in st["constant_sets"]
+                if (cs.get("time_base") or {}).get("code") == "disputed"]
+    log(f"sets with a disputed time base: {len(disputed)}")
+    if errs or disputed:
+        return 1
+    a.out.mkdir(parents=True, exist_ok=True)
+    files = write_release(release, a.out, datestamp=a.datestamp, app_export=None, congen_run=parts.congen_run)
+    provenance = {"command_line": [sys.executable, "-m", "otc_pipeline.build_otc", *argv], "cwd": os.getcwd(),
+                  **parts.provenance,
+                  "agency_cache": {s: {"path": str((a.agency_cache / s).resolve()),
+                                       "manifest_sha256": _sha256(a.agency_cache / s / "MANIFEST.json")}
+                                   for s in agency},
+                  "position_corrections_sha256": _sha256(combine.CORRECTIONS_PATH),
+                  "currents_canary_cache": str(a.currents_canary_cache.resolve())}
+    gb.write_report(parts.report, provenance, a.out / "BUILD_REPORT.json", extra={"agency": arep.as_dict()})
+    log(f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

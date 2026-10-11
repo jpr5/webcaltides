@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# build-otc: the OTC release build (GESLA + TICON-4 + the official agency sources), from committed code.
+#
+#   bin/build-otc --fit-run R --audit-dir A --verdicts-dir F --calibration C [--overlay-run O] \
+#       --ticon-csv T --ticon-refs J --congen-run G --agency-cache ROOT --currents-canary-cache DIR \
+#       --datestamp YYYYMMDD --created ISO8601 --out OUT
+#
+# Runs python -m otc_pipeline.build_otc (see its docstring) in scripts/otc with the locked environment.
+# Before a release: `python -m otc_pipeline.combine mint ...` gives new agency records their station ids (commit
+# data/otc/station_ids.json), and `python -m otc_pipeline.currents_canary fetch ...` fills the currents canary cache.
+set -euo pipefail
+cd "$(dirname "$0")/../scripts/otc"
+exec uv run --frozen python -u -m otc_pipeline.build_otc "$@"
