@@ -1,0 +1,8 @@
+{
+ "format": 1,
+ "note": "Agency sets the per-source canary may leave uncompared because the source publishes no M2, S2, K1 or O1 for them (otc_pipeline.build_otc.run_canaries). Any other set the canary cannot compare fails the canary. A row whose set is gone, or now publishes all four, stops the build so the row is reviewed.",
+ "exceptions": [
+  {"source": "kartverket", "source_record_id": "VIK", "missing": ["K1"],
+   "reason": "Viker (Hvaler, inner Oslofjord): Kartverket's harmonic constants for VIK have no K1 (46 constituents, K1 not among them); OTC's own GESLA fit of viker-vik-nor-nhs has no K1 either (the diurnal tide there is too small to resolve). The set is published; it is not a convention comparison."}
+ ]
+}

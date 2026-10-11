@@ -11,7 +11,9 @@ at least 3 gauges, no gauge missing a constituent), read for events:
 - no sampled station without data: each has a cached NOAA prediction and at least one paired event (the rule's
   "no gauge missing a constituent": the comparison is complete);
 - median |dt| over every paired event (slack, max flood, max ebb) <= 2 deg of M2 (TOL_DT_MIN, 4.14 min);
-- median |dv| over every paired max flood and max ebb <= 1 cm/s (TOL_DV_MS).
+- median |dv| over every paired max flood and max ebb <= 1 cm/s (TOL_DV_MS);
+- per station (fix round 1): every paired event within STATION_MAX_DT_MIN (10 min) and every paired peak within
+  STATION_MAX_DV_MS (3 cm/s), so a sign or bin error at one station fails the canary although the medians hold.
 Like the other canaries, the bar is on medians, not on single events. Events one side lists and the other does
 not (NOAA leaves out weak events: a max ebb of a few cm/s between two slacks, a 0.1 cm/s reversal) are counted
 per station in the result (`unmatched_noaa`, `unmatched_engine`) and do not fail the canary.
@@ -42,6 +44,8 @@ SAMPLE = 20
 MIN_GAUGES = 3
 TOL_DT_MIN = 2.0 / 28.9841042 * 60.0     # 2 deg of M2 in minutes (4.14)
 TOL_DV_MS = 0.01                          # 1 cm/s
+STATION_MAX_DT_MIN = 10.0                 # per station: no paired event more than 10 min off (current_proof's peak bar)
+STATION_MAX_DV_MS = 0.03                  # per station: no paired peak more than 3 cm/s off (current_proof's bar)
 START = "2026-10-08"
 DAYS = 7
 
@@ -94,6 +98,13 @@ def judge(comparisons: list[cp.Comparison], unavailable: list[str], *, min_gauge
     for c in comparisons:
         if not c.dt_min:
             reasons.append(f"{c.station} bin {c.bin}: no paired event")
+            continue
+        if max(c.dt_min) > STATION_MAX_DT_MIN:
+            reasons.append(f"{c.station} bin {c.bin}: a paired event {max(c.dt_min):.1f} min off "
+                           f"(limit {STATION_MAX_DT_MIN:g} min)")
+        if c.dv_ms and max(c.dv_ms) > STATION_MAX_DV_MS:
+            reasons.append(f"{c.station} bin {c.bin}: a paired peak {max(c.dv_ms):.3f} m/s off "
+                           f"(limit {STATION_MAX_DV_MS} m/s)")
     if mdt is not None and not mdt <= tol_dt_min:
         reasons.append(f"median |dt| {mdt:.2f} min exceeds {tol_dt_min:.2f} min")
     if mdv is not None and not mdv <= tol_dv_ms:

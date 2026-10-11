@@ -38,6 +38,7 @@ from otc_pipeline.canary import CANARY_CONSTITUENTS, canary
 from otc_pipeline.release_writer import validate_release, write_release
 
 GESLA_CANARY_SOURCES = ("kartverket", "linz", "jma", "noaa")
+EXCEPTIONS_PATH = sm.DATA / "canary_exceptions.json"
 
 
 def _has_canary_constituents(ss) -> bool:
@@ -63,27 +64,55 @@ def gesla_comparators(parts: gb.BuildParts) -> list:
     return out
 
 
+def load_canary_exceptions(path: Path = EXCEPTIONS_PATH) -> list[dict]:
+    d = json.loads(Path(path).read_text())
+    if d.get("format") != 1:
+        raise combine.CombineError(f"{path}: format {d.get('format')!r}, expected 1")
+    for e in d["exceptions"]:
+        if not str(e.get("reason", "")).strip():
+            raise combine.CombineError(f"{path}: exception {e} has no reason")
+    return list(d["exceptions"])
+
+
 def run_canaries(agency: dict, comparators: list, currents_cache: Path, *, start: str = cc.START,
-                 log=print) -> tuple[dict, dict]:
+                 exceptions: list[dict] | None = None, log=print) -> tuple[dict, dict]:
     """(source -> convention.canary object, source -> full result) for every included source. A source set that
-    does not publish all four canary constituents is not compared (listed in the result as
-    `not_compared_missing_constituents`); canary.canary checks every pair it makes as it always does."""
+    does not publish all four canary constituents cannot be compared: it fails the source's canary unless it is
+    on the reviewed exceptions list (data/otc/canary_exceptions.json, with the same missing constituents); an
+    exception that no longer matches a set stops the build. canary.canary checks every pair it makes."""
+    exceptions = load_canary_exceptions() if exceptions is None else exceptions
     conv, full = {}, {}
+    used = set()
     for src, a in agency.items():
         if src in GESLA_CANARY_SOURCES:
             lacking = [ss for ss in a.sets if ss.constant_set is not None and not _has_canary_constituents(ss)]
             r = canary(src, [ss for ss in a.sets if ss not in lacking], comparators)
             conv[src], full[src] = r.convention_canary(), r.to_dict()
-            full[src]["not_compared_missing_constituents"] = [
-                {"source_record_id": ss.constant_set["source_record_id"],
-                 "missing": sorted(set(CANARY_CONSTITUENTS) - {c["name"] for c in ss.constant_set["constituents"]})}
-                for ss in lacking]
+            rows = [{"source_record_id": ss.constant_set["source_record_id"],
+                     "missing": sorted(set(CANARY_CONSTITUENTS) - {c["name"] for c in ss.constant_set["constituents"]})}
+                    for ss in lacking]
+            full[src]["not_compared_missing_constituents"] = rows
+            for row in rows:
+                ok = next((i for i, e in enumerate(exceptions) if e["source"] == src
+                           and e["source_record_id"] == row["source_record_id"]
+                           and sorted(e["missing"]) == row["missing"]), None)
+                if ok is None:
+                    conv[src] = {**conv[src], "status": "fail"}
+                    full[src]["passed"] = False
+                    full[src]["reasons"] = [*full[src]["reasons"],
+                                            f"{row['source_record_id']}: missing {', '.join(row['missing'])}, "
+                                            "not compared and not on the canary exceptions list"]
+                else:
+                    used.add(ok)
         elif src == "noaa-currents":
             r = cc.run_canary(a.sets, currents_cache, start=start)
             conv[src], full[src] = cc.convention_canary(r), r
         else:
             raise combine.CombineError(f"{src}: no canary is defined")
         log(f"canary {src}: {conv[src]}")
+    stale = [e for i, e in enumerate(exceptions) if i not in used and e["source"] in agency]
+    if stale:
+        raise combine.CombineError(f"canary exceptions that match no uncompared set (review them): {stale}")
     return conv, full
 
 

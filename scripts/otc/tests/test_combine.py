@@ -304,6 +304,16 @@ def test_a_source_whose_canary_fails_stops_the_build():
                       build_commit="1234567", table_id=TABLE, canaries={"noaa": {"status": "fail", "gauges": 1}})
 
 
+def test_a_source_with_no_canary_stops_the_build():
+    a = agency(ref("8443970", 42.3551, -71.05))
+    with pytest.raises(CombineError, match="D11"):
+        combine.merge(gesla_release(), {"noaa": a}, station_ids=IDS, build_commit="1234567", table_id=TABLE,
+                      canaries={})
+    with pytest.raises(CombineError, match="D11"):
+        combine.merge(gesla_release(), {"noaa": a}, station_ids=IDS, build_commit="1234567", table_id=TABLE,
+                      canaries={"noaa": {"gauges": 5}})
+
+
 def test_an_agency_record_with_no_station_id_stops_the_build():
     with pytest.raises(CombineError, match="no station id"):
         combine.merge(gesla_release(), {"noaa": agency(ref("7", 1.0, 1.0))}, station_ids=IDS,
@@ -339,6 +349,15 @@ def test_the_currents_bar_is_the_canary_rule_read_for_events():
     assert cc.judge([comparison(s, dt=(4.0,)) for s in "ABC"], [])["status"] == "pass"
     assert cc.judge([comparison(s, dv=(0.011,)) for s in "ABC"], [])["status"] == "fail"    # median dv > 1 cm/s
     assert cc.judge(ok, ["D bin 1"])["status"] == "fail"                                    # not cached
+
+
+def test_one_station_off_by_more_than_10_min_or_3_cm_s_fails_whatever_the_medians():
+    ok = [comparison(s) for s in "ABCDE"]
+    assert cc.judge(ok, [])["status"] == "pass"
+    assert cc.judge(ok[:4] + [comparison("E", dt=(1.0, 10.5))], [])["status"] == "fail"
+    assert cc.judge(ok[:4] + [comparison("E", dt=(1.0, 10.0))], [])["status"] == "pass"
+    assert cc.judge(ok[:4] + [comparison("E", dv=(0.031,))], [])["status"] == "fail"
+    assert cc.judge(ok[:4] + [comparison("E", dv=(0.03,))], [])["status"] == "pass"
 
 
 def test_the_sample_is_fixed_whatever_the_order():
@@ -383,9 +402,24 @@ def test_canaries_compare_only_sets_with_the_four_constituents(monkeypatch):
     a = agency(*(SourceSet({"lat": lat, "lon": -70.0, "country": "USA", "type": "reference", "aliases": {}},
                            {"source_record_id": rid, "constituents": four(rid, drop=drop)})
                  for rid, lat, drop in (("n0", 40.0, ()), ("n5", 45.0, ()), ("n9", 49.0, ()), ("nk", 40.0, ("K1",)))))
-    conv, full = bo.run_canaries({"noaa": a}, comp + [comparator({"record_id": "g9"})], None, log=lambda m: None)
+    comp9 = comp + [comparator({"record_id": "g9"})]
+    exc = [{"source": "noaa", "source_record_id": "nk", "missing": ["K1"], "reason": "publishes no K1"}]
+    conv, full = bo.run_canaries({"noaa": a}, comp9, None, exceptions=exc, log=lambda m: None)
     assert conv["noaa"]["status"] == "pass" and conv["noaa"]["gauges"] == 3
     assert full["noaa"]["not_compared_missing_constituents"] == [{"source_record_id": "nk", "missing": ["K1"]}]
+    # F4b: a set that cannot be compared fails the canary unless a reasoned exception names it
+    conv, full = bo.run_canaries({"noaa": a}, comp9, None, exceptions=[], log=lambda m: None)
+    assert conv["noaa"]["status"] == "fail" and any("nk: missing K1" in r for r in full["noaa"]["reasons"])
+    wrong = [{**exc[0], "missing": ["O1"]}]
+    with pytest.raises(CombineError, match="match no uncompared set"):          # does not match: a stale row
+        bo.run_canaries({"noaa": a}, comp9, None, exceptions=wrong, log=lambda m: None)
+
+
+def test_the_committed_canary_exceptions_are_viker_only():
+    from otc_pipeline import build_otc as bo
+    rows = bo.load_canary_exceptions()
+    assert [(r["source"], r["source_record_id"], r["missing"]) for r in rows] == [("kartverket", "VIK", ["K1"])]
+    assert all(r["reason"].strip() for r in rows)
 
 
 # --- F1: the same agency gauge joins first (fix round 1) --------------------------------------------
