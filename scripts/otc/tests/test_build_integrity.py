@@ -592,6 +592,7 @@ def test_make_docs_is_the_entry_point_with_calibration_and_overlay(tmp_path, dum
     (run / "timebase_manifest.json").write_text(json.dumps(m))
     cal = tmp_path / "cal"
     sa.write_calibration({**short_calibration(f, rid=rid),         # made from this run on this dump (check_bound)
+                          "config": {**short_calibration(f, rid=rid).get("config", {}), "method": sa.method()},
                           "inputs": {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": dump.sha256}}, cal)
     monkeypatch.setattr(gesla_sets, "GeslaRelease", lambda: rel)
     monkeypatch.setattr(gesla_sets, "load_tcd_dump", lambda p: dump)
@@ -621,9 +622,12 @@ def test_make_docs_refuses_a_calibration_of_other_fits_or_another_dump(tmp_path,
     monkeypatch.setattr(gesla_sets, "load_tcd_dump", lambda p: dump)
     for n, inputs, why in ((1, {"fit_runs": [sa.run_identity(other)], "tcd_table_sha256": dump.sha256}, "the build uses"),
                            (2, {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": "e" * 64}, "made on the TCD dump"),
-                           (3, {}, "the build uses")):
+                           (3, {}, "the build uses"),
+                           (4, {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": dump.sha256}, "method is not recorded")):
         cal = tmp_path / f"cal{n}"
-        sa.write_calibration({**short_calibration(f, rid=rid), "inputs": inputs}, cal)
+        conf = short_calibration(f, rid=rid).get("config", {})
+        sa.write_calibration({**short_calibration(f, rid=rid), "inputs": inputs,
+                              "config": conf if n == 4 else {**conf, "method": sa.method()}}, cal)
         with pytest.raises(ValueError, match=why):
             gesla_sets.main(["make-docs", "--fit-run", str(run), "--audit-dir", str(audit), "--calibration", str(cal),
                              "--out", str(tmp_path / f"docs{n}")])

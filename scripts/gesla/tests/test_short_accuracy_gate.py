@@ -92,7 +92,7 @@ def gate_cli(tmp_path, monkeypatch):
     (other / "fits").mkdir(parents=True)
     (other / "results.jsonl").write_text('{"record": "a", "outcome": "short", "x": 1}\n')
     cal_dir = tmp_path / "cal"
-    sa.write_calibration({"cal_version": sa.CAL_VERSION, "config": {}, "targets": {}, "refused": {},
+    sa.write_calibration({"cal_version": sa.CAL_VERSION, "config": {"method": sa.method()}, "targets": {}, "refused": {},
                           "inputs": {"fit_runs": [sa.run_identity(run)]}}, cal_dir)
     h = type("H", (), {})()
     h.run, h.other, h.cal, h.out = run, other, cal_dir, tmp_path / "gate.json"
@@ -164,3 +164,16 @@ def test_apply_needs_the_calibrations_own_fit_runs(gate_cli):
     assert h.applied == []
     h.gates = [True]
     assert g.main(argv) == 0
+
+
+def test_apply_needs_the_codes_method(gate_cli):
+    # FIX-SRCAL r2: a calibration of a superseded method (v7: none recorded) takes no gate pass
+    h = gate_cli
+    cal = sa.read_calibration(h.cal)
+    cal.pop("_sha256")
+    cal["config"].pop("method")
+    sa.write_calibration(cal, h.cal)
+    h.gates = [False, True]
+    with pytest.raises(SystemExit, match="method is not recorded"):
+        g.main([*h.argv, "--until-pass"])
+    assert h.applied == []

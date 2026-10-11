@@ -108,6 +108,7 @@ def fakes(tmp_path, monkeypatch):
     crun = _Run()
     paths = _inputs(tmp_path)
     cal = {"cal_version": 6, "_sha256": "c" * 64,          # made from the run, then the overlay, on the dump (check_bound)
+           "config": {"method": sa.method()},
            "inputs": {"fit_runs": [sa.run_identity(paths["fit_run"]), sa.run_identity(paths["overlay_run"])],
                       "tcd_table_sha256": "d" * 64}}
     doc = {"record_id": "a", "fit": {"constituents": {"M2": {}}}}
@@ -205,6 +206,17 @@ def test_a_calibration_of_other_fit_runs_stops_the_build(fakes):
 def test_a_calibration_made_on_another_tcd_dump_stops_the_build(fakes):
     fakes.cal["inputs"]["tcd_table_sha256"] = "e" * 64          # e.g. the plain XTide dump's
     with pytest.raises(SystemExit, match="made on the TCD dump e+, the build uses d+"):
+        _build(fakes)
+    assert "docs_from_fit_run" not in fakes.seen
+
+
+@pytest.mark.parametrize("config,why", [({}, "method is not recorded"),            # v6, v7
+                                         ({"method": {"cal_method_version": 2, "cut_list_rule": "donor list"}},
+                                          "method is {'cal_method_version': 2")])
+def test_a_calibration_of_another_method_stops_the_build(fakes, config, why):
+    # FIX-SRCAL r2: same fit run and dump, superseded cut method (v7) never reaches a release
+    fakes.cal["config"] = config
+    with pytest.raises(SystemExit, match=why):
         _build(fakes)
     assert "docs_from_fit_run" not in fakes.seen
 

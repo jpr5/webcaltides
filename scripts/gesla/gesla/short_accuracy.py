@@ -49,6 +49,10 @@ station's and it holds the targets the round asks; every other row is cut again.
 only with the fit runs and TCD dump it was made from (check_bound).
 
     uv run python -m gesla.short_accuracy --fit-run DIR [--overlay-run DIR] --out DIR [--workers 4]
+    uv run python -m gesla.short_accuracy record-method DIR      (record_method: a stamped calibration's method)
+
+The calibration records its method (config["method"]: CAL_METHOD_VERSION and the cut list rule); a build, make-docs and
+the gate use only a calibration of this code's method (check_bound).
 """
 from __future__ import annotations
 
@@ -847,6 +851,17 @@ def _mask_job(rid: str) -> tuple[str, np.ndarray | None, str | None]:
 
 
 CUT_LIST_RULE = "select_candidate_list on the cut, the station's GESLA COUNTRY"   # in every cuts.jsonl stamp
+# The calibration method: what makes a calibration's stated values (raise it whenever a change to the code would change
+# them for the same fit runs and TCD dump). A build, make-docs and the gate refuse a calibration of another method
+# (check_bound). 3: cuts fitted with fit_run's choice of list for the cut (FIX-SRCAL r1); calibrations before it
+# (v6: no extended fits; v7: the donor's own full-record list) record no method.
+CAL_METHOD_VERSION = 3
+RULE_METHOD = {CUT_LIST_RULE: CAL_METHOD_VERSION}          # the method a cut list rule in the stamps belongs to
+
+
+def method() -> dict:
+    """The calibration method of this code, as config["method"] records it."""
+    return {"cal_method_version": CAL_METHOD_VERSION, "cut_list_rule": CUT_LIST_RULE}
 
 
 def cut_candidate_list(table: TcdTable, cut: Series, country: str | None) -> str:
@@ -937,13 +952,18 @@ def check_bound(cal: Mapping, fit_runs: Sequence[Path], *, tcd_table_sha256: str
     """A build must use the calibration made from the fit runs it builds (the run, then the overlay): their
     results.jsonl and timebase_manifest.json (which names every fit's sha256) must be the ones the calibration
     names, in order, and (when tcd_table_sha256 is given) the build's TCD dump must be the one the calibration was
-    made on, else ValueError naming each difference. Its targets are keyed to those fits (fit_sha256): with any
+    made on, and its method (config["method"]) must be this code's (method(); none recorded is another method),
+    else ValueError naming each difference. The commit is not compared: a build's commit may follow the calibration's. Its targets are keyed to those fits (fit_sha256): with any
     other run the short records it would refuse are not uncalibrated but calibrated on other fits, so the build
     stops."""
     inputs = cal.get("inputs", {})
+    why = []
+    got = (cal.get("config") or {}).get("method")
+    if got != method():
+        why.append(f"the calibration's method is {got if got is not None else 'not recorded (made before methods were versioned)'}, "
+                   f"this code's is {method()}")
     want = [{k: r.get(k) for k in ("results_jsonl_sha256", "manifest_sha256")} for r in inputs.get("fit_runs", [])]
     have = [{k: r[k] for k in ("results_jsonl_sha256", "manifest_sha256")} for r in map(run_identity, fit_runs)]
-    why = []
     if not want or want != have:
         named = [r.get("dir") for r in inputs.get("fit_runs", [])]
         why.append(f"the calibration was made from the fit runs {named} {want}, the build uses "
@@ -952,7 +972,7 @@ def check_bound(cal: Mapping, fit_runs: Sequence[Path], *, tcd_table_sha256: str
         why.append(f"the calibration was made on the TCD dump {inputs.get('tcd_table_sha256')}, the build uses "
                    f"{tcd_table_sha256}")
     if why:
-        raise ValueError("; ".join(why) + ": re-run gesla.short_accuracy on the build's fit runs")
+        raise ValueError("; ".join(why) + ": re-run gesla.short_accuracy on the build's fit runs with this code")
 
 
 def load_rows(fit_runs: Sequence[Path]) -> tuple[dict[str, dict], dict[str, Path]]:
@@ -1272,7 +1292,7 @@ def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed
                       "pool_stations": POOL_STATIONS, "pool_candidates": POOL_CANDIDATES, "m2_ratio": list(M2_RATIO),
                       "form_limits": list(FORM_LIMITS), "cosite_km": COSITE_KM, "pool_min_good_days": POOL_MIN_GOOD_DAYS,
                       "sanity_m2_max_m": SANITY_M2_MAX_M, "sanity_ratio": SANITY_RATIO,
-                      "sanity_neighbours": SANITY_NEIGHBOURS, "holdout_n": holdout_n, "seed": seed,
+                      "sanity_neighbours": SANITY_NEIGHBOURS, "holdout_n": holdout_n, "seed": seed, "method": method(),
                       "unclaimed": list(UNCLAIMED), "unclaimed_reason": UNCLAIMED_REASON},
            "inputs": {"fit_runs": run_inputs, "tcd_table": str(tcd_path), "tcd_table_sha256": sha256_file(tcd_path),
                       "tcd_sha256": table.tcd_sha256,
@@ -1283,6 +1303,32 @@ def calibrate(fit_runs: Sequence[Path], out_dir: Path, *, workers: int = 4, seed
     write_calibration(cal, out_dir)
     log(f"done in {(time.time() - t_start) / 60:.1f} min")
     return cal
+
+
+def record_method(cal_dir: Path) -> dict:
+    """Write config["method"] into a calibration made with stamped cuts but before its method was recorded (v8), by
+    deriving it from its cuts.jsonl: every row must carry a stamp with the calibration's own commit, TCD dump and seed
+    and one cut list rule that names a method (RULE_METHOD), else ValueError. Nothing else in the file changes;
+    MANIFEST.json is rewritten (cuts.jsonl and masks.npz are not touched)."""
+    cal = read_calibration(cal_dir)
+    cal.pop("_sha256", None)
+    if "method" in cal["config"]:
+        raise ValueError(f"{cal_dir}: the calibration already records its method {cal['config']['method']}")
+    want = {"commit": cal["code"]["commit"], "tcd_table_sha256": cal["inputs"]["tcd_table_sha256"],
+            "seed": cal["config"]["seed"]}
+    rules, n = [], 0
+    for x in (cal_dir / CUTS_FILE).read_text().splitlines():
+        st = json.loads(x).get("stamp")
+        if st is None or {k: st.get(k) for k in want} != want:
+            raise ValueError(f"{cal_dir}/{CUTS_FILE}: row {n + 1} stamp {st} is not the calibration's own {want}")
+        rules.append(st.get("cut_list_rule"))
+        n += 1
+    if n == 0 or set(rules) != {rules[0]} or rules[0] not in RULE_METHOD:
+        raise ValueError(f"{cal_dir}/{CUTS_FILE}: cut list rules {sorted(set(map(str, rules)))} over {n} rows name no one method")
+    rule = rules[0]
+    cal["config"]["method"] = {"cal_method_version": RULE_METHOD[rule], "cut_list_rule": rule}
+    write_calibration(cal, cal_dir)
+    return cal["config"]["method"]
 
 
 def summary(cal: Mapping) -> dict:
@@ -1309,6 +1355,12 @@ def summary(cal: Mapping) -> dict:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["record-method"]:               # python -m gesla.short_accuracy record-method CAL_DIR
+        if len(argv) != 2:
+            raise SystemExit("usage: python -m gesla.short_accuracy record-method CAL_DIR")
+        print(json.dumps(record_method(Path(argv[1]))), flush=True)
+        return 0
     ap = argparse.ArgumentParser(prog="python -m gesla.short_accuracy")
     ap.add_argument("--fit-run", required=True, type=Path, help="a fit run dir (results.jsonl, fits/)")
     ap.add_argument("--overlay-run", type=Path, help="a partial run whose records replace the fit run's")

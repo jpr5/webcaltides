@@ -647,21 +647,21 @@ def _run(root, name, results, manifest=None):
 def test_a_calibration_binds_to_the_fit_runs_it_was_made_from(tmp_path):
     run = _run(tmp_path, "run", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
     over = _run(tmp_path, "over", '{"record": "b"}\n', {"fits_sha256": {"b": "2" * 64}})
-    cal = {"inputs": {"fit_runs": [sa.run_identity(run), sa.run_identity(over)]}}
+    cal = {"config": {"method": sa.method()}, "inputs": {"fit_runs": [sa.run_identity(run), sa.run_identity(over)]}}
     sa.check_bound(cal, [run, over])
     copy = _run(tmp_path, "copy", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
-    sa.check_bound({"inputs": {"fit_runs": [sa.run_identity(copy)]}}, [run])     # the bytes, not the path
+    sa.check_bound({"config": {"method": sa.method()}, "inputs": {"fit_runs": [sa.run_identity(copy)]}}, [run])     # the bytes, not the path
     with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
         sa.check_bound(cal, [run])                                                # the overlay left out
     with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
         sa.check_bound(cal, [over, run])                                          # the order: the overlay wins
     with pytest.raises(ValueError, match="re-run gesla.short_accuracy"):
-        sa.check_bound({"inputs": {}}, [run])                                     # a calibration naming none
+        sa.check_bound({"config": {"method": sa.method()}, "inputs": {}}, [run])   # a calibration naming none
 
 
 def test_a_refit_breaks_the_binding_by_its_results_or_its_fits(tmp_path):
     run = _run(tmp_path, "run", '{"record": "a", "rms_m": 0.1}\n', {"fits_sha256": {"a": "1" * 64}})
-    cal = {"inputs": {"fit_runs": [sa.run_identity(run)]}}
+    cal = {"config": {"method": sa.method()}, "inputs": {"fit_runs": [sa.run_identity(run)]}}
     refit = _run(tmp_path, "refit", '{"record": "a", "rms_m": 0.2}\n', {"fits_sha256": {"a": "1" * 64}})
     with pytest.raises(ValueError, match="the build uses"):
         sa.check_bound(cal, [refit])
@@ -785,7 +785,7 @@ def test_the_station_job_fits_each_cut_with_its_own_choice(tmp_path, monkeypatch
 
 def test_a_calibration_made_on_another_tcd_dump_is_not_bound(tmp_path):
     run = _run(tmp_path, "run", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
-    cal = {"inputs": {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": "e" * 64}}
+    cal = {"config": {"method": sa.method()}, "inputs": {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": "e" * 64}}
     sa.check_bound(cal, [run], tcd_table_sha256="e" * 64)
     with pytest.raises(ValueError, match="made on the TCD dump e+, the build uses 7+"):
         sa.check_bound(cal, [run], tcd_table_sha256="7" * 64)
@@ -921,3 +921,66 @@ def test_a_relative_dump_path_is_the_manifests(tmp_path, monkeypatch):
     (elsewhere / "dump.json").write_text('{"other": 1}')                       # a same-named file in the cwd
     monkeypatch.chdir(elsewhere)
     assert sa.fit_runs_tcd([run]) == run / "dump.json"
+
+
+# --- the calibration method (FIX-SRCAL r2) ----------------------------------------------------------------------
+
+def _bound(run, **config):
+    return {"config": config, "inputs": {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": "d" * 64}}
+
+
+def test_a_calibration_of_another_method_is_not_bound(tmp_path):
+    run = _run(tmp_path, "run", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
+    sa.check_bound(_bound(run, method=sa.method()), [run], tcd_table_sha256="d" * 64)
+    with pytest.raises(ValueError, match=r"method is not recorded .*this code's is \{'cal_method_version': 3"):
+        sa.check_bound(_bound(run), [run], tcd_table_sha256="d" * 64)                 # v6, v7: none recorded
+    old = {"cal_method_version": 2, "cut_list_rule": "the donor's own full-record list"}
+    with pytest.raises(ValueError, match=r"method is \{'cal_method_version': 2.*this code's is \{'cal_method_version': 3"):
+        sa.check_bound(_bound(run, method=old), [run], tcd_table_sha256="d" * 64)
+    with pytest.raises(ValueError, match="method is"):
+        sa.check_bound(_bound(run, method={**sa.method(), "cut_list_rule": "x"}), [run])
+    assert sa.method() == {"cal_method_version": sa.CAL_METHOD_VERSION, "cut_list_rule": sa.CUT_LIST_RULE}
+
+
+def test_calibrate_records_the_method(cal_harness, tmp_path):
+    cal = sa.calibrate([cal_harness.run], tmp_path / "out", workers=1)
+    assert cal["config"]["method"] == sa.method()
+    assert sa.read_calibration(tmp_path / "out")["config"]["method"] == sa.method()
+
+
+def _stamped(tmp_path, rows):
+    tab = fake_table()
+    cal = {**_cal(tab, _fit(tab, 40.5)), "config": {"seed": 0}, "code": {"commit": "c0ffee"},
+           "inputs": {"tcd_table_sha256": "d" * 64}}
+    (tmp_path / sa.CUTS_FILE).write_text("".join(json.dumps(r) + "\n" for r in rows))
+    sa.write_calibration(cal, tmp_path)
+    return cal
+
+
+def test_record_method_derives_it_from_the_stamps_and_changes_nothing_else(tmp_path):
+    st = sa.cut_stamp("c0ffee", "d" * 64, 0)
+    cal = _stamped(tmp_path, [{"station": "s", "stamp": st}, {"station": "u", "stamp": st}])
+    cuts = (tmp_path / sa.CUTS_FILE).read_bytes()
+    assert sa.main(["record-method", str(tmp_path)]) == 0
+    got = sa.read_calibration(tmp_path)
+    assert got["config"]["method"] == sa.method()
+    got.pop("_sha256"); got["config"].pop("method")
+    assert got == cal and (tmp_path / sa.CUTS_FILE).read_bytes() == cuts
+    with pytest.raises(ValueError, match="already records its method"):
+        sa.record_method(tmp_path)
+
+
+@pytest.mark.parametrize("rows,why", [
+    ([{"station": "s"}], "is not the calibration's own"),                                      # v7: no stamp
+    ([{"station": "s", "stamp": {**sa.cut_stamp("c0ffee", "d" * 64, 0), "commit": "beef"}}], "is not the calibration's own"),
+    ([{"station": "s", "stamp": {**sa.cut_stamp("c0ffee", "d" * 64, 0), "tcd_table_sha256": "e" * 64}}], "is not the calibration's own"),
+    ([{"station": "s", "stamp": {**sa.cut_stamp("c0ffee", "d" * 64, 0), "seed": 1}}], "is not the calibration's own"),
+    ([{"station": "s", "stamp": {**sa.cut_stamp("c0ffee", "d" * 64, 0), "cut_list_rule": "donor list"}}], "name no one method"),
+    ([{"station": "s", "stamp": sa.cut_stamp("c0ffee", "d" * 64, 0)},
+      {"station": "u", "stamp": {**sa.cut_stamp("c0ffee", "d" * 64, 0), "cut_list_rule": "donor list"}}], "name no one method"),
+    ([], "name no one method")])
+def test_record_method_refuses_cuts_it_cannot_vouch_for(tmp_path, rows, why):
+    _stamped(tmp_path, rows)
+    with pytest.raises(ValueError, match=why):
+        sa.record_method(tmp_path)
+    assert "method" not in sa.read_calibration(tmp_path)["config"]
