@@ -127,6 +127,13 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(gs, "load_tcd_dump", lambda p: SimpleNamespace(table=table, sha256="d" * 64, path=Path(p)))
     monkeypatch.setattr(gs, "load_audit", lambda d: audits[Path(d).name])
     monkeypatch.setattr(gs, "docs_from_fit_run", docs_from_fit_run)
+    eot20 = {"a": {"M2": [1.0, 100.0]}}           # FIX-LP: the inversion screen reads the fit audit's EOT20
+
+    def load_eot20(audit_dir):
+        seen["eot20_audit_dir"] = audit_dir
+        return eot20
+    monkeypatch.setattr(gs, "load_eot20", load_eot20)
+    seen["eot20"] = eot20
     monkeypatch.setattr(gb, "read_calibration", lambda d: seen.setdefault("calibration_dir", d) and cal)
     monkeypatch.setattr(gb, "gesla_licences", lambda docs: ([], {}))
     monkeypatch.setattr(sm, "load", lambda: smap)
@@ -150,7 +157,8 @@ def test_build_hands_each_input_to_its_step(fakes):
     release, report, crun, prov = _build(fakes)
     seen = fakes.seen
     assert seen["docs_from_fit_run"] == dict(run=p["fit_run"], ids=["a"], audit_dir=p["audit_dir"],
-                                             calibration=fakes.cal, overlay_dir=p["overlay_run"])
+                                             calibration=fakes.cal, overlay_dir=p["overlay_run"], eot20=seen["eot20"])
+    assert seen["eot20_audit_dir"] == p["audit_dir"]
     assert seen["calibration_dir"] == p["calibration_dir"] and seen["ticon_csv"] == p["ticon_csv"]
     # the final verdicts, not the fit's audit, decide what is disputed and annotate TICON-4
     assert seen["ticon_audit"] is fakes.audits["final"] and seen["ticon_refs"] == p["ticon_refs"]
