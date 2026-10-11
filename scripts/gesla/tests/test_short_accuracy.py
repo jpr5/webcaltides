@@ -573,40 +573,60 @@ def test_a_short_record_never_publishes_sa_or_ssa():
     assert [(x["name"], x["dropped_reason"]) for x in d] == [("SA", "long_period_rule"), ("SSA", "long_period_rule")]
 
 
-def test_mm_mf_msf_need_three_cycles_and_twice_their_uncertainty():
-    # 64 days: MF 4.7 cycles, MM 2.3 (constable_hook: MF 0.176 u 0.134, MM 0.325 u 0.170)
-    d = {x["name"]: x["detail"] for x in sa.long_period_drops(lp_fit(64, MF=(0.176, 0.134), MM=(0.325, 0.170)),
+def _ref(**lines):
+    return {"record": "long-1", "km": 1.2, "lines": {n: lines.get(n) for n in ("MM", "MF", "MSF")}}
+
+
+def test_with_no_long_record_nearby_nothing_confirms_mm_mf_msf():
+    # waal_km_922: MF 0.413 m at u 0.1 passed the old 2 u_m test, on a river reach with no long record within 3 km
+    d = {x["name"]: x["detail"] for x in sa.long_period_drops(lp_fit(300, MF=(0.413, 0.1), MM=(0.02, 0.001)),
                                                                  LP_SPEEDS, None)}
-    assert set(d) == {"MF", "MM"}
-    assert "2.3 cycles" in d["MM"] and "under 2 x its uncertainty" in d["MM"]
-    assert "cycles" not in d["MF"] and "under 2 x its uncertainty" in d["MF"]
-    # 83 days, well above its noise: MM is kept (3.0 cycles), MF and MSF too
-    assert sa.long_period_drops(lp_fit(83, MM=(0.05, 0.01), MF=(0.03, 0.01), MSF=(0.03, 0.01)), LP_SPEEDS, None) == []
-    assert [x["name"] for x in sa.long_period_drops(lp_fit(82, MM=(0.05, 0.01)), LP_SPEEDS, None)] == ["MM"]
-    assert [x["name"] for x in sa.long_period_drops(lp_fit(200, MF=(0.0199, 0.01)), LP_SPEEDS, None)] == ["MF"]
-    assert sa.long_period_drops(lp_fit(200, MF=(0.02, 0.01)), LP_SPEEDS, None) == []
+    assert set(d) == {"MF", "MM"} and "no long record of the same water within 3 km confirms its 0.413 m" in d["MF"]
 
 
-def test_a_value_over_three_times_the_long_reference_is_dropped():
-    ref = {"record": "long-1", "km": 3.4, "amps": {"MM": 0.009, "MF": 0.009, "MSF": 0.02}}
-    d = {x["name"]: x["detail"] for x in sa.long_period_drops(lp_fit(200, MM=(0.026, 0.005), MF=(0.028, 0.005),
-                                                                        MSF=(0.06, 0.005)), LP_SPEEDS, ref)}
-    assert set(d) == {"MF"} and "over 3 x the 0.009 m of the long record long-1 (3.4 km)" in d["MF"]
+def test_a_line_the_long_record_confirms_is_published_over_three_cycles():
+    # santana-716d against santana-716a: MSF 0.126 m at 41 deg against 0.12 at 45 deg
+    ref = _ref(MSF=[0.12, 45.0], MM=[0.08, 10.0])
+    f = lp_fit(300, MSF=(0.126, 0.01), MM=(0.08, 0.01))
+    f["constituents"]["MSF"]["phase_deg"], f["constituents"]["MM"]["phase_deg"] = 41.0, 10.0
+    assert sa.long_period_drops(f, LP_SPEEDS, ref) == []
+    # the same values over 2.3 cycles of MM (64 days): MM is dropped for its cycles alone
+    d = sa.long_period_drops(dict(f, rayleigh_hours=64 * 24.0), LP_SPEEDS, ref)
+    assert [x["name"] for x in d] == ["MM"] and "2.3 cycles" in d[0]["detail"] and "differs" not in d[0]["detail"]
+    assert [x["name"] for x in sa.long_period_drops(dict(f, rayleigh_hours=82 * 24.0), LP_SPEEDS, ref)] == ["MM"]
+    assert sa.long_period_drops(dict(f, rayleigh_hours=83 * 24.0), LP_SPEEDS, ref) == []
+
+
+def test_confirmed_means_within_3_cm_or_half_the_long_value_whichever_is_larger():
+    def drops(a, g, line):
+        f = lp_fit(300, MM=(a, 0.001))
+        f["constituents"]["MM"]["phase_deg"] = g
+        return [x["detail"] for x in sa.long_period_drops(f, LP_SPEEDS, _ref(MM=line))]
+    assert drops(0.229, 0.0, [0.2, 0.0]) == []                 # 2.9 cm off a 20 cm line
+    assert drops(0.26, 0.0, [0.1, 0.0])                        # 16 cm off a 10 cm line: over 3 cm and over 5 cm
+    assert drops(0.149, 0.0, [0.1, 0.0]) == []                 # 4.9 cm off: under half of 10 cm
+    assert drops(0.151, 0.0, [0.1, 0.0])
+    assert drops(0.02, 0.0, [0.02, 180.0])                     # same amplitude, opposite phase: 4 cm vector apart
+    assert drops(0.02, 0.0, [0.02, 60.0]) == []                # 2 cm vector apart
+    assert drops(0.029, 0.0, None) == []                       # the long record has it under its noise: 0
+    d = drops(0.221, 0.0, [0.03, 0.0])                         # caernarvon_outfall: MM 0.221 against 0.030
+    assert d and "differs by 0.191 m (over 0.030 m) from the long record long-1 (1.2 km), which has 0.030 m" in d[0]
+    assert "which has it under its noise" in drops(0.031, 0.0, None)[0]
 
 
 def _long(rid, lat, lon, m2=(0.7, 10.0), **lp):
     c = {"M2": {"amp_m": m2[0], "phase_deg": m2[1]}}
-    c.update({n: {"amp_m": a, "phase_deg": 0.0} for n, a in lp.items()})
-    return {"record": rid, "lat": lat, "lon": lon, "fit": {"constituents": c, "band_noise_m": {"LP": 0.004}}}
+    c.update({n: {"amp_m": a, "phase_deg": 5.0} for n, a in lp.items()})
+    return {"record": rid, "lat": lat, "lon": lon, "fit": {"constituents": c}}
 
 
-def test_the_reference_is_the_nearest_long_record_in_the_same_water_within_15_km():
+def test_the_reference_is_the_nearest_long_record_in_the_same_water_within_3_km():
     f = lp_fit(60)
-    longs = [_long("far", 40.0, -73.80, MM=0.02),                       # 16.9 km
-             _long("bay", 40.0, -73.99, m2=(0.04, 120.0), MM=0.5),      # 0.9 km, another water (M2 x0.06)
-             _long("lag", 40.0, -73.98, m2=(0.7, 60.0), MM=0.5),        # 1.7 km, M2 50 deg away
-             _long("near", 40.03, -74.0, MM=0.02, MF=0.01)]              # 3.3 km, same water
+    longs = [_long("far", 40.03, -74.0, MM=0.02),                       # 3.3 km
+             _long("bay", 40.0, -74.005, m2=(0.04, 120.0), MM=0.5),     # 0.4 km, another water (M2 x0.06)
+             _long("lag", 40.0, -74.01, m2=(0.7, 60.0), MM=0.5),        # 0.9 km, M2 50 deg away
+             _long("near", 40.02, -74.0, MM=0.02, MF=0.01)]              # 2.2 km, same water
     r = sa.long_period_reference(f, 40.0, -74.0, longs)
-    assert r == {"record": "near", "km": 3.34, "amps": {"MM": 0.02, "MF": 0.01, "MSF": 0.008}}   # MSF: 2 x its noise
+    assert r == {"record": "near", "km": 2.22, "lines": {"MM": [0.02, 5.0], "MF": [0.01, 5.0], "MSF": None}}
     assert sa.long_period_reference(f, 40.0, -74.0, [longs[0]]) is None
     assert sa.long_period_reference(f, 40.0, -74.0, []) is None

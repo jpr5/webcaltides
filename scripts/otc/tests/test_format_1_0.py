@@ -309,32 +309,34 @@ def lp_doc(table, f, rid="synthetic-1-nor-test", meta=None, attach=True):
     return d
 
 
-def test_a_short_record_publishes_no_sa_ssa_and_only_resolved_mm_mf_msf(table_lp):
-    """200 days: SSA kept by the Rayleigh rule (1.1 cycles) but never published short; MF under 2 x its own
-    uncertainty (constable_hook's MF 0.176 u 0.134); MM and MSF resolved, above noise and with no long record
-    nearby: published."""
-    f = lp_fit(table_lp, 200 * 24.0, SSA=(0.965, 0.01), MM=(0.05, 0.01), MF=(0.176, 0.134), MSF=(0.03, 0.005))
+def test_a_short_record_with_no_long_record_nearby_publishes_no_long_period_line(table_lp):
+    """200 days: SSA kept by the Rayleigh rule (1.1 cycles) but never published short; MM, MF and MSF resolved and
+    well above their own noise, but no long record of the same water within 3 km confirms them (waal_km_922's MF)."""
+    f = lp_fit(table_lp, 200 * 24.0, SSA=(0.965, 0.01), MM=(0.05, 0.001), MF=(0.413, 0.1), MSF=(0.03, 0.001))
     assert {"SSA", "MM", "MF", "MSF"} <= set(f["rayleigh_kept"]) and "SA" not in f["rayleigh_kept"]
     cs = source_set(lp_doc(table_lp, f), licence_id="gesla-derived").constant_set
-    assert sorted(c["name"] for c in cs["constituents"]) == ["K1", "M2", "MM", "MSF", "O1", "S2"]
+    assert sorted(c["name"] for c in cs["constituents"]) == ["K1", "M2", "O1", "S2"]
     held = {d["name"]: d for d in cs["dropped_constituents"] if d["dropped_reason"] == "long_period_rule"}
-    assert set(held) == {"SSA", "MF"}
-    assert "never publishes SA or SSA" in held["SSA"]["detail"] and "under 2 x its uncertainty" in held["MF"]["detail"]
+    assert set(held) == {"SSA", "MM", "MF", "MSF"}
+    assert "never publishes SA or SSA" in held["SSA"]["detail"] and "within 3 km confirms" in held["MF"]["detail"]
     assert [d["name"] for d in cs["dropped_constituents"]] == sorted(d["name"] for d in cs["dropped_constituents"])
     assert next(d for d in cs["dropped_constituents"] if d["name"] == "SA")["dropped_reason"] == "other"
     assert [e for e in jsonschema_errors(cs, "constant_set") if "set_id" not in e and "build" not in e] == []
 
 
-def test_a_short_value_over_three_times_its_long_neighbour_is_held(table_lp):
-    short = lp_doc(table_lp, lp_fit(table_lp, 200 * 24.0, MM=(0.05, 0.01), MSF=(0.03, 0.005)), attach=False)
-    long_ = lp_doc(table_lp, lp_fit(table_lp, LONG_HOURS, MM=(0.01, 0.001), MSF=(0.012, 0.001)),
-                   rid="long-1-nor-test", meta={"LATITUDE": "60.42"}, attach=False)       # 3.3 km north
+def test_a_short_record_publishes_only_the_lines_its_long_neighbour_confirms(table_lp):
+    short = lp_doc(table_lp, lp_fit(table_lp, 200 * 24.0, MM=(0.05, 0.01), MF=(0.04, 0.005), MSF=(0.06, 0.005)),
+                   attach=False)
+    long_ = lp_doc(table_lp, lp_fit(table_lp, LONG_HOURS, MM=(0.052, 0.001), MSF=(0.01, 0.001)),
+                   rid="long-1-nor-test", meta={"LATITUDE": "60.40"}, attach=False)       # 1.1 km north, no MF
     attach_long_period_references([short, long_])
     assert short["long_period_reference"]["record"] == "long-1-nor-test" and "long_period_reference" not in long_
     cs = source_set(short, licence_id="gesla-derived").constant_set
-    assert "MSF" in {c["name"] for c in cs["constituents"]} and "MM" not in {c["name"] for c in cs["constituents"]}
-    mm = next(d for d in cs["dropped_constituents"] if d["name"] == "MM")
-    assert "over 3 x the 0.010 m of the long record long-1-nor-test (3.3 km)" in mm["detail"]
+    names = {c["name"] for c in cs["constituents"]}
+    assert "MM" in names and not names & {"MF", "MSF"}
+    held = {d["name"]: d["detail"] for d in cs["dropped_constituents"] if d["dropped_reason"] == "long_period_rule"}
+    assert "differs by 0.050 m (over 0.030 m) from the long record long-1-nor-test (1.1 km), which has 0.010 m" in held["MSF"]
+    assert "which has it under its noise" in held["MF"]
 
 
 def test_a_long_record_keeps_its_long_period_lines(table_lp):

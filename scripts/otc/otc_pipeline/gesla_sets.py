@@ -470,7 +470,7 @@ def refusal(record: str, reason: str, message: str, good_hours: float | None = N
 
 def attach_long_period_references(docs: list[dict]) -> None:
     """Sets every short document's long_period_reference (short_accuracy.long_period_reference: the nearest long
-    record of `docs` within 15 km in the same water, or None), which source_set needs to judge the record's MM, MF
+    record of `docs` within 3 km in the same water, or None), which source_set needs to confirm the record's MM, MF
     and MSF. A long record is a document with no Rayleigh drop and no refusal."""
     longs = [{"record": d["record_id"], "lat": d["lat"], "lon": d["lon"], "fit": d["fit"]}
              for d in docs if not d["rayleigh_drops"] and not d.get("refusal")]

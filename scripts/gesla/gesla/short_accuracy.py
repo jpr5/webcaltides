@@ -452,13 +452,15 @@ def inverted_against_eot20(fit: Mapping, eot: Mapping | None) -> str | None:
 
 # Under a year the long-period lines are mostly weather, river flow or datum drift, not tide: on the release run,
 # 145 short sets published one of them at 10 cm or more, and 76 of the 102 with a long record nearby were over 3 x
-# its value. A short record publishes MM, MF and MSF only when each test passes; SA and SSA never.
+# its value. The fit's own uncertainty does not catch them (u_m is underestimated there: waal_km_922 MF 0.413 m passed
+# a 2 u_m test on a river reach with no M2). So a short record publishes MM, MF or MSF only when a long record of the
+# same water within 3 km confirms the value, and only over 3 cycles; SA and SSA never.
 LONG_PERIOD = ("SA", "SSA", "MM", "MF", "MSF")
 LONG_PERIOD_NEVER_SHORT = ("SA", "SSA")
 LONG_PERIOD_MIN_CYCLES = 3.0     # the record covers at least 3 periods of the constituent
-LONG_PERIOD_SNR = 2.0            # its amplitude is at least 2 x its own uncertainty u_m
-LONG_PERIOD_REF_KM = 15.0        # a long record within this distance, in the same water (below), is the reference
-LONG_PERIOD_REF_RATIO = 3.0      # ... and the short record's value is at most 3 x the reference's
+LONG_PERIOD_REF_KM = 3.0         # a long record within this distance, in the same water (below), is the reference
+LONG_PERIOD_CONFIRM_M = 0.03     # confirmed: |z_short - z_long| at most this ...
+LONG_PERIOD_CONFIRM_SHARE = 0.5  # ... or at most this x the long record's amplitude, whichever is larger
 LONG_PERIOD_SAME_WATER_M2_RATIO = (0.5, 2.0)    # same water: the reference's M2 amplitude over the record's
 LONG_PERIOD_SAME_WATER_M2_DEG = 45.0            # ... and M2 phases within this
 LONG_PERIOD_RULE = "long_period_rule"           # format 1.0 dropped_reason
@@ -467,10 +469,9 @@ LONG_PERIOD_RULE = "long_period_rule"           # format 1.0 dropped_reason
 def long_period_reference(fit: Mapping, lat: float, lon: float, longs: Sequence[Mapping]) -> dict | None:
     """The nearest long record within LONG_PERIOD_REF_KM in the same water (M2 amplitude ratio within
     LONG_PERIOD_SAME_WATER_M2_RATIO, M2 phase within LONG_PERIOD_SAME_WATER_M2_DEG), or None. longs: {"record", "lat",
-    "lon", "fit"} of the run's long records (no Rayleigh drop, not refused). Returns {"record", "km", "amps"}: amps is
-    each of MM, MF, MSF the reference publishes, else the noise rule's threshold it was under (SNR_MIN x its LP band
-    noise: the most the long record allows), so the short record's value is judged against it."""
-    from .select_constituents import SNR_MIN
+    "lon", "fit"} of the run's long records (no Rayleigh drop, not refused). Returns {"record", "km", "lines"}: lines
+    is [amp m, phase deg] of each of MM, MF, MSF the reference publishes, None for one it does not (under its noise:
+    amplitude 0 for the confirmation)."""
     m2 = fit["constituents"].get("M2")
     if m2 is None or not longs:
         return None
@@ -478,25 +479,24 @@ def long_period_reference(fit: Mapping, lat: float, lon: float, longs: Sequence[
     for i in np.argsort(d, kind="stable"):
         if d[i] > LONG_PERIOD_REF_KM:
             break
-        rf = longs[i]["fit"]
-        r2 = rf["constituents"].get("M2")
+        rc = longs[i]["fit"]["constituents"]
+        r2 = rc.get("M2")
         if r2 is None or not (LONG_PERIOD_SAME_WATER_M2_RATIO[0] <= r2["amp_m"] / m2["amp_m"] <= LONG_PERIOD_SAME_WATER_M2_RATIO[1]) \
                 or abs(_wrap(r2["phase_deg"] - m2["phase_deg"])) > LONG_PERIOD_SAME_WATER_M2_DEG:
             continue
-        floor = SNR_MIN * float((rf.get("band_noise_m") or {}).get("LP") or 0.0)
-        amps = {c: float(rf["constituents"][c]["amp_m"]) if c in rf["constituents"] else round(floor, AMP_ND)
-                for c in LONG_PERIOD if c not in LONG_PERIOD_NEVER_SHORT}
-        return {"record": longs[i]["record"], "km": round(float(d[i]), 2), "amps": amps}
+        lines = {c: ([float(rc[c]["amp_m"]), float(rc[c]["phase_deg"])] if c in rc else None)
+                 for c in LONG_PERIOD if c not in LONG_PERIOD_NEVER_SHORT}
+        return {"record": longs[i]["record"], "km": round(float(d[i]), 2), "lines": lines}
     return None
 
 
 def long_period_drops(fit: Mapping, speeds: Mapping[str, float], reference: Mapping | None) -> list[dict]:
     """The long-period lines a short record's fit (RecordFit.to_dict()) does not publish, as format 1.0
     dropped_constituents items (dropped_reason long_period_rule, detail: every test it failed), sorted by name.
-    SA and SSA always; MM, MF and MSF when the record covers fewer than LONG_PERIOD_MIN_CYCLES of its periods
-    (rayleigh_hours x speed / 360), or its amplitude is under LONG_PERIOD_SNR x its u_m, or it is over
-    LONG_PERIOD_REF_RATIO x the reference's (long_period_reference; no test without one). Call it for a short record
-    only (one with Rayleigh drops)."""
+    SA and SSA always; MM, MF and MSF unless the record covers at least LONG_PERIOD_MIN_CYCLES of its periods
+    (rayleigh_hours x speed / 360) and the reference (long_period_reference) confirms it: the vector difference is at
+    most LONG_PERIOD_CONFIRM_M or LONG_PERIOD_CONFIRM_SHARE x the reference's amplitude, whichever is larger. With no
+    reference nothing confirms it. Call it for a short record only (one with Rayleigh drops)."""
     out = []
     hours = float(fit["rayleigh_hours"])
     for name in LONG_PERIOD:
@@ -511,15 +511,18 @@ def long_period_drops(fit: Mapping, speeds: Mapping[str, float], reference: Mapp
         cycles = hours * float(speeds[name]) / 360.0
         if cycles < LONG_PERIOD_MIN_CYCLES:
             why.append(f"the record covers {cycles:.1f} cycles, under {LONG_PERIOD_MIN_CYCLES:g}")
-        a, u = float(c["amp_m"]), c.get("u_m")
-        if u is None or a < LONG_PERIOD_SNR * float(u):
-            why.append(f"amplitude {a:.3f} m is under {LONG_PERIOD_SNR:g} x its uncertainty "
-                       + (f"{float(u):.3f} m" if u is not None else "(none stated)"))
-        if reference is not None:
-            r = float(reference["amps"][name])
-            if a > LONG_PERIOD_REF_RATIO * r:
-                why.append(f"amplitude {a:.3f} m is over {LONG_PERIOD_REF_RATIO:g} x the {r:.3f} m of the long record "
-                           f"{reference['record']} ({reference['km']:.1f} km)")
+        a = float(c["amp_m"])
+        if reference is None:
+            why.append(f"no long record of the same water within {LONG_PERIOD_REF_KM:g} km confirms its {a:.3f} m")
+        else:
+            line = reference["lines"][name]
+            ref_amp = line[0] if line else 0.0
+            z = _vec(a, float(c["phase_deg"])) - (_vec(line[0], line[1]) if line else 0j)
+            limit = max(LONG_PERIOD_CONFIRM_M, LONG_PERIOD_CONFIRM_SHARE * ref_amp)
+            if abs(z) > limit:
+                why.append(f"{a:.3f} m differs by {abs(z):.3f} m (over {limit:.3f} m) from the long record "
+                           f"{reference['record']} ({reference['km']:.1f} km), which has "
+                           + (f"{ref_amp:.3f} m" if line else "it under its noise"))
         if why:
             out.append({"name": name, "dropped_reason": LONG_PERIOD_RULE, "detail": "; ".join(why)})
     return sorted(out, key=lambda o: o["name"])
