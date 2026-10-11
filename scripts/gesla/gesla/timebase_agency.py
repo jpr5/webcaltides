@@ -18,7 +18,10 @@ Classes (EOT20 is the second, independent source: timebase_sibling.eot_lag_alone
   lead     tau <= -AG_LEAD_MIN: the record leads EVERY agency station within AG_MAX_KM by two hours or more. A gauge
            up a river, inside a lagoon or behind a structure lags the open water; it does not lead all of it by hours.
            Offset evidence on the agency constants alone: disputed, never corrected on it alone.
-  agreed   AG_PAIR_MIN <= |tau| and EOT20 within AG_AGREE_MIN of tau: two sources agree on one offset; disputed.
+  agreed   AG_PAIR_MIN <= |tau|, EOT20 within AG_AGREE_MIN of tau and a qualifying reference within AG_AGREE_KM:
+           two sources agree on one offset at the record's own site; disputed. EOT20 sees the open water, so an inland
+           gauge 14 km up a waterway lags it and the coast station alike (AIW at Nixons Crossroads SC: +54 against
+           NOAA 13.8 km off, EOT20 +52; a physical lag, never flagged).
            A lag (tau > 0) is never offset evidence on the agency constants alone: rivers lag (Hudson, the WSV Ems,
            Hunte and Wümme gauges), and so does the upper Elbe low water.
   correct  an agreed or lead offset whose every qualifying reference is within AG_HOUR_MIN of a whole number n != 0 of
@@ -68,6 +71,7 @@ AG_RESID_MIN = 45.0
 AG_LEAD_MIN = 120.0
 AG_PAIR_MIN = 45.0
 AG_AGREE_MIN = 15.0
+AG_AGREE_KM = 3.0
 AG_HOUR_MIN = 15.0
 AG_SAME_KM = 2.0
 AG_SAME_RATIO = (0.9, 1.1)
@@ -170,7 +174,10 @@ def classify(sh: dict | None, eot_lag: float | None) -> dict:
     if sh is None:
         return {"kind": "none", "hours": None, "why": "no agency station within the limits"}
     tau = sh["tau"]
-    agree = eot_lag is not None and abs(eot_lag - tau) <= AG_AGREE_MIN
+    # EOT20 sees the open water, so an inland gauge lags EOT20 and the open-water stations alike: a lag both see is
+    # an offset only at the reference's own site (AG_AGREE_KM)
+    agree = (eot_lag is not None and abs(eot_lag - tau) <= AG_AGREE_MIN
+             and any(q["km"] <= AG_AGREE_KM for q in sh["refs"]))
     if tau <= -AG_LEAD_MIN:
         kind = "lead"
     elif abs(tau) >= AG_PAIR_MIN and agree:

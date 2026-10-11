@@ -101,8 +101,14 @@ def test_ref_index_finds_stations_by_distance():
                                           (+300.0, None, "none"), (+88.5, 85.0, "agreed"), (+88.5, 60.0, "none"),
                                           (-50.0, -45.0, "agreed"), (-30.0, -30.0, "none")])
 def test_classes(tau, e, kind):
-    sh = {"tau": tau, "refs": [{"ref": "noaa:A", "tau": tau, "km": 5.0, "ratio": 1.0, "resid": 5.0}]}
+    sh = {"tau": tau, "refs": [{"ref": "noaa:A", "tau": tau, "km": 2.5, "ratio": 1.0, "resid": 5.0}]}
     assert tag.classify(sh, e)["kind"] == kind
+
+
+def test_a_lag_both_sources_see_from_far_off_is_physical_not_agreed():
+    # AIW at Nixons Crossroads SC: +54 against NOAA 13.8 km away, EOT20 +52: the waterway's lag, not a clock
+    far = {"tau": 54.0, "refs": [{"ref": "noaa:A", "tau": 54.0, "km": 13.8, "ratio": 0.9, "resid": 8.0}]}
+    assert tag.classify(far, 52.0)["kind"] == "none"
 
 
 def test_a_whole_hour_needs_every_reference_eot20_and_a_reference_in_the_same_water():
