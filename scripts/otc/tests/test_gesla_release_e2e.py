@@ -135,7 +135,7 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
         sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
         fit_run_results_sha256="f" * 64, disputed_reasons={},
         astro_tables=[astro_table(congen, tcd, names, table_id=TABLE_ID)], congen_run=crun)
-    assert report.counts() == {"short_record": 1} and report.refused[0]["record"] == short
+    assert report.counts() == {"short_record_uncalibrated": 1} and report.refused[0]["record"] == short
     assert sorted(report.published) == sorted(instant + mean60)
     write_release(release, tmp_path, datestamp="20261010", app_export=None, congen_run=crun)
     assert check_release_dir(tmp_path) == []

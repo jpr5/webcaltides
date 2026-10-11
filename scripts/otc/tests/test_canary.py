@@ -220,7 +220,7 @@ def test_canary_tolerances_are_parameters():
     assert not canary("noaa", src, ges, phase_tol_deg=1.0).passed
 
 
-# --- gesla-fit documents (DOC_VERSION 2, format 1.0) -----------------------------------------------
+# --- gesla-fit documents (DOC_VERSION 3, format 1.0) -----------------------------------------------
 
 TABLE = TcdTable({"years": [2020, 2020], "tcd_sha256": "b" * 64, "aliases": {},
                   "constituents": {n: {"speed": sp, "v0u": [0.0], "f": [1.0]} for n, sp in SPEEDS.items()}})
@@ -231,7 +231,8 @@ def doc(rid="boston-8443970-usa-noaa", lat=42.354801, lon=-71.0534):
     meta = {"SITE NAME": "Boston", "SITE CODE": "8443970", "COUNTRY": "USA", "LATITUDE": str(lat),
             "LONGITUDE": str(lon), "CONTRIBUTOR (ABBREVIATED)": "NOAA"}
     fit = {"first_s": 1104537600, "last_s": 1704067200, "n": 160000, "z0_m": 1.6,
-           "rayleigh_kept": list(CANDIDATES), "candidates_missing_from_tcd": [],
+           "rayleigh_hours": 166000.0, "rayleigh_kept": [n for n in CANDIDATES if n in SPEEDS],
+           "candidates_missing_from_tcd": [n for n in CANDIDATES if n not in SPEEDS],
            "constituents": {n: {"amp_m": a, "phase_deg": g, "u_m": 0.001} for n, (a, g) in BOSTON.items()}}
     tb = time_base_annotation(None, 0, rid, decided_in="20261010")
     return fit_document(rid, "4.1", "a" * 64, meta, TABLE, fit, good_hours=166000.0, time_base=tb)

@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 from gesla.read_gesla import GeslaRelease, otc_work
+from gesla import short_accuracy
 from gesla.select_constituents import CANDIDATES, RecordFit
 from gesla.tcd_table import TcdTable
 from gesla.timebase_audit import check_audit_outputs, correction_of, declared_correction
@@ -61,7 +62,7 @@ from gesla.timebase_verdict import Correction
 
 from otc_pipeline.adapter import SourceSet
 
-DOC_VERSION = 2
+DOC_VERSION = 3
 SOURCE = "gesla-fit"
 CONVENTION_ID = "otc-greenwich-schureman-v1"
 FIT_MIN_GOOD_HOURS = 15 * 24.0   # release.fit_min_good_hours: below it a record gets no constants
@@ -363,9 +364,15 @@ def load_audit(audit_dir: Path) -> Audit:
 # --- fit documents --------------------------------------------------------------------------------
 
 def fit_document(record_id: str, source_version: str, member_sha256: str, meta: Mapping[str, str],
-                 table: TcdTable, fit: Mapping, *, good_hours: float, time_base: Mapping) -> dict:
-    """One record's fit document (DOC_VERSION 2). `fit` is RecordFit.to_dict(), with its
-    sampling_corrected stamp; `meta` the record's GESLA metadata row."""
+                 table: TcdTable, fit: Mapping, *, good_hours: float, time_base: Mapping,
+                 calibration: Mapping | None = None) -> dict:
+    """One record's fit document (DOC_VERSION 3). `fit` is RecordFit.to_dict(), with its
+    sampling_corrected stamp; `meta` the record's GESLA metadata row; good_hours is kept to 0.1 h on both
+    paths (the fit run's data_hours, fit_records' record_hours). The v3 fields come from
+    gesla.short_accuracy.fit_document_v3_fields and `calibration` (read_calibration): rayleigh_drops,
+    expected_accuracy, accuracy_by_constituent, microtidal and refusal (implausible_fit, or
+    short_record_uncalibrated for a short record the calibration does not cover). They never raise:
+    source_set refuses the record instead."""
     names = sorted(set(fit["constituents"]) | set(fit.get("snr_dropped", ())))
     return {"doc_version": DOC_VERSION, "record_id": record_id, "source_version": source_version,
             "member_sha256": member_sha256, "tcd_sha256": table.tcd_sha256,
@@ -373,9 +380,11 @@ def fit_document(record_id: str, source_version: str, member_sha256: str, meta: 
             "country": meta["COUNTRY"], "lat": float(meta["LATITUDE"]), "lon": float(meta["LONGITUDE"]),
             "contributor": meta.get("CONTRIBUTOR (ABBREVIATED)", ""),
             "datum_information": meta.get("DATUM INFORMATION", ""),
-            "good_hours": float(good_hours), "time_base": dict(time_base),
+            "good_hours": round(float(good_hours), 1), "time_base": dict(time_base),
             "speeds_deg_per_hour": {n: table.speed(n) for n in names},
-            "fit": dict(fit)}
+            "fit": dict(fit),
+            **short_accuracy.fit_document_v3_fields(table, fit, record_id=record_id, good_hours=float(good_hours),
+                                                    calibration=calibration)}
 
 
 def _mark(fit: Mapping) -> dict | None:
@@ -394,7 +403,7 @@ def _unusable(rf: RecordFit) -> str | None:
 
 
 def fit_records(table: TcdTable, release: GeslaRelease, record_ids: Iterable[str], *, audit_dir: Path,
-                roles: Mapping | None = None) -> tuple[list[dict], list[dict]]:
+                roles: Mapping | None = None, calibration: Mapping | None = None) -> tuple[list[dict], list[dict]]:
     """Fit each record from the verified cache with its published time base (G03c default: QC, the
     last 19 years), from the audit in audit_dir (load_audit: the gate runs before any fit). Returns
     (documents, refused); a refused entry (build-report shape) names the record, the reason class
@@ -443,7 +452,7 @@ def fit_records(table: TcdTable, release: GeslaRelease, record_ids: Iterable[str
             raise FitIntegrityError(f"{rid}: sampling_corrected left no stamp on the fit")
         check_stamp(rid, fit, tb["published"], corr=corr, speed=table.speed, span=span)
         docs.append(fit_document(rid, release.version, rec.member_sha256, meta, table, fit,
-                                 good_hours=hours, time_base=tb))
+                                 good_hours=hours, time_base=tb, calibration=calibration))
     return docs, skipped
 
 
@@ -459,7 +468,8 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def check_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, audit: Audit) -> tuple[dict, dict[str, dict]]:
+def check_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, audit: Audit, *,
+                  overlay: bool = False) -> tuple[dict, dict[str, dict]]:
     """The fit run's timebase_manifest.json, fit to consume: status complete, a clean tree, results.jsonl
     as the manifest recorded it, `fits_sha256` (record id -> sha256 of fits/<record>.json) listing exactly
     the fitted rows and every file in fits/, and the inputs this build uses: the same TCD dump (its
@@ -471,8 +481,9 @@ def check_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, audit: Aud
     if not mp.is_file():
         raise FitIntegrityError(f"{run_dir}: no timebase_manifest.json: not a fit run")
     m = json.loads(mp.read_text())
-    if m.get("status") != "complete":
-        raise FitIntegrityError(f"{mp}: status {m.get('status')!r}: only a complete run is published")
+    if m.get("status") != ("partial" if overlay else "complete"):
+        raise FitIntegrityError(f"{mp}: status {m.get('status')!r}: only a complete run is published"
+                                + (" (an overlay is a partial run: ONLY)" if overlay else ""))
     if m.get("dirty") is not False:
         raise FitIntegrityError(f"{mp}: dirty {m.get('dirty')!r}: the run's commit does not describe its code")
     want = (m.get("outputs") or {}).get("results.jsonl")
@@ -517,7 +528,8 @@ def check_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, audit: Aud
 
 
 def docs_from_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, record_ids: Iterable[str], *,
-                      audit_dir: Path) -> tuple[list[dict], list[dict]]:
+                      audit_dir: Path, calibration: Mapping | None = None,
+                      overlay_dir: Path | None = None) -> tuple[list[dict], list[dict]]:
     """Fit documents from a complete in-repo fit run (results.jsonl + fits/<record>.json +
     timebase_manifest.json), with the time bases of the audit in audit_dir (load_audit, gated). The
     run is checked first (check_fit_run): its TCD dump, GESLA manifest and audit csv must be this
@@ -528,6 +540,14 @@ def docs_from_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, record
     audit = load_audit(audit_dir)
     manifest, base = check_fit_run(run_dir, tcd, release, audit)
     fits_map = manifest[FITS_SHA256]
+    src = {rid: Path(run_dir) for rid in base}
+    if overlay_dir is not None:                 # a partial refit (same TCD, GESLA and audit) replaces its records
+        om, orows = check_fit_run(overlay_dir, tcd, release, audit, overlay=True)
+        for rid, r in orows.items():
+            if r.get("outcome") != "fitted":
+                raise FitIntegrityError(f"{overlay_dir}: {rid} is {r.get('outcome')} in the overlay")
+            base[rid], src[rid] = r, Path(overlay_dir)
+            fits_map = {**fits_map, rid: om[FITS_SHA256][rid]}
     table = tcd.table
     meta_all = release.metadata()
     docs, refused = [], []
@@ -552,7 +572,7 @@ def docs_from_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, record
         if r["time_base"] != corr.label or r["months_dropped"] != len(corr.months_drop):
             raise FitIntegrityError(f"{rid}: the run fitted {r['time_base']} ({r['months_dropped']} months dropped), "
                                     f"this build publishes {corr.label} ({len(corr.months_drop)})")
-        data = (Path(run_dir) / "fits" / f"{rid}.json").read_bytes()
+        data = (src[rid] / "fits" / f"{rid}.json").read_bytes()
         if hashlib.sha256(data).hexdigest() != fits_map[rid]:
             raise FitIntegrityError(f"{rid}: fits/{rid}.json is not the file the run recorded ({FITS_SHA256})")
         fit = json.loads(data)
@@ -562,8 +582,33 @@ def docs_from_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, record
         check_stamp(rid, fit, tb["published"], corr=corr, speed=table.speed,
                     span=(int(r["first"]), int(r["last"]) + 3600))
         docs.append(fit_document(rid, release.version, release.members[rid]["sha256"], meta, table, fit,
-                                 good_hours=r["data_hours"], time_base=tb))
+                                 good_hours=r["data_hours"], time_base=tb, calibration=calibration))
+    # R8 on the whole run, with or without a calibration: an implausible fit never publishes
+    fitted = {rid: {"lat": float(meta_all[rid]["LATITUDE"]), "lon": float(meta_all[rid]["LONGITUDE"])}
+              for rid, r in base.items() if r.get("outcome") == "fitted" and rid in meta_all}
+    run_fits = {rid: json.loads((src[rid] / "fits" / f"{rid}.json").read_bytes()) for rid in fitted}
+    for rid, why in short_accuracy.run_implausible(fitted, run_fits, table).items():
+        for d in docs:
+            if d["record_id"] == rid and not d.get("refusal"):
+                d["refusal"] = {"reason": why["reason"], "detail": f"{rid}: {why['detail']}"}
     return docs, refused
+
+
+def make_docs(run_dir: Path, audit_dir: Path, out_dir: Path, *, calibration_dir: Path | None,
+              overlay_dir: Path | None = None, tcd_path: Path | None = None) -> Path:
+    """The fit documents of a build, from a complete fit run (and the R7 overlay refit), with the short-record
+    calibration (gesla.short_accuracy.read_calibration of calibration_dir), written to out_dir (write_fits). The
+    entry point of the build's fit stage. Returns the MANIFEST path; the stage's refusals go beside out_dir, to
+    <out_dir>.refused.json (out_dir holds only the doc set)."""
+    tcd = load_tcd_dump(tcd_path or otc_work() / "tcd_table.json")
+    release = GeslaRelease()
+    cal = short_accuracy.read_calibration(calibration_dir) if calibration_dir is not None else None
+    ids = sorted(json.loads(x)["record"] for x in (Path(run_dir) / "results.jsonl").read_text().splitlines() if x.strip())
+    docs, refused = docs_from_fit_run(run_dir, tcd, release, ids, audit_dir=audit_dir, calibration=cal,
+                                      overlay_dir=overlay_dir)
+    path = write_fits(docs, out_dir)
+    out_dir.with_name(out_dir.name + ".refused.json").write_text(json.dumps(refused, indent=1, sort_keys=True) + "\n")
+    return path
 
 
 def write_fits(docs: Iterable[dict], out_dir: Path) -> Path:
@@ -699,11 +744,17 @@ def comparator_set(doc: Mapping) -> SourceSet:
         return speeds[n]
     check_stamp(rid, f, tb["published"], corr=_label_correction(rid, tb["published"]), speed=speed,
                 span=(int(f["first_s"]), int(f["last_s"]) + 3600))
-    missing = [n for n in CANDIDATES if n not in f["rayleigh_kept"] and n not in f["candidates_missing_from_tcd"]]
-    if missing:
-        raise NotPublishable(f"{rid}: short record ({doc['good_hours']:.0f} good hours): the Rayleigh rule drops "
-                             f"{missing}; a short_record set needs expected_accuracy, which this build does not have",
-                             "short_record")
+    refused = doc.get("refusal")
+    if refused:
+        raise NotPublishable(refused["detail"], refused["reason"])
+    missing = {n for n in CANDIDATES if n not in f["rayleigh_kept"] and n not in f["candidates_missing_from_tcd"]}
+    drops = doc["rayleigh_drops"]
+    if {d["name"] for d in drops} != missing:
+        raise FitIntegrityError(f"{rid}: rayleigh_drops {sorted(d['name'] for d in drops)} are not the Rayleigh "
+                                f"rule's drops {sorted(missing)}")
+    if missing and not doc.get("expected_accuracy"):
+        raise NotPublishable(f"{rid}: short record ({doc['good_hours']:.0f} good hours) with no expected_accuracy",
+                             short_accuracy.UNCALIBRATED)
     speeds = doc["speeds_deg_per_hour"]
     cons = []
     for name in sorted(f["constituents"]):
@@ -725,10 +776,20 @@ def comparator_set(doc: Mapping) -> SourceSet:
         "constituents": cons,
         "provenance": {"input_sha256": [doc["member_sha256"]], "tcd_sha256": doc["tcd_sha256"]},
     }
-    dropped = [{"name": _canonical_name(rid, n), "dropped_reason": "noise"} for n in sorted(f.get("snr_dropped", ()))]
+    dropped = [dict(d, name=_canonical_name(rid, d["name"]))
+               for d in short_accuracy.dropped_constituents(drops, sorted(f.get("snr_dropped", ())))]
     if dropped:
         cs["dropped_constituents"] = dropped
     flags = []
+    if drops:
+        cs["expected_accuracy"] = dict(doc["expected_accuracy"])
+        flags.append({"flag": "short_record",
+                      "reason": clip(short_accuracy.short_record_reason(doc["good_hours"], drops,
+                                                                        notes=doc.get("accuracy_notes") or ())),
+                      "values": short_accuracy.flag_values(doc["accuracy_by_constituent"])})
+        if doc.get("microtidal"):
+            flags.append({"flag": "microtidal", "reason": "every main constituent (M2, S2, K1, O1) is under 5 mm: "
+                                                          "the phases are not meaningful as tide phases"})
     if tb["code"] in ("unverified", "disputed"):
         flags.append({"flag": "time_base", "reason": clip(f"time base {tb['code']}: {tb['reason']}")})
     cs["qc_status"] = "flagged" if flags else "ok"
@@ -780,10 +841,20 @@ def _load_sets(in_dir: Path, only: Iterable[str] | None, make) -> list[SourceSet
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="otc_pipeline.gesla_sets")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    md = sub.add_parser("make-docs", help="write a build's fit documents from a fit run and the calibration")
+    md.add_argument("--fit-run", type=Path, required=True)
+    md.add_argument("--audit-dir", type=Path, required=True)
+    md.add_argument("--calibration", type=Path, help="gesla.short_accuracy calibration dir (without it no short "
+                    "record publishes)")
+    md.add_argument("--overlay-run", type=Path, help="a partial refit replacing its records (the R7 overlay)")
+    md.add_argument("--out", type=Path, required=True)
     sp = sub.add_parser("show", help="print the sets of a build as JSON")
     sp.add_argument("--datestamp", required=True)
     sp.add_argument("--licence-ids", type=Path, required=True, help="JSON {record id: licence id} (L-NC)")
     a = ap.parse_args(argv)
+    if a.cmd == "make-docs":
+        print(make_docs(a.fit_run, a.audit_dir, a.out, calibration_dir=a.calibration, overlay_dir=a.overlay_run))
+        return 0
     for s in load_gesla_sets(a.datestamp, licence_ids=json.loads(a.licence_ids.read_text())):
         print(json.dumps({"station_hint": s.station_hint, "constant_set": s.constant_set}, sort_keys=True))
     return 0

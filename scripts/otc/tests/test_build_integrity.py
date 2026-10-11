@@ -211,7 +211,7 @@ def test_the_pin_check_and_the_parse_read_the_schema_once(monkeypatch):
 
 def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(table, tmp_path):
     good = [doc(table, rid=f"good-{i}-nor-test", row=tb_row()) for i in range(2)]
-    short = doc(table, rid="short-1-nor-test", fit=fit_dict(rayleigh_kept=[n for n in CANDIDATES if n != "T2"]))
+    short = doc(table, rid="short-1-nor-test", fit=fit_dict(rayleigh_hours=100 * 24.0))
     kw = dict(table=table, table_id=TABLE_ID, datestamp=D, created="2026-10-10T00:00:00Z", build_commit="abcdef0",
               station_ids={d["record_id"]: f"OTC-T{i:04d}" for i, d in enumerate(good + [short])}, licences=[LICENCE],
               licence_ids={d["record_id"]: "gesla-derived" for d in good + [short]}, withheld={},
@@ -224,11 +224,11 @@ def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(tab
     release, report = build_release(good + [short], refused=fit_stage, **kw)
     assert [s["constant_sets"][0]["source_record_id"] for s in release["stations"]] == ["good-0-nor-test", "good-1-nor-test"]
     assert report.published == ["good-0-nor-test", "good-1-nor-test"]
-    assert report.counts() == {"short_record": 1, "too_short": 1}
+    assert report.counts() == {"short_record_uncalibrated": 1, "too_short": 1}
     assert {r["record"] for r in report.refused} == {"short-1-nor-test", "tiny-1-nor-test"}
     assert validate_release(release) == []
     out = json.loads(report.write(tmp_path / "BUILD_REPORT.json").read_text())
-    assert out["published"] == 2 and out["refused"] == 2 and out["refused_by_reason"] == {"short_record": 1, "too_short": 1}
+    assert out["published"] == 2 and out["refused"] == 2 and out["refused_by_reason"] == {"short_record_uncalibrated": 1, "too_short": 1}
     with pytest.raises(ValueError, match="no record is publishable"):
         build_release([short], refused=[], **kw)
 
@@ -503,3 +503,65 @@ def test_results_are_hashed_and_parsed_from_one_read(tmp_path, dump, monkeypatch
     monkeypatch.setattr(Path, "read_text", lambda p, *a, **k: reads.append(p.name) or real_text(p, *a, **k))
     docs_from_fit_run(run, dump, rel, [rid], audit_dir=audit)
     assert reads.count("results.jsonl") == 1
+
+
+def test_an_overlay_refit_replaces_its_records_and_must_be_a_partial_run_on_the_same_inputs(tmp_path, dump):
+    """SR-ACC R7: the records the Rayleigh hierarchy changes are published from a partial refit (gesla.fit_run ONLY)."""
+    import shutil
+    a, b = "x-1-nor-test", "y-2-nor-test"
+    run, audit, rel = make_run(tmp_path, dump, {a: fit_dict(), b: fit_dict()}, [])
+    over, _, _ = make_run(tmp_path / "o", dump, {b: fit_dict(amp_m2=1.5)}, [], status="partial")
+    shutil.copy(audit / "timebase.csv", tmp_path / "o" / "audit" / "timebase.csv")
+    over2, _, _ = make_run(tmp_path / "p", dump, {b: fit_dict(amp_m2=1.5)}, [tb_row(file_id="z-9-nor-test")],
+                           status="partial")
+    m = json.loads((over / "timebase_manifest.json").read_text())
+    m["inputs"]["timebase_csv"]["sha256"] = hashlib.sha256((audit / "timebase.csv").read_bytes()).hexdigest()
+    (over / "timebase_manifest.json").write_text(json.dumps(m))
+    docs, _ = docs_from_fit_run(run, dump, rel, [a, b], audit_dir=audit, overlay_dir=over)
+    amps = {d["record_id"]: d["fit"]["constituents"]["M2"]["amp_m"] for d in docs}
+    assert amps == {a: 1.0, b: 1.5}
+    with pytest.raises(FitIntegrityError, match="overlay is a partial run"):
+        docs_from_fit_run(run, dump, rel, [a, b], audit_dir=audit, overlay_dir=run)       # a complete run is not an overlay
+    with pytest.raises(FitIntegrityError, match="inputs.timebase_csv"):
+        docs_from_fit_run(run, dump, rel, [a, b], audit_dir=audit, overlay_dir=over2)     # another audit
+
+
+def test_an_implausible_fit_is_refused_with_no_calibration(tmp_path, dump):
+    """SR-ACC R8 in the run path itself: an M2 over 10 m never publishes, calibration or not."""
+    good, bad = "x-1-nor-test", "big-1-nor-test"
+    run, audit, rel = make_run(tmp_path, dump, {good: fit_dict(), bad: fit_dict(amp_m2=17.67)}, [])
+    docs, _ = docs_from_fit_run(run, dump, rel, [good, bad], audit_dir=audit)
+    by = {d["record_id"]: d for d in docs}
+    assert by[good]["refusal"] is None
+    assert by[bad]["refusal"]["reason"] == "implausible_fit"
+    with pytest.raises(NotPublishable) as e:
+        gesla_sets.source_set(by[bad], licence_id="gesla-derived")
+    assert e.value.reason == "implausible_fit"
+
+
+def test_make_docs_is_the_entry_point_with_calibration_and_overlay(tmp_path, dump, monkeypatch):
+    """The fit stage's entry point: a short record publishes with the calibration, is refused without it."""
+    from test_format_1_0 import SHORT_HOURS, short_calibration
+    from gesla import short_accuracy as sa
+    rid = "short-1-nor-test"
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    run, audit, rel = make_run(tmp_path, dump, {rid: f}, [])
+    rows = (run / "results.jsonl").read_text().replace('"data_hours": 157000.0', f'"data_hours": {SHORT_HOURS}')
+    (run / "results.jsonl").write_text(rows)
+    m = json.loads((run / "timebase_manifest.json").read_text())
+    m["outputs"]["results.jsonl"] = hashlib.sha256((run / "results.jsonl").read_bytes()).hexdigest()
+    (run / "timebase_manifest.json").write_text(json.dumps(m))
+    cal = tmp_path / "cal"
+    sa.write_calibration(short_calibration(f, rid=rid), cal)
+    monkeypatch.setattr(gesla_sets, "GeslaRelease", lambda: rel)
+    monkeypatch.setattr(gesla_sets, "load_tcd_dump", lambda p: dump)
+    gesla_sets.main(["make-docs", "--fit-run", str(run), "--audit-dir", str(audit), "--calibration", str(cal),
+                     "--out", str(tmp_path / "docs")])
+    (d,) = gesla_sets.read_fits(tmp_path / "docs")
+    cs = gesla_sets.source_set(d, licence_id="gesla-derived").constant_set
+    assert cs["expected_accuracy"]["calibration_records"] == 15
+    gesla_sets.main(["make-docs", "--fit-run", str(run), "--audit-dir", str(audit), "--out", str(tmp_path / "docs2")])
+    (d2,) = gesla_sets.read_fits(tmp_path / "docs2")
+    with pytest.raises(NotPublishable) as e:
+        gesla_sets.source_set(d2, licence_id="gesla-derived")
+    assert e.value.reason == "short_record_uncalibrated"

@@ -96,7 +96,8 @@ def _doc(rid, lat, lon, cons, name="Boston", country="USA"):
     meta = {"SITE NAME": name, "SITE CODE": rid.split("-")[1], "COUNTRY": country, "LATITUDE": str(lat),
             "LONGITUDE": str(lon), "CONTRIBUTOR (ABBREVIATED)": "NOAA"}
     fit = {"first_s": 1104537600, "last_s": 1704067200, "n": 160000, "z0_m": 1.6,
-           "rayleigh_kept": list(CANDIDATES), "candidates_missing_from_tcd": [],
+           "rayleigh_hours": 166000.0, "rayleigh_kept": [n for n in CANDIDATES if n in SPEEDS],
+           "candidates_missing_from_tcd": [n for n in CANDIDATES if n not in SPEEDS],
            "constituents": {n: {"amp_m": a, "phase_deg": g, "u_m": 0.001} for n, (a, g) in cons.items()}}
     tb = time_base_annotation(None, 0, rid, decided_in="20261010")
     return fit_document(rid, "4.1", "a" * 64, meta, TABLE, fit, good_hours=166000.0, time_base=tb)

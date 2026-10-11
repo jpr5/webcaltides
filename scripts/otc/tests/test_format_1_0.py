@@ -52,12 +52,31 @@ META = {"FILE NAME": "synthetic-1-nor-test", "SITE NAME": "Synthetic_Harbour", "
         "DATUM INFORMATION": "Unspecified"}
 
 
-def fit_dict(amp_m2=1.0, rayleigh_kept=None):
+LONG_HOURS = 157000.0
+SHORT_HOURS = 100 * 24.0                                 # SSA (182.6 days) is a period drop on the test table
+
+
+def fit_dict(amp_m2=1.0, rayleigh_hours=LONG_HOURS):
+    """A fit consistent with the test table: its Rayleigh selection replays (gesla.short_accuracy)."""
+    from gesla.select_constituents import rayleigh_select
+    kept = [n for n in CANDIDATES if n in SPEEDS and n != "SSA"] + (["SSA"] if rayleigh_hours >= 360 / SPEEDS["SSA"] else [])
     cons = {n: {"amp_m": a, "phase_deg": p, "u_m": 0.001} for n, a, p in
             (("M2", amp_m2, 100.0), ("S2", 0.3, 130.0), ("K1", 0.1, 200.0), ("O1", 0.05, 360.0))}
     return {"constituents": cons, "first_s": 1262304000, "last_s": 1830297600, "n": 157000, "z0_m": 1.234,
-            "rayleigh_kept": list(CANDIDATES if rayleigh_kept is None else rayleigh_kept),
-            "candidates_missing_from_tcd": [], "snr_dropped": ["SSA"]}
+            "rayleigh_hours": rayleigh_hours, "rayleigh_kept": kept,
+            "candidates_missing_from_tcd": [n for n in CANDIDATES if n not in SPEEDS],
+            "snr_dropped": ["SSA"] if "SSA" in kept else []}
+
+
+def short_calibration(fit, rid="synthetic-1-nor-test", good_hours=SHORT_HOURS, microtidal=False):
+    """A calibration (gesla.short_accuracy, version 2) covering one short record."""
+    from gesla import short_accuracy as sa
+    return {"cal_version": sa.CAL_VERSION, "refused": {}, "targets": {rid: {
+        "good_hours": round(good_hours, 1), "cut_to_days": round(good_hours / 24, 1), "calibration_records": 15,
+        "amp_uncertainty_m": 0.012, "phase_uncertainty_deg": 6.5, "microtidal": microtidal,
+        "fit_sha256": sa.fit_sha256(fit),
+        "by_constituent": {"M2": {"amp_m": 0.012, "phase_deg": 1.2}, "S2": {"amp_m": 0.008, "phase_deg": 6.5},
+                           "K1": {"amp_m": 0.004, "phase_deg": 4.0}, "O1": {"amp_m": 0.002, "phase_deg": None}}}}}
 
 
 def tb_row(status="verified", **over):
@@ -75,10 +94,11 @@ def stamped(fit, label, kind=None, factors=None):
     return {**fit, "stats": {"sampling_corrected": {"kind": kind or label, "label": label, "factors": factors or {}}}}
 
 
-def doc(table, *, row=None, fit=None, rid="synthetic-1-nor-test", meta=None):
+def doc(table, *, row=None, fit=None, rid="synthetic-1-nor-test", meta=None, calibration=None):
     tb = time_base_annotation(row, 0, rid, decided_in="20261010", decided_build_commit="1efca1c")
-    return fit_document(rid, "4.1", "a" * 64, {**META, **(meta or {})}, table, fit or fit_dict(), good_hours=157000.0,
-                        time_base=tb)
+    f = fit or fit_dict()
+    return fit_document(rid, "4.1", "a" * 64, {**META, **(meta or {})}, table, f, good_hours=f["rayleigh_hours"],
+                        time_base=tb, calibration=calibration)
 
 
 LICENCE = {"licence_id": "gesla-derived", "spdx": "LicenseRef-GESLA-Research", "provider": "TEST ONLY",
@@ -225,10 +245,48 @@ def test_a_corrected_mean60_record_needs_its_sampling_response_divided(table):
     assert cs["qc_status"] == "ok"
 
 
-def test_a_short_record_is_not_published_without_expected_accuracy(table):
-    with pytest.raises(NotPublishable, match="short record"):
-        source_set(doc(table, fit=fit_dict(rayleigh_kept=[n for n in CANDIDATES if n not in ("SA", "T2")])),
-                   licence_id="gesla-derived")
+def test_a_short_record_without_a_calibration_is_refused_not_crashed(table):
+    with pytest.raises(NotPublishable, match="no calibration") as e:
+        source_set(doc(table, fit=fit_dict(rayleigh_hours=SHORT_HOURS)), licence_id="gesla-derived")
+    assert e.value.reason == "short_record_uncalibrated"
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    other = short_calibration(f, rid="someone-else")
+    with pytest.raises(NotPublishable, match="not a target") as e:
+        source_set(doc(table, fit=f, calibration=other), licence_id="gesla-derived")
+    assert e.value.reason == "short_record_uncalibrated"
+    refit = fit_dict(amp_m2=1.01, rayleigh_hours=SHORT_HOURS)
+    with pytest.raises(NotPublishable, match="differs") as e:
+        source_set(doc(table, fit=refit, calibration=short_calibration(f)), licence_id="gesla-derived")
+
+
+def test_a_calibrated_short_record_is_published_with_its_accuracy(table):
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    cs = source_set(doc(table, fit=f, calibration=short_calibration(f)), licence_id="gesla-derived").constant_set
+    assert cs["expected_accuracy"] == {"cut_to_days": 100.0, "calibration_records": 15, "amp_uncertainty_m": 0.012,
+                                       "phase_uncertainty_deg": 6.5}
+    assert cs["qc_status"] == "flagged"
+    flag = next(x for x in cs["qc_flags"] if x["flag"] == "short_record")
+    assert flag["values"]["S2_phase_uncertainty_deg"] == 6.5 and flag["values"]["O1_phase_uncertainty_deg"] is None
+    assert cs["dropped_constituents"] == [{"name": "SSA", "dropped_reason": "other",
+                                           "detail": "period longer than the record (needs 182.6 days)"}]
+    assert not [x for x in cs["qc_flags"] if x["flag"] == "microtidal"]
+    assert jsonschema_errors(cs, "constant_set") == [] or all("set_id" in e or "build" in e for e in jsonschema_errors(cs, "constant_set"))
+
+
+def test_a_microtidal_short_record_is_flagged(table):
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    cs = source_set(doc(table, fit=f, calibration=short_calibration(f, microtidal=True)),
+                    licence_id="gesla-derived").constant_set
+    assert [x["flag"] for x in cs["qc_flags"]][:2] == ["short_record", "microtidal"]
+
+
+def test_an_implausible_fit_is_refused(table):
+    f = fit_dict()
+    cal = {"cal_version": 2, "refused": {"synthetic-1-nor-test": {"reason": "implausible_fit", "detail": "M2 17.67 m"}},
+           "targets": {}}
+    with pytest.raises(NotPublishable, match="17.67") as e:
+        source_set(doc(table, fit=f, calibration=cal), licence_id="gesla-derived")
+    assert e.value.reason == "implausible_fit"
 
 
 def test_build_needs_the_inputs_other_slots_own(table):
