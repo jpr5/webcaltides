@@ -421,8 +421,20 @@ def test_a_lead_over_lagged_inland_water_is_judged_against_open_water_through_it
     # an unknown open lag: only a reference an undisputed record confirms may judge a record in other water
     unk = {"A": {"lag": None, "how": "unknown", "confirmed": None}}
     assert tag.shift(a, near, SP, unk) is None
-    assert tag.shift(a, near, SP, {"A": {**unk["A"], "confirmed": "card_sound_bridge-8723534-usa-noaa"}})["tau"] \
-        == pytest.approx(-135.5, abs=1)
+    # FIX-LST-5 B1: a record confirming the reference's constants says nothing of its water: still no verdict
+    assert tag.shift(a, near, SP, {"A": {**unk["A"], "confirmed": "card_sound_bridge-8723534-usa-noaa"}}) is None
+    # ... but in the reference's own water an unknown open lag does not matter
+    assert tag.shift(cons(-212.5), near, SP, unk)["tau"] == pytest.approx(-212.5, abs=1)
+
+
+def test_a_reference_ahead_of_the_open_water_never_moves_a_record_earlier():
+    # a reference with a negative open lag (it leads EOT20 by 50 min): the record is judged by its own tau, clipped at 0
+    near = [(ref("A", 4.6), 4.6)]
+    lead = {"A": {"lag": -50.0, "how": "eot20", "confirmed": None}}
+    a = damped(-100.0, 0.82)
+    sh = tag.shift(a, near, SP, lead)
+    assert sh["tau"] == pytest.approx(-100.0, abs=1)                # not -150: no lead of 120 made by the reference
+    assert tag.classify(sh, None)["kind"] == "none"
 
 
 def test_the_lead_residual_allowance_is_for_a_near_reference_and_a_lead_only():
@@ -587,3 +599,23 @@ def test_a_set_across_a_structure_never_judges_a_lag():
                                                              up.items()}, "dist_km": 3.0}
     _apply2(inv, rows, cfg, wk)
     assert rows["s79_t-s79_t-usa-sfwmd"].status == "unverified"
+
+
+def test_a_reviewed_withhold_is_never_a_reference():
+    # FIX-LST-5 L3: a listed record is no set for rule 2, no control for rule B, no site for open_lags
+    spec = {"a-1-x-c1": (-60.0, UNV, 0.0), "b-2-x-c2": (0.0, UNV, 1.0)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -60.0})
+    ta.apply_two_source(rows, inv, cfg, wk, {f: 0 for f in rows}, {}, SP, tag.RefIndex([]), lambda *_: None,
+                        exclude={"b-2-x-c2"})
+    assert rows["a-1-x-c1"].status == "unverified"
+    spec = {"ptm3066-ptm-bgr-cmems": (165.0, UNV, 0.0), "ioc_mang-ioc-rou-cmems": (10.0, UNV, 87.0)}
+    inv, rows, cfg, wk = _setup_sea(spec)
+    ta.apply_regional(rows, inv, cfg, wk, {f: 0 for f in rows}, {}, SP, lambda *_: None,
+                      exclude={"ioc_mang-ioc-rou-cmems"})
+    assert rows["ptm3066-ptm-bgr-cmems"].status == "unverified"
+    coast = ref("C", 0.0)
+    site = [{"id": "c-1-x-noaa", "lat": 10.0, "lon": 20.0, "consts": REF, "disputed": False,
+             "eot": {**{k: list(v) for k, v in REF.items()}, "dist_km": 4.0}}]
+    assert tag.open_lags([coast], site, SP)["C"]["lag"] == pytest.approx(0.0, abs=1)
+    got = tag.open_lags([coast], site, SP, exclude={"c-1-x-noaa"})["C"]
+    assert got["lag"] is None and got["confirmed"] is None

@@ -1451,7 +1451,8 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                         log(f"agency constants: skipped {s}")
                 sp_ = weak_speeds(TcdTable.load(table_path))
                 bound = bound_fits(rows, inv, sibling, dec)
-                lags = tag.open_lags(agency_refs, agency_sites(bound, rows, inv, weak, transforms), sp_)
+                listed = {e["file_id"] for e in withhold}        # FIX-LST-5 L3: never a reference for another record
+                lags = tag.open_lags(agency_refs, agency_sites(bound, rows, inv, weak, transforms), sp_, exclude=listed)
                 log("agency constants: open-water lag of the references: " + ", ".join(
                     f"{k} {v}" for k, v in sorted(Counter(
                         "unknown, confirmed" if x["lag"] is None and x["confirmed"] else "unknown" if x["lag"] is None
@@ -1461,8 +1462,9 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                 sib_crashes = sib_crashes + ag_crashes
                 sib_counts["agency"] = ac
                 sib_counts["two_source"] = apply_two_source(rows, inv, sibling, weak, dec, transforms, sp_,
-                                                            tag.RefIndex(agency_refs), log, lags=lags)
-                sib_counts["regional"] = apply_regional(rows, inv, sibling, weak, dec, transforms, sp_, log)
+                                                            tag.RefIndex(agency_refs), log, lags=lags, exclude=listed)
+                sib_counts["regional"] = apply_regional(rows, inv, sibling, weak, dec, transforms, sp_, log,
+                                                        exclude=listed)
     if withhold:
         sib_counts["reviewed_withhold"] = apply_reviewed_withhold(rows, withhold, inv, log)
     for f in allf:
@@ -1814,7 +1816,7 @@ def _noaa_id_of(file_id: str) -> str | None:
 def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
                      dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float],
                      index: "tag.RefIndex", log, lags: Mapping[str, Mapping] | None = None,
-                     judge: Iterable[str] | None = None, dry: bool = False) -> dict:
+                     judge: Iterable[str] | None = None, dry: bool = False, exclude: Iterable[str] = ()) -> dict:
     """The two-source dispute rule (timebase_agency.two_sources; FIX-LST-2/3), after apply_agency. Dispute only, per
     record: a record that publishes its declared base (unverified or disputed; a verified or corrected one is not
     judged here), fitted on the base it publishes, whose EOT20 (E), other contributors' sets (S) and agency shift (H)
@@ -1828,13 +1830,13 @@ def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], c
     A shift under AG_LEAD_MIN needs an agreeing source with a uniform, undamped shift (timebase_agency.uniform).
     The references are judged as they stand before this step, so one record's dispute never makes another's.
     judge / dry (calibration): judge exactly these records, whatever their status; dry: change no row, return the
-    hits in counts["hits"]."""
+    hits in counts["hits"]. exclude: records never used as a set (the reviewed withholds)."""
     counts = {"bound": 0, "with_two_sources": 0, "disputed": 0, "already_disputed": 0, "not_uniform": 0,
               "sets_same_site_dropped": 0}
     judge = None if judge is None else set(judge)
     bound = bound_fits(rows, inv, cfg, dec)
     offset = {f for f, row in rows.items()
-              if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)}
+              if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)} | set(exclude)
     near = _Near(sorted(bound), inv)
     refs_by = {f"{r.src}:{r.id}": r for r in index.refs}
     eot_cache: dict[str, float | None] = {}
@@ -1945,19 +1947,20 @@ REGIONAL_DISPUTED = "disputed:eot20_regional_offset"
 
 def apply_regional(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
                    dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float],
-                   log, judge: Iterable[str] | None = None, dry: bool = False) -> dict:
+                   log, judge: Iterable[str] | None = None, dry: bool = False, exclude: Iterable[str] = ()) -> dict:
     """EOT20 confirmed by the sea's other gauges (timebase_agency.regional_offset / control_ok; FIX-LST-3), after
     apply_two_source. Dispute only, per record: a Coastal record that publishes its declared base, fitted on it, whose
     EOT20 bands both put it off by RB_MIN or more, the same way, while a gauge of another provider family within
     RB_CONTROL_KM agrees with EOT20, is disputed (REGIONAL_DISPUTED; an already disputed record keeps its code).
-    judge / dry: as apply_two_source."""
+    judge / dry / exclude: as apply_two_source (an excluded record is never a control nor a veto)."""
     counts = {"judged": 0, "offset_by_eot20": 0, "disputed": 0, "already_disputed": 0, "no_control": 0}
     judge = None if judge is None else set(judge)
     bound = bound_fits(rows, inv, cfg, dec)
     gt = {f: (cfg.fits[f].get("gauge_type") or "") for f in bound}
     offset = {f for f, row in rows.items()
               if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)}
-    near = _Near(sorted(f for f in bound if gt[f] == tsib.COASTAL), inv)
+    ex = set(exclude)
+    near = _Near(sorted(f for f in bound if gt[f] == tsib.COASTAL and f not in ex), inv)
     bl: dict[str, dict | None] = {}
 
     def bands(g: str):
@@ -2068,13 +2071,14 @@ def apply_reviewed_withhold(rows: dict[str, AuditRow], withhold: Sequence[dict],
                             log) -> dict:
     """Each listed record with a row becomes disputed (REVIEWER_DISPUTED, reason "reviewer_evidence: <short>"), never
     corrected; a record already disputed takes this code too (the review is its explicit reason), its earlier reason
-    kept after it. A listed record a strong comparator verified or corrected (official, harcon, sibling series) stops
-    the audit: the list never overrides strong evidence."""
+    kept after it. A listed record the audit verified or corrected, by any evidence (official, harcon, sibling series,
+    provider inheritance, the weak checks or the sibling-constants rule; FIX-LST-5 L2), stops the audit: the list
+    never overrides evidence."""
     check_withhold(withhold, inv)
     strong = [e["file_id"] for e in withhold if e["file_id"] in rows and rows[e["file_id"]].status == "used"
-              and rows[e["file_id"]].comparator_kind in ("b", "c", "a")]
+              and rows[e["file_id"]].correction.usable]
     if strong:
-        raise WithholdError("reviewed withhold: listed record(s) a strong comparator verified: "
+        raise WithholdError("reviewed withhold: listed record(s) the audit verified or corrected: "
                             + ", ".join(f"{f} ({rows[f].comparator_kind}: {rows[f].comparator_id})" for f in strong))
     counts = {"listed": len(withhold), "applied": 0, "was_disputed": 0, "not_in_run": 0}
     for e in withhold:

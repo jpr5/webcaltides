@@ -58,7 +58,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -154,7 +154,11 @@ class RefIndex:
 # against a reference in OTHER water than its own is judged against open water through it: the effective shift is
 # tau + max(open_lag, 0). In the SAME water (M2 ratio AG_WATER_RATIO and every constituent within AG_WATER_RESID_MIN:
 # the record and the reference see one tide) the shift is the record's own: tau. A reference whose open_lag is unknown
-# counts only in the same water, or when an undisputed record at it (2 km) confirms its constants (AG_CONFIRM_*).
+# counts only in the same water (FIX-LST-5 B1). An undisputed record that confirms its constants (AG_CONFIRM_*) says the
+# reference's clock is right, not where its water sits behind the open sea, so it no longer lets it judge other water:
+# that assumed an open lag of 0, the CRMS 0535 pattern (Little Card Sound 8723534 lags EOT20 by about +150 min on M2,
+# its diurnals 88-105 min off, so the lag stays unknown). A semidiurnal-only lag was not used: it leaves the 12.4-h
+# cycle unresolved. The confirmation stays in open_lags' output (logged), informational.
 # Uniform shift (Settlement Point 257: M2 +86, S2 +89, K1 +98, O1 +112 with M2 0.84 is the relocated gauge's response,
 # not a clock): a dispute of a shift under AG_LEAD_MIN needs a source whose constituents agree within
 # AG_UNIFORM_SPREAD_MIN and whose amplitudes are undamped (first ratio >= AG_UNIFORM_RATIO). A lead of AG_LEAD_MIN or
@@ -206,12 +210,16 @@ def joint_lag(a: Mapping[str, tuple[float, float]], b: Mapping[str, tuple[float,
             "res": {k: round(x, 1) for k, x in res.items()}}
 
 
-def open_lags(refs: Sequence[AgencyRef], sites: Sequence[dict], speeds: Mapping[str, float]) -> dict[str, dict]:
+def open_lags(refs: Sequence[AgencyRef], sites: Sequence[dict], speeds: Mapping[str, float],
+              exclude: Iterable[str] = ()) -> dict[str, dict]:
     """Per reference id: {"lag": its lag behind open water (min) or None, "how", "confirmed": the undisputed record that
     confirms its constants, or None}. sites: the bound records, {"id", "lat", "lon", "consts", "eot", "disputed"}.
     The lag: against EOT20 at the nearest site within AG_CONFIRM_KM (its cell within AG_OPEN_CELL_KM; wide gates
     AG_OPEN_RATIO, AG_OPEN_RESID_MIN); a reference within AG_OPEN_COAST_MIN of EOT20 is open coast. Else against the
-    nearest open-coast reference within AG_OPEN_KM (the same gates). Else unknown."""
+    nearest open-coast reference within AG_OPEN_KM (the same gates). Else unknown. exclude: site ids never used
+    (the reviewed withholds, FIX-LST-5 L3)."""
+    ex = set(exclude)
+    sites = [x for x in sites if x["id"] not in ex]
     lat = np.array([x["lat"] for x in sites]) if sites else np.zeros(0)
     lon = np.array([x["lon"] for x in sites]) if sites else np.zeros(0)
 
@@ -273,10 +281,8 @@ def ref_shift(consts: Mapping[str, tuple[float, float]], ref: AgencyRef, speeds:
         eff, via = tau, "same water"
     elif ol.get("lag") is not None:
         eff, via = tau + max(float(ol["lag"]), 0.0), f"open lag {float(ol['lag']):+.1f} ({ol.get('how')})"
-    elif ol.get("confirmed"):
-        eff, via = tau, f"confirmed by {ol['confirmed']}"
     else:
-        return None
+        return None                      # unknown open lag, other water: it cannot judge the record (FIX-LST-5 B1)
     if j["resid"] > AG_RESID_MIN and eff > -AG_LEAD_MIN:
         return None                      # the lead residual allowance is for leads over open water only
     return {"ref": f"{ref.src}:{ref.id}", "tau": tau, "eff": eff, "via": via, "ratio": j["ratio"], "resid": j["resid"],

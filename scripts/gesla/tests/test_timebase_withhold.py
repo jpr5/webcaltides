@@ -50,20 +50,18 @@ def test_a_listed_record_is_disputed_with_the_reviewer_reason_never_corrected():
     assert rows["other-1-usa-sfwmd"].status == "unverified" and counts["applied"] == 1
 
 
-def test_a_weakly_verified_or_disputed_record_is_withheld_too():
-    spec = {"a-1-x-c1": ("used", "w", Correction("utc_instant")), "b-2-x-c2": ("residue", "w", NOT_USABLE),
-            "c-3-x-c3": ("used", "inherit", Correction("utc_instant"))}
-    inv, rows = setup(spec)
+def test_a_disputed_record_is_withheld_with_its_earlier_reason_kept():
+    inv, rows = setup({"b-2-x-c2": ("residue", "w", NOT_USABLE)})
     rows["b-2-x-c2"].comparator_id, rows["b-2-x-c2"].reason = "disputed:eot20_whole_hour", "EOT20 -5 h"
-    counts = ta.apply_reviewed_withhold(rows, [entry(f) for f in spec], inv, lambda *_: None)
-    assert all(rows[f].comparator_id == ta.REVIEWER_DISPUTED and rows[f].status == "residue" for f in spec)
+    counts = ta.apply_reviewed_withhold(rows, [entry("b-2-x-c2")], inv, lambda *_: None)
+    assert rows["b-2-x-c2"].comparator_id == ta.REVIEWER_DISPUTED and rows["b-2-x-c2"].status == "residue"
     assert rows["b-2-x-c2"].reason.endswith("was disputed: EOT20 -5 h") and counts["was_disputed"] == 1
 
 
-@pytest.mark.parametrize("kind", ["b", "c", "a"])
-def test_a_listed_record_a_strong_comparator_verified_stops_the_audit(kind):
+@pytest.mark.parametrize("kind", ["b", "c", "a", "inherit", "w"])
+def test_a_listed_record_the_audit_verified_by_any_evidence_stops_the_audit(kind):
     inv, rows = setup({"x-1-usa-noaa": ("used", kind, Correction("utc_instant")), "y-2-usa-usgs": UNV})
-    with pytest.raises(ta.WithholdError, match="strong comparator verified: x-1-usa-noaa"):
+    with pytest.raises(ta.WithholdError, match="verified or corrected: x-1-usa-noaa"):
         ta.apply_reviewed_withhold(rows, [entry("y-2-usa-usgs"), entry("x-1-usa-noaa")], inv, lambda *_: None)
     assert rows["y-2-usa-usgs"].status == "unverified"            # nothing applied before the stop
 
@@ -111,7 +109,8 @@ def test_the_committed_list_is_valid_and_names_the_six_reviewed_records():
     got = ta.load_withhold()
     assert sorted(e["file_id"] for e in got) == sorted([
         "wcoco_t_navd88-wcoco-usa-sfwmd", "calahootchieriver_s79_t-s79_t-usa-sfwmd", "burgassouth-bur-bgr-cmems",
-        "crms0590-crms0590-usa-crms", "crms0511-crms0511-usa-crms", "crms0531-crms0531-usa-crms"])
+        "crms0590-crms0590-usa-crms", "crms0511-crms0511-usa-crms", "crms0531-crms0531-usa-crms",
+        "s197_t-s197-usa-sfwmd", "mbts_navd88-mbts-usa-sfwmd", "mdts-mdts-usa-sfwmd", "kivalina-9491253-usa-noaa"])
     assert not any("san_felipe" in e["file_id"] for e in got)          # an owner decision, not a reviewed withhold
 
 
@@ -124,5 +123,5 @@ def test_the_audit_applies_the_list_and_stops_on_a_strong_listed_record(monkeypa
     assert res.rows["u"].comparator_id == ta.REVIEWER_DISPUTED and res.rows["u"].annotation == "disputed"
     assert res.rows["u"].annotation_code == "disputed:reviewer_evidence"
     assert res.sibling_counts["reviewed_withhold"]["applied"] == 1
-    with pytest.raises(ta.WithholdError, match="strong comparator verified: p0"):
+    with pytest.raises(ta.WithholdError, match="verified or corrected: p0"):
         _fake_audit(monkeypatch, inv, official, {}, withhold=[entry("p0")])
