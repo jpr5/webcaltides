@@ -359,7 +359,7 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
                   licence_ids: Mapping[str, str], withheld: Mapping[str, str], astro_tables: list[dict] | None,
                   congen_run: CongenRun,
                   refused: Iterable[Mapping], epoch_hours: Mapping[str, Mapping],
-                  sibling_flags: Mapping[str, Mapping], tombstones: Iterable[Mapping],
+                  sibling_flags: Mapping[str, "Mapping | Iterable[Mapping]"], tombstones: Iterable[Mapping],
                   station_map_inputs: Mapping[str, str], fit_run_results_sha256: str,
                   station_aliases: Mapping[str, Mapping] | None = None,
                   contributor_roles: Mapping[str, str] | None = None,
