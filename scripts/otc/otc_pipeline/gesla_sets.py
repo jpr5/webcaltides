@@ -797,7 +797,10 @@ def comparator_set(doc: Mapping) -> SourceSet:
     refused = doc.get("refusal")
     if refused:
         raise NotPublishable(refused["detail"], refused["reason"])
-    cands = CANDIDATE_LISTS[f.get("candidate_list", "base")]     # the list the fit walked ("base" when absent)
+    clist = f.get("candidate_list", "base")                         # the list the fit walked ("base" when absent)
+    if clist not in CANDIDATE_LISTS:
+        raise FitIntegrityError(f"{rid}: the fit's candidate_list {clist!r} is not one of {sorted(CANDIDATE_LISTS)}")
+    cands = CANDIDATE_LISTS[clist]
     missing = {n for n in cands if n not in f["rayleigh_kept"] and n not in f["candidates_missing_from_tcd"]}
     drops = doc["rayleigh_drops"]
     if {d["name"] for d in drops} != missing:

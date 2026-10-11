@@ -444,3 +444,11 @@ def test_an_extended_fit_short_of_its_own_list_is_a_calibrated_short_record_not_
     assert d["refusal"] is None and "MB2" in {x["name"] for x in d["rayleigh_drops"]}
     cs = source_set(d, licence_id="gesla-derived")         # read against the 45, this would be an integrity error
     assert "MB2" in {x["name"] for x in cs.constant_set["dropped_constituents"]}
+
+
+def test_an_unknown_candidate_list_is_an_integrity_error(table):
+    # N8: a fit naming a list this code does not have is refused as FitIntegrityError, not a KeyError
+    d = doc(table, fit=fit_dict())
+    d["fit"]["candidate_list"] = "bogus"
+    with pytest.raises(FitIntegrityError, match="candidate_list 'bogus' is not one of"):
+        source_set(d, licence_id="gesla-derived")
