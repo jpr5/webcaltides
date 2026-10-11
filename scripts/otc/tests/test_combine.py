@@ -473,4 +473,26 @@ def test_a_same_gauge_claim_beats_another_claim_on_the_station():
     new, rows = combine.mint_agency(m, {"noaa": a}, BALT[:1])
     by = {r["record"]: r for r in rows}
     assert by["noaa:8574680"]["how"] == "same_id" and new.record_ids()["noaa:8574680"] == "OTC-39db6605"
-    assert by["noaa:8574683"]["how"] == "source_already_joined"
+    # G4: 8574683 may not join Baltimore by rule 3 either: the station holds another NOAA gauge
+    assert by["noaa:8574683"]["how"] == "no_station_within_radius"
+    assert by["noaa:8574683"]["other_gauge_stations"] == ["OTC-39db6605"]
+
+
+# --- G4: the same gauge is the same country and agency; another gauge of the agency never joins ---------
+
+def test_the_same_gauge_needs_the_country_and_the_agency_of_the_record():
+    far = [Place("OTC-cccccccc", 40.0, -70.0, None, ("riverside-8440889-can-noaa",))]
+    assert combine.join(ref("8440889", 40.031, -70.0), far, source="noaa")[0] is None
+    nhs = [Place("OTC-dddddddd", 40.0, -70.0, None, ("x-8440889-usa-nhs",))]
+    assert combine.join(ref("8440889", 40.031, -70.0), nhs, source="noaa")[0] is None
+
+
+def test_rules_2_and_3_never_join_a_station_holding_another_gauge_of_the_agency():
+    one = [Place("OTC-cccccccc", 40.0, -70.0, m2c(1.0, 100.0), ("x-8440888-usa-noaa",))]
+    sid, ev = combine.join(ref("8440889", 40.004, -70.0), one, source="noaa")          # rule 2 would join
+    assert sid is None and ev["other_gauge_stations"] == ["OTC-cccccccc"]
+    two = one + [Place("OTC-dddddddd", 40.002, -70.0, m2c(0.5, 140.0), ("y-y-usa-uhslc",))]
+    sid, ev = combine.join(ref("8440889", 40.004, -70.0, m2=(1.0, 100.0)), two, source="noaa")  # rule 3: best M2 is the other gauge
+    assert (sid, ev["how"]) == ("OTC-dddddddd", "unambiguous")
+    # another source's records do not count as this agency's gauges
+    assert combine.join(ref("8440889", 40.004, -70.0), one, source="kartverket")[0] == "OTC-cccccccc"

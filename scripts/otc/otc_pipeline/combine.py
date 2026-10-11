@@ -57,8 +57,9 @@ __all__ = ["AGENCY_SOURCES", "JOIN_RADIUS_KM", "AgencySource", "CombineError", "
 AGENCY_SOURCES = ("kartverket", "linz", "jma", "noaa", "noaa-currents")
 JOIN_RADIUS_KM = 1.0
 SAME_ID_RADIUS_KM = 5.0      # a GESLA record of the same agency gauge joins up to this far (positions differ)
-# GESLA contributors whose site code is the agency's own station id (record `<site>-<code>-<country>-<contributor>`)
-SAME_ID_CONTRIBUTORS = {"noaa": ("noaa",), "kartverket": ("nhs",)}
+# (country, contributor) of the GESLA records whose site code is the agency's own station id
+# (record `<site>-<code>-<country>-<contributor>`: `-8443970-usa-noaa`, `-bgo-nor-nhs`)
+SAME_ID_CONTRIBUTORS = {"noaa": (("usa", "noaa"),), "kartverket": (("nor", "nhs"),)}
 CORRECTIONS_PATH = sm.DATA / "position_corrections.json"
 POSITION_TOL_DEG = 1e-9      # a correction applies only to the position it was written for
 
@@ -237,14 +238,27 @@ def _joins(ss: SourceSet) -> bool:
             and ss.station_hint.get("type") == "reference" and ss.subordinate_offsets is None)
 
 
-def _same_id(source: str, upstream: str, p: Place) -> bool:
-    """The station publishes a GESLA record of this agency gauge: contributor of the source, site code = the id."""
+def _agency_codes(source: str, p: Place) -> set[str]:
+    """The site codes of the station's GESLA records that are gauges of this agency (country and contributor of
+    SAME_ID_CONTRIBUTORS), lower case."""
     agencies = SAME_ID_CONTRIBUTORS.get(source, ())
+    out = set()
     for rid in p.records:
         parts = rid.rsplit("-", 3)
-        if len(parts) == 4 and parts[3].split("_")[0].lower() in agencies and parts[1].lower() == upstream.lower():
-            return True
-    return False
+        if len(parts) == 4 and (parts[2].lower(), parts[3].split("_")[0].lower()) in agencies:
+            out.add(parts[1].lower())
+    return out
+
+
+def _same_id(source: str, upstream: str, p: Place) -> bool:
+    """The station publishes a GESLA record of this agency gauge: country and contributor of the source, site
+    code = the id."""
+    return upstream.lower() in _agency_codes(source, p)
+
+
+def _other_gauge(source: str, upstream: str, p: Place) -> bool:
+    """The station publishes a GESLA record of ANOTHER gauge of this agency: rules 2 and 3 never join it."""
+    return bool(_agency_codes(source, p) - {upstream.lower()})
 
 
 def join(ss: SourceSet, places: list[Place], radius_km: float = JOIN_RADIUS_KM, *,
@@ -265,16 +279,19 @@ def join(ss: SourceSet, places: list[Place], radius_km: float = JOIN_RADIUS_KM, 
         return s, {"how": "same_id", "distance_km": round(d, 4),
                    "m2_vector_diff_m": None if m2 is None or p.m2 is None else round(abs(m2 - p.m2), 5),
                    "candidates": [{"station_id": x, "distance_km": round(dd, 4)} for dd, x, _ in same]}
-    cands = sorted((distance_km(lat, lon, p.lat, p.lon), p.station_id, p) for p in places
-                   if abs(p.lat - lat) < 0.05 and distance_km(lat, lon, p.lat, p.lon) <= radius_km)
+    near = [p for p in places if abs(p.lat - lat) < 0.05 and distance_km(lat, lon, p.lat, p.lon) <= radius_km]
+    other = sorted(p.station_id for p in near if _other_gauge(source, up, p))
+    cands = sorted((distance_km(lat, lon, p.lat, p.lon), p.station_id, p) for p in near
+                   if not _other_gauge(source, up, p))
     if not cands:
-        return None, {"how": "no_station_within_radius"}
+        return None, {"how": "no_station_within_radius",
+                      **({"other_gauge_stations": other} if other else {})}
     m2 = _m2(ss.constant_set)
 
     def diff(p: Place) -> float | None:
         return None if m2 is None or p.m2 is None else round(abs(m2 - p.m2), 5)
     ev = {"candidates": [{"station_id": s, "distance_km": round(d, 4), "m2_vector_diff_m": diff(p)}
-                         for d, s, p in cands]}
+                         for d, s, p in cands], **({"other_gauge_stations": other} if other else {})}
     if len(cands) == 1:
         d, s, p = cands[0]
         return s, {"how": "unambiguous", "distance_km": round(d, 4), "m2_vector_diff_m": diff(p), **ev}
