@@ -362,3 +362,12 @@ def test_the_sets_source_is_their_median():
     inv, rows, cfg, wk = _setup2(spec, eots={"a-1-x-c1": -60.0})
     _apply2(inv, rows, cfg, wk)
     assert rows["a-1-x-c1"].status == "residue" and rows["a-1-x-c1"].agency["two_source"]["S"]["tau"] == -60.0
+
+
+def test_a_neighbour_without_a_row_is_still_a_reference_set():
+    # an --only run: the Hoek van Holland sets are outside the audited pool, their fits still count
+    spec = {"tennesseehaven-ten-nld-rws": (-59.0, UNV, 0.0), "hoekvh-hoe-nld-cmems": (0.0, UNV, 2.5)}
+    inv, rows, cfg, wk = _setup2(spec, eots={"tennesseehaven-ten-nld-rws": -59.0})
+    del rows["hoekvh-hoe-nld-cmems"]
+    _apply2(inv, rows, cfg, wk)
+    assert rows["tennesseehaven-ten-nld-rws"].status == "residue" and "hoekvh-hoe-nld-cmems" not in rows

@@ -1766,10 +1766,12 @@ def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], c
     counts = {"bound": 0, "with_two_sources": 0, "disputed": 0, "already_disputed": 0}
     bound: dict[str, dict] = {}
     for f, r in cfg.fits.items():
-        row = rows.get(f)
-        if row is None or r.get("outcome") != "fitted" or not r.get("main") or f not in inv:
+        # every fitted record of the inventory is a possible reference (an --only run audits a few, but their
+        # neighbours' sets still exist); one without a row publishes its declared base
+        if r.get("outcome") != "fitted" or not r.get("main") or f not in inv:
             continue
-        if r.get("time_base") == _published_now(row, dec[f]).label:
+        pub = _published_now(rows[f], dec[f]) if f in rows else declared_correction(int(dec.get(f, 0)))
+        if r.get("time_base") == pub.label:
             bound[f] = {k: (float(v[0]), float(v[1])) for k, v in r["main"].items()}
     offset = {f for f, row in rows.items()
               if row.status == "residue" and any(c in row.comparator_id for c in tag.TS_OFFSET_CODES)}
@@ -1778,8 +1780,8 @@ def apply_two_source(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], c
         cell[(math.floor(inv[f].lat * 30), math.floor(inv[f].lon * 30))].append(f)
     hits = []
     for f in sorted(bound):
-        row = rows[f]
-        if row.status == "used":
+        row = rows.get(f)
+        if row is None or row.status == "used":
             continue                     # verified or corrected stays as it is: this rule only withholds the declared base
         counts["bound"] += 1
         a, info = bound[f], inv[f]
