@@ -22,7 +22,8 @@ S  served constants: EVERY webcaltides station of the record (all G07a station-m
      dependent    - same lineage, or a lineage that cannot be established (a redistributor on either
                     side, an unknown role): a consistency check only, never evidence to verify or correct;
      unqualified  - another lineage, but the origin's own time base is not verified (unverified,
-                    disputed, corrected, not audited): its constants are not used at all (S n/a).
+                    disputed, corrected, not audited): its constants are not used at all (S n/a); and a
+                    station built from the record under test itself (it agrees by construction; TB-SIB).
    All determined S values of the independent and dependent stations must agree, else the record is
    disputed (served_stations_disagree). The station used is an independent determined one if any,
    else a dependent one; its id, origin and class are in the evidence.
@@ -185,7 +186,11 @@ class ServedRow:
 
 def served_kind(file_id: str, served: Served, lineages: Mapping[str, Lineage] | None,
                 origin_status: Mapping[str, str] | None) -> ServedRow:
-    """Class one served station (module docstring): lineage first, then the origin's own status."""
+    """Class one served station (module docstring): lineage first, then the origin's own status. A station built
+    from the record under test (its origin is the record) agrees with it by construction: unqualified, never a
+    0 (TB-SIB: Apia 401A's own station read as agreement)."""
+    if served.origin and served.origin == file_id:
+        return ServedRow(served, "unqualified", f"built from the record under test ({file_id}): agrees by construction")
     why = lineage_reason(file_id, served, lineages)
     if why is not None:
         return ServedRow(served, "dependent", why)

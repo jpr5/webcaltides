@@ -136,6 +136,15 @@ def test_served_kind_needs_a_verified_origin():
     assert same.kind == "dependent" and "redistributor" in same.why
 
 
+
+def test_a_served_station_built_from_the_record_itself_is_unqualified_never_an_agreement():
+    """TB-SIB: Apia 401A's own station (origin the record) read as S = 0; it agrees by construction."""
+    r = served_kind("apia-401a-wsm-uhslc_rq", Served("T32b0dc4", "apia-401a-wsm-uhslc_rq", {}), LIN,
+                    {"apia-401a-wsm-uhslc_rq": "verified"})
+    assert r.kind == "unqualified" and "record under test" in r.why
+    c = tw.checks(_feat(0), _T(), _eot(), [r], None)
+    assert c["S"]["value"] == NA and not c["S_independent"]
+
 # --- several served stations (M3) -------------------------------------------------------------------
 
 def test_load_served_keeps_every_station_in_id_order(tmp_path):

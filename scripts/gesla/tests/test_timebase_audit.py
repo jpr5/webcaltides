@@ -1368,9 +1368,10 @@ def test_real_weak_task_forwards_the_declared_hours_lineage_and_origin_status(mo
     rid, _o, notes, extra = ta._weak_task("r-1-usa-noaa", 1, {"o-2-usa-usgs": "verified"})
     assert notes == [] and "failed" not in extra
     assert got["n_decl"] == 1 and got["zone"] == "America/New_York" and got["missing_inputs"] is False
-    assert [(r.served.station, r.kind) for r in got["served"]] == [("T1", "independent"), ("T2", "dependent")]
+    # T2 is built from the record itself: no agreement, unqualified (TB-SIB), whatever the other origin's status
+    assert [(r.served.station, r.kind) for r in got["served"]] == [("T1", "independent"), ("T2", "unqualified")]
     ta._weak_task("r-1-usa-noaa", 0, {"o-2-usa-usgs": "unverified"})
-    assert [r.kind for r in got["served"]] == ["unqualified", "dependent"]
+    assert [r.kind for r in got["served"]] == ["unqualified", "unqualified"]
 
 
 def test_weak_task_without_good_data_is_counted_as_a_failure(monkeypatch):

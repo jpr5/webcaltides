@@ -122,6 +122,7 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 
 from . import dmi_reference, noaa_subordinate
+from . import timebase_sibling as tsib
 from .fit import FitError, design
 from .qc import clean
 from .read_gesla import GeslaRelease, otc_work
@@ -130,8 +131,9 @@ from .residue import ResidueCase
 from .select_constituents import FIT_SPAN_YEARS, SECONDS_PER_YEAR, analyse, between, in_tcd_years, load_noaa_harcon
 from .tcd_table import TcdTable
 from .timebase_measure import Samples, monthly_lags, samples
-from .timebase_weak import (ORIGIN_VERIFIED, Lineage, Served, WeakInputs, assess, load_served, served_kind,
-                            sha256_file)
+from .timebase_weak import (ORIGIN_VERIFIED, Lineage, Served, WeakInputs, assess, fit_features, load_served,
+                            served_kind, sha256_file)
+from .timebase_weak import speeds as weak_speeds
 from .timebase_verdict import (BAND_MIN, LAG_CLASSES, MAX_BAD_FRACTION, MEAN60_LAG, NOT_USABLE, Correction, Verdict,
                                boxcar_response, evaluate, isolated, month_key)
 
@@ -786,6 +788,8 @@ class AuditRow:
     annotation_code: str = ""    # machine-readable: <annotation>:<evidence>, corrected:<from>-><to>:<evidence>
     annotation_reason: str = ""
     published: Correction | None = None     # the correction published: the audit's, or the declared one
+    sibling: dict = field(default_factory=dict)     # the intra-site constants / provider-family evidence (TB-SIB)
+    in_pool: bool = True         # False: a record outside the pool (no served station, no sibling of one)
 
     @property
     def usable(self) -> bool:
@@ -951,6 +955,14 @@ class WeakConfig:
     lineages: Mapping[str, Lineage]
 
 
+@dataclass(frozen=True)
+class SiblingConfig:
+    """The intra-site constants comparison's inputs (TB-SIB, timebase_sibling): pass 1, a gesla.fit_run results.jsonl
+    of every record fitted with the time base it is published with, by record; and each record's station-map ids."""
+    fits: Mapping[str, Mapping]
+    stations: Mapping[str, frozenset]
+
+
 def _init(release_root: str, table_path: str, gates_dir: str, transforms: Mapping[str, tuple[str, int]],
           weak: WeakConfig | None = None) -> None:
     _W["release"] = GeslaRelease(release_root)
@@ -1061,6 +1073,36 @@ def _weak_task(rid: str, n_decl: int, origin_status: Mapping[str, str],
     return rid, [], [], {"weak": res, "span": span}
 
 
+@_safe
+def _sibling_confirm_task(rid: str, n_new: int, refs: list, origin_status: Mapping[str, str],
+                          independent_served_only: bool) -> tuple[str, list, list[str], dict]:
+    """Pass 2 of a candidate correction (TB-SIB): the record fitted again with the corrected hours n_new, and
+    compared with what it disagreed with: each reference record's pass-1 constants (a site finding; every comparable
+    one within timebase_sibling.ALIGN_MIN, at least one), or EOT20 (a provider-family finding; within EOT_ZERO_MIN).
+    Then the record's own weak checks at n_new (as an inherited class: independent_served_only when n_new is not the
+    declared base), whose disagreement makes the correction yield (yield_inherited's rule)."""
+    rec, table, wk = _record(rid), _W["table"], _W["weak"]
+    span = audit_span(samples(rec))
+    if span is None:
+        return rid, [], ["no good data"], {}
+    src = _W["transforms"].get(rid, (rid,))[0]
+    sp = weak_speeds(table)
+    feat = fit_features(rec, table, span, declared_correction(n_new))
+    if refs:
+        taus = [tsib.pair_shift(feat["consts"], c, sp) for c in refs]
+        got = [t for t in taus if t is not None]
+        ok = bool(got) and all(abs(t) <= tsib.ALIGN_MIN for t in got)
+        p2 = {"against": "references", "taus": [None if t is None else round(t, 1) for t in taus], "ok": ok}
+    else:
+        lag = tsib.eot_lag(tsib.SiteRecord(rid, rec.lat, rec.lon, rec.gauge_type, feat["consts"], wk.inputs.eot(src)), sp)
+        ok = lag is not None and abs(lag) <= tsib.EOT_ZERO_MIN
+        p2 = {"against": "eot20", "lag": None if lag is None else round(lag, 1), "ok": ok}
+    served = [served_kind(src, sv, wk.lineages, origin_status) for sv in wk.served.get(src, ())]
+    res = assess(rec, table, span, eot=wk.inputs.eot(src), served=served, zone=wk.inputs.zone(src), n_decl=n_new,
+                 missing_inputs=not wk.inputs.has(src), independent_served_only=independent_served_only)
+    return rid, [], [], {"pass2": p2, "weak": res, "span": span}
+
+
 def origin_status(row: "AuditRow | None", n_decl: int, pending_inherit: bool = False) -> str:
     """A served station's origin record, after the strong audit: "verified" only when a strong comparator
     (official, harcon, sibling, provider) confirmed its declared time base; else what it is."""
@@ -1102,6 +1144,8 @@ class AuditResult:
     residue: list[ResidueCase]
     rounds: int                  # sibling rounds run after round 0
     weak_failures: list = field(default_factory=list)   # (record, failure note) of weak tasks that raised
+    sibling_crashes: list = field(default_factory=list) # records whose sibling confirmation crashed in our code
+    sibling_counts: dict = field(default_factory=dict)  # the sibling step's counts (logged, in the manifest)
 
 
 def _log(msg: str) -> None:
@@ -1137,11 +1181,16 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
           transforms: Mapping[str, tuple[str, int]] | None = None,
           previous_providers: Mapping[tuple[str, int], str] | None = None, version: str = "4.1",
           weak: WeakConfig | None = None, declared: Mapping[str, int] | None = None,
-          log=None) -> AuditResult:
+          sibling: SiblingConfig | None = None, out_of_pool: bool = False,
+          provider_class: Sequence[str] = (), log=None) -> AuditResult:
     """Audit the candidates and their siblings in the plan's order (module docstring).
     declared: GESLA's TIME ZONE HOURS by record (missing = 0, UTC: GESLA's declaration for all but
     one 4.1 record); weak: the weak evidence's inputs (None: records without a comparator verdict
-    stay unverified). Every record of the pool gets a row and an annotation: none is dropped."""
+    stay unverified). Every record of the pool gets a row and an annotation: none is dropped.
+    out_of_pool (with weak): every other inventory record gets a row too (no comparator; the weak checks, EOT20
+    first; never inherits: the provider rule is the pool's); sibling: the intra-site constants comparison and the
+    provider-family rule on pass 1 (timebase_sibling; apply_sibling). provider_class: the contributors of the owner
+    switch D-O3 (provider_class_inherit; main passes PROVIDER_CLASS_INHERIT)."""
     log = log or (lambda *_: None)
     transforms = dict(transforms or {})
     inv = dict(inv)
@@ -1243,6 +1292,8 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
 
     rounds = 0
     weak_failures: list[tuple[str, str]] = []
+    sib_crashes: list[str] = []
+    sib_counts: dict = {}
     with ex:
         log(f"round 0: {len(has_official)} of {len(pool)} records have an official comparator")
         res = _progress(ex.map(_official_task, has_official, [inv[f].lat for f in has_official],
@@ -1311,14 +1362,35 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
             if f not in rows:
                 settle(f, None, True)
         providers = inherit(rows, inv, pool, cand_set, version=version)
-        dec = {f: int((declared or {}).get(transforms.get(f, (f,))[0], 0)) for f in pool}
+        extra_ids: list[str] = []
+        if weak is not None and out_of_pool:
+            # TB-SIB: a record outside the pool used to keep its declared base unchecked (fit_run "not in the audit
+            # pool"); it gets a row, no comparator and no inheritance, and the weak checks below
+            extra_ids = [f for f in sorted(inv) if f not in pool_set]
+            for f in extra_ids:
+                info = inv[f]
+                rows[f] = AuditRow(f, False, info.contributor, info.interval_s, "unverified", "no_comparator",
+                                   "no_comparator", NOT_USABLE, None, "none", "", in_pool=False,
+                                   reason="not in the audit pool (no served station, no sibling of one)")
+            log(f"out of the pool: {len(extra_ids)} records get a row and the weak checks")
+        allf = list(pool) + extra_ids
+        dec = {f: int((declared or {}).get(transforms.get(f, (f,))[0], 0)) for f in allf}
+        pci = provider_class_inherit(rows, inv, allf, provider_class, sibling.fits if sibling else None,
+                                     weak_speeds(TcdTable.load(table_path)) if sibling else None, dec)
+        if provider_class:
+            log(f"{PROVIDER_CLASS_ID} ({', '.join(provider_class)}): {len(pci['inherited'])} records inherit their "
+                f"provider's sibling-verified class, {len(pci['contradicted'])} kept (own constants disagree); groups "
+                + "; ".join(f"{k} {v}" for k, v in pci["groups"].items()))
+            for f, why in pci["contradicted"]:
+                log(f"  {PROVIDER_CLASS_ID} not inherited: {f}: {why}")
+            sib_counts["provider_class"] = {"inherited": len(pci["inherited"]), "contradicted": len(pci["contradicted"])}
         if weak is not None:
             # records without a comparator verdict, and inherited ones: a provider's verdict yields to the
             # record's own evidence when that disagrees (yield_inherited)
             # An inherited record is tested against its INHERITED class (the hours it is published with), not
             # the declared one; a class the weak checks cannot test (mean60, local_dst) is not tested at all.
             n_test = dict(dec)
-            for f in pool:
+            for f in allf:
                 if rows[f].comparator_kind == "inherit":
                     h = inherited_hours(rows[f].correction)
                     if h is None:
@@ -1326,7 +1398,7 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                                           f"inherited class {rows[f].verdict}, so the inheritance stands")[:REASON_MAX * 2]
                     else:
                         n_test[f] = h
-            todo = [f for f in pool if rows[f].verdict == "no_comparator"
+            todo = [f for f in allf if rows[f].verdict == "no_comparator"
                     or (rows[f].comparator_kind == "inherit" and inherited_hours(rows[f].correction) is not None)]
             n_inh = sum(1 for f in todo if rows[f].comparator_kind == "inherit")
             log(f"weak evidence: {len(todo)} records without a comparator verdict or inherited ({n_inh} inherited)")
@@ -1334,7 +1406,7 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
             # after its record's own weak checks: phase 1 tests the inherited records (an inherited origin is
             # pending, never "verified"); phase 2 the records without a comparator verdict, with the origins'
             # status taken after phase 1 (an inherited origin its own evidence disputed is "disputed").
-            def ostat_of(f, pending):
+            def ostat_of(f, pending=False):
                 src = transforms.get(f, (f,))[0]
                 return {sv.origin: origin_status(rows.get(sv.origin), int((declared or {}).get(sv.origin, 0)),
                                                  pending_inherit=pending)
@@ -1361,10 +1433,15 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                     lost, extra_ = sorted(set(part) - set(got)), sorted(set(got) - set(part))
                     raise RuntimeError(f"weak evidence ({phase}): results for {len(got)} of {len(part)} records "
                                        f"(missing {lost[:5]}, unexpected or repeated {extra_[:5] or 'duplicates'})")
-    for f in pool:
+            if sibling is not None:
+                sib_crashes, sc = apply_sibling(rows, inv, sibling, weak, dec, transforms,
+                                                        weak_speeds(TcdTable.load(table_path)), ex, ostat_of,
+                                                        declared or {}, log)
+                sib_counts.update(sc)
+    for f in allf:
         annotate(rows[f], dec[f])
     final_counts(providers, rows, inv)
-    for f in pool:
+    for f in allf:
         rows[f].official = rows[f].official or official_ev.get(f, {})
         rows[f].official_verdict = official_cls.get(f, "")
         if rows[f].comparator_kind in ("none", "inherit") and tried[f]:
@@ -1375,7 +1452,7 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
         elif rows[f].status == "unverified" and notes[f]:
             rows[f].reason = f"{'; '.join(notes[f])}; {rows[f].reason}"
     residue = residue_cases(rows, providers, previous_providers or {}, version=version)
-    return AuditResult(rows, providers, residue, rounds, weak_failures)
+    return AuditResult(rows, providers, residue, rounds, weak_failures, sib_crashes, sib_counts)
 
 
 def correction_of(label: str) -> Correction:
@@ -1424,6 +1501,139 @@ def apply_weak(row: AuditRow, res, span: tuple[int, int] | None, notes: Sequence
         row.span, row.reason = span, res.reason
     else:
         row.reason = f"{row.reason}; {res.reason}"[:REASON_MAX * 2]
+
+
+SIB_DISPUTED, FAM_DISPUTED = "disputed:sibling_constants_offset", "disputed:eot20_family_offset"
+WHOLE_HOUR_DISPUTED = "disputed:eot20_whole_hour"
+
+
+def _published_now(row: AuditRow, n_decl: int) -> Correction:
+    """The correction a row publishes before the sibling step: its own when used, else the declared one."""
+    return row.correction if row.status == "used" and row.correction.usable else declared_correction(n_decl)
+
+
+def _sib_dispute(row: AuditRow, code: str, why: str) -> None:
+    """Offset evidence on a record (TB-SIB): disputed (residue, D5); a record already disputed keeps its own code."""
+    if row.status == "residue":
+        row.reason = f"{row.reason}; {why}"[:REASON_MAX * 2]
+        return
+    prev = f" (was {row.verdict} by {row.comparator_kind or 'none'})" if row.status == "used" else ""
+    row.status, row.verdict, row.base = "residue", "unexplained", "unexplained"
+    row.correction, row.comparator_kind, row.comparator_id = NOT_USABLE, "w", code
+    row.months_bad = []
+    row.reason = f"{why}{prev}"[:REASON_MAX * 2]
+
+
+def apply_sibling(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
+                  dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float], ex,
+                  ostat_of, declared: Mapping[str, int], log) -> tuple[list[str], dict]:
+    """The intra-site constants comparison and the provider-family rule (timebase_sibling) on pass 1, into the verdicts.
+
+    Pass 1 binds: a record's fitted constants are used only when the fit's time base is the one the record
+    publishes now (the audit's correction when used, else declared); others are left out (counted).
+    A strongly verified record (official, harcon, sibling series) is an anchor and never flagged. Every other
+    record a finding names becomes disputed (SIB_DISPUTED / FAM_DISPUTED), unless the finding is unambiguous and
+    the record publishes a whole-hour class: then the corrected hours (published + the shift) go to pass 2
+    (_sibling_confirm_task), and the record is corrected only when pass 2 confirms them and its own weak checks at
+    those hours do not disagree (yield_inherited's rule, independent_served_only when they are not the declared
+    base). sp: the constituent speeds (deg/h). Returns (records whose pass 2 crashed in our code, counts)."""
+    recs: dict[str, tsib.SiteRecord] = {}
+    unbound = []
+    for f, r in sorted(cfg.fits.items()):
+        if r.get("outcome") != "fitted" or not r.get("main") or f not in inv:
+            continue
+        row = rows.get(f)
+        n = dec.get(f, int(declared.get(transforms.get(f, (f,))[0], 0)))
+        want = (_published_now(row, n) if row else declared_correction(n)).label
+        if r.get("time_base") != want:
+            unbound.append(f"{f} (fitted {r.get('time_base')}, publishes {want})")
+            continue
+        strong = bool(row and row.status == "used" and row.comparator_kind in ("b", "c", "a"))
+        src = transforms.get(f, (f,))[0]
+        recs[f] = tsib.SiteRecord(f, float(r["lat"]), float(r["lon"]), r.get("gauge_type") or "",
+                                  {k: (float(v[0]), float(v[1])) for k, v in r["main"].items()},
+                                  weak.inputs.eot(src), strong, frozenset(cfg.stations.get(src, ())))
+    site = tsib.find_offsets(recs, sp)
+    fam = tsib.family_offsets(recs, sp, site.findings)
+    whole = tsib.eot_whole_hours(recs, sp, skip=set(site.findings) | set(fam))
+    log(f"sibling constants: {len(recs)} fitted records on their published base ({len(unbound)} fitted on another: "
+        f"{'; '.join(unbound[:5])}), {len(site.pairs)} clock-like pairs, {len(site.findings)} offset by the site "
+        f"({sum(x.unambiguous for x in site.findings.values())} unambiguous), {len(fam)} by the provider family, "
+        f"{len(site.unresolved)} site disagreements with no side, {len(site.conflicts)} refused")
+    for line in site.conflicts:
+        log(f"  sibling constants refused: {line}")
+    for f, (lag, how, n) in sorted(whole.items()):
+        if f not in rows:
+            continue
+        row = rows[f]
+        why = (f"EOT20 lag {lag:+.1f} min ({how}) is {n:+d} h, a whole number of hours beyond what a harbour does to the "
+               f"tide; disputed on EOT20 alone, never corrected (owner rule)")
+        row.sibling = {"rule": "eot20_whole_hour", "summary": why, "lag_min": round(lag, 1), "hours": n, "how": how}
+        _sib_dispute(row, WHOLE_HOUR_DISPUTED, why)
+    cands = []
+    for f, x in sorted({**{k: v for k, v in fam.items()}, **site.findings}.items()):
+        if f not in rows:
+            continue
+        row = rows[f]
+        fam_x = isinstance(x, tsib.FamilyFinding)
+        row.sibling = ({"rule": "eot20_family", "summary": x.summary(), "lag_min": x.lag_min, "hours": x.hours,
+                        "family": list(x.family), "agree": list(x.agree), "confirmed": list(x.confirmed),
+                        "on_utc": list(x.on_utc), "unambiguous": x.unambiguous}
+                       if fam_x else
+                       {"rule": "site", "summary": x.summary(), "shift_min": x.shift_min, "group": list(x.group),
+                        "references": list(x.references), "resolved_by": x.resolved_by, "eot_group": x.eot_group,
+                        "eot_reference": x.eot_reference, "whole_hours": x.whole_hours, "unambiguous": x.unambiguous,
+                        "pairs": [list(p) for p in x.pairs]})
+        code = FAM_DISPUTED if fam_x else SIB_DISPUTED
+        hours = x.hours if fam_x else x.whole_hours
+        n_pub = inherited_hours(_published_now(row, dec[f]))
+        if not x.unambiguous or hours is None or n_pub is None or row.status == "residue":
+            why = x.summary() if n_pub is not None else f"{x.summary()}; its class cannot take a whole-hour shift"
+            _sib_dispute(row, code, why)
+            continue
+        refs = [] if fam_x else [dict(recs[g].consts) for g in x.references if g in recs]
+        cands.append((f, n_pub + hours, refs, code))
+    crashes: list[str] = []
+    n_corr = 0
+    if cands:
+        log(f"sibling constants: pass 2 on {len(cands)} candidate corrections")
+        ost = [ostat_of(f) for f, *_ in cands]
+        indep = [n != dec[f] for f, n, *_ in cands]
+        got = {rid: (n, extra) for rid, _o, n, extra in ex.map(_sibling_confirm_task, [c[0] for c in cands],
+                                                               [c[1] for c in cands], [c[2] for c in cands], ost, indep)}
+        for f, n_new, _refs, code in cands:
+            row = rows[f]
+            notes, extra = got[f]
+            label = declared_correction(n_new).label
+            decl = declared_correction(dec[f]).label
+            summ = row.sibling["summary"]
+            if extra.get("failed"):
+                if extra.get("error_type") not in EXPECTED_WEAK_ERRORS:
+                    crashes.append(f)
+                _sib_dispute(row, code, f"{summ}; pass 2 at {label} failed: {'; '.join(notes)}")
+                continue
+            p2, res = extra["pass2"], extra["weak"]
+            row.sibling.update(pass2=p2, pass2_weak=res.code)
+            conflict = res.annotation == "disputed" or (res.annotation in ("verified", "corrected")
+                                                        and res.label != label)
+            if not p2["ok"] or conflict:
+                why = (f"pass 2 at {label} does not confirm it ({p2})" if not p2["ok"]
+                       else f"its own weak checks at {label} disagree ({res.code}): {res.reason}")
+                _sib_dispute(row, code, f"{summ}; {why}")
+                continue
+            ev = "eot20_family+sibling_constants" if code == FAM_DISPUTED else "sibling_constants+eot20"
+            row.status, row.verdict, row.base = "used", label, label
+            row.correction, row.comparator_kind = correction_of(label), "w"
+            row.comparator_id = f"corrected:{decl}->{label}:{ev}"
+            row.months_bad, row.span = [], extra.get("span") or row.span
+            row.reason = f"{summ}; pass 2 at {label} confirms it ({p2['against']})"[:REASON_MAX * 2]
+            n_corr += 1
+    counts = {"fitted_bound": len(recs), "fitted_unbound": len(unbound), "clock_like_pairs": len(site.pairs),
+              "site_findings": len(site.findings), "family_findings": len(fam), "pass2_candidates": len(cands),
+              "corrected": n_corr, "unresolved": len(site.unresolved), "refused": len(site.conflicts),
+              "eot20_whole_hour": sum(1 for f in whole if f in rows)}
+    log("sibling constants: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    return crashes, counts
 
 
 def inherited_hours(corr: Correction) -> int | None:
@@ -1601,6 +1811,113 @@ def inherit(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], pool: Sequ
     return providers
 
 
+# OWNER SWITCH (D-O3, owner-pending; default ON): contributors whose records inherit the class their own records'
+# sibling-series verdicts agree on (provider_class_inherit). Set to () to turn it off (or --no-provider-class-inherit).
+PROVIDER_CLASS_INHERIT: tuple[str, ...] = ("WSV",)
+PROVIDER_CLASS_ID = "D-O3"
+
+
+def provider_class_inherit(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], ids: Sequence[str],
+                           contributors: Sequence[str], fits: Mapping[str, Mapping] | None = None,
+                           speeds: Mapping[str, float] | None = None,
+                           declared: Mapping[str, int] | None = None) -> dict:
+    """D-O3 (owner switch PROVIDER_CLASS_INHERIT): a provider's verified class for its records no strong comparator
+    judged. The rule 5 machinery (inherit) with one change of voters: in a group (contributor, interval) of a listed
+    contributor, the voters are the records a SIBLING SERIES verified (comparator kind a: the monthly series test, the
+    only one that can establish utc_mean_start60; an official or harcon lag is record-level and cannot, so those
+    verdicts do not vote). With >= INHERIT_MIN voters in the record's country, all of one class (no step), every
+    other record of the group in that country whose span overlaps a voter's inherits it (comparator kind
+    "inherit", evidence "provider") unless a strong comparator (official, harcon, sibling) judged it, its task
+    crashed, or its own pass-1 constants contradict the class: with fits, a Coastal record of another contributor
+    within timebase_sibling.SITE_KM publishing utc_instant whose constants are clock-comparable must show the class's
+    shift (utc_mean_start60: -30 min, within ALIGN_MIN); any other comparable shift keeps the record as it was.
+    A disputed record (its comparators could not test mean60) is replaced too: that is the owner rule. Returns
+    counts and the records each way."""
+    out: dict = {"inherited": [], "contradicted": [], "groups": {}}
+    if not contributors:
+        return out
+    want = {c.upper() for c in contributors}
+    groups: dict[tuple[str, int], list[str]] = defaultdict(list)
+    for f in ids:
+        if inv[f].contributor.upper() in want:
+            groups[(inv[f].contributor, inv[f].interval_s)].append(f)
+    centre = {"utc_mean_start60": MEAN60_LAG, "utc_instant": 0.0}
+    for key, members in sorted(groups.items()):
+        voters = [f for f in members if f in rows and rows[f].status == "used" and rows[f].comparator_kind == "a"
+                  and not rows[f].task_failed]
+        by_c: dict[str, list[str]] = defaultdict(list)
+        for f in voters:
+            if inv[f].country:
+                by_c[inv[f].country].append(f)
+        for country, vs in sorted(by_c.items()):
+            fams = sorted({_family(rows[f]) for f in vs})
+            info = {"voters": len(vs), "classes": fams}
+            out["groups"][f"{key[0]}:{key[1]}:{country}"] = info
+            if len(vs) < INHERIT_MIN or len(fams) != 1 or fams[0].startswith("step:"):
+                continue
+            cls = fams[0]
+            corr = replace(rows[vs[0]].correction, months_drop=(), first=None, parts=())
+            spans = [rows[g].span or (inv[g].start_s, inv[g].end_s) for g in vs]
+            for f in members:
+                r = rows.get(f)
+                if inv[f].country != country or r is None or f in vs or r.task_failed:
+                    continue
+                if r.status == "used" and r.comparator_kind in ("b", "c", "a"):
+                    continue
+                if not any(a < inv[f].end_s and inv[f].start_s < b for a, b in spans):
+                    continue
+                ev = _class_check(f, cls, centre.get(cls), rows, inv, fits, speeds, declared or {})
+                if ev.get("contradicts"):
+                    out["contradicted"].append((f, ev["why"]))
+                    r.reason = f"{r.reason}; {PROVIDER_CLASS_ID}: not inherited ({ev['why']})"[:REASON_MAX * 2]
+                    continue
+                rows[f] = replace(r, status="used", verdict=cls, base=cls, correction=corr, round=None,
+                                  comparator_kind="inherit", comparator_id=f"provider:{key[0]}:{key[1]}:{PROVIDER_CLASS_ID}",
+                                  span=None, months_bad=[],
+                                  reason=(f"{PROVIDER_CLASS_ID}: inherits {cls} from the {len(vs)} records of {key[0]} in "
+                                          f"{country} a sibling series verified (interval {key[1]} s); "
+                                          f"{ev.get('why', 'no comparable record of another contributor within 2 km')}; "
+                                          f"was {r.status} ({r.reason[:120]})")[:REASON_MAX * 2])
+                out["inherited"].append(f)
+            info["inherited"] = sum(1 for f in out["inherited"] if f in members)
+    return out
+
+
+def _class_check(f: str, cls: str, centre: float | None, rows: Mapping[str, AuditRow], inv: Mapping[str, RecordInfo],
+                 fits: Mapping[str, Mapping] | None, speeds: Mapping[str, float] | None,
+                 declared: Mapping[str, int]) -> dict:
+    """provider_class_inherit's own-evidence check: the record's pass-1 constants against every Coastal record of
+    another contributor within SITE_KM that publishes utc_instant (both fitted on their published base)."""
+    if not fits or not speeds or centre is None or f not in fits:
+        return {}
+    a = fits[f]
+    if a.get("outcome") != "fitted" or a.get("gauge_type") != tsib.COASTAL \
+            or a.get("time_base") != declared_correction(int(declared.get(f, 0))).label:
+        return {}
+    seen = []
+    for g, b in fits.items():
+        if g == f or g not in inv or b.get("outcome") != "fitted" or b.get("gauge_type") != tsib.COASTAL \
+                or inv[g].contributor == inv[f].contributor:
+            continue
+        if abs(inv[g].lat - inv[f].lat) > 0.03 or tsib.haversine_km(inv[f].lat, inv[f].lon, inv[g].lat, inv[g].lon) > tsib.SITE_KM:
+            continue
+        rg = rows.get(g)
+        pub = (_published_now(rg, int(declared.get(g, 0))) if rg else declared_correction(int(declared.get(g, 0)))).label
+        if pub != "utc_instant" or b.get("time_base") != "utc_instant":
+            continue
+        t = tsib.pair_shift({k: (v[0], v[1]) for k, v in a["main"].items()}, {k: (v[0], v[1]) for k, v in b["main"].items()},
+                            speeds)
+        if t is not None:
+            seen.append((g, t))
+    if not seen:
+        return {}
+    bad = [(g, t) for g, t in seen if abs(t - centre) > tsib.ALIGN_MIN]
+    txt = ", ".join(f"{g} {t:+.1f} min" for g, t in seen)
+    if bad:
+        return {"contradicts": True, "why": f"its constants against {txt}: not the {centre:+.0f} min of {cls}"}
+    return {"why": f"its constants show the {centre:+.0f} min of {cls} against {txt}"}
+
+
 def final_counts(providers: list[dict], rows: Mapping[str, AuditRow], inv: Mapping[str, RecordInfo]) -> None:
     """Add each provider group's FINAL annotation counts (after the weak evidence and annotate()).
     n_no_comparator is the count before the weak evidence: records left without a comparator verdict;
@@ -1642,6 +1959,8 @@ def row_evidence(row: AuditRow) -> dict:
         ev["official"] = row.official
     if row.weak:
         ev["weak"] = row.weak
+    if row.sibling:
+        ev["sibling"] = row.sibling
     return _num(ev)
 
 
@@ -1677,7 +1996,8 @@ CSV_FIELDS = ["file_id", "candidate", "contributor", "interval_s", "time_base_st
               "comparator_kind", "comparator", "span_start", "span_end", "n_months", "lag_median", "lag_min",
               "lag_max", "lag_jan", "lag_jul", "resid_max", "months_bad", "m2_lag", "m2_ratio", "m4_ratio",
               "m6_ratio", "mean60_cm", "inst_t30_cm", "inst_t_cm", "official_lag", "official_matched",
-              "weak_eot20", "weak_served", "weak_dst", "comparators_tried", "reason", "time_base_reason"]
+              "weak_eot20", "weak_served", "weak_dst", "comparators_tried", "reason", "time_base_reason",
+              "sibling_constants", "in_pool", "disputed_reason"]
 
 
 def _iso_day(s: int) -> str:
@@ -1686,6 +2006,17 @@ def _iso_day(s: int) -> str:
 
 def _f(x, nd=2):
     return "" if x is None or (isinstance(x, float) and not math.isfinite(x)) else f"{x:.{nd}f}"
+
+
+def disputed_reasons(r: AuditRow) -> str:
+    """A disputed row's reasons for the station map (space-separated, the code's reason first): the annotation's
+    own reason, and eot20_whole_hour when that rule also fired on a record already disputed for another reason."""
+    if r.annotation != "disputed":
+        return ""
+    out = [r.annotation_code.split(":", 1)[1]]
+    if (r.sibling or {}).get("rule") == "eot20_whole_hour" and "eot20_whole_hour" not in out:
+        out.append("eot20_whole_hour")
+    return " ".join(out)
 
 
 def csv_row(r: AuditRow) -> dict:
@@ -1738,7 +2069,9 @@ def csv_row(r: AuditRow) -> dict:
             "weak_eot20": chk("E"), "weak_served": fail_note if failed else (chk("S") + (f" {(wk.get('S') or {}).get('station', '')} "
                                                      f"{(wk.get('S') or {}).get('kind', '')}" if wk.get("S") else "")).strip(),
             "weak_dst": chk("D"), "comparators_tried": " ".join(r.tried), "reason": r.reason[:REASON_MAX],
-            "time_base_reason": r.annotation_reason[:REASON_MAX * 2]}
+            "time_base_reason": r.annotation_reason[:REASON_MAX * 2],
+            "sibling_constants": (r.sibling or {}).get("summary", "")[:REASON_MAX * 2], "in_pool": int(r.in_pool),
+            "disputed_reason": disputed_reasons(r)}
 
 
 def write_csv(rows: Mapping[str, AuditRow], path: str | Path) -> Path:
@@ -1964,10 +2297,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--gates-dir", default=os.environ.get("OTC_GATES_DIR", str(otc_work() / "gates")))
     ap.add_argument("--weak-inputs", help="timebase_weak.prepare() output (EOT20 + zones); needs --candidates")
     ap.add_argument("--served", default=str(repo / "data/ticon.json"), help="the served stations (ticon.json)")
+    ap.add_argument("--no-provider-class-inherit", action="store_true",
+                    help=f"turn the owner switch {PROVIDER_CLASS_ID} off (PROVIDER_CLASS_INHERIT {PROVIDER_CLASS_INHERIT})")
+    ap.add_argument("--fit-results", help="pass 1 for the intra-site constants comparison (TB-SIB): a complete "
+                    "gesla.fit_run results.jsonl of every record fitted with its published time base; needs --weak-inputs")
     a = ap.parse_args(argv)
     argv = list(sys.argv[1:] if argv is None else argv)
     if a.weak_inputs and not a.candidates:
         ap.error("--weak-inputs needs --candidates (the station map gives each record's served station)")
+    if a.fit_results and not a.weak_inputs:
+        ap.error("--fit-results needs --weak-inputs (EOT20 picks the offset side)")
     work = otc_work()
     release = GeslaRelease(work / "inputs/gesla" / a.version)
     table_path = Path(os.environ.get("OTC_TCD_TABLE", work / "tcd_table.json"))
@@ -2000,10 +2339,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                      "served_sha256": sha256_file(a.served), "station_map": str(a.candidates),
                      "station_map_sha256": sha256_file(a.candidates)}
         print("weak inputs: " + json.dumps(weak_meta, sort_keys=True))
+    sibling = None
+    if a.fit_results:
+        fm = Path(a.fit_results).parent / MANIFEST
+        fit_m = json.loads(fm.read_text()) if fm.is_file() else {}
+        if fit_m.get("status") != "complete":
+            raise SystemExit(f"--fit-results {a.fit_results}: its {fm} says status {fit_m.get('status')!r}, not complete")
+        fits = {}
+        for line in Path(a.fit_results).read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                fits[r["record"]] = r
+        stations: dict[str, set] = defaultdict(set)
+        with open(a.candidates, newline="") as fh:
+            for r in csv.DictReader(fh):
+                if r.get("file_id"):
+                    stations[r["file_id"]].add(r["id"])
+        sibling = SiblingConfig(fits, {k: frozenset(v) for k, v in stations.items()})
+        print(f"sibling constants: pass 1 {a.fit_results} ({len(fits)} records, fit commit "
+              f"{str(fit_m.get('commit'))[:12]}, audit {(fit_m.get('audit') or {}).get('dir')})")
     out = Path(a.out_dir) if a.out_dir else work / "builds" / a.build_date / "gesla"
     inputs = {"inventory": repo / "data/gesla" / a.version / "inventory.csv", "station_map": a.candidates,
               "weak_inputs": a.weak_inputs, "served": a.served if a.weak_inputs else None,
-              "tcd_table": table_path, "previous_providers": a.previous_providers}
+              "tcd_table": table_path, "previous_providers": a.previous_providers,
+              "fit_results": a.fit_results,
+              "fit_results_manifest": (Path(a.fit_results).parent / MANIFEST) if a.fit_results else None}
     gates = Path(a.gates_dir)
     inputs.update({"gates_harmonics_stations": gates / "evid/testplan/harmonics_stations.json",
                    "gates_nearest_ref": gates / "evid/testplan/nearest_ref.json",
@@ -2015,12 +2375,14 @@ def main(argv: Sequence[str] | None = None) -> int:
               "noaa_cache": dir_fingerprint(default_noaa_cache())}
     config = {"args": {k: (str(v) if isinstance(v, Path) else v) for k, v in sorted(vars(a).items())},
               "otc_work": str(work), "release_root": str(release.root), "gates_dir": str(gates),
+              "provider_class_inherit": [] if a.no_provider_class_inherit else list(PROVIDER_CLASS_INHERIT),
               "dmi_dir": str(default_dmi_dir()), "noaa_cache": str(default_noaa_cache())}
     run_m = write_manifest(out, repo, argv, inputs, status="running", extra={"config": config, "caches": caches})
     started = run_m["started"]
     res = audit(inv, cands, release_root=release.root, table_path=table_path, gates_dir=a.gates_dir,
                 workers=a.workers, previous_providers=prev, version=a.version, weak=weak, declared=declared,
-                log=_log)
+                sibling=sibling, out_of_pool=weak is not None and not a.only,
+                provider_class=() if a.no_provider_class_inherit else PROVIDER_CLASS_INHERIT, log=_log)
     write_csv(res.rows, out / "timebase.csv")
     write_providers(res.providers, out / "timebase_providers.csv")
     if weak is not None:
@@ -2037,7 +2399,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         by_type[note.split(":", 2)[1].strip() if note.count(":") >= 2 else note] += 1
     print(f"weak task failures: {len(res.weak_failures)}"
           + (" (" + ", ".join(f"{k} {v}" for k, v in sorted(by_type.items())) + ")" if by_type else ""))
-    crashes = sorted(f for f, r in res.rows.items() if (r.weak or {}).get("code") == WEAK_CRASHED)
+    crashes = sorted({f for f, r in res.rows.items() if (r.weak or {}).get("code") == WEAK_CRASHED}
+                     | set(res.sibling_crashes))
     if crashes:
         print(f"WARNING: {len(crashes)} weak task(s) crashed in our code (not a data limit): {', '.join(crashes[:20])}")
     outs = [out / "timebase.csv", out / "timebase_providers.csv", rp]
@@ -2046,6 +2409,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     m = write_manifest(out, repo, argv, inputs, status="complete", started=started, outputs=outs, run=run_m,
                        extra={"config": config, "caches": caches, "weak_failures": [list(x) for x in res.weak_failures],
                               "weak_crashes": crashes,
+                              "sibling": res.sibling_counts,
                               "counts": {"records": len(res.rows), "residue": n, "rounds": res.rounds}})
     print(f"manifest: {out / MANIFEST} (commit {m['commit'][:12]}{', dirty' if m['dirty'] else ''})")
     return 3 if crashes else 0              # a crashed weak pass stops a pipeline (outputs written, naming it)
