@@ -5,8 +5,13 @@ Per record (fit_record):
 1. Fit span: the last FIT_SPAN_YEARS years of the cleaned series (a shorter record is used
    whole), less the samples in years outside the TCD dump (as the PoC). The linear trend is
    fitted alongside (fit.lsq). The per-station span choice is G06a.
-2. Rayleigh rule: walk CANDIDATES in priority order; keep a candidate when speed * T >= 360 R
-   and |speed - speed_k| * T >= 360 R for every constituent already kept. T is the record
+2. Rayleigh rule: walk CANDIDATES in priority order; keep a candidate when speed * T >= 360 R,
+   |speed - speed_k| * T >= 360 R for every constituent already kept, and the record separates it
+   from its Foreman comparison constituent when that one ranks above it in CANDIDATES
+   (FOREMAN_COMPARISON, df * T >= R), whether or not that one was kept. So a minor constituent is
+   not kept when the major one it is compared with cannot be resolved: under 27.6 days N2 and Q1 go,
+   and so do MU2 and 2Q1 (the walk alone kept them, against M2 and O1). Beyond 31.8 days the extra
+   check drops nothing the walk keeps; at 365.26 days or more every candidate is kept. T is the record
    length in hours: the data the series holds (record_hours), not its span. A record of a few
    one-month blocks years apart spans years, but inside each block SA and SSA are nearly
    constant, so on the span they were collinear with Z0 and the trend (fits of 74-296 m SA).
@@ -62,23 +67,105 @@ def record_hours(times_s: np.ndarray) -> float:
     return min(float(t[-1] - t[0]), len(t) * step) / 3600.0
 
 
-def rayleigh_select(table: TcdTable, span_hours: float, candidates: Sequence[str] = CANDIDATES,
-                    r: float = RAYLEIGH_R) -> list[str]:
-    """Candidates the span resolves, in priority order. Candidates the TCD lacks are skipped
-    (see tcd_missing)."""
+# Foreman's Rayleigh comparison table: each constituent is resolved against one "comparison" constituent
+# (kmpr) that ranks above it, with the frequency difference df (cycles per hour); a record of T hours
+# resolves it when df * T >= R. Source: M.G.G. Foreman (1977, revised 2004), Manual for Tidal Heights
+# Analysis and Prediction, Pacific Marine Science Report 77-10, Institute of Ocean Sciences, the
+# constituent table of its analysis program, as distributed with T_TIDE (Pawlowicz, Beardsley and Lentz
+# 2002) and UTide (Codiga 2011): utide 0.3.1 utide/data/ut_constants.npz, const.kmpr and const.df.
+# Only our candidates are listed; Z0 is the mean level (df = the constituent's own frequency). The
+# candidates the table has no comparison for (2SM2, S6, N4, 2MO5: shallow-water terms outside Foreman's
+# automatic selection; M1, S3, 2MK3: not in the table) and pairs whose comparison constituent ranks
+# below the candidate in CANDIDATES (MF and MM against MSF, SA against SSA) are left to the walk.
+FOREMAN_COMPARISON: dict[str, tuple[str, float]] = {
+    "SA": ("SSA", 0.0001141), "SSA": ("Z0", 0.0002282), "MM": ("MSF", 0.0013098), "MSF": ("Z0", 0.0028219),
+    "MF": ("MSF", 0.0002282), "2Q1": ("Q1", 0.0015122), "SIG1": ("2Q1", 0.0002024), "Q1": ("O1", 0.0015122),
+    "RHO1": ("Q1", 0.0002024), "O1": ("K1", 0.0030501), "P1": ("K1", 0.0002282), "S1": ("K1", 0.0001141),
+    "K1": ("Z0", 0.0417807), "J1": ("K1", 0.0015122), "OO1": ("J1", 0.0015379), "EPS2": ("2N2", 0.0013098),
+    "2N2": ("MU2", 0.0002024), "MU2": ("N2", 0.0013098), "N2": ("M2", 0.0015122), "NU2": ("N2", 0.0002024),
+    "M2": ("Z0", 0.0805114), "MKS2": ("M2", 0.0002282), "LDA2": ("L2", 0.0002024), "L2": ("S2", 0.0013098),
+    "T2": ("S2", 0.0001141), "S2": ("M2", 0.0028219), "R2": ("S2", 0.0001141), "K2": ("S2", 0.0002282),
+    "M3": ("M2", 0.0402557), "MK3": ("M3", 0.0015250), "MN4": ("M4", 0.0015122), "M4": ("M3", 0.0402557),
+    "MS4": ("M4", 0.0028219), "S4": ("MS4", 0.0028219), "2MK5": ("M4", 0.0417807), "M6": ("2MK5", 0.0387307),
+    "2MS6": ("M6", 0.0028219), "M8": ("3MK7", 0.0387307),
+}
+NEAREST_PARTNER_BELOW_DAYS = 30.0
+
+
+@dataclass(frozen=True)
+class RayleighDrop:
+    """A candidate the Rayleigh rule left out of a record of T hours.
+
+    kind "conflict": the record cannot separate it from a constituent ranking above it: a kept candidate
+    within 360 R / T (the first in priority order), or its Foreman comparison constituent. `partner`
+    names a kept constituent: the rule's partner when it is kept and the record is
+    NEAREST_PARTNER_BELOW_DAYS or longer, else the kept constituent nearest in frequency. kind "period_exceeds_record": speed * T < 360 R, so it cannot
+    be separated from the mean level Z0 (not a constituent): partner is None, and needs_days is the record
+    length that resolves it."""
+    name: str                       # TCD name
+    kind: str                       # "conflict" | "period_exceeds_record"
+    partner: str | None             # TCD name of a kept constituent (conflict only)
+    needs_days: float | None        # 360 R / speed / 24 (period_exceeds_record only)
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "kind": self.kind, "partner": self.partner,
+                "needs_days": None if self.needs_days is None else round(self.needs_days, 3)}
+
+
+CONFLICT = "conflict"
+PERIOD_EXCEEDS_RECORD = "period_exceeds_record"
+
+
+def _rayleigh_walk(table: TcdTable, span_hours: float, candidates: Sequence[str],
+                   r: float) -> tuple[list[str], list[RayleighDrop]]:
     kept: list[str] = []
     speeds: list[float] = []
+    pending: list[tuple[str, float, str | None]] = []       # (name, speed, rule partner) of each conflict
+    drops: dict[str, RayleighDrop] = {}
+    order: list[str] = []
+    rank = {table.name(c): i for i, c in enumerate(candidates) if c in table}
     for raw in candidates:
         if raw not in table:
             continue
         n = table.name(raw)
         sp = table.speed(n)
+        order.append(n)
         if sp == 0 or sp * span_hours < 360 * r:
+            drops[n] = RayleighDrop(n, PERIOD_EXCEEDS_RECORD, None, None if sp == 0 else 360 * r / sp / 24)
             continue
-        if all(abs(sp - k) * span_hours >= 360 * r for k in speeds):
+        rule_partner = next((k for k, ks in zip(kept, speeds) if abs(sp - ks) * span_hours < 360 * r), None)
+        ref, df = FOREMAN_COMPARISON.get(n, (None, 0.0))
+        if rule_partner is None and ref is not None and ref != "Z0" and rank.get(ref, len(rank)) < rank[n] \
+                and df * span_hours < r:
+            rule_partner = ref               # Foreman: not separable from the major constituent it ranks under
+        if rule_partner is None:
             kept.append(n)
             speeds.append(sp)
-    return kept
+        else:
+            pending.append((n, sp, rule_partner))
+    if pending and not kept:
+        raise ValueError(f"a record of {span_hours:.1f} h keeps no candidate")
+    for n, sp, rule_partner in pending:          # partners are named once the kept set is known
+        if rule_partner in kept and span_hours / 24 >= NEAREST_PARTNER_BELOW_DAYS:
+            partner = rule_partner
+        else:
+            partner = min(zip(kept, speeds), key=lambda kv: (abs(kv[1] - sp), kv[0]))[0]
+        drops[n] = RayleighDrop(n, CONFLICT, partner, None)
+    return kept, [drops[n] for n in order if n in drops]
+
+
+def rayleigh_select(table: TcdTable, span_hours: float, candidates: Sequence[str] = CANDIDATES,
+                    r: float = RAYLEIGH_R) -> list[str]:
+    """Candidates the span resolves, in priority order. Candidates the TCD lacks are skipped
+    (see tcd_missing)."""
+    return _rayleigh_walk(table, span_hours, candidates, r)[0]
+
+
+def rayleigh_drops(table: TcdTable, span_hours: float, candidates: Sequence[str] = CANDIDATES,
+                   r: float = RAYLEIGH_R) -> list[RayleighDrop]:
+    """The candidates rayleigh_select leaves out (those the TCD lacks excepted), in priority order,
+    each with why (RayleighDrop). Together with rayleigh_select they are every candidate the TCD has."""
+    return _rayleigh_walk(table, span_hours, candidates, r)[1]
 
 
 def _subset(series: Series, mask: np.ndarray, **stats) -> Series:
@@ -337,6 +424,7 @@ def load_noaa_harcon(path: str | Path) -> dict[str, tuple[float, float]]:
     return out
 
 
-__all__ = ["CANDIDATES", "RAYLEIGH_R", "SNR_MIN", "FIT_SPAN_YEARS", "record_hours", "rayleigh_select", "last_years",
+__all__ = ["CANDIDATES", "RAYLEIGH_R", "SNR_MIN", "FIT_SPAN_YEARS", "record_hours", "rayleigh_select", "rayleigh_drops",
+           "RayleighDrop", "CONFLICT", "PERIOD_EXCEEDS_RECORD", "last_years",
            "between", "Analysis", "analyse", "RecordFit", "fit_record", "G9_CONSTITUENTS", "G9_AMP_TOL_M",
            "G9_PHASE_TOL_DEG", "G9Result", "g9_canary", "load_noaa_harcon", "vector"]
