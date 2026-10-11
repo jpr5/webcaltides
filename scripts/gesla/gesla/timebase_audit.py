@@ -122,6 +122,7 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 
 from . import dmi_reference, noaa_subordinate
+from . import timebase_agency as tag
 from . import timebase_sibling as tsib
 from .fit import FitError, design
 from .qc import clean
@@ -790,6 +791,7 @@ class AuditRow:
     published: Correction | None = None     # the correction published: the audit's, or the declared one
     sibling: dict = field(default_factory=dict)     # the intra-site constants / provider-family evidence (TB-SIB)
     in_pool: bool = True         # False: a record outside the pool (no served station, no sibling of one)
+    agency: dict = field(default_factory=dict)      # the agency-constants evidence (FIX-LST, timebase_agency)
 
     @property
     def usable(self) -> bool:
@@ -1182,7 +1184,8 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
           previous_providers: Mapping[tuple[str, int], str] | None = None, version: str = "4.1",
           weak: WeakConfig | None = None, declared: Mapping[str, int] | None = None,
           sibling: SiblingConfig | None = None, out_of_pool: bool = False,
-          provider_class: Sequence[str] = (), log=None) -> AuditResult:
+          provider_class: Sequence[str] = (), agency_refs: "Sequence[tag.AgencyRef] | None" = None,
+          log=None) -> AuditResult:
     """Audit the candidates and their siblings in the plan's order (module docstring).
     declared: GESLA's TIME ZONE HOURS by record (missing = 0, UTC: GESLA's declaration for all but
     one 4.1 record); weak: the weak evidence's inputs (None: records without a comparator verdict
@@ -1190,7 +1193,8 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
     out_of_pool (with weak): every other inventory record gets a row too (no comparator; the weak checks, EOT20
     first; never inherits: the provider rule is the pool's); sibling: the intra-site constants comparison and the
     provider-family rule on pass 1 (timebase_sibling; apply_sibling). provider_class: the contributors of the owner
-    switch D-O3 (provider_class_inherit; main passes PROVIDER_CLASS_INHERIT)."""
+    switch D-O3 (provider_class_inherit; main passes PROVIDER_CLASS_INHERIT). With sibling, the agency constants
+    (timebase_agency; apply_agency) follow the sibling step; agency_refs None: A-NOAA's harcon cache."""
     log = log or (lambda *_: None)
     transforms = dict(transforms or {})
     inv = dict(inv)
@@ -1438,6 +1442,15 @@ def audit(inv: Mapping[str, RecordInfo], candidates: Sequence[str], *, release_r
                                                         weak_speeds(TcdTable.load(table_path)), ex, ostat_of,
                                                         declared or {}, log)
                 sib_counts.update(sc)
+                if agency_refs is None:
+                    agency_refs, skipped = tag.load_noaa_refs(refs.noaa_harcon_dir.parent)
+                    for s in skipped[:10]:
+                        log(f"agency constants: skipped {s}")
+                ag_crashes, ac = apply_agency(rows, inv, sibling, weak, dec, transforms,
+                                              weak_speeds(TcdTable.load(table_path)), ex, ostat_of, declared or {},
+                                              tag.RefIndex(agency_refs), log)
+                sib_crashes = sib_crashes + ag_crashes
+                sib_counts["agency"] = ac
     for f in allf:
         annotate(rows[f], dec[f])
     final_counts(providers, rows, inv)
@@ -1633,6 +1646,104 @@ def apply_sibling(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg:
               "corrected": n_corr, "unresolved": len(site.unresolved), "refused": len(site.conflicts),
               "eot20_whole_hour": sum(1 for f in whole if f in rows)}
     log("sibling constants: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    return crashes, counts
+
+
+AGENCY_DISPUTED = "disputed:agency_constants_offset"
+
+
+def apply_agency(rows: dict[str, AuditRow], inv: Mapping[str, RecordInfo], cfg: SiblingConfig, weak: WeakConfig,
+                 dec: Mapping[str, int], transforms: Mapping[str, tuple[str, int]], sp: Mapping[str, float], ex,
+                 ostat_of, declared: Mapping[str, int], index: "tag.RefIndex", log) -> tuple[list[str], dict]:
+    """The agency constants (timebase_agency) on pass 1, into the verdicts, after apply_sibling.
+
+    Pass 1 binds as in apply_sibling: a record's constants are used only when its fit's time base is the one it
+    publishes now. A record a strong comparator verified (official, harcon, sibling series) is not judged. A lead or
+    an agreed offset makes the record disputed (AGENCY_DISPUTED; a record already disputed keeps its code), unless it is
+    a correction candidate (timebase_agency.classify: every reference and EOT20 on one whole hour, a reference in the
+    same water): then pass 2 (_sibling_confirm_task against that reference) and the record's own weak checks decide,
+    as in apply_sibling. Each record is judged on its own evidence. Returns (records whose pass 2 crashed, counts)."""
+    counts = {"references": len(index), "bound": 0, "with_reference": 0, "lead": 0, "agreed": 0,
+              "pass2_candidates": 0, "corrected": 0, "disputed": 0, "already_disputed": 0}
+    if not len(index):
+        log("agency constants: no agency station loaded, nothing judged")
+        return [], counts
+    cands = []
+    for f, r in sorted(cfg.fits.items()):
+        row = rows.get(f)
+        if row is None or r.get("outcome") != "fitted" or not r.get("main") or f not in inv:
+            continue
+        if row.status == "used" and row.comparator_kind in ("b", "c", "a"):
+            continue
+        if r.get("time_base") != _published_now(row, dec[f]).label:
+            continue
+        counts["bound"] += 1
+        consts = {k: (float(v[0]), float(v[1])) for k, v in r["main"].items()}
+        sh = tag.shift(consts, index.near(inv[f].lat, inv[f].lon), sp)
+        if sh is None:
+            continue
+        counts["with_reference"] += 1
+        src = transforms.get(f, (f,))[0]
+        el = tsib.eot_lag_alone(tsib.SiteRecord(f, inv[f].lat, inv[f].lon, r.get("gauge_type") or "", consts,
+                                                weak.inputs.eot(src)), sp)
+        e = None if el is None else el[0]
+        cls = tag.classify(sh, e)
+        if cls["kind"] == "none":
+            continue
+        counts[cls["kind"]] += 1
+        row.agency = {"rule": cls["kind"], "summary": cls["why"], "tau_min": round(sh["tau"], 1),
+                      "eot20_min": None if e is None else round(e, 1), "hours": cls["hours"],
+                      "references": [{k: (round(v, 3) if isinstance(v, float) else v) for k, v in q.items()}
+                                     for q in sh["refs"]]}
+        n_pub = inherited_hours(_published_now(row, dec[f]))
+        if row.status == "residue":
+            counts["already_disputed"] += 1
+            _sib_dispute(row, AGENCY_DISPUTED, cls["why"])
+            continue
+        if cls["hours"] is None or n_pub is None:
+            counts["disputed"] += 1
+            _sib_dispute(row, AGENCY_DISPUTED, cls["why"] + ("" if n_pub is not None else
+                                                             "; its class cannot take a whole-hour shift"))
+            continue
+        ref = next(x for x in index.refs if f"{x.src}:{x.id}" == cls["same_ref"])
+        cands.append((f, n_pub + cls["hours"], [dict(ref.consts)]))
+    crashes: list[str] = []
+    if cands:
+        counts["pass2_candidates"] = len(cands)
+        log(f"agency constants: pass 2 on {len(cands)} candidate corrections")
+        ost = [ostat_of(f) for f, *_ in cands]
+        indep = [n != dec[f] for f, n, _ in cands]
+        got = {rid: (n, extra) for rid, _o, n, extra in ex.map(_sibling_confirm_task, [c[0] for c in cands],
+                                                               [c[1] for c in cands], [c[2] for c in cands], ost, indep)}
+        for f, n_new, _refs in cands:
+            row = rows[f]
+            notes, extra = got[f]
+            label = declared_correction(n_new).label
+            decl = declared_correction(dec[f]).label
+            summ = row.agency["summary"]
+            if extra.get("failed"):
+                if extra.get("error_type") not in EXPECTED_WEAK_ERRORS:
+                    crashes.append(f)
+                counts["disputed"] += 1
+                _sib_dispute(row, AGENCY_DISPUTED, f"{summ}; pass 2 at {label} failed: {'; '.join(notes)}")
+                continue
+            p2, res = extra["pass2"], extra["weak"]
+            row.agency.update(pass2=p2, pass2_weak=res.code)
+            conflict = res.annotation == "disputed" or (res.annotation in ("verified", "corrected")
+                                                        and res.label != label)
+            if not p2["ok"] or conflict:
+                why = (f"pass 2 at {label} does not confirm it ({p2})" if not p2["ok"]
+                       else f"its own weak checks at {label} disagree ({res.code}): {res.reason}")
+                counts["disputed"] += 1
+                _sib_dispute(row, AGENCY_DISPUTED, f"{summ}; {why}")
+                continue
+            row.status, row.verdict, row.base = "used", label, label
+            row.correction, row.comparator_kind = correction_of(label), "w"
+            row.comparator_id = f"corrected:{decl}->{label}:agency_constants+eot20"
+            row.months_bad, row.span = [], extra.get("span") or row.span
+            row.reason = f"{summ}; pass 2 at {label} confirms it ({p2['against']})"[:REASON_MAX * 2]
+            counts["corrected"] += 1
+    log("agency constants: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
     return crashes, counts
 
 
@@ -1961,6 +2072,8 @@ def row_evidence(row: AuditRow) -> dict:
         ev["weak"] = row.weak
     if row.sibling:
         ev["sibling"] = row.sibling
+    if row.agency:
+        ev["agency"] = row.agency
     return _num(ev)
 
 
@@ -1997,7 +2110,7 @@ CSV_FIELDS = ["file_id", "candidate", "contributor", "interval_s", "time_base_st
               "lag_max", "lag_jan", "lag_jul", "resid_max", "months_bad", "m2_lag", "m2_ratio", "m4_ratio",
               "m6_ratio", "mean60_cm", "inst_t30_cm", "inst_t_cm", "official_lag", "official_matched",
               "weak_eot20", "weak_served", "weak_dst", "comparators_tried", "reason", "time_base_reason",
-              "sibling_constants", "in_pool", "disputed_reason"]
+              "sibling_constants", "in_pool", "disputed_reason", "agency_constants"]
 
 
 def _iso_day(s: int) -> str:
@@ -2071,7 +2184,8 @@ def csv_row(r: AuditRow) -> dict:
             "weak_dst": chk("D"), "comparators_tried": " ".join(r.tried), "reason": r.reason[:REASON_MAX],
             "time_base_reason": r.annotation_reason[:REASON_MAX * 2],
             "sibling_constants": (r.sibling or {}).get("summary", "")[:REASON_MAX * 2], "in_pool": int(r.in_pool),
-            "disputed_reason": disputed_reasons(r)}
+            "disputed_reason": disputed_reasons(r),
+            "agency_constants": (r.agency or {}).get("summary", "")[:REASON_MAX * 2]}
 
 
 def write_csv(rows: Mapping[str, AuditRow], path: str | Path) -> Path:
