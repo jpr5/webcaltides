@@ -2,7 +2,14 @@
 CR-dir copies fit-1/run_fits_tb.py and fit-2/run_fits_tb.py refuse and point here).
 
 Environment: FIT_OUT (output dir), TIMEBASE_CSV (the audit's timebase.csv; its dir must pass
-timebase_audit.check_audit_outputs), WORKERS (default 4), LIMIT (first N records), ONLY (a file of record ids).
+timebase_audit.check_audit_outputs), WORKERS (default 4), LIMIT (first N records), ONLY (a file of record ids),
+TCD_TABLE (the TCD dump the fit reads; default $OTC_WORK/tcd_table.json; the OTC TCD's is the congen run's
+tcd-1900-2100.json).
+
+The candidate list per record (FIX-CONST): select_constituents.select_candidate_list, from the record's GESLA
+COUNTRY. A record in scope fits the extended list where window A says it is better; its run row records the choice
+(candidate_list, candidate_selection), and so does its fit file when the extended list was chosen. Every other fit
+is the 45's, byte for byte as before.
 
 Per record, the time base it is published with: in the audit pool, verified/corrected -> its correction (class +
 bad months dropped); unverified/disputed -> GESLA's declared time base (owner rule: never dropped, worst case =
@@ -29,7 +36,8 @@ from pathlib import Path
 from .fit import FitError
 from .qc import clean
 from .read_gesla import GeslaRelease, ShaMismatch, load_contributor_roles, otc_work
-from .select_constituents import FIT_SPAN_YEARS, fit_record, in_tcd_years, last_years, record_hours, sampling_corrected
+from .select_constituents import (FIT_SPAN_YEARS, fit_record, in_tcd_years, last_years, record_hours, sampling_corrected,
+                                  select_candidate_list)
 from .tcd_table import TcdTable
 from .timebase_audit import check_audit_outputs, correction_of, declared_correction, write_manifest
 from .timebase_verdict import Correction
@@ -38,6 +46,11 @@ WT = Path(__file__).resolve().parents[3]            # the checkout (the manifest
 ROLES = WT / "data/gesla/contributor_roles.csv"
 OUT = Path(os.environ.get("FIT_OUT", "."))
 TIMEBASE = Path(os.environ.get("TIMEBASE_CSV", "timebase.csv"))
+
+
+def tcd_table_path() -> Path:
+    """The TCD dump the fit reads: $TCD_TABLE, else $OTC_WORK/tcd_table.json."""
+    return Path(os.environ.get("TCD_TABLE") or otc_work() / "tcd_table.json")
 RESULTS = OUT / "results.jsonl"
 FITS = OUT / "fits"
 SHORT_HOURS = 15 * 24
@@ -69,7 +82,7 @@ def _init():
     _rel = GeslaRelease()
     _rel.metadata()
     _roles = load_contributor_roles(ROLES)
-    _table = TcdTable.load(otc_work() / "tcd_table.json")
+    _table = TcdTable.load(tcd_table_path())
     _tb = load_timebase()
 
 
@@ -118,7 +131,12 @@ def one(name: str) -> dict:
                    secs=round(time.time() - t0, 2))
         return out
     try:
-        rf = fit_record(_table, series)
+        clist, selection = select_candidate_list(_table, series, country=meta.get("COUNTRY"))
+        if selection is not None:
+            out.update(candidate_list=clist, candidate_selection=selection)
+        # the fit file records the choice only when it is the extended list: a 45-list fit stays byte for byte what
+        # it was (a short record's calibration is keyed by its fit's hash); the run row records every choice
+        rf = fit_record(_table, series, candidate_list=clist, selection=selection if clist != "base" else None)
         out.update(first=int(rf.primary.first_s), last=int(rf.primary.last_s))
         # the sampling response of the time base (utc_mean_start60: an hourly mean) divided out per constituent,
         # over the span the fit used (the consumer recomputes the stamp's factors from that same span)
@@ -227,7 +245,7 @@ def main() -> int:
             c, _ = published(r, 0)
             if c.label != r["correction"]:
                 raise SystemExit(f"{f}: rebuilt correction {c.label} != CSV {r['correction']}")
-    inputs = {"timebase_csv": TIMEBASE, "tcd_table": otc_work() / "tcd_table.json", "roles": ROLES,
+    inputs = {"timebase_csv": TIMEBASE, "tcd_table": tcd_table_path(), "roles": ROLES,
               "gesla_metadata": Path(rel.root) / rel.metadata_path, "gesla_manifest": Path(rel.root) / "MANIFEST.json",
               "runner": Path(__file__)}
     argv = [f"WORKERS={workers}", f"LIMIT={limit}", f"ONLY={os.environ.get('ONLY', '')}"]

@@ -55,7 +55,7 @@ from typing import Iterable, Mapping
 
 from gesla.read_gesla import GeslaRelease, otc_work
 from gesla import short_accuracy
-from gesla.select_constituents import CANDIDATES, RecordFit
+from gesla.select_constituents import CANDIDATE_LISTS, RecordFit
 from gesla.tcd_table import TcdTable
 from gesla.timebase_audit import check_audit_outputs, correction_of, declared_correction
 from gesla.timebase_verdict import Correction
@@ -793,7 +793,8 @@ def comparator_set(doc: Mapping) -> SourceSet:
     refused = doc.get("refusal")
     if refused:
         raise NotPublishable(refused["detail"], refused["reason"])
-    missing = {n for n in CANDIDATES if n not in f["rayleigh_kept"] and n not in f["candidates_missing_from_tcd"]}
+    cands = CANDIDATE_LISTS[f.get("candidate_list", "base")]     # the list the fit walked ("base" when absent)
+    missing = {n for n in cands if n not in f["rayleigh_kept"] and n not in f["candidates_missing_from_tcd"]}
     drops = doc["rayleigh_drops"]
     if {d["name"] for d in drops} != missing:
         raise FitIntegrityError(f"{rid}: rayleigh_drops {sorted(d['name'] for d in drops)} are not the Rayleigh "

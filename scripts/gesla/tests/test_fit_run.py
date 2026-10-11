@@ -130,7 +130,7 @@ def test_one_cleans_and_corrects_the_sampling_with_the_published_correction(monk
     monkeypatch.setattr(fr, "in_tcd_years", lambda t, s: Win())
     monkeypatch.setattr(fr, "record_hours", lambda t: 10_000.0)
     rf = type("RF", (), {"primary": type("P", (), {"first_s": 0, "last_s": 3600})()})()
-    monkeypatch.setattr(fr, "fit_record", lambda t, s: rf)
+    monkeypatch.setattr(fr, "fit_record", lambda t, s, **kw: rf)
 
     def sc(rf, table, corr, span):
         seen["sampling"] = (rf, corr, span)
@@ -208,12 +208,81 @@ def test_a_fitted_row_records_the_fits_own_span_and_scales_over_it(monkeypatch, 
     monkeypatch.setattr(fr, "last_years", lambda s, y: s)
     monkeypatch.setattr(fr, "in_tcd_years", lambda t, s: Win())
     monkeypatch.setattr(fr, "record_hours", lambda t: 10_000.0)
-    monkeypatch.setattr(fr, "fit_record", lambda t, s: RF())
+    monkeypatch.setattr(fr, "fit_record", lambda t, s, **kw: RF())
     monkeypatch.setattr(fr, "sampling_corrected", lambda rf, table, corr, span: seen.setdefault("span", span) and rf)
     out = fr.one("a-1-nor-nhs")
     assert out["outcome"] == "fitted", out
     assert (out["first"], out["last"]) == (7200, 36000) and (out["window_first"], out["window_last"]) == (0, 36000)
     assert seen["span"] == (7200, 36000 + 3600)
+
+
+def test_one_fits_the_list_the_window_a_rule_chose_and_records_it(tmp_path, monkeypatch):
+    # FIX-CONST: the record's COUNTRY goes to select_candidate_list; fit_record walks its choice, and the run row
+    # carries the choice and its record
+    import numpy as np
+
+    class Fit:
+        names, amplitude_m, phase_deg, rms_m = ("M2",), {"M2": 1.0}, {"M2": 10.0}, 0.1
+
+    class RF:
+        primary = type("P", (), {"fit": Fit(), "first_s": 0, "last_s": 3600, "snr_dropped": ()})()
+        half_errors, u = (), {"M2": 0.01}
+
+        def to_json(self):
+            return "{}"
+
+    class Win:
+        times_s = np.array([0, 3600], dtype=np.int64)
+
+        def __len__(self):
+            return 2
+
+    class Rel:
+        def metadata(self):
+            return {"a-1-deu-wsv": {"TIME ZONE HOURS": "0", "LATITUDE": "1", "LONGITUDE": "2", "COUNTRY": "DEU"}}
+
+        def record(self, name, roles):
+            return type("R", (), {"gauge_type": "C", "licence_class": "A", "originator": True, "interval_min": 60,
+                                  "good": np.ones(3, dtype=bool), "__len__": lambda self: 3})()
+    seen = {}
+    rec = {"chosen": "extended", "rms_m": {"base": 0.2, "extended": 0.19}}
+
+    def choose(table, series, *, country):
+        seen["country"] = country
+        return "extended", rec
+
+    def fit(table, series, **kw):
+        seen["fit"] = kw
+        return RF()
+    monkeypatch.setattr(fr, "FITS", tmp_path)
+    monkeypatch.setattr(fr, "_rel", Rel())
+    monkeypatch.setattr(fr, "_tb", {})
+    monkeypatch.setattr(fr, "_table", object())
+    monkeypatch.setattr(fr, "clean", lambda rec_, corr: [1] * 5)
+    monkeypatch.setattr(fr, "last_years", lambda s, y: s)
+    monkeypatch.setattr(fr, "in_tcd_years", lambda t, s: Win())
+    monkeypatch.setattr(fr, "record_hours", lambda t: 10_000.0)
+    monkeypatch.setattr(fr, "select_candidate_list", choose)
+    monkeypatch.setattr(fr, "fit_record", fit)
+    monkeypatch.setattr(fr, "sampling_corrected", lambda rf, table, corr, span: rf)
+    out = fr.one("a-1-deu-wsv")
+    assert out["outcome"] == "fitted", out
+    assert seen["country"] == "DEU" and seen["fit"] == {"candidate_list": "extended", "selection": rec}
+    assert out["candidate_list"] == "extended" and out["candidate_selection"] == rec
+    # a 45-list choice in scope: the row records it, the fit file does not (it stays the 45's, byte for byte)
+    rec0 = {"chosen": "base", "rms_m": {"base": 0.2, "extended": 0.21}}
+    monkeypatch.setattr(fr, "select_candidate_list", lambda table, series, *, country: ("base", rec0))
+    out = fr.one("a-1-deu-wsv")
+    assert seen["fit"] == {"candidate_list": "base", "selection": None}
+    assert out["candidate_list"] == "base" and out["candidate_selection"] == rec0
+
+
+def test_the_fit_reads_tcd_table_when_set(monkeypatch, tmp_path):
+    monkeypatch.setenv("TCD_TABLE", str(tmp_path / "otc.json"))
+    assert fr.tcd_table_path() == tmp_path / "otc.json"
+    monkeypatch.delenv("TCD_TABLE")
+    monkeypatch.setenv("OTC_WORK", str(tmp_path))
+    assert fr.tcd_table_path() == tmp_path / "tcd_table.json"
 
 
 # --- gate5 review C M1-M3 (and A 3): a fit run never reports complete over a bad write, a resume across a change,
@@ -260,7 +329,7 @@ def _one_env(monkeypatch, tmp_path, record=None, clean=None):
     monkeypatch.setattr(fr, "last_years", lambda s, y: s)
     monkeypatch.setattr(fr, "in_tcd_years", lambda t, s: Win())
     monkeypatch.setattr(fr, "record_hours", lambda t: 10_000.0)
-    monkeypatch.setattr(fr, "fit_record", lambda t, s: RF())
+    monkeypatch.setattr(fr, "fit_record", lambda t, s, **kw: RF())
     monkeypatch.setattr(fr, "sampling_corrected", lambda rf, table, corr, span: rf)
 
 

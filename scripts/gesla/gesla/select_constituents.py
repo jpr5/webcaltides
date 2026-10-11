@@ -34,7 +34,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from .fit import AMP_DECIMALS, PHASE_DECIMALS, FitError, FitResult, fit_despiked_mask, lsq, year_and_hours
+from .fit import AMP_DECIMALS, PHASE_DECIMALS, FitError, FitResult, design, fit_despiked_mask, lsq, year_and_hours
 from .noise import band_noise_detail, band_of, uncertainty_detail, vector
 from .qc import Series
 from .tcd_table import TcdTable
@@ -46,6 +46,18 @@ CANDIDATES: tuple[str, ...] = (
     "RHO1", "MM", "MF", "MSF", "R2", "2SM2", "S6", "M1",
     "EPS2", "MKS2", "SIG1", "N4", "S3", "2MK5", "2MO5", "2MS6",
 )
+# FIX-CONST (owner decision 2026-10-11, option A): the extended list = CANDIDATES + the M2 annual sidebands
+# MA2 and MB2 (the OTC TCD's own constituents, scripts/otc/tools/otc_constituents.txt) + shallow-water
+# compounds the TCD defines. Appended after CANDIDATES, so a Rayleigh conflict still goes to the 45. MO3 of
+# the decided twelve compounds is left out: the TCD gives it 2MK3's speed (42.9271398 deg/h), so the Rayleigh
+# rule could never keep it, and a list holding it would drop it from every record as a conflict.
+EXTENDED_ADDITIONS: tuple[str, ...] = (
+    "MA2", "MB2",
+    "2MN6", "2MK6", "2SM6", "MSK6", "3MK7", "SO3", "MK4", "SN4", "SK3", "2SK5", "MSN2",
+)
+EXTENDED_LEFT_OUT = {"MO3": "same TCD speed as 2MK3 (42.9271398 deg/h): the Rayleigh rule can never keep it"}
+EXTENDED_CANDIDATES: tuple[str, ...] = CANDIDATES + EXTENDED_ADDITIONS
+CANDIDATE_LISTS: dict[str, tuple[str, ...]] = {"base": CANDIDATES, "extended": EXTENDED_CANDIDATES}
 RAYLEIGH_R = 1.0
 SNR_MIN = 2.0
 FIT_SPAN_YEARS = 19.0
@@ -258,6 +270,8 @@ class RecordFit:
     half_errors: tuple[str, ...]
     u: dict[str, float]
     u_basis: dict[str, str]             # constituent -> noise.uncertainty_detail basis
+    candidate_list: str = "base"        # the CANDIDATE_LISTS key the analyses walked
+    selection: Mapping | None = None    # select_candidate_list's record (FIX-CONST scope only)
 
     def considered(self) -> set[str]:
         """Every constituent any of the analyses considered (its Rayleigh-kept list)."""
@@ -278,7 +292,8 @@ class RecordFit:
             amp = {n: v * factors.get(n, 1.0) for n, v in a.fit.amplitude_m.items()}
             return dataclasses.replace(a, fit=dataclasses.replace(a.fit, amplitude_m=amp))
         p, h1, h2 = sc(self.primary), sc(self.half1), sc(self.half2)
-        return RecordFit(p, h1, h2, self.half_errors, *_u(p, h1, h2))
+        u, u_basis = _u(p, h1, h2)
+        return dataclasses.replace(self, primary=p, half1=h1, half2=h2, u=u, u_basis=u_basis)
 
     def to_dict(self) -> dict:
         p = self.primary
@@ -294,7 +309,11 @@ class RecordFit:
                 "constituents": {n: {"amp_m": round(a.fit.amplitude_m[n], AMP_DECIMALS),
                                      "phase_deg": round(a.fit.phase_deg[n], PHASE_DECIMALS) % 360.0}
                                  for n in sorted(a.fit.names)}}
-        return dict(f, first_s=p.first_s, last_s=p.last_s, span_hours=round(p.span_hours, 3),
+        extra = {}
+        if self.candidate_list != "base" or self.selection is not None:
+            # only for a FIX-CONST record: every other fit file stays as it was (absent = "base")
+            extra = {"candidate_list": self.candidate_list, "candidate_selection": self.selection}
+        return dict(f, **extra, first_s=p.first_s, last_s=p.last_s, span_hours=round(p.span_hours, 3),
                     rayleigh_hours=round(p.rayleigh_hours, 3),
                     rayleigh_kept=list(p.rayleigh_kept), snr_dropped=list(p.snr_dropped),
                     candidates_missing_from_tcd=list(p.tcd_missing),
@@ -344,10 +363,15 @@ def sampling_corrected(rf: RecordFit, table: TcdTable, correction, span: tuple[i
 
 
 def fit_record(table: TcdTable, series: Series, *, years: float = FIT_SPAN_YEARS,
-               candidates: Sequence[str] = CANDIDATES, keep_unassessed: bool = True,
-               rayleigh_on_span: bool = False) -> RecordFit:
+               candidates: Sequence[str] | None = None, keep_unassessed: bool = True,
+               rayleigh_on_span: bool = False, candidate_list: str = "base",
+               selection: Mapping | None = None) -> RecordFit:
     """Steps 1-4 of the module docstring on a cleaned series (qc.clean). keep_unassessed=False
-    and rayleigh_on_span=True together are the PoC's method (the PoC comparison only)."""
+    and rayleigh_on_span=True together are the PoC's method (the PoC comparison only).
+    candidate_list names the CANDIDATE_LISTS entry walked (recorded in the fit); `candidates` overrides
+    the list itself (tests and studies), `selection` is select_candidate_list's record."""
+    if candidates is None:
+        candidates = CANDIDATE_LISTS[candidate_list]
     kw = dict(candidates=candidates, keep_unassessed=keep_unassessed, rayleigh_on_span=rayleigh_on_span)
     primary = analyse(table, in_tcd_years(table, last_years(series, years)), **kw)
     s0, s1 = primary.first_s, primary.last_s
@@ -360,7 +384,76 @@ def fit_record(table: TcdTable, series: Series, *, years: float = FIT_SPAN_YEARS
         except FitError as e:
             halves.append(None)
             errors.append(f"{k}: {e}")
-    return RecordFit(primary, halves[0], halves[1], tuple(errors), *_u(primary, halves[0], halves[1]))
+    return RecordFit(primary, halves[0], halves[1], tuple(errors), *_u(primary, halves[0], halves[1]),
+                     candidate_list=candidate_list, selection=selection)
+
+
+# --- FIX-CONST: the extended list where window A says it is better ---------------------------------------
+
+# Owner decision 2026-10-11: FIX-CONST's scope is extended to the German WSV and the Norway gauges. A record is
+# in scope by its GESLA COUNTRY (Germany's coastal gauges are the WSV's; at a WSV place the release may
+# recommend the CMEMS copy of the same gauge, so the scope is the place, not the contributor).
+FIX_CONST_COUNTRIES = frozenset({"DEU", "NOR"})
+# The launch scorecard's window A (plan §6.3; REC-SKILL): selection copies are fitted on data before A0 and
+# scored on A0 <= t < A1. Windows B and C (later) are never read here.
+WINDOW_A = (1722470400, 1754006400)          # 2024-08-01, 2025-08-01 00:00 UTC
+MIN_WINDOW_A_HOURS = int(0.6 * 180 * 24)     # the accuracy study's minimum held-out data (60% of 180 days)
+
+
+def in_fix_const_scope(country: str | None) -> bool:
+    return (country or "").strip().upper() in FIX_CONST_COUNTRIES
+
+
+def _window_rms(table: TcdTable, a: Analysis, t: np.ndarray, h: np.ndarray) -> float:
+    """RMS (m) of h minus the analysis' harmonic part at t, each side's mean removed (the study's measure A)."""
+    names = list(a.fit.names)
+    cols = design(table, names, t)
+    coef = np.empty(2 * len(names))
+    for j, n in enumerate(names):
+        amp, g = a.fit.amplitude_m[n], math.radians(a.fit.phase_deg[n])
+        coef[2 * j], coef[2 * j + 1] = amp * math.cos(g), amp * math.sin(g)
+    r = h - cols @ coef
+    r = r - r.mean()
+    return float(np.sqrt(np.mean(r ** 2)))
+
+
+def select_candidate_list(table: TcdTable, series: Series, *, country: str | None,
+                          years: float = FIT_SPAN_YEARS) -> tuple[str, dict | None]:
+    """("base" | "extended", the record of the choice or None) for a cleaned series (qc.clean).
+
+    Out of scope (in_fix_const_scope): ("base", None). In scope, the extended list is kept only where window-A
+    skill improves (owner decision 2026-10-11, the per-place window-A rule): selection copies of the record are
+    fitted with each list (analyse, the primary fit) on its data before WINDOW_A (its last `years` years in the
+    TCD's range), and the extended list is chosen when its hourly residual RMS on window A is strictly lower.
+    The base list stays (with the reason) when window A has fewer than MIN_WINDOW_A_HOURS samples, when either
+    the selection span or the whole fit span leaves a candidate of the extended list unresolved (Rayleigh drops:
+    the extended list is for records that resolve all of it, so it never makes a record short), or when a
+    selection copy cannot be fitted (FitError)."""
+    if not in_fix_const_scope(country):
+        return "base", None
+    a0, a1 = WINDOW_A
+    t, h = series.times_s, series.heights_m
+    rec: dict = {"rule": "window A RMS, extended only when strictly lower", "window_a": ["2024-08-01", "2025-08-01"]}
+    win = (t >= a0) & (t < a1)
+    rec["window_a_hours"] = int(win.sum())
+    if rec["window_a_hours"] < MIN_WINDOW_A_HOURS:
+        return "base", {**rec, "chosen": "base", "reason": f"window A has {rec['window_a_hours']} hourly samples"}
+    pre = in_tcd_years(table, last_years(_subset(series, t < a0), years))
+    for what, s_ in (("selection span", pre), ("fit span", in_tcd_years(table, last_years(series, years)))):
+        drops = rayleigh_drops(table, record_hours(s_.times_s), EXTENDED_CANDIDATES)
+        if drops:
+            return "base", {**rec, "chosen": "base",
+                            "reason": f"the {what} leaves {', '.join(d.name for d in drops)} unresolved"}
+    rms = {}
+    for name in ("base", "extended"):
+        try:
+            a = analyse(table, pre, candidates=CANDIDATE_LISTS[name])
+        except FitError as e:
+            return "base", {**rec, "chosen": "base", "reason": f"{name} selection copy: {e}"}
+        rms[name] = _window_rms(table, a, t[win], h[win])
+    chosen = "extended" if rms["extended"] < rms["base"] else "base"
+    return chosen, {**rec, "chosen": chosen, "rms_m": {k: round(v, 6) for k, v in rms.items()},
+                    "selection_last_s": int(pre.times_s.max())}
 
 
 # --- G9 convention canary (BP §8) ------------------------------------------------------------------
@@ -424,7 +517,9 @@ def load_noaa_harcon(path: str | Path) -> dict[str, tuple[float, float]]:
     return out
 
 
-__all__ = ["CANDIDATES", "RAYLEIGH_R", "SNR_MIN", "FIT_SPAN_YEARS", "record_hours", "rayleigh_select", "rayleigh_drops",
+__all__ = ["CANDIDATES", "CANDIDATE_LISTS", "EXTENDED_ADDITIONS", "EXTENDED_CANDIDATES", "EXTENDED_LEFT_OUT",
+           "FIX_CONST_COUNTRIES", "WINDOW_A", "MIN_WINDOW_A_HOURS", "in_fix_const_scope", "select_candidate_list",
+           "RAYLEIGH_R", "SNR_MIN", "FIT_SPAN_YEARS", "record_hours", "rayleigh_select", "rayleigh_drops",
            "RayleighDrop", "CONFLICT", "PERIOD_EXCEEDS_RECORD", "last_years",
            "between", "Analysis", "analyse", "RecordFit", "fit_record", "G9_CONSTITUENTS", "G9_AMP_TOL_M",
            "G9_PHASE_TOL_DEG", "G9Result", "g9_canary", "load_noaa_harcon", "vector"]

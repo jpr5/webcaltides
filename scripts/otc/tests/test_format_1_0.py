@@ -401,3 +401,46 @@ def test_declared_offsets_and_dropped_months():
                                      time_base_reason="declared utc_plus_1 confirmed"), 1, "x", decided_in="20261010")
     assert (tb["declared"], tb["published"], tb["months_dropped"]) == ("utc_plus_1", "utc_plus_1", ["2010-07", "2011-02"])
     assert time_base_annotation(None, -3, "x", decided_in="20261010")["declared"] == "utc_minus_3"
+
+
+# --- FIX-CONST: an extended-list fit (MA2, MB2) ----------------------------------------------------------------
+
+def test_an_extended_fit_publishes_ma2_and_is_checked_against_its_own_list():
+    from gesla.select_constituents import EXTENDED_CANDIDATES
+    speeds = {**SPEEDS, "MA2": 28.9430356, "MB2": 29.0251729}
+    t2 = TcdTable({"years": [2020, 2022], "tcd_sha256": "e" * 64, "aliases": {},
+                   "constituents": {n: {"speed": s, "v0u": [10.0 * i for i in range(3)], "f": [1.0] * 3}
+                                    for n, s in speeds.items()}})
+    f = fit_dict()
+    f["constituents"]["MA2"] = {"amp_m": 0.04, "phase_deg": 75.0, "u_m": 0.001}
+    f.update(candidate_list="extended", candidate_selection={"chosen": "extended"},
+             rayleigh_kept=[n for n in EXTENDED_CANDIDATES if n in speeds],
+             candidates_missing_from_tcd=[n for n in EXTENDED_CANDIDATES if n not in speeds])
+    d = doc(t2, fit=f)
+    assert d["refusal"] is None and d["rayleigh_drops"] == []
+    release = build(t2, [d], astro_tables=kp0b_tables(congen_run(t2), speeds, TABLE_ID), congen_run=congen_run(t2))
+    assert validate_release(release) == []
+    (cs,) = release["stations"][0]["constant_sets"]
+    ma2 = next(c for c in cs["constituents"] if c["name"] == "MA2")
+    assert ma2["speed_deg_per_hour"] == 28.9430356 and ma2["amplitude_m"] == 0.04
+    # read as a 45-list fit (no candidate_list), its kept list is not the Rayleigh rule's: refused, never published
+    f.pop("candidate_list")
+    assert doc(t2, fit=f)["refusal"]["reason"] == "short_record_uncalibrated"
+
+
+def test_an_extended_fit_short_of_its_own_list_is_a_calibrated_short_record_not_an_integrity_error():
+    # the drops a document carries are its own list's: MB2 left out at 300 days is a short-record drop
+    from gesla.select_constituents import EXTENDED_CANDIDATES
+    speeds = {**SPEEDS, "MA2": 28.9430356, "MB2": 29.0251729}
+    t2 = TcdTable({"years": [2020, 2022], "tcd_sha256": "e" * 64, "aliases": {},
+                   "constituents": {n: {"speed": s, "v0u": [10.0 * i for i in range(3)], "f": [1.0] * 3}
+                                    for n, s in speeds.items()}})
+    from gesla.select_constituents import rayleigh_select
+    hours = 300 * 24.0
+    f = fit_dict(rayleigh_hours=hours)
+    f.update(candidate_list="extended", rayleigh_kept=rayleigh_select(t2, hours, EXTENDED_CANDIDATES),
+             candidates_missing_from_tcd=[n for n in EXTENDED_CANDIDATES if n not in speeds])
+    d = doc(t2, fit=f, calibration=short_calibration(f, good_hours=hours))
+    assert d["refusal"] is None and "MB2" in {x["name"] for x in d["rayleigh_drops"]}
+    cs = source_set(d, licence_id="gesla-derived")         # read against the 45, this would be an integrity error
+    assert "MB2" in {x["name"] for x in cs.constant_set["dropped_constituents"]}

@@ -60,7 +60,7 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 
 from .qc import Series
-from .select_constituents import (CANDIDATES, CONFLICT, FIT_SPAN_YEARS, PERIOD_EXCEEDS_RECORD, RayleighDrop, analyse,
+from .select_constituents import (CANDIDATE_LISTS, CANDIDATES, CONFLICT, FIT_SPAN_YEARS, PERIOD_EXCEEDS_RECORD, RayleighDrop, analyse,
                                   in_tcd_years, last_years, rayleigh_drops, rayleigh_select)
 from .tcd_table import TcdTable
 
@@ -655,12 +655,17 @@ def read_calibration(in_dir: Path) -> dict:
 
 def drops_of_fit(table: TcdTable, fit: Mapping) -> list[RayleighDrop]:
     """The Rayleigh drops of a fit (RecordFit.to_dict()), replayed on its rayleigh_hours. The replay must
-    rebuild the fit's rayleigh_kept exactly, else ValueError (a different TCD or rule)."""
+    rebuild the fit's rayleigh_kept exactly, else ValueError (a different TCD or rule). The replay walks the
+    fit's own candidate list (its candidate_list, "base" when absent)."""
     t = float(fit["rayleigh_hours"])
-    kept = rayleigh_select(table, t)
+    name = fit.get("candidate_list", "base")
+    if name not in CANDIDATE_LISTS:
+        raise ValueError(f"candidate_list {name!r} is not one of {sorted(CANDIDATE_LISTS)}")
+    cands = CANDIDATE_LISTS[name]
+    kept = rayleigh_select(table, t, cands)
     if kept != list(fit["rayleigh_kept"]):
         raise ValueError(f"Rayleigh replay at {t} h keeps {kept}, the fit kept {fit['rayleigh_kept']}")
-    return rayleigh_drops(table, t)
+    return rayleigh_drops(table, t, cands)
 
 
 def dropped_constituents(drops: Sequence[Mapping], snr_dropped: Sequence[str]) -> list[dict]:
