@@ -12,9 +12,11 @@ the TICON-4 carry, unchanged) and then merges the official agency sets into it (
   (data/otc/station_ids.json), under the map's stability rules (station_map: an id is never removed or reused, a
   record keeps its station). `mint_agency` gives the new ones their ids by the join rule; the build never writes
   the map, and an agency record with no id stops it;
-- the join rule (owner-delegated decision 1, 2026-10-11): a water-level reference set with constants joins the
-  GESLA station of the release within JOIN_RADIUS_KM when there is one; with two or more (ambiguous), the one whose
-  recommended set's M2 is nearest the agency M2 as a vector (A e^{ig}). Current stations and subordinate stations
+- the join rule (owner-delegated decision 1, 2026-10-11; same-gauge first, fix round 1): a water-level reference
+  set with constants joins (1) the GESLA station that publishes a GESLA record of the same agency gauge
+  (`-<id>-usa-noaa`, Kartverket's NHS codes) within SAME_ID_RADIUS_KM; else (2) the GESLA station of the release
+  within JOIN_RADIUS_KM when there is one; else (3) of two or more (ambiguous), the one whose recommended set's M2
+  is nearest the agency M2 as a vector (A e^{ig}). Current stations and subordinate stations
   are always stations of their own. One station holds one alias id per alias system (the schema's `aliases.noaa` is
   a string), so of two agency records of one alias system that would join one station, the better one (M2, then
   distance) joins and the other gets its own station;
@@ -54,6 +56,9 @@ __all__ = ["AGENCY_SOURCES", "JOIN_RADIUS_KM", "AgencySource", "CombineError", "
 
 AGENCY_SOURCES = ("kartverket", "linz", "jma", "noaa", "noaa-currents")
 JOIN_RADIUS_KM = 1.0
+SAME_ID_RADIUS_KM = 5.0      # a GESLA record of the same agency gauge joins up to this far (positions differ)
+# GESLA contributors whose site code is the agency's own station id (record `<site>-<code>-<country>-<contributor>`)
+SAME_ID_CONTRIBUTORS = {"noaa": ("noaa",), "kartverket": ("nhs",)}
 CORRECTIONS_PATH = sm.DATA / "position_corrections.json"
 POSITION_TOL_DEG = 1e-9      # a correction applies only to the position it was written for
 
@@ -202,6 +207,7 @@ class Place:
     lat: float
     lon: float
     m2: complex | None
+    records: tuple[str, ...] = ()     # the GESLA record ids the station publishes (aliases.gesla)
 
 
 def _m2(cs: Mapping | None) -> complex | None:
@@ -220,7 +226,8 @@ def gesla_places(release: Mapping) -> list[Place]:
         rec = next((cs for cs in st["constant_sets"] if cs["set_id"] == st["recommended_set_id"]), None)
         if rec is not None and rec["quantity"] != "water_level":
             continue
-        out.append(Place(st["station_id"], float(st["lat"]), float(st["lon"]), _m2(rec)))
+        out.append(Place(st["station_id"], float(st["lat"]), float(st["lon"]), _m2(rec),
+                         tuple((st.get("aliases") or {}).get("gesla", ()))))
     return out
 
 
@@ -230,11 +237,34 @@ def _joins(ss: SourceSet) -> bool:
             and ss.station_hint.get("type") == "reference" and ss.subordinate_offsets is None)
 
 
-def join(ss: SourceSet, places: list[Place], radius_km: float = JOIN_RADIUS_KM) -> tuple[str | None, dict]:
-    """(GESLA station id or None, evidence) for one agency set by the join rule (module text)."""
+def _same_id(source: str, upstream: str, p: Place) -> bool:
+    """The station publishes a GESLA record of this agency gauge: contributor of the source, site code = the id."""
+    agencies = SAME_ID_CONTRIBUTORS.get(source, ())
+    for rid in p.records:
+        parts = rid.rsplit("-", 3)
+        if len(parts) == 4 and parts[3].split("_")[0].lower() in agencies and parts[1].lower() == upstream.lower():
+            return True
+    return False
+
+
+def join(ss: SourceSet, places: list[Place], radius_km: float = JOIN_RADIUS_KM, *,
+         source: str = "") -> tuple[str | None, dict]:
+    """(GESLA station id or None, evidence) for one agency set by the join rule, in this order: (1) a station
+    holding a GESLA record of the same agency gauge (SAME_ID_CONTRIBUTORS) within SAME_ID_RADIUS_KM; (2) the one
+    station within radius_km; (3) of several within radius_km, the best M2 vector match."""
     if not _joins(ss):
         return None, {"how": "own_station", "why": "current or subordinate stations are stations of their own"}
     lat, lon = float(ss.station_hint["lat"]), float(ss.station_hint["lon"])
+    up = str(ss.constant_set["source_record_id"])
+    same = sorted((distance_km(lat, lon, p.lat, p.lon), p.station_id, p) for p in places
+                  if abs(p.lat - lat) < 0.1 and _same_id(source, up, p))
+    same = [c for c in same if c[0] <= SAME_ID_RADIUS_KM]
+    if same:
+        d, s, p = same[0]
+        m2 = _m2(ss.constant_set)
+        return s, {"how": "same_id", "distance_km": round(d, 4),
+                   "m2_vector_diff_m": None if m2 is None or p.m2 is None else round(abs(m2 - p.m2), 5),
+                   "candidates": [{"station_id": x, "distance_km": round(dd, 4)} for dd, x, _ in same]}
     cands = sorted((distance_km(lat, lon, p.lat, p.lon), p.station_id, p) for p in places
                    if abs(p.lat - lat) < 0.05 and distance_km(lat, lon, p.lat, p.lon) <= radius_km)
     if not cands:
@@ -276,7 +306,7 @@ def mint_agency(smap: sm.StationMap, agency: Mapping[str, AgencySource], places:
             rid = record_id(a.source, upstream_id(ss, a.alias_system))
             if rid in old_of:
                 continue
-            sid, ev = join(ss, places)
+            sid, ev = join(ss, places, source=a.source)
             proposals.append((a, ss, rid, sid, ev))
     # one record per source and station (one alias id per alias system: the schema's aliases.noaa is a string):
     # the best claimant joins (M2 vector difference, then distance, then record id); the others get their own
@@ -289,7 +319,7 @@ def mint_agency(smap: sm.StationMap, agency: Mapping[str, AgencySource], places:
     for key, ps in claims.items():
         def rank_key(p):
             dm2 = p[4].get("m2_vector_diff_m")
-            return (math.inf if dm2 is None else dm2, p[4]["distance_km"], p[2])
+            return (p[4]["how"] != "same_id", math.inf if dm2 is None else dm2, p[4]["distance_km"], p[2])
         ranked = sorted(ps, key=rank_key)
         start = 0 if key in held else 1
         losers |= {p[2] for p in ranked[start:]}

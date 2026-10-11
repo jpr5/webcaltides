@@ -386,3 +386,44 @@ def test_canaries_compare_only_sets_with_the_four_constituents(monkeypatch):
     conv, full = bo.run_canaries({"noaa": a}, comp + [comparator({"record_id": "g9"})], None, log=lambda m: None)
     assert conv["noaa"]["status"] == "pass" and conv["noaa"]["gauges"] == 3
     assert full["noaa"]["not_compared_missing_constituents"] == [{"source_record_id": "nk", "missing": ["K1"]}]
+
+
+# --- F1: the same agency gauge joins first (fix round 1) --------------------------------------------
+
+BALT = [Place("OTC-39db6605", 39.2667, -76.5783, m2c(0.150, 230.0), ("baltimore-8574680-usa-noaa",)),
+        Place("OTC-a803b2b4", 39.2667, -76.5800, m2c(0.152, 231.0), ("fort_mchenry_marsh-8574683-usa-noaa",))]
+
+
+def test_the_station_with_the_same_agency_gauge_wins_over_a_better_m2():
+    # 8574680's M2 is nearer Fort McHenry Marsh, but Baltimore holds the GESLA record of gauge 8574680
+    sid, ev = combine.join(ref("8574680", 39.2667, -76.5795, m2=(0.152, 231.0)), BALT, source="noaa")
+    assert (sid, ev["how"]) == ("OTC-39db6605", "same_id")
+    sid, ev = combine.join(ref("8574683", 39.2667, -76.5800, m2=(0.150, 230.0)), BALT, source="noaa")
+    assert (sid, ev["how"]) == ("OTC-a803b2b4", "same_id")
+
+
+def test_the_same_gauge_joins_up_to_5km_and_not_beyond():
+    far = [Place("OTC-cccccccc", 40.0, -70.0, None, ("riverside-8440889-usa-noaa",))]
+    assert combine.join(ref("8440889", 40.031, -70.0), far, source="noaa")[1]["how"] == "same_id"      # 3.4 km
+    assert combine.join(ref("8440889", 40.046, -70.0), far, source="noaa")[0] is None                   # 5.1 km
+    # another source's id, or another code, is not the same gauge
+    assert combine.join(ref("8440889", 40.031, -70.0), far, source="kartverket")[0] is None
+    assert combine.join(ref("8440888", 40.031, -70.0), far, source="noaa")[0] is None
+
+
+def test_a_kartverket_station_joins_its_nhs_record():
+    p = [Place("OTC-8c70dc71", 68.2, 14.5, m2c(1.0, 0.0), ("kabelvag-kab-nor-nhs",)),
+         Place("OTC-0bac4c60", 68.201, 14.5, m2c(0.8, 10.0), ())]
+    k = ref("KAB", 68.2005, 14.5, m2=(0.8, 10.0), source="kartverket")
+    assert combine.join(k, p, source="kartverket") == ("OTC-8c70dc71", combine.join(k, p, source="kartverket")[1])
+    assert combine.join(k, p, source="kartverket")[1]["how"] == "same_id"
+
+
+def test_a_same_gauge_claim_beats_another_claim_on_the_station():
+    m = smap(**{"OTC-39db6605": ["baltimore-8574680-usa-noaa"], "OTC-a803b2b4": ["fort_mchenry_marsh-8574683-usa-noaa"]})
+    # 8574683 alone would join Baltimore by M2 if Fort McHenry Marsh were not a place
+    a = agency(ref("8574683", 39.2667, -76.5795, m2=(0.150, 230.0)), ref("8574680", 39.2668, -76.5783, m2=(0.3, 250.0)))
+    new, rows = combine.mint_agency(m, {"noaa": a}, BALT[:1])
+    by = {r["record"]: r for r in rows}
+    assert by["noaa:8574680"]["how"] == "same_id" and new.record_ids()["noaa:8574680"] == "OTC-39db6605"
+    assert by["noaa:8574683"]["how"] == "source_already_joined"
