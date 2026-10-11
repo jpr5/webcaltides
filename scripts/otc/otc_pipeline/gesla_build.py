@@ -39,6 +39,7 @@ import secrets
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from gesla.read_gesla import GeslaRelease, otc_work
@@ -88,11 +89,37 @@ def _audit_identity(audit_dir: Path, audit: gs.Audit) -> dict:
             "timebase_csv_sha256": audit.csv_sha256, "commit": audit.decided_build_commit}
 
 
+@dataclass
+class BuildParts:
+    """What build_parts makes: the release and its report, the congen run and provenance (build's result), and
+    the inputs a combined build reads again: the fit documents (the agency canaries' comparators), the final
+    audit's disputed reasons, the station map's sibling flags and the TCD table."""
+    release: dict
+    report: gr.BuildReport
+    congen_run: object
+    provenance: dict
+    docs: list
+    disputed_reasons: dict
+    sibling_flags: dict
+    table: object
+
+
 def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir: Path, overlay_run: Path | None,
           ticon_csv: Path, ticon_refs: Path, congen_run: Path, datestamp: str, created: str, build_commit: str,
           tcd_path: Path | None = None, log=print):
     """(release document, build report, congen run, provenance) (see the module docstring); provenance is
     BUILD_REPORT.json's, without the command line (main adds it)."""
+    p = build_parts(fit_run=fit_run, audit_dir=audit_dir, verdicts_dir=verdicts_dir, calibration_dir=calibration_dir,
+                    overlay_run=overlay_run, ticon_csv=ticon_csv, ticon_refs=ticon_refs, congen_run=congen_run,
+                    datestamp=datestamp, created=created, build_commit=build_commit, tcd_path=tcd_path, log=log)
+    return p.release, p.report, p.congen_run, p.provenance
+
+
+def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir: Path,
+                overlay_run: Path | None, ticon_csv: Path, ticon_refs: Path, congen_run: Path, datestamp: str,
+                created: str, build_commit: str, tcd_path: Path | None = None, extra_names=(), log=print) -> BuildParts:
+    """build(), with its inputs kept (BuildParts). `extra_names`: constituent names the astro table must also
+    have (the agency sets' of a combined build, otc_pipeline.build_otc); the GESLA sets do not change."""
     rel = GeslaRelease()
     tcd_path = tcd_path or otc_work() / "tcd_table.json"
     dump = gs.load_tcd_dump(tcd_path)
@@ -109,11 +136,12 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     audit = gs.load_audit(audit_dir)
     final = gs.load_audit(verdicts_dir)
     carry = ts.TiconCarry.from_audit(ts.load_ticon(ticon_csv), final, rel.metadata(), references_path=ticon_refs)
-    names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table)
+    names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table) | set(extra_names)
     crun = load_congen_run(congen_run, tcd_sha256=table.tcd_sha256)
     congen, tcd = crun
     astro = [astro_table(congen, tcd, sorted(names), table_id=TABLE_ID)]
     results_sha256 = hashlib.sha256(results).hexdigest()
+    disputed = gr.disputed_reasons_of(final.rows)
     release, report = gr.build_release(
         docs, table=table, table_id=TABLE_ID, datestamp=datestamp, created=created, build_commit=build_commit,
         station_ids=smap.record_ids(), licences=licences, licence_ids=licence_ids, withheld=withheld_licences(),
@@ -121,7 +149,7 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
         sibling_flags=smap.sibling_flags(), tombstones=smap.tombstones(), station_map_inputs=smap.inputs,
         station_aliases=smap.release_aliases(),
         fit_run_results_sha256=results_sha256,
-        disputed_reasons=gr.disputed_reasons_of(final.rows), ticon=carry)
+        disputed_reasons=disputed, ticon=carry)
     fit_identity = _run_identity(fit_run)
     if fit_identity["results_sha256"] != results_sha256:
         raise SystemExit(f"{fit_run}/results.jsonl changed during the build")
@@ -137,16 +165,16 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
         "ticon_csv": {"path": _path(ticon_csv), "sha256": _sha256(ticon_csv)},
         "ticon_refs": {"path": _path(ticon_refs), "sha256": _sha256(ticon_refs)},
     }
-    return release, report, crun, provenance
+    return BuildParts(release, report, crun, provenance, docs, disputed, smap.sibling_flags(), table)
 
 
-def write_report(report: gr.BuildReport, provenance: dict, path: Path) -> Path:
-    """BUILD_REPORT.json: the build report (BuildReport.as_dict) with `provenance`, through a temp file and an
-    atomic rename."""
+def write_report(report: gr.BuildReport, provenance: dict, path: Path, extra: dict | None = None) -> Path:
+    """BUILD_REPORT.json: the build report (BuildReport.as_dict) with `provenance` (and the `extra` sections of a
+    combined build), through a temp file and an atomic rename."""
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     try:
         with open(tmp, "xb") as fh:
-            fh.write((json.dumps({**report.as_dict(), "provenance": provenance}, sort_keys=True, indent=1)
+            fh.write((json.dumps({**report.as_dict(), "provenance": provenance, **(extra or {})}, sort_keys=True, indent=1)
                       + "\n").encode())
             fh.flush()
             os.fsync(fh.fileno())
