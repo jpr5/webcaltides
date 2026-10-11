@@ -18,6 +18,10 @@ recommended (recommend()). The pieces another slot owns come in as arguments, ne
 - `astro_tables`: the per-year V0+u and f tables (KP0b). Format 1.0 requires them whenever a
   convention predicts with f and u, and the gesla-fit convention does, so a release cannot be
   built without them.
+- `ticon` (ticon_sets.TiconCarry, optional): the TICON-4 fallback. A withheld record whose TICON-4 record
+  (same file name, else a site within 1 km) can be carried is published as a TICON-4 analysis set at the
+  record's station (ticon_sets.ticon_set); the OTC fit itself stays withheld and is used only for the
+  convention canary. BuildReport.carried and .not_carried say what happened to each withheld record.
 - datums beyond Z0 (DT4a/DT5f/DT5g/DT6): `gesla_sets.source_set` writes only `msl_offset_m`.
 
 The build checks the schema cannot express (its top description, checks 1-14) are not all here:
@@ -39,6 +43,7 @@ from gesla.tcd_table import TcdTable
 from otc_pipeline.gesla_sets import (CONVENTION_ID, FIT_MIN_GOOD_HOURS, SOURCE, FitIntegrityError, NotPublishable,
                                      licence_of, refusal, source_set)
 from otc_pipeline.release_writer import FORMAT_VERSION
+from otc_pipeline import ticon_sets as ts
 
 __all__ = ["BuildReport", "Candidate", "build_release", "gesla_convention", "rank", "recommend", "set_order",
            "station_timezone"]
@@ -192,6 +197,10 @@ def recommend(cands: list[Candidate]) -> tuple[Candidate | None, dict]:
     live = [c for c in cands if c.cs.get("qc_status") != "no_constants"]
     if not live:
         return None, {"recommended": None, "decided_by": "no_constants", "overridden": None, "candidates": []}
+    # a third party's analysis never outranks an OTC fit or an official set of the station, by rank or by the
+    # override rules below (site sources/ticon-4: "below official constants and any OTC gauge fit"): with any
+    # other set present, the analysis sets do not compete
+    live = [c for c in live if c.cs["source_type"] != "analysis"] or live
     q = rank(live)[0][0].cs["quantity"]
     live = [c for c in live if c.cs["quantity"] == q]
     eligible = [c for c in live if not (_is_short(c.cs) and any(_good(o.cs) > _good(c.cs) for o in live))]
@@ -303,6 +312,10 @@ class BuildReport:
     recommendations: list[dict] = field(default_factory=list)
     # station id -> reason: stations not published because every record they hold is withheld
     withheld_stations: dict[str, str] = field(default_factory=dict)
+    # TICON-4 fallback (ticon): per withheld record, the carried TICON-4 set or why there is none
+    carried: list[dict] = field(default_factory=list)
+    not_carried: list[dict] = field(default_factory=list)
+    ticon_audit: str | None = None
 
     def counts(self) -> dict[str, int]:
         return dict(sorted(Counter(r["reason"] for r in self.refused).items()))
@@ -310,6 +323,8 @@ class BuildReport:
     def as_dict(self) -> dict:
         return {"published": len(self.published), "refused": len(self.refused), "refused_by_reason": self.counts(),
                 "withheld_stations": dict(sorted(self.withheld_stations.items())),
+                "ticon": {"audit": self.ticon_audit, "carried": sorted(self.carried, key=lambda r: r["record"]),
+                          "not_carried": sorted(self.not_carried, key=lambda r: r["record"])},
                 "records": {"published": sorted(self.published),
                             "refused": sorted(self.refused, key=lambda r: r["record"])},
                 "recommendations": [r for r in self.recommendations if r["decided_by"] != "single"]}
@@ -341,7 +356,8 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
                   station_aliases: Mapping[str, Mapping] | None = None,
                   contributor_roles: Mapping[str, str] | None = None,
                   disputed_reasons: Mapping[str, str],
-                  sampling_s: Mapping[str, int] | None = None) -> tuple[dict, BuildReport]:
+                  sampling_s: Mapping[str, int] | None = None,
+                  ticon: "ts.TiconCarry | None" = None) -> tuple[dict, BuildReport]:
     """The release document for these fit documents, and the build report. A record this build cannot
     publish yet (gesla_sets.NotPublishable: a short record, a bad constituent name) is left out and
     reported by reason; `refused` (required, [] when there are none) carries the fit stage's refusals
@@ -388,9 +404,21 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         if lid not in lic_by_id:
             raise ValueError(f"withheld licence {lid!r} is not in licences")
     report = BuildReport(refused=[dict(r) for r in refused])
+    docs = sorted(docs, key=lambda d: d["record_id"])
+    if ticon is not None:
+        if lic_by_id.setdefault(ts.LICENCE_ID, ts.LICENCE) != ts.LICENCE:
+            raise ValueError(f"licence {ts.LICENCE_ID} is given, and differs from ticon_sets.LICENCE")
+        report.ticon_audit = ticon.audit
+    build_records = {d["record_id"] for d in docs} | {r["record"] for r in report.refused}
+    # the OTC fits a TICON-4 set may be judged against as a neighbour: ones this build may publish
+    neighbour_pool = [d for d in docs if licence_of(licence_ids, d["record_id"]) not in withheld
+                      and d["time_base"]["code"] != "disputed" and d["record_id"] not in disputed_reasons
+                      and not suspects.get(d["record_id"])] if ticon is not None else []
+    carried_ticon: set[str] = set()
+    canary_pairs: list[tuple[dict, dict]] = []          # (TICON set, OTC's withheld fit of the record): check only
     withheld_sids: dict[str, list[str]] = {}
     by_station, used_names, versions = {}, set(), set()
-    for doc in sorted(docs, key=lambda d: d["record_id"]):
+    for doc in docs:
         rid = doc["record_id"]
         if rid not in station_ids:
             raise ValueError(f"{rid}: no station id (the station map assigns it)")
@@ -406,6 +434,13 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
             reasons = withheld_sids.setdefault(station_ids[rid], [])
             if withheld[lic_id] not in reasons:
                 reasons.append(withheld[lic_id])
+            if ticon is not None:
+                _carry_ticon(doc, lic_id, ticon=ticon, table=table, build_records=build_records,
+                             all_docs=neighbour_pool,
+                             carried_ticon=carried_ticon, station_ids=station_ids, epoch_hours=epoch_hours,
+                             suspects=suspects, contributor_roles=contributor_roles, sampling_s=sampling_s,
+                             build_commit=build_commit, by_station=by_station, report=report,
+                             canary_pairs=canary_pairs)
             continue
         ep = epoch_hours.get(rid)
         if ep is None:
@@ -444,14 +479,22 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         # TB-SIB: a record the audit disputes for a whole-hour EOT20 lag of 3 h or more is unresolved too
         whole = [EOT20_WHOLE_HOUR in (disputed_reasons.get(c.cs["source_record_id"]) or "").split()
                  for c, _ in by_station[sid]]
-        # owner rule: a disputed time base is not carried, as the recommended set or as an alternate
+        # owner rule: a disputed time base is not carried, as the recommended set or as an alternate (FIX-DISP);
+        # the station rule is about OTC's fits: when every gauge set of the station is disputed or unresolved,
+        # those sets are refused; a clean TICON-4 set of another record keeps the station, with that set
+        # recommended, and never makes an unresolved OTC fit publishable
         disp = [_time_base_disputed(c.cs, disputed_reasons) for c, _ in by_station[sid]]
-        withheld = all(f is not None or w or d for f, w, d in zip(offsets, whole, disp))
+        bad = [f is not None or w or d for f, w, d in zip(offsets, whole, disp)]
+        withheld = all(b for (c, _), b in zip(by_station[sid], bad) if c.cs["source_type"] != "analysis")
         keep = []
-        for (c, h), f, w, d in zip(by_station[sid], offsets, whole, disp):
+        for (c, h), f, w, d, b in zip(by_station[sid], offsets, whole, disp, bad):
             rid = c.cs["source_record_id"]
-            if not (withheld or d):
+            if not d and not (withheld and b):
                 keep.append((c, h))
+                continue
+            if c.cs["source_type"] == "analysis":
+                _uncarry(report, c.cs, "eot20_whole_hour_unresolved" if w else
+                         "time_base_disputed" if d else "clock_offset_unresolved")
                 continue
             report.published.remove(rid)
             if w:
@@ -483,7 +526,10 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
                   "constants disagree with most sets of this station; another set is recommended")
         hint = next(h for c, h in cands if c is win) if win else cands[0][1]
         aliases = {**(station_aliases or {}).get(sid, {}),
-                   "gesla": sorted(r for _, h in cands for r in h["aliases"]["gesla"])}
+                   "gesla": sorted({r for _, h in cands for r in h["aliases"]["gesla"]})}
+        tic = sorted({r for _, h in cands for r in h["aliases"].get("ticon", [])})
+        if tic:
+            aliases["ticon"] = tic
         stations.append({"station_id": sid, "status": "active", "name": hint["name"], "country": hint["country"],
                          "lat": hint["lat"], "lon": hint["lon"], "timezone": station_timezone(hint["lat"], hint["lon"]),
                          "type": "reference", "aliases": dict(sorted(aliases.items())),
@@ -506,12 +552,21 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         raise ValueError(f"the documents come from GESLA versions {sorted(versions)}: one build, one version")
     used_names = {c["name"] for st in stations for cs in st.get("constant_sets", []) for c in cs["constituents"]}
     licence_rows = [lic_by_id[i] for i in sorted({cs["licence_id"] for s in stations for cs in s.get("constant_sets", [])})]
+    conventions = [gesla_convention(table_id, table)]
+    source_versions = {"gesla": versions.pop()}
+    if any(cs["source"] == ts.SOURCE for s in stations for cs in s.get("constant_sets", [])):
+        live = {cs["set_id"] for s in stations for cs in s.get("constant_sets", [])}
+        canary = ticon_canary([(cs, d) for cs, d in canary_pairs if cs["set_id"] in live])
+        if canary["status"] != "pass":
+            raise ValueError(f"TICON-4 fails its convention check against OTC's own fits: {canary}")
+        conventions.append(ts.ticon_convention(table_id, table, canary))
+        source_versions["ticon"] = ts.SOURCE_VERSION
     release = {
         "format_version": FORMAT_VERSION,
         "release": {"datestamp": datestamp, "created": created, "min_reader_version": FORMAT_VERSION,
                     "fit_min_good_hours": FIT_MIN_GOOD_HOURS, "concept_doi": None,
-                    "source_versions": {"gesla": versions.pop()}, "build_commit": build_commit},
-        "conventions": [gesla_convention(table_id, table)],
+                    "source_versions": source_versions, "build_commit": build_commit},
+        "conventions": conventions,
         "licences": licence_rows,
         "constituents": [{"constituent_table_version": table_id, "name": n, "speed_deg_per_hour": table.speed(n)}
                          for n in sorted(used_names)],
@@ -519,3 +574,95 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         "stations": stations,
     }
     return release, report
+
+
+def _uncarry(report: BuildReport, cs: Mapping, reason: str) -> None:
+    """Move a TICON-4 set that the station rules leave out from report.carried to report.not_carried."""
+    entry = next(e for e in report.carried if e["set_id"] == cs["set_id"])
+    report.carried.remove(entry)
+    report.not_carried.append({"record": entry["record"], "ticon": entry["ticon"], "reason": reason,
+                               "message": f"{entry['record']}: station {entry['station_id']}: every set is unresolved "
+                                          f"({reason}); the TICON-4 set of the same record is not carried either"})
+
+
+def _carry_ticon(doc: Mapping, lic_id: str, *, ticon: "ts.TiconCarry", table: TcdTable, build_records: set[str],
+                 all_docs: list[Mapping],
+                 carried_ticon: set[str], station_ids: Mapping[str, str], epoch_hours: Mapping[str, Mapping],
+                 suspects: Mapping, contributor_roles: Mapping[str, str], sampling_s: Mapping[str, int],
+                 build_commit: str, by_station: dict, report: BuildReport, canary_pairs: list) -> None:
+    """The TICON-4 fallback for one withheld record: its analysis set joins the record's station as a
+    candidate (ranked as the record would be, after any gauge fit by tier), or the reason it does not."""
+    rid = doc["record_id"]
+    t, how = ts.match(rid, float(doc["lat"]), float(doc["lon"]), ticon.records, build_records)
+    if t is None:
+        report.not_carried.append({"record": rid, "reason": how})
+        return
+    if t.name in carried_ticon:
+        report.not_carried.append({"record": rid, "ticon": t.name, "reason": "ticon_already_carried"})
+        return
+    sid = station_ids[rid]
+    try:
+        cs = ts.ticon_set(t, time_base=ticon.time_bases.get(t.name), table=table, licence_id=ts.LICENCE_ID,
+                          record_licence=lic_id, checked_window=ticon.windows.get(t.name))
+        # the gates read OTC's own fit of the record (of the co-located withheld record for a site match): a check only
+        refs = list(ticon.references.get(t.name, [])) + ts.neighbour_references(
+            rid, float(doc["lat"]), float(doc["lon"]), sid, all_docs, station_ids)
+        cs = ts.quality_gate(cs, rec=t, fit_doc=doc, references=refs, table=table,
+                             interval_s=int(sampling_s.get(rid, 3600)))
+    except ts.NotCarried as e:
+        report.not_carried.append({"record": rid, "ticon": t.name, "reason": e.reason, "message": str(e)})
+        return
+    ep = epoch_hours.get(rid)
+    if ep is None or ep["member_sha256"] != doc["member_sha256"]:
+        raise ValueError(f"{rid}: no epoch hours of this member (data/otc/gesla_epoch_hours.csv)")
+    if rid not in sampling_s:
+        raise ValueError(f"{rid}: no sampling interval (data/gesla/4.1/inventory.csv)")
+    cs = {**cs, "set_id": f"{sid}/{ts.SOURCE}/{t.name}"}
+    cs["provenance"] = {**cs["provenance"], "build": {"build_commit": build_commit}}
+    if ticon.references_sha256:
+        cs["provenance"]["input_sha256"] = [*cs["provenance"]["input_sha256"], ticon.references_sha256]
+    sus = _flag_list(suspects.get(rid)) if how == "id" else []
+    for info in sus:                    # the same data as the record's OTC fit: the same station-map flags
+        reason, values = sibling_flag(info)
+        _flag(cs, reason, **values)
+    role = contributor_roles.get(doc["contributor"], "unlisted")
+    cand = Candidate(cs, ep["hours"], int(doc["fit"]["last_s"]), originator=(role == "originator"),
+                     commercial=bool(ts.LICENCE["commercial_use"]), suspect=bool(sus),
+                     interval_s=int(sampling_s[rid]), fast_delivery=doc["contributor"] == "UHSLC_FD")
+    hint = {"name": doc["site_name"], "country": doc["country"], "lat": doc["lat"], "lon": doc["lon"],
+            "aliases": {"gesla": [rid], "ticon": [t.name]}}
+    by_station.setdefault(sid, []).append((cand, hint))
+    carried_ticon.add(t.name)
+    report.carried.append({"record": rid, "ticon": t.name, "how": how, "station_id": sid, "set_id": cs["set_id"],
+                           "time_base": cs["time_base"]["code"], "record_licence": lic_id,
+                           "contributor": doc["contributor"]})
+    if how == "id" and doc["time_base"]["published"] == cs["time_base"]["published"]:
+        canary_pairs.append((cs, doc))
+
+
+CANARY = ("M2", "S2", "K1", "O1")
+CANARY_AMP_M, CANARY_PHASE_DEG, CANARY_GAUGES = 0.01, 2.0, 3      # method.html: per-source convention check
+
+
+def ticon_canary(pairs: list[tuple[dict, dict]]) -> dict:
+    """The TICON-4 convention check (method.html: median M2, S2, K1, O1 differences within 1 cm and 2 deg over at
+    least 3 overlapping gauges) against OTC's own fits of the same records on the same time base. Those fits are
+    withheld: they are the comparator only, never published."""
+    import statistics
+    da, dp, gauges = [], [], 0
+    for cs, doc in pairs:
+        mine = {c["name"]: c for c in cs["constituents"]}
+        fit = doc["fit"]["constituents"]
+        used = [n for n in CANARY if n in mine and n in fit]
+        if not used:
+            continue
+        gauges += 1
+        for n in used:
+            da.append(abs(mine[n]["amplitude_m"] - fit[n]["amp_m"]))
+            dp.append(abs((mine[n]["phase_deg"] - fit[n]["phase_deg"] + 180.0) % 360.0 - 180.0))
+    if gauges < CANARY_GAUGES:
+        return {"status": "fail", "gauges": gauges}
+    amp, ph = statistics.median(da), statistics.median(dp)
+    ok = amp <= CANARY_AMP_M and ph <= CANARY_PHASE_DEG
+    return {"status": "pass" if ok else "fail", "gauges": gauges, "median_amp_diff_m": round(amp, 4),
+            "median_phase_diff_deg": round(ph, 2)}
