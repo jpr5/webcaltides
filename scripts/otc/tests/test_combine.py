@@ -360,6 +360,19 @@ def test_one_station_off_by_more_than_10_min_or_3_cm_s_fails_whatever_the_median
     assert cc.judge(ok[:4] + [comparison("E", dv=(0.03,))], [])["status"] == "pass"
 
 
+def test_a_station_whose_floods_and_ebbs_do_not_pair_fails():
+    # a full flood/ebb negation: the slacks pair (small dt), every NOAA peak is missed and every engine peak extra
+    def neg(st):
+        return Comparison(st, 1, 54, 54, 27, 27, 27, 0.5, 0, 0, 0, 0, 0, 0, (0.3,) * 27, (), 27)
+    ok = [comparison(s) for s in "ABCDE"]
+    assert cc.judge(ok[:4] + [neg("E")], [])["status"] == "fail"
+    half = Comparison("E", 1, 54, 54, 40, 14, 14, 0.5, 1, 0.01, 0, 0, 0, 0, (0.3,) * 40, (0.002,) * 13, 27)
+    assert cc.judge(ok[:4] + [half], [])["status"] == "fail"                    # 13 of 27 peaks paired
+    most = Comparison("E", 1, 54, 54, 41, 13, 13, 0.5, 1, 0.01, 0, 0, 0, 0, (0.3,) * 41, (0.002,) * 14, 27)
+    assert cc.judge(ok[:4] + [most], [])["status"] == "pass"                    # 14 of 27
+    assert cc.judge(ok, [])["status"] == "pass"
+
+
 def test_the_sample_is_fixed_whatever_the_order():
     sets = [ref(f"ACT{i}", 30.0, -80.0, quantity="current") for i in range(40)]
     s = cc.sample(sets)

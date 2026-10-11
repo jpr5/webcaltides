@@ -63,6 +63,7 @@ class Comparison:
     # every paired event's |dt| (min) and every paired peak's |dv| (m/s): the canary's medians (not in to_dict)
     dt_min: tuple = ()
     dv_ms: tuple = ()
+    noaa_peaks: int = 0         # NOAA max flood and max ebb events in the window (paired ones: len(dv_ms))
 
     @property
     def passed(self) -> bool:
@@ -70,7 +71,8 @@ class Comparison:
                 and self.max_dt_peak_min <= TOL_MAX_TIME_MIN and self.max_dv_ms <= TOL_SPEED_MS)
 
     def to_dict(self) -> dict:
-        return {**{k: v for k, v in self.__dict__.items() if k not in ("dt_min", "dv_ms")}, "passed": self.passed}
+        return {**{k: v for k, v in self.__dict__.items() if k not in ("dt_min", "dv_ms")},
+                "paired_peaks": len(self.dv_ms), "passed": self.passed}
 
 
 def engine_input(current_bin: dict, start: datetime, end: datetime) -> dict:
@@ -153,7 +155,7 @@ def compare(station: str, bin_: int, noaa: dict, model: dict, start: datetime, e
     return Comparison(station, bin_, len(ref), sum(1 for m in mod if inside(m["t"])), len(used), missed, extra,
                       round(max(dt_slack), 2), round(max(dt_peak), 2), round(max(dv), 4),
                       peak(ref, "flood", max), peak(mod, "flood", max), peak(ref, "ebb", min), peak(mod, "ebb", min),
-                      tuple(dts), tuple(dvs))
+                      tuple(dts), tuple(dvs), sum(1 for e in ref if e["type"] != "slack"))
 
 
 def prove(cache: Path, targets: list[tuple[str, int]], start: datetime, days: int,
