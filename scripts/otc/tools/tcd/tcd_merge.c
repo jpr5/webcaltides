@@ -10,6 +10,8 @@
  * uses them. A NAME the source already has, or the congen run lacks, is refused, and so is a congen
  * run whose years differ from the source's.
  *
+ * Any failure exits 1 and removes OUT.tcd.records and, once this run created it, OUT.tcd.
+ *
  * libtcd stamps [LAST MODIFIED] with the clock; this program fixes the clock at STAMP (UTC,
  * "YYYY-MM-DD HH:MM"), so OUT.tcd is the same bytes on every run. libtcd keeps one database open at a
  * time, so the source records go through a temporary file (OUT.tcd.records, removed at the end).
@@ -34,8 +36,18 @@ time_t time (time_t *t) {
     return fixed_clock;
 }
 
+/* What a failed run must not leave behind: the temporary records file, and OUT.tcd once this run created it. */
+static char g_tmp_path[4096];
+static FILE *g_tmp;
+static const char *g_out;
+static int g_out_created, g_db_open;   /* g_db_open: OUT.tcd is the open database */
+
 static void die (const char *msg, const char *arg) {
     fprintf (stderr, "tcd_merge: %s%s%s\n", msg, arg ? ": " : "", arg ? arg : "");
+    if (g_db_open) close_tide_db ();
+    if (g_out_created) remove (g_out);
+    if (g_tmp) fclose (g_tmp);
+    if (g_tmp_path[0]) remove (g_tmp_path);
     exit (1);
 }
 
@@ -155,9 +167,9 @@ int main (int argc, char **argv) {
     if (n_out > MAX_CONSTITUENTS) die ("too many constituents for libtcd", NULL);
 
     /* the source records and their string-table names, through a temporary file */
-    char tmp_path[4096];
-    snprintf (tmp_path, sizeof tmp_path, "%s.records", out);
-    FILE *tmp = fopen (tmp_path, "w+b");
+    char *tmp_path = g_tmp_path;
+    snprintf (g_tmp_path, sizeof g_tmp_path, "%s.records", out);
+    FILE *tmp = g_tmp = fopen (tmp_path, "w+b");
     if (!tmp) die ("cannot write", tmp_path);
     TIDE_RECORD *rec = malloc (sizeof *rec), *chk = malloc (sizeof *chk);
     Names *names = calloc (sdb.number_of_records, sizeof *names);
@@ -189,8 +201,13 @@ int main (int argc, char **argv) {
         eq[c] = congen.eq[idx[i]]; nf[c] = congen.nf[idx[i]];
     }
     remove (out);
+    g_out = out;
     if (!create_tide_db (out, n_out, cname, speed, source.start, source.years, eq, nf))
         die ("libtcd could not create", out);
+    g_out_created = g_db_open = 1;
+    /* TCD_MERGE_FAIL_AFTER_RECORDS=n: fail after n records are added (the cleanup's test, tests/test_astro_tables.py) */
+    const char *fail_env = getenv ("TCD_MERGE_FAIL_AFTER_RECORDS");
+    long fail_after = fail_env ? strtol (fail_env, NULL, 10) : -1;
     DB_HEADER_PUBLIC odb = get_tide_db_header ();
     for (int k = 0; k < 5; ++k)
         for (NV_U_INT32 i = 0; i < nt[k]; ++i) {
@@ -214,12 +231,15 @@ int main (int argc, char **argv) {
         rec->level_units = (NV_U_BYTE) lu; rec->direction_units = (NV_U_BYTE) du;
         for (NV_U_INT32 c = source.n; c < n_out; ++c) { rec->amplitude[c] = 0.0f; rec->epoch[c] = 0.0f; }
         if (!add_tide_record (rec, &odb)) die ("libtcd refused a record", rec->header.name);
+        if ((long) r + 1 == fail_after) die ("failing as TCD_MERGE_FAIL_AFTER_RECORDS asks", fail_env);
     }
     close_tide_db ();
+    g_db_open = 0;
 
     /* check what was written */
     int bad = 0;
     if (!open_tide_db (out)) die ("libtcd could not reopen", out);
+    g_db_open = 1;
     odb = get_tide_db_header ();
     if (odb.constituents != n_out || odb.number_of_records != sdb.number_of_records
         || odb.start_year != sdb.start_year || odb.number_of_years != sdb.number_of_years) {
@@ -246,8 +266,11 @@ int main (int argc, char **argv) {
         if (why) { fprintf (stderr, "tcd_merge: record %u (%s): %s differs\n", r, rec->header.name, why); bad = 1; }
     }
     close_tide_db ();
+    g_db_open = 0;
     fclose (tmp);
+    g_tmp = NULL;
     remove (tmp_path);
+    g_tmp_path[0] = 0;
     if (bad) { remove (out); return 1; }
     printf ("%s: %u constituents (%u + %d added), %u records\n", out, n_out, source.n, n_add, sdb.number_of_records);
     return 0;
