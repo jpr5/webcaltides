@@ -499,3 +499,114 @@ def test_run_implausible_needs_no_calibration():
     fits["marsh"] = _fit(tab, 400, {"M2": 0.06, "K1": 0.05})
     out = sa.run_implausible(rows, fits, tab)
     assert list(out) == ["marsh"] and out["marsh"]["reason"] == "implausible_fit"
+
+
+# --- sign inversion against EOT20 ------------------------------------------------------------------------
+
+EOT = {"M2": [1.0, 40.0], "S2": [0.4, 80.0], "K1": [0.10, 10.0], "O1": [0.08, 350.0], "dist_km": 3.5}
+SPEED = {"M2": 28.9841042, "S2": 30.0, "K1": 15.0410686, "O1": 13.9430356}
+
+
+def eot_fit(shift=None, amp=None, lag_h=0.0):
+    """A fit's mains: EOT's, each phase moved by shift[c] (deg) plus a clock lag of lag_h hours, amplitude x amp[c]."""
+    shift, amp = shift or {}, amp or {}
+    return {"constituents": {c: {"amp_m": EOT[c][0] * amp.get(c, 1.0),
+                                 "phase_deg": (EOT[c][1] + shift.get(c, 0.0) + SPEED[c] * lag_h) % 360.0}
+                             for c in sa.MAIN}}
+
+
+def test_an_inverted_record_is_named_and_the_detail_has_the_shifts():
+    why = sa.inverted_against_eot20(eot_fit({c: 195.0 for c in sa.MAIN}), EOT)    # antonio_enes: about +195 deg
+    assert why and why.startswith("sign-inverted") and "M2 195" in why and "3.5 km" in why
+    assert sa.inverted_against_eot20(eot_fit({"M2": 158.0, "S2": 203.0, "K1": 165.0, "O1": 205.0}), EOT)
+
+
+@pytest.mark.parametrize("case", ["agree", "lag_6h", "lag_12h", "one_out", "band_split", "amp_ratio", "far", "tiny",
+                                  "missing", "no_eot"])
+def test_records_that_are_not_inverted_never_trip(case):
+    fit, eot = eot_fit({c: 180.0 for c in sa.MAIN}), dict(EOT)
+    if case == "agree":
+        fit = eot_fit({c: 8.0 for c in sa.MAIN})
+    elif case == "lag_6h":            # a clock offset: the semidiurnal band moves twice as far as the diurnal one
+        fit = eot_fit(lag_h=6.0)
+    elif case == "lag_12h":
+        fit = eot_fit(lag_h=12.0)
+    elif case == "one_out":
+        fit = eot_fit({"M2": 180.0, "S2": 180.0, "K1": 180.0, "O1": 215.0})
+    elif case == "band_split":        # all in the window, but the bands shifted 40 deg apart
+        fit = eot_fit({"M2": 200.0, "S2": 200.0, "K1": 160.0, "O1": 160.0})
+    elif case == "amp_ratio":
+        fit = eot_fit({c: 180.0 for c in sa.MAIN}, amp={"S2": 2.2})
+    elif case == "far":
+        eot["dist_km"] = 15.1
+    elif case == "tiny":
+        eot["O1"] = [0.004, 350.0]
+        fit["constituents"]["O1"]["amp_m"] = 0.004
+    elif case == "missing":
+        del fit["constituents"]["K1"]
+    elif case == "no_eot":
+        eot = None
+    assert sa.inverted_against_eot20(fit, eot) is None
+
+
+def test_the_window_and_band_limits_are_inclusive_at_30_degrees():
+    assert sa.inverted_against_eot20(eot_fit({c: 210.0 for c in sa.MAIN}), EOT)
+    assert sa.inverted_against_eot20(eot_fit({c: 210.5 for c in sa.MAIN}), EOT) is None
+    assert sa.inverted_against_eot20(eot_fit({"M2": 195.0, "S2": 195.0, "K1": 165.0, "O1": 165.0}), EOT)
+    assert sa.inverted_against_eot20(eot_fit({"M2": 195.5, "S2": 195.5, "K1": 165.0, "O1": 165.0}), EOT) is None
+
+
+# --- long-period lines of a short record ----------------------------------------------------------------
+
+LP_SPEEDS = {"SA": 0.0410686, "SSA": 0.0821373, "MM": 0.5443747, "MF": 1.0980331, "MSF": 1.0158958}
+
+
+def lp_fit(days, **cons):
+    """A short fit of `days` with M2 and the given long-period lines, name=(amp, u)."""
+    c = {"M2": {"amp_m": 0.7, "phase_deg": 10.0, "u_m": 0.007}}
+    c.update({n: {"amp_m": a, "phase_deg": 0.0, "u_m": u} for n, (a, u) in cons.items()})
+    return {"constituents": c, "rayleigh_hours": days * 24.0, "band_noise_m": {"LP": 0.01}}
+
+
+def test_a_short_record_never_publishes_sa_or_ssa():
+    d = sa.long_period_drops(lp_fit(300, SA=(0.3, 0.01), SSA=(0.965, 0.01)), LP_SPEEDS, None)
+    assert [(x["name"], x["dropped_reason"]) for x in d] == [("SA", "long_period_rule"), ("SSA", "long_period_rule")]
+
+
+def test_mm_mf_msf_need_three_cycles_and_twice_their_uncertainty():
+    # 64 days: MF 4.7 cycles, MM 2.3 (constable_hook: MF 0.176 u 0.134, MM 0.325 u 0.170)
+    d = {x["name"]: x["detail"] for x in sa.long_period_drops(lp_fit(64, MF=(0.176, 0.134), MM=(0.325, 0.170)),
+                                                                 LP_SPEEDS, None)}
+    assert set(d) == {"MF", "MM"}
+    assert "2.3 cycles" in d["MM"] and "under 2 x its uncertainty" in d["MM"]
+    assert "cycles" not in d["MF"] and "under 2 x its uncertainty" in d["MF"]
+    # 83 days, well above its noise: MM is kept (3.0 cycles), MF and MSF too
+    assert sa.long_period_drops(lp_fit(83, MM=(0.05, 0.01), MF=(0.03, 0.01), MSF=(0.03, 0.01)), LP_SPEEDS, None) == []
+    assert [x["name"] for x in sa.long_period_drops(lp_fit(82, MM=(0.05, 0.01)), LP_SPEEDS, None)] == ["MM"]
+    assert [x["name"] for x in sa.long_period_drops(lp_fit(200, MF=(0.0199, 0.01)), LP_SPEEDS, None)] == ["MF"]
+    assert sa.long_period_drops(lp_fit(200, MF=(0.02, 0.01)), LP_SPEEDS, None) == []
+
+
+def test_a_value_over_three_times_the_long_reference_is_dropped():
+    ref = {"record": "long-1", "km": 3.4, "amps": {"MM": 0.009, "MF": 0.009, "MSF": 0.02}}
+    d = {x["name"]: x["detail"] for x in sa.long_period_drops(lp_fit(200, MM=(0.026, 0.005), MF=(0.028, 0.005),
+                                                                        MSF=(0.06, 0.005)), LP_SPEEDS, ref)}
+    assert set(d) == {"MF"} and "over 3 x the 0.009 m of the long record long-1 (3.4 km)" in d["MF"]
+
+
+def _long(rid, lat, lon, m2=(0.7, 10.0), **lp):
+    c = {"M2": {"amp_m": m2[0], "phase_deg": m2[1]}}
+    c.update({n: {"amp_m": a, "phase_deg": 0.0} for n, a in lp.items()})
+    return {"record": rid, "lat": lat, "lon": lon, "fit": {"constituents": c, "band_noise_m": {"LP": 0.004}}}
+
+
+def test_the_reference_is_the_nearest_long_record_in_the_same_water_within_15_km():
+    f = lp_fit(60)
+    longs = [_long("far", 40.0, -73.80, MM=0.02),                       # 16.9 km
+             _long("bay", 40.0, -73.99, m2=(0.04, 120.0), MM=0.5),      # 0.9 km, another water (M2 x0.06)
+             _long("lag", 40.0, -73.98, m2=(0.7, 60.0), MM=0.5),        # 1.7 km, M2 50 deg away
+             _long("near", 40.03, -74.0, MM=0.02, MF=0.01)]              # 3.3 km, same water
+    r = sa.long_period_reference(f, 40.0, -74.0, longs)
+    assert r == {"record": "near", "km": 3.34, "amps": {"MM": 0.02, "MF": 0.01, "MSF": 0.008}}   # MSF: 2 x its noise
+    assert sa.long_period_reference(f, 40.0, -74.0, [longs[0]]) is None
+    assert sa.long_period_reference(f, 40.0, -74.0, []) is None

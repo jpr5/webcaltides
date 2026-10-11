@@ -11,6 +11,8 @@ Inputs (none of them is in git; each is checked where it is read):
 - FINAL: the newest finished time-base audit (the final verdicts). Its disputed reasons (disputed_reasons_of) decide
   what is never published (FIX-DISP, the whole-hour EOT20 rule), and it annotates the TICON-4 sets' time bases.
   The fit documents keep the annotation of AUDIT, the audit the fit used.
+- AUDIT's weak inputs (EOT20 at each gauge, sha256-checked against its manifest): every fit is screened for a sign
+  inversion (gesla_sets.screen_inverted).
 - CAL: the short-record calibration (gesla.short_accuracy.read_calibration); R7: its partial overlay refit.
 - TICON.csv: the pinned TICON-4 download; refs.json: ticon_refs' official references (its SHA-256 goes into every
   carried set's provenance).
@@ -71,7 +73,7 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     fitted = sorted(r["record"] for r in rows if r["outcome"] == "fitted")
     cal = read_calibration(calibration_dir)
     docs, refused = gs.docs_from_fit_run(fit_run, dump, rel, fitted, audit_dir=audit_dir, calibration=cal,
-                                         overlay_dir=overlay_run)
+                                         overlay_dir=overlay_run, eot20=gs.load_eot20(audit_dir))
     log(f"fit documents: {len(docs)} of {len(fitted)} fitted records ({len(rows)} rows), fit-stage refusals {len(refused)}")
     licences, licence_ids = gesla_licences(docs)
     smap = sm.load()

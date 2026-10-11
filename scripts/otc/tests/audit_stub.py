@@ -1,5 +1,5 @@
 """TEST ONLY: a time-base audit output dir that passes timebase_audit.check_audit_outputs, around given
-rows (or a copy of a real timebase.csv). A real audit made before the crash check (85c7076) has no
+rows (or a copy of a real timebase.csv), with the weak inputs (EOT20 per record, `eot`) its manifest names. A real audit made before the crash check (85c7076) has no
 weak_crashes and is refused by the gate; the tests that read such an audit's rows put them in a stub.
 """
 from __future__ import annotations
@@ -18,7 +18,8 @@ COLUMNS = ["file_id", "time_base_status", "time_base_code", "published_time_base
 
 def stub_audit(out: Path, rows: Iterable[Mapping] | None = None, *, csv_from: Path | None = None,
                commit: str = "1efca1c676a0338056d328632d283675fb63d62e",
-               finished: str = "2026-10-10T08:02:12+00:00", **manifest) -> Path:
+               finished: str = "2026-10-10T08:02:12+00:00", eot: Mapping[str, Mapping] | None = None,
+               **manifest) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     path = out / "timebase.csv"
     if csv_from is not None:
@@ -29,7 +30,10 @@ def stub_audit(out: Path, rows: Iterable[Mapping] | None = None, *, csv_from: Pa
             w.writeheader()
             for r in rows or ():
                 w.writerow({c: r.get(c, "") for c in COLUMNS})
+    weak = out / "weak_inputs.json"
+    weak.write_text(json.dumps({"meta": {}, "records": {rid: {"eot": e} for rid, e in (eot or {}).items()}}))
     m = {"status": "complete", "commit": commit, "dirty": False, "finished": finished, "weak_crashes": [],
+         "inputs": {"weak_inputs": {"path": str(weak), "sha256": hashlib.sha256(weak.read_bytes()).hexdigest()}},
          "outputs": {"timebase.csv": hashlib.sha256(path.read_bytes()).hexdigest()}}
     m.update(manifest)
     (out / "timebase_manifest.json").write_text(json.dumps(m))

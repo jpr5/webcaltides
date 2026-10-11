@@ -17,8 +17,8 @@ from gesla.tcd_table import TcdTable
 
 from otc_pipeline import release_writer
 from otc_pipeline.gesla_release import build_release
-from otc_pipeline.gesla_sets import (FitIntegrityError, NotPublishable, fit_document, source_set,
-                                     time_base_annotation)
+from otc_pipeline.gesla_sets import (FitIntegrityError, NotPublishable, attach_long_period_references, fit_document,
+                                     source_set, time_base_annotation)
 from otc_pipeline.release_writer import SCHEMA_SHA256, SchemaPinError, validate_release, write_release
 
 from synthetic_congen import congen_run, kp0b_tables
@@ -97,8 +97,10 @@ def stamped(fit, label, kind=None, factors=None):
 def doc(table, *, row=None, fit=None, rid="synthetic-1-nor-test", meta=None, calibration=None):
     tb = time_base_annotation(row, 0, rid, decided_in="20261010", decided_build_commit="1efca1c")
     f = fit or fit_dict()
-    return fit_document(rid, "4.1", "a" * 64, {**META, **(meta or {})}, table, f, good_hours=f["rayleigh_hours"],
-                        time_base=tb, calibration=calibration)
+    d = fit_document(rid, "4.1", "a" * 64, {**META, **(meta or {})}, table, f, good_hours=f["rayleigh_hours"],
+                     time_base=tb, calibration=calibration)
+    attach_long_period_references([d])          # a run of one record: no long record to judge it against
+    return d
 
 
 LICENCE = {"licence_id": "gesla-derived", "spdx": "LicenseRef-GESLA-Research", "provider": "TEST ONLY",
@@ -278,6 +280,75 @@ def test_a_microtidal_short_record_is_flagged(table):
     cs = source_set(doc(table, fit=f, calibration=short_calibration(f, microtidal=True)),
                     licence_id="gesla-derived").constant_set
     assert [x["flag"] for x in cs["qc_flags"]][:2] == ["short_record", "microtidal"]
+
+
+LP_SPEEDS = {**SPEEDS, "SA": 0.0410686, "MM": 0.5443747, "MF": 1.0980331, "MSF": 1.0158958}
+
+
+@pytest.fixture(scope="module")
+def table_lp():
+    return TcdTable({"years": [2020, 2022], "tcd_sha256": "c" * 64, "aliases": {},
+                     "constituents": {n: {"speed": s, "v0u": [0.0] * 3, "f": [1.0] * 3} for n, s in LP_SPEEDS.items()}})
+
+
+def lp_fit(table, hours, **lp):
+    """A fit on the long-period test table: the mains of fit_dict and long-period lines name=(amp, u)."""
+    from gesla.select_constituents import rayleigh_select
+    f = fit_dict(rayleigh_hours=hours)
+    f["constituents"].update({n: {"amp_m": a, "phase_deg": 0.0, "u_m": u} for n, (a, u) in lp.items()})
+    return dict(f, rayleigh_kept=rayleigh_select(table, hours), snr_dropped=[], band_noise_m={"LP": 0.004},
+                candidates_missing_from_tcd=[n for n in CANDIDATES if n not in LP_SPEEDS])
+
+
+def lp_doc(table, f, rid="synthetic-1-nor-test", meta=None, attach=True):
+    tb = time_base_annotation(None, 0, rid, decided_in="20261010")
+    d = fit_document(rid, "4.1", "a" * 64, {**META, **(meta or {})}, table, f, good_hours=f["rayleigh_hours"],
+                     time_base=tb, calibration=short_calibration(f, rid=rid, good_hours=f["rayleigh_hours"]))
+    if attach:
+        attach_long_period_references([d])
+    return d
+
+
+def test_a_short_record_publishes_no_sa_ssa_and_only_resolved_mm_mf_msf(table_lp):
+    """200 days: SSA kept by the Rayleigh rule (1.1 cycles) but never published short; MF under 2 x its own
+    uncertainty (constable_hook's MF 0.176 u 0.134); MM and MSF resolved, above noise and with no long record
+    nearby: published."""
+    f = lp_fit(table_lp, 200 * 24.0, SSA=(0.965, 0.01), MM=(0.05, 0.01), MF=(0.176, 0.134), MSF=(0.03, 0.005))
+    assert {"SSA", "MM", "MF", "MSF"} <= set(f["rayleigh_kept"]) and "SA" not in f["rayleigh_kept"]
+    cs = source_set(lp_doc(table_lp, f), licence_id="gesla-derived").constant_set
+    assert sorted(c["name"] for c in cs["constituents"]) == ["K1", "M2", "MM", "MSF", "O1", "S2"]
+    held = {d["name"]: d for d in cs["dropped_constituents"] if d["dropped_reason"] == "long_period_rule"}
+    assert set(held) == {"SSA", "MF"}
+    assert "never publishes SA or SSA" in held["SSA"]["detail"] and "under 2 x its uncertainty" in held["MF"]["detail"]
+    assert [d["name"] for d in cs["dropped_constituents"]] == sorted(d["name"] for d in cs["dropped_constituents"])
+    assert next(d for d in cs["dropped_constituents"] if d["name"] == "SA")["dropped_reason"] == "other"
+    assert [e for e in jsonschema_errors(cs, "constant_set") if "set_id" not in e and "build" not in e] == []
+
+
+def test_a_short_value_over_three_times_its_long_neighbour_is_held(table_lp):
+    short = lp_doc(table_lp, lp_fit(table_lp, 200 * 24.0, MM=(0.05, 0.01), MSF=(0.03, 0.005)), attach=False)
+    long_ = lp_doc(table_lp, lp_fit(table_lp, LONG_HOURS, MM=(0.01, 0.001), MSF=(0.012, 0.001)),
+                   rid="long-1-nor-test", meta={"LATITUDE": "60.42"}, attach=False)       # 3.3 km north
+    attach_long_period_references([short, long_])
+    assert short["long_period_reference"]["record"] == "long-1-nor-test" and "long_period_reference" not in long_
+    cs = source_set(short, licence_id="gesla-derived").constant_set
+    assert "MSF" in {c["name"] for c in cs["constituents"]} and "MM" not in {c["name"] for c in cs["constituents"]}
+    mm = next(d for d in cs["dropped_constituents"] if d["name"] == "MM")
+    assert "over 3 x the 0.010 m of the long record long-1-nor-test (3.3 km)" in mm["detail"]
+
+
+def test_a_long_record_keeps_its_long_period_lines(table_lp):
+    f = lp_fit(table_lp, LONG_HOURS, SA=(0.1, 0.01), SSA=(0.05, 0.01), MM=(0.02, 0.01), MF=(0.01, 0.01))
+    d = fit_document("long-1-nor-test", "4.1", "a" * 64, META, table_lp, f, good_hours=LONG_HOURS,
+                     time_base=time_base_annotation(None, 0, "long-1-nor-test", decided_in="20261010"))
+    names = {c["name"] for c in source_set(d, licence_id="gesla-derived").constant_set["constituents"]}
+    assert {"SA", "SSA", "MM", "MF"} <= names
+
+
+def test_a_short_record_never_checked_against_the_long_records_is_not_published(table_lp):
+    f = lp_fit(table_lp, 200 * 24.0, MM=(0.05, 0.01))
+    with pytest.raises(FitIntegrityError, match="long_period_reference"):
+        source_set(lp_doc(table_lp, f, attach=False), licence_id="gesla-derived")
 
 
 def test_an_implausible_fit_is_refused(table):

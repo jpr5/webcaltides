@@ -403,7 +403,8 @@ def _unusable(rf: RecordFit) -> str | None:
 
 
 def fit_records(table: TcdTable, release: GeslaRelease, record_ids: Iterable[str], *, audit_dir: Path,
-                roles: Mapping | None = None, calibration: Mapping | None = None) -> tuple[list[dict], list[dict]]:
+                roles: Mapping | None = None, calibration: Mapping | None = None,
+                eot20: Mapping[str, Mapping] | None = None) -> tuple[list[dict], list[dict]]:
     """Fit each record from the verified cache with its published time base (G03c default: QC, the
     last 19 years), from the audit in audit_dir (load_audit: the gate runs before any fit). Returns
     (documents, refused); a refused entry (build-report shape) names the record, the reason class
@@ -453,6 +454,9 @@ def fit_records(table: TcdTable, release: GeslaRelease, record_ids: Iterable[str
         check_stamp(rid, fit, tb["published"], corr=corr, speed=table.speed, span=span)
         docs.append(fit_document(rid, release.version, rec.member_sha256, meta, table, fit,
                                  good_hours=hours, time_base=tb, calibration=calibration))
+    if eot20 is not None:
+        screen_inverted(docs, eot20)
+    attach_long_period_references(docs)
     return docs, skipped
 
 
@@ -462,6 +466,42 @@ def refusal(record: str, reason: str, message: str, good_hours: float | None = N
     if good_hours is not None:
         out["good_hours"] = round(float(good_hours), 1)
     return out
+
+
+def attach_long_period_references(docs: list[dict]) -> None:
+    """Sets every short document's long_period_reference (short_accuracy.long_period_reference: the nearest long
+    record of `docs` within 15 km in the same water, or None), which source_set needs to judge the record's MM, MF
+    and MSF. A long record is a document with no Rayleigh drop and no refusal."""
+    longs = [{"record": d["record_id"], "lat": d["lat"], "lon": d["lon"], "fit": d["fit"]}
+             for d in docs if not d["rayleigh_drops"] and not d.get("refusal")]
+    for d in docs:
+        if d["rayleigh_drops"]:
+            d["long_period_reference"] = short_accuracy.long_period_reference(d["fit"], d["lat"], d["lon"], longs)
+
+
+def load_eot20(audit_dir: Path) -> dict[str, Mapping]:
+    """record id -> EOT20 at its cell ({constituent: [amp m, phase deg], "dist_km"}): the weak inputs the audit in
+    audit_dir read (its manifest's inputs.weak_inputs, checked against the sha256 recorded there)."""
+    m = check_audit_outputs(audit_dir)
+    wi = (m.get("inputs") or {}).get("weak_inputs") or {}
+    if not wi.get("path") or not wi.get("sha256"):
+        raise FitIntegrityError(f"{audit_dir}: the audit manifest names no weak inputs (EOT20): the inversion screen "
+                                "cannot run")
+    data = Path(wi["path"]).read_bytes()
+    if _sha256(data) != wi["sha256"]:
+        raise FitIntegrityError(f"{wi['path']}: sha256 {_sha256(data)}, the audit read {wi['sha256']}")
+    return {rid: r["eot"] for rid, r in json.loads(data)["records"].items() if r.get("eot")}
+
+
+def screen_inverted(docs: list[dict], eot20: Mapping[str, Mapping]) -> None:
+    """Refuses (implausible_fit) every document, long or short, whose fit is sign-inverted against EOT20
+    (short_accuracy.inverted_against_eot20)."""
+    for d in docs:
+        if d.get("refusal"):
+            continue
+        why = short_accuracy.inverted_against_eot20(d["fit"], eot20.get(d["record_id"]))
+        if why:
+            d["refusal"] = {"reason": short_accuracy.IMPLAUSIBLE, "detail": f"{d['record_id']}: {why}"}
 
 
 def _sha256_file(path: Path) -> str:
@@ -529,14 +569,17 @@ def check_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, audit: Aud
 
 def docs_from_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, record_ids: Iterable[str], *,
                       audit_dir: Path, calibration: Mapping | None = None,
-                      overlay_dir: Path | None = None) -> tuple[list[dict], list[dict]]:
+                      overlay_dir: Path | None = None,
+                      eot20: Mapping[str, Mapping] | None = None) -> tuple[list[dict], list[dict]]:
     """Fit documents from a complete in-repo fit run (results.jsonl + fits/<record>.json +
     timebase_manifest.json), with the time bases of the audit in audit_dir (load_audit, gated). The
     run is checked first (check_fit_run): its TCD dump, GESLA manifest and audit csv must be this
     build's, so the documents' tcd_sha256 and member hashes describe what the run used. A fit whose
     time base attenuates the tide is taken only with its own sampling_corrected stamp (check_stamp);
     an unstamped one, or a run row whose time base is not the published one, raises
-    FitIntegrityError. Returns (documents, refused): a record the run did not fit is refused."""
+    FitIntegrityError. Returns (documents, refused): a record the run did not fit is refused. With `eot20`
+    (load_eot20) every fit is screened for a sign inversion (screen_inverted); then each short document gets its
+    long-period reference (attach_long_period_references)."""
     audit = load_audit(audit_dir)
     manifest, base = check_fit_run(run_dir, tcd, release, audit)
     fits_map = manifest[FITS_SHA256]
@@ -591,6 +634,9 @@ def docs_from_fit_run(run_dir: Path, tcd: TcdDump, release: GeslaRelease, record
         for d in docs:
             if d["record_id"] == rid and not d.get("refusal"):
                 d["refusal"] = {"reason": why["reason"], "detail": f"{rid}: {why['detail']}"}
+    if eot20 is not None:
+        screen_inverted(docs, eot20)
+    attach_long_period_references(docs)
     return docs, refused
 
 
@@ -605,7 +651,7 @@ def make_docs(run_dir: Path, audit_dir: Path, out_dir: Path, *, calibration_dir:
     cal = short_accuracy.read_calibration(calibration_dir) if calibration_dir is not None else None
     ids = sorted(json.loads(x)["record"] for x in (Path(run_dir) / "results.jsonl").read_text().splitlines() if x.strip())
     docs, refused = docs_from_fit_run(run_dir, tcd, release, ids, audit_dir=audit_dir, calibration=cal,
-                                      overlay_dir=overlay_dir)
+                                      overlay_dir=overlay_dir, eot20=load_eot20(audit_dir))
     path = write_fits(docs, out_dir)
     out_dir.with_name(out_dir.name + ".refused.json").write_text(json.dumps(refused, indent=1, sort_keys=True) + "\n")
     return path
@@ -756,8 +802,18 @@ def comparator_set(doc: Mapping) -> SourceSet:
         raise NotPublishable(f"{rid}: short record ({doc['good_hours']:.0f} good hours) with no expected_accuracy",
                              short_accuracy.UNCALIBRATED)
     speeds = doc["speeds_deg_per_hour"]
+    long_period = []
+    if drops:
+        # a short record's long-period lines are judged against the run's long records (attach_long_period_references)
+        if "long_period_reference" not in doc:
+            raise FitIntegrityError(f"{rid}: short record not checked against the run's long records "
+                                    "(no long_period_reference: attach_long_period_references)")
+        long_period = short_accuracy.long_period_drops(f, speeds, doc["long_period_reference"])
+    held = {d["name"] for d in long_period}
     cons = []
     for name in sorted(f["constituents"]):
+        if name in held:
+            continue
         c = f["constituents"][name]
         entry = {"name": _canonical_name(rid, name), "speed_deg_per_hour": speeds[name], "amplitude_m": c["amp_m"],
                  "phase_deg": c["phase_deg"] % 360.0}
@@ -777,7 +833,8 @@ def comparator_set(doc: Mapping) -> SourceSet:
         "provenance": {"input_sha256": [doc["member_sha256"]], "tcd_sha256": doc["tcd_sha256"]},
     }
     dropped = [dict(d, name=_canonical_name(rid, d["name"]))
-               for d in short_accuracy.dropped_constituents(drops, sorted(f.get("snr_dropped", ())))]
+               for d in sorted(short_accuracy.dropped_constituents(drops, sorted(f.get("snr_dropped", ()))) + long_period,
+                               key=lambda d: d["name"])]
     if dropped:
         cs["dropped_constituents"] = dropped
     flags = []

@@ -92,11 +92,11 @@ class FakeRelease:
 
 
 def make_run(tmp_path, dump, fits: dict, audit_rows: list, *, status="complete", dirty=False, tcd_sha=None,
-             outcomes=None, fits_map=True):
+             outcomes=None, fits_map=True, eot=None):
     """A fit run dir in the run_fits_tb.py layout around these fits, its manifest naming this build's inputs."""
     run = tmp_path / "run"
     (run / "fits").mkdir(parents=True)
-    audit = stub_audit(tmp_path / "audit", audit_rows)
+    audit = stub_audit(tmp_path / "audit", audit_rows, eot=eot)
     rel = FakeRelease(tmp_path, {rid: {**META, "FILE NAME": rid} for rid in fits})
     lines = []
     for rid, fit in fits.items():
@@ -537,6 +537,45 @@ def test_an_implausible_fit_is_refused_with_no_calibration(tmp_path, dump):
     with pytest.raises(NotPublishable) as e:
         gesla_sets.source_set(by[bad], licence_id="gesla-derived")
     assert e.value.reason == "implausible_fit"
+
+
+def _eot_of(fit, shift=0.0, dist_km=3.5):
+    return {"dist_km": dist_km, **{c: [fit["constituents"][c]["amp_m"], (fit["constituents"][c]["phase_deg"] - shift) % 360]
+                                   for c in ("M2", "S2", "K1", "O1")}}
+
+
+def test_a_sign_inverted_fit_is_refused_long_or_short(tmp_path, dump):
+    """antonio_enes-191a-moz-uhslc_rq: every main constituent about +195 deg from EOT20 at its cell, the EOT20 amplitude
+    gate of the audit (M2 ratio 1.069) having skipped it. The screen runs on every record of the run."""
+    from test_format_1_0 import SHORT_HOURS, short_calibration
+    good, inv, inv_short = "x-1-nor-test", "inv-1-nor-test", "invs-1-nor-test"
+    fits = {good: fit_dict(), inv: fit_dict(), inv_short: fit_dict(rayleigh_hours=SHORT_HOURS)}
+    eot = {good: _eot_of(fits[good], shift=8.0), inv: _eot_of(fits[inv], shift=195.0),
+           inv_short: _eot_of(fits[inv_short], shift=165.0)}
+    run, audit, rel = make_run(tmp_path, dump, fits, [], eot=eot)
+    cal = short_calibration(fits[inv_short], rid=inv_short, good_hours=157000.0)    # the short one is calibrated
+    docs, _ = docs_from_fit_run(run, dump, rel, sorted(fits), audit_dir=audit, calibration=cal,
+                                eot20=gesla_sets.load_eot20(audit))
+    by = {d["record_id"]: d for d in docs}
+    assert by[good]["refusal"] is None
+    for rid in (inv, inv_short):
+        assert by[rid]["refusal"]["reason"] == "implausible_fit" and "sign-inverted" in by[rid]["refusal"]["detail"]
+        with pytest.raises(NotPublishable) as e:
+            gesla_sets.source_set(by[rid], licence_id="gesla-derived")
+        assert e.value.reason == "implausible_fit"
+    docs, _ = docs_from_fit_run(run, dump, rel, sorted(fits), audit_dir=audit, calibration=cal)   # no EOT20: no screen
+    assert [d["refusal"] for d in docs] == [None, None, None]
+
+
+def test_the_eot20_inputs_are_the_audits_own(tmp_path):
+    audit = stub_audit(tmp_path / "a", [], eot={"r-1": {"M2": [1.0, 2.0], "dist_km": 1.0}, "r-2": None})
+    assert gesla_sets.load_eot20(audit) == {"r-1": {"M2": [1.0, 2.0], "dist_km": 1.0}}
+    (audit / "weak_inputs.json").write_text('{"records": {}}')                      # changed since the audit read it
+    with pytest.raises(FitIntegrityError, match="the audit read"):
+        gesla_sets.load_eot20(audit)
+    bare = stub_audit(tmp_path / "b", [], inputs={})
+    with pytest.raises(FitIntegrityError, match="names no weak inputs"):
+        gesla_sets.load_eot20(bare)
 
 
 def test_make_docs_is_the_entry_point_with_calibration_and_overlay(tmp_path, dump, monkeypatch):
