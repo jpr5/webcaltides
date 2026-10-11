@@ -591,7 +591,8 @@ def test_make_docs_is_the_entry_point_with_calibration_and_overlay(tmp_path, dum
     m["outputs"]["results.jsonl"] = hashlib.sha256((run / "results.jsonl").read_bytes()).hexdigest()
     (run / "timebase_manifest.json").write_text(json.dumps(m))
     cal = tmp_path / "cal"
-    sa.write_calibration(short_calibration(f, rid=rid), cal)
+    sa.write_calibration({**short_calibration(f, rid=rid),         # made from this run on this dump (check_bound)
+                          "inputs": {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": dump.sha256}}, cal)
     monkeypatch.setattr(gesla_sets, "GeslaRelease", lambda: rel)
     monkeypatch.setattr(gesla_sets, "load_tcd_dump", lambda p: dump)
     gesla_sets.main(["make-docs", "--fit-run", str(run), "--audit-dir", str(audit), "--calibration", str(cal),
@@ -604,3 +605,26 @@ def test_make_docs_is_the_entry_point_with_calibration_and_overlay(tmp_path, dum
     with pytest.raises(NotPublishable) as e:
         gesla_sets.source_set(d2, licence_id="gesla-derived")
     assert e.value.reason == "short_record_uncalibrated"
+
+
+def test_make_docs_refuses_a_calibration_of_other_fits_or_another_dump(tmp_path, dump, monkeypatch):
+    # FIX-SRCAL r1 N1: the fit stage stops, as the build does, rather than refuse every short record it covers
+    from test_format_1_0 import SHORT_HOURS, short_calibration
+    from gesla import short_accuracy as sa
+    rid = "short-1-nor-test"
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    run, audit, rel = make_run(tmp_path, dump, {rid: f}, [])
+    other = tmp_path / "other-run"
+    other.mkdir()
+    (other / "results.jsonl").write_text("{}\n")
+    monkeypatch.setattr(gesla_sets, "GeslaRelease", lambda: rel)
+    monkeypatch.setattr(gesla_sets, "load_tcd_dump", lambda p: dump)
+    for n, inputs, why in ((1, {"fit_runs": [sa.run_identity(other)], "tcd_table_sha256": dump.sha256}, "the build uses"),
+                           (2, {"fit_runs": [sa.run_identity(run)], "tcd_table_sha256": "e" * 64}, "made on the TCD dump"),
+                           (3, {}, "the build uses")):
+        cal = tmp_path / f"cal{n}"
+        sa.write_calibration({**short_calibration(f, rid=rid), "inputs": inputs}, cal)
+        with pytest.raises(ValueError, match=why):
+            gesla_sets.main(["make-docs", "--fit-run", str(run), "--audit-dir", str(audit), "--calibration", str(cal),
+                             "--out", str(tmp_path / f"docs{n}")])
+        assert not (tmp_path / f"docs{n}").exists()

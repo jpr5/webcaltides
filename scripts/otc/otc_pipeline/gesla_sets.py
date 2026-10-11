@@ -648,11 +648,15 @@ def make_docs(run_dir: Path, audit_dir: Path, out_dir: Path, *, calibration_dir:
               overlay_dir: Path | None = None, tcd_path: Path | None = None) -> Path:
     """The fit documents of a build, from a complete fit run (and the R7 overlay refit), with the short-record
     calibration (gesla.short_accuracy.read_calibration of calibration_dir), written to out_dir (write_fits). The
-    entry point of the build's fit stage. Returns the MANIFEST path; the stage's refusals go beside out_dir, to
-    <out_dir>.refused.json (out_dir holds only the doc set)."""
+    entry point of the build's fit stage. The calibration must have been made from these fit runs on this TCD dump
+    (short_accuracy.check_bound), else ValueError. Returns the MANIFEST path; the stage's refusals go beside
+    out_dir, to <out_dir>.refused.json (out_dir holds only the doc set)."""
     tcd = load_tcd_dump(tcd_path or otc_work() / "tcd_table.json")
     release = GeslaRelease()
     cal = short_accuracy.read_calibration(calibration_dir) if calibration_dir is not None else None
+    if cal is not None:
+        short_accuracy.check_bound(cal, [Path(run_dir)] + ([Path(overlay_dir)] if overlay_dir is not None else []),
+                                   tcd_table_sha256=tcd.sha256)
     ids = sorted(json.loads(x)["record"] for x in (Path(run_dir) / "results.jsonl").read_text().splitlines() if x.strip())
     docs, refused = docs_from_fit_run(run_dir, tcd, release, ids, audit_dir=audit_dir, calibration=cal,
                                       overlay_dir=overlay_dir, eot20=load_eot20(audit_dir))
