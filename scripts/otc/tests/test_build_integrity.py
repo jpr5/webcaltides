@@ -215,6 +215,10 @@ def test_one_short_record_among_good_ones_is_reported_and_the_rest_published(tab
     kw = dict(table=table, table_id=TABLE_ID, datestamp=D, created="2026-10-10T00:00:00Z", build_commit="abcdef0",
               station_ids={d["record_id"]: f"OTC-T{i:04d}" for i, d in enumerate(good + [short])}, licences=[LICENCE],
               licence_ids={d["record_id"]: "gesla-derived" for d in good + [short]},
+              epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in good + [short]},
+              contributor_roles={"TEST": "originator"},
+              sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
+              fit_run_results_sha256="f" * 64, disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in good + [short]},
               astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)])
     fit_stage = [{"record": "tiny-1-nor-test", "reason": "too_short", "message": "100 good hours", "good_hours": 100.0}]
     release, report = build_release(good + [short], refused=fit_stage, **kw)

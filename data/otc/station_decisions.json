@@ -1,0 +1,5 @@
+{
+ "note": "Reviewed decisions for otc_pipeline.station_map. merge: [{\"records\": [record ids], \"note\": why}] makes the records one station (accepts a held-apart proposal). separate: [{\"records\": [record ids], \"note\": why}] makes the records a station of their own, cut out of the group the rule puts them in (rejects a merge).",
+ "merge": [],
+ "separate": []
+}

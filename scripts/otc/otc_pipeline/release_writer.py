@@ -353,8 +353,11 @@ def _cross_reference_errors(release: dict) -> list[str]:
         if isinstance(off, dict) and cur_off:
             errors.append(f"{where}: a station has subordinate_offsets or current_offsets, not both")
         if rec is None:
+            sets = _dicts(st.get("constant_sets"))
             if st.get("type") != "subordinate":
-                errors.append(f"{where}: recommended_set_id is null but the station is not subordinate")
+                if not sets or any(cs.get("qc_status") != "no_constants" for cs in sets):
+                    errors.append(f"{where}: recommended_set_id is null but the station is not subordinate "
+                                  "and not every set is no_constants (build check 6)")
             elif not isinstance(off, dict) and not cur_off:
                 errors.append(f"{where}: recommended_set_id is null but the station has no "
                               "subordinate_offsets or current_offsets (it cannot be predicted)")

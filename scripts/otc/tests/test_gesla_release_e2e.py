@@ -125,6 +125,9 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
         docs, table=dump.table, table_id=TABLE_ID, datestamp="20261010", created="2026-10-10T00:00:00Z",
         build_commit="c6f2fac", station_ids={r: f"OTC-WR10-{i:04d}" for i, r in enumerate(records)},
         licences=[LICENCE], licence_ids={r: "gesla-derived" for r in records}, refused=refused,
+        epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in docs},
+        sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
+        fit_run_results_sha256="f" * 64, disputed_reasons={},
         astro_tables=[astro_table(dump.table, names, table_id=TABLE_ID, first_year=dump.table.first_year,
                                   last_year=dump.table.last_year)])
     assert report.counts() == {"short_record": 1} and report.refused[0]["record"] == short

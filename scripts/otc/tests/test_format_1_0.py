@@ -89,6 +89,10 @@ def build(table, docs, **over):
     kw = dict(table=table, table_id=TABLE_ID, datestamp=D, created="2026-10-10T00:00:00Z", build_commit="abcdef0",
               station_ids={d["record_id"]: f"OTC-T{i:04d}" for i, d in enumerate(docs)}, licences=[LICENCE],
               licence_ids={d["record_id"]: "gesla-derived" for d in docs}, refused=[],
+              epoch_hours={d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 0} for d in docs},
+              contributor_roles={d["contributor"]: "originator" for d in docs},
+              sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
+              fit_run_results_sha256="f" * 64, disputed_reasons={}, sampling_s={d["record_id"]: 3600 for d in docs},
               astro_tables=[astro_table(table, SPEEDS, table_id=TABLE_ID, first_year=2020, last_year=2022)])
     kw.update(over)
     release, _report = build_release(docs, **kw)

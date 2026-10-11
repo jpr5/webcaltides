@@ -223,6 +223,40 @@ def _comparator_id(kind: str, raw: str) -> str:
     return raw                                       # official_constants: harcon:<NOAA id>
 
 
+# TB-SIB's sibling_constants column (timebase_audit.csv_row; the rule's summary text, f5a026a):
+# site:       "fitted constants +39.0 min against 2 record(s) of the site (a, b); side by eot20 (EOT20 +51.5 here, ...)"
+# family:     "EOT20 -484.5 min (all four) = -8 h, as 6 records of provider family bom/aus/aaaaa99 (...)"
+# whole hour: "EOT20 lag +542.5 min (all four) is +9 h, a whole number of hours ..."
+_SIB_SITE_RE = re.compile(r"fitted constants ([+-]?[0-9.]+) min against \d+ record\(s\) of the site \(([^)]*)\)")
+_SIB_HERE_RE = re.compile(r"\(EOT20 ([+-]?[0-9.]+) here")
+_SIB_EOT_RE = re.compile(r"EOT20(?: lag)? ([+-]?[0-9.]+) min")
+_SIB_FAMILY_RE = re.compile(r"provider family (\S+?)(?: \(|$|,|;)")
+
+
+def _sibling_evidence(text: str) -> list[dict]:
+    """format 1.0 time_base_evidence from TB-SIB's sibling_constants summary: a sibling_record per site record
+    the fitted constants were compared with (lag = the shift), the EOT20 lag (model), the provider family
+    (provider). Each item carries the summary as its detail."""
+    out = []
+    m = _SIB_SITE_RE.search(text)
+    if m:
+        for rid in (x.strip() for x in m.group(2).split(",")):
+            if rid:
+                out.append({"comparator_kind": "sibling_record", "comparator_id": rid, "lag_min": float(m.group(1)),
+                            "detail": text})
+        here = _SIB_HERE_RE.search(text)
+        if here:
+            out.append({"comparator_kind": "model", "comparator_id": "eot20", "lag_min": float(here.group(1)), "detail": text})
+    else:
+        e = _SIB_EOT_RE.search(text)
+        if e:
+            out.append({"comparator_kind": "model", "comparator_id": "eot20", "lag_min": float(e.group(1)), "detail": text})
+        f = _SIB_FAMILY_RE.search(text)
+        if f:
+            out.append({"comparator_kind": "provider", "comparator_id": f.group(1), "detail": text})
+    return out
+
+
 def _evidence(row: Mapping, record_id: str) -> list[dict]:
     """The comparisons behind an audit row, as format 1.0 time_base_evidence."""
     out = []
@@ -258,6 +292,10 @@ def _evidence(row: Mapping, record_id: str) -> list[dict]:
             if m and wkind != "dst_selftest":
                 e["lag_min"] = float(m.group(1))
             out.append(e)
+        sib = (row.get("sibling_constants") or "").strip()
+        if sib:                              # TB-SIB: the site siblings' constants, the provider family, EOT20
+            have = {(e["comparator_kind"], e["comparator_id"]) for e in out}
+            out += [e for e in _sibling_evidence(sib) if (e["comparator_kind"], e["comparator_id"]) not in have]
     return out
 
 
