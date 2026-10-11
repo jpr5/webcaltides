@@ -375,3 +375,24 @@ def test_sa_served_at_the_tcd_frequency_is_refused(tmp_path):
         return data.replace(b"   2 SA      .00011407", b"   2 SA      .00011408")
     with pytest.raises(ValueError, match="SA"):
         list(LinzAdapter(speeds=speeds()).sets(fixture_fetch(tmp_path, mutate=mutate)))
+
+
+# --- F2: every constituent row is read (RELEASE-AGENCY fix round 1) -------------------------------
+
+_HEAD = ("Rangatira Point        Units in CM\n"
+         " STATION  351   TIME ZONE =  180, LATITUDE =  4050, LONGITUDE = 17457\n"
+         "  NO NAME    FREQUENCY   STN  M-Y/ M-Y      A       G\n")
+
+
+def test_values_below_one_and_an_amplitude_run_into_the_year_column_are_read():
+    hf = parse_harm(_HEAD + "   1 Z0      .00000000   148 0106/1219134.2423    .00\n"
+                    "   2 Q1      .03721850   351 0198/1206   .7750   5.34\n"
+                    "  11 M2      .08051140   351 0198/1206 55.2125 280.56\n", "351RANGATIRAPOINT-Harm_1998-2006.txt")
+    assert [(r.name, r.amp_cm, r.phase_deg) for r in hf.rows] == [
+        ("Z0", 134.2423, 0.0), ("Q1", 0.775, 5.34), ("M2", 55.2125, 280.56)]
+
+
+def test_a_constituent_row_that_cannot_be_read_stops_the_read():
+    with pytest.raises(ValueError, match="cannot be read"):
+        parse_harm(_HEAD + "  11 M2      .08051140   351 0198/1206 55.2125 280.56\n"
+                   "  12 S2      .08333334   351 0198/1206 26,1980 336.55\n", "351RANGATIRAPOINT-Harm_1998-2006.txt")

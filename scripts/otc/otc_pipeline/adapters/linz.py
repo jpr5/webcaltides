@@ -84,7 +84,11 @@ MEMBER_RE = re.compile(r"^(\d{1,4})([A-Z][A-Z ]*?)[-_]Harm_(\d{4})-(\d{4})\.txt$
 SITE_ID_RE = re.compile(r"^[0-9]{1,4}[A-Z][A-Z0-9]*$")
 HEADER_RE = re.compile(r"STATION\s+(\d+)\s+TIME ZONE\s*=\s*(-?\d+)\s*,\s*LATITUDE\s*=\s*(\d+)\s*,"
                        r"\s*LONGITUDE\s*=\s*(\d+)")
-ROW_RE = re.compile(r"^\s*\d+\s+([A-Z0-9]+)\s+(\d*\.\d+)\s+\d+\s+(\d{4})/(\d{4})\s+(\d+\.\d+)\s+(\d+\.\d+)\s*$")
+# One constituent row: NO NAME FREQUENCY STN M-Y/M-Y A G. Fortran fixed columns: a value below 1 has no leading
+# zero (".7750"), and an amplitude of 100 cm or more runs into the M-Y/M-Y column ("0106/1219134.2423").
+ROW_RE = re.compile(r"^\s*\d+\s+([A-Z0-9]+)\s+(\d*\.\d+)\s+\d+\s+(\d{4})/(\d{4})\s*(\d*\.\d+)\s+(\d*\.\d+)\s*$")
+# What a constituent row starts with: a row that looks like this and does not match ROW_RE stops the read.
+ROW_START_RE = re.compile(r"^\s*\d+\s+[A-Z0-9]+\s+\d*\.\d+\s")
 PORT_HEADER_RE = re.compile(r"^\s*(\d+)\s*,\s*([^,]+?)\s*,\s*(\d+)°(\d+(?:\.\d+)?)'?([NS])\s*,"
                             r"\s*(\d+)°(\d+(?:\.\d+)?)'?([EW])")
 
@@ -275,6 +279,8 @@ def parse_harm(text: str, member: str) -> HarmFile:
         if r:
             rows.append(Row(r.group(1), float(r.group(2)), r.group(3), r.group(4),
                             float(r.group(5)), float(r.group(6))))
+        elif ROW_START_RE.match(line):
+            raise ValueError(f"{member}: a constituent row that cannot be read: {line.strip()!r}")
     names = [r.name for r in rows]
     if len(set(names)) != len(names):
         raise ValueError(f"{member}: a constituent is listed twice")
