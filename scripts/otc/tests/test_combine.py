@@ -192,6 +192,16 @@ def test_a_gesla_re_mint_keeps_the_agency_records():
     assert sm.dump(again) == sm.dump(old)
 
 
+def test_the_committed_map_holds_every_agency_record_once():
+    m = sm.load()
+    agency_records = [r for r in m.record_ids() if r.split(":", 1)[0] in combine.AGENCY_SOURCES]
+    assert len(agency_records) > 6000
+    for r in agency_records:
+        sid = m.record_ids()[r]
+        same = [x for x in m.stations[sid]["records"] if x.split(":", 1)[0] == r.split(":", 1)[0]]
+        assert same == [r], (sid, same)
+
+
 # --- position corrections ---------------------------------------------------------------------------
 
 def correction(up="TPT2891", pub=(-19.0333, 169.9167), to=(-19.0333, -169.9167), tz="Pacific/Niue", country="NIU"):
