@@ -231,9 +231,9 @@ def test_a_congen_run_without_the_otc_tcd_is_refused(fakes, monkeypatch):
         _build(fakes)
 
 
-def _dump(path, rows, years=(1900, 2100), aliases=None):
+def _dump(path, rows, years=(1900, 2100), aliases=None, tcd=at.TCD_SHA256):
     n = years[1] - years[0] + 1
-    path.write_text(json.dumps({"tcd_sha256": at.TCD_SHA256, "years": list(years), "aliases": aliases or {},
+    path.write_text(json.dumps({"tcd_sha256": tcd, "years": list(years), "aliases": aliases or {},
                                 "constituents": {k: {"speed": v, "v0u": [1.0] * n, "f": [1.0] * n}
                                                  for k, v in rows.items()}}))
     return path
@@ -265,14 +265,14 @@ def test_an_audit_on_the_rows_of_the_build_dump_is_recorded(fakes):
     # the dump before MA2 and MB2 were added: every row it has is the build dump's
     p = fakes.paths
     _dump(p["tcd_path"], {"M2": 28.9841042, "MA2": 28.9430356, "MB2": 29.0251729})
-    old = _dump(p["tcd_path"].parent / "old.json", {"M2": 28.9841042})
+    old = _dump(p["tcd_path"].parent / "old.json", {"M2": 28.9841042}, tcd=at.SOURCE_TCD_SHA256)
     (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
         {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
     *_, prov = _build(fakes)
     assert prov["audit"]["tcd_dump"] == {"path": str(old), "sha256": _sha(old), "relation": "rows of the build's",
                                          "rows_not_read": ["MA2", "MB2"]}
     assert prov["verdicts"]["tcd_dump"]["relation"] == "same"
-    _dump(old, {"M2": 28.9841042}, years=(1900, 2000))
+    _dump(old, {"M2": 28.9841042}, years=(1900, 2000), tcd=at.SOURCE_TCD_SHA256)
     (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
         {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
     with pytest.raises(SystemExit, match="years"):
@@ -308,6 +308,29 @@ def test_a_listed_record_the_verdicts_do_not_dispute_stops_the_build(fakes):
     del fakes.audits["final"].rows["z-1-xxx-yy"]
     *_, prov = _build(fakes)
     assert prov["verdicts"]["reviewed_withhold"]["disputed"] == 1
+
+
+def test_an_audit_dump_is_the_xtide_tcd_minus_exactly_the_otc_additions(fakes):
+    # INT-2 A1: a subset dump of any TCD was accepted (M2 only, another TCD); only the XTide dump the OTC TCD is made
+    # from, lacking exactly MA2 and MB2, is
+    p = fakes.paths
+    _dump(p["tcd_path"], {"M2": 28.9841042, "S2": 30.0, "MA2": 28.9430356, "MB2": 29.0251729})
+    for rows, tcd, why in (({"M2": 28.9841042}, at.SOURCE_TCD_SHA256, "not the OTC additions"),
+                           ({"M2": 28.9841042}, "f" * 64, "not the XTide TCD"),
+                           ({"M2": 28.9841042, "S2": 30.0}, "f" * 64, "not the XTide TCD"),
+                           ({"M2": 28.9841042, "S2": 30.0, "MA2": 28.9430356}, at.SOURCE_TCD_SHA256,
+                            r"rows it lacks are \['MB2'\]")):
+        old = _dump(p["tcd_path"].parent / "old.json", rows, tcd=tcd)
+        (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
+            {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
+        with pytest.raises(SystemExit, match=why):
+            _build(fakes)
+        assert "docs_from_fit_run" not in fakes.seen
+    old = _dump(p["tcd_path"].parent / "old.json", {"M2": 28.9841042, "S2": 30.0}, tcd=at.SOURCE_TCD_SHA256)
+    (p["audit_dir"] / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": str(old), "sha256": _sha(old)}}}))
+    *_, prov = _build(fakes)
+    assert prov["audit"]["tcd_dump"]["rows_not_read"] == ["MA2", "MB2"]
 
 
 def test_build_records_the_identity_of_every_input(fakes):

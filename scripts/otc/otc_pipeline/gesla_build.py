@@ -57,7 +57,8 @@ from otc_pipeline import gesla_release as gr
 from otc_pipeline import gesla_sets as gs
 from otc_pipeline import station_map as sm
 from otc_pipeline import ticon_sets as ts
-from otc_pipeline.astro_tables import TABLE_ID, TCD_SHA256, AstroTableMismatch, astro_table, load_congen_run
+from otc_pipeline.astro_tables import (OTC_ADDED, SOURCE_TCD_SHA256, TABLE_ID, TCD_SHA256, AstroTableMismatch,
+                                       astro_table, load_congen_run)
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline.release_writer import validate_release, write_release
 
@@ -100,9 +101,11 @@ def _audit_identity(audit_dir: Path, audit: gs.Audit) -> dict:
 def audit_dump(audit_dir: Path, dump) -> dict:
     """The TCD dump the time-base audit in `audit_dir` read (its manifest's inputs.tcd_table), checked against the
     build's dump: the same file ("same"), or a dump whose every row (speed, V0+u and f for every year), alias and
-    year range is the build dump's, which only has more rows ("rows of the build's": the dump before MA2 and MB2 were
-    added). Anything else, a manifest without it, or a file that is no longer the one the audit hashed, stops the
-    build: the audit, the fits and the agency sets read one table."""
+    year range is the build dump's, which only has the OTC additions more ("rows of the build's": the XTide dump
+    before MA2 and MB2 were added). Anything else, a manifest without it, or a file that is no longer the one the
+    audit hashed, stops the build: the audit, the fits and the agency sets read one table. The second case is exact: the audit's dump is of
+    the XTide TCD the OTC TCD is made from (astro_tables.SOURCE_TCD_SHA256), the build's of the OTC TCD, and the rows
+    the audit's lacks are exactly the OTC additions (astro_tables.OTC_ADDED)."""
     m = json.loads((Path(audit_dir) / "timebase_manifest.json").read_text())
     rec = (m.get("inputs") or {}).get("tcd_table")
     if not rec or not rec.get("path") or not rec.get("sha256"):
@@ -115,13 +118,20 @@ def audit_dump(audit_dir: Path, dump) -> dict:
                          f"{dump.path} ({dump.sha256}), and that file is not there as the audit hashed it")
     data, mine = json.loads(path.read_bytes()), json.loads(Path(dump.path).read_bytes())
     other = sorted(n for n, c in data["constituents"].items() if mine["constituents"].get(n) != c)
-    if data["years"] != mine["years"] or data["aliases"] != mine["aliases"] or other:
+    not_read = sorted(set(mine["constituents"]) - set(data["constituents"]))
+    why = [w for w, bad in ((f"a dump of TCD {data.get('tcd_sha256')}, not the XTide TCD {SOURCE_TCD_SHA256} the OTC TCD "
+                             f"is made from", data.get("tcd_sha256") != SOURCE_TCD_SHA256),
+                            (f"the build dump is of TCD {mine.get('tcd_sha256')}, not the OTC TCD {TCD_SHA256}",
+                             mine.get("tcd_sha256") != TCD_SHA256),
+                            (f"rows that differ or are not in the build's: {other[:20]}", bool(other)),
+                            (f"rows it lacks are {not_read[:20]}, not the OTC additions {sorted(OTC_ADDED)}",
+                             not_read != sorted(OTC_ADDED)),
+                            ("other years", data["years"] != mine["years"]),
+                            ("other aliases", data["aliases"] != mine["aliases"])) if bad]
+    if why:
         raise SystemExit(f"{audit_dir}: the audit read the TCD dump {path} ({rec['sha256']}), another table than the "
-                         f"build's {dump.path} ({dump.sha256}): rows that differ or are not in the build's: {other[:20]}"
-                         f"{'' if data['years'] == mine['years'] else ', years'}"
-                         f"{'' if data['aliases'] == mine['aliases'] else ', aliases'}")
-    return {"path": rec["path"], "sha256": rec["sha256"], "relation": "rows of the build's",
-            "rows_not_read": sorted(set(mine["constituents"]) - set(data["constituents"]))}
+                         f"build's {dump.path} ({dump.sha256}): " + "; ".join(why))
+    return {"path": rec["path"], "sha256": rec["sha256"], "relation": "rows of the build's", "rows_not_read": not_read}
 
 
 def check_reviewed_withhold(verdicts_dir: Path, final: gs.Audit, withhold_path: Path | None = None) -> dict:
