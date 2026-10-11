@@ -87,9 +87,11 @@ HEADER_RE = re.compile(r"STATION\s+(\d+)\s+TIME ZONE\s*=\s*(-?\d+)\s*,\s*LATITUD
 # One constituent row: NO NAME FREQUENCY STN M-Y/M-Y A G. Fortran fixed columns: a value below 1 has no leading
 # zero (".7750"), and an amplitude of 100 cm or more runs into the M-Y/M-Y column ("0106/1219134.2423").
 ROW_RE = re.compile(r"^\s*\d+\s+([A-Z0-9]+)\s+(\d*\.\d+)\s+\d+\s+(\d{4})/(\d{4})\s*(\d*\.\d+)\s+(\d*\.\d+)\s*$")
-# A numbered row (a number, then two more fields): every such row is a constituent row, and one that does not
-# match ROW_RE stops the read (a lowercase or punctuated name, a bad frequency, a cut row are never skipped).
-ROW_START_RE = re.compile(r"^\s*\d+\s+\S+\s+\S")
+# A numbered row (a line that starts with a number, alone or followed by a blank): every such row is a
+# constituent row, and one that does not match ROW_RE stops the read (a lowercase or punctuated name, a bad
+# frequency, a row cut anywhere, even after the name or the number, is never skipped). In every real member, each
+# other line after the header is blank or starts with a letter.
+ROW_START_RE = re.compile(r"^\s*\d+(\s|$)")
 PORT_HEADER_RE = re.compile(r"^\s*(\d+)\s*,\s*([^,]+?)\s*,\s*(\d+)°(\d+(?:\.\d+)?)'?([NS])\s*,"
                             r"\s*(\d+)°(\d+(?:\.\d+)?)'?([EW])")
 
