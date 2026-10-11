@@ -5,7 +5,7 @@
 # defined in congen's Basic form with M2's arguments, changing only the coefficient of h (the
 # mean longitude of the sun): M2 is 2 -2 2 (T s h), so MA2 is h = 1 and MB2 is h = 3. The u part
 # (2 xi - 2 nu) and the node factor formula (78, f_M2, SP 98) are M2's. Their speeds are
-# M2 -/+ SA (28.9430356 and 29.0251728 deg/h).
+# M2 -/+ SA (28.9430356 and 29.0251729 deg/h, the TCD's stored values).
 #
 #   name  Basic   T  s  h  p  p1 c    xi  nu  nu' 2nu'' Q  R   f_formula
 MA2     Basic   2 -2  1  0  0  0     2  -2   0   0    0  0   78
