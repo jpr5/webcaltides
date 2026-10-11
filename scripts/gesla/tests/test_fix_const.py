@@ -109,6 +109,29 @@ def test_a_selection_span_that_cannot_resolve_ma2_keeps_the_45(table, small_list
     assert clist == "base" and "selection span leaves" in rec["reason"] and "MA2" in rec["reason"]
 
 
+def test_a_tcd_without_the_extended_candidates_is_an_error_in_scope(table, small_lists, monkeypatch):
+    # N1: the XTide TCD's dump has no MA2/MB2; the Rayleigh walk would skip them and "extended" would be chosen
+    # without them. In scope that is an error (fit_run: outcome error); out of scope nothing changes.
+    monkeypatch.setattr(sc, "EXTENDED_CANDIDATES", EXT + ("ZZ9",))
+    with pytest.raises(ValueError, match="has no ZZ9: the extended list needs the OTC TCD"):
+        sc.select_candidate_list(table, series(table, ma2=0.05), country="NOR")
+    assert sc.select_candidate_list(table, series(table, ma2=0.05), country="USA") == ("base", None)
+
+
+@pytest.mark.parametrize("failing", ["base", "extended"])
+def test_a_selection_copy_that_cannot_be_fitted_keeps_the_45(table, small_lists, monkeypatch, failing):
+    real = sc.analyse
+
+    def analyse(tab, s, *, candidates, **kw):
+        if tuple(candidates) == sc.CANDIDATE_LISTS[failing]:
+            raise sc.FitError("synthetic: design rank 3 of 14")
+        return real(tab, s, candidates=candidates, **kw)
+    monkeypatch.setattr(sc, "analyse", analyse)
+    clist, rec = sc.select_candidate_list(table, series(table, ma2=0.05), country="DEU")
+    assert clist == "base" and rec["chosen"] == "base"
+    assert rec["reason"] == f"{failing} selection copy: synthetic: design rank 3 of 14" and "rms_m" not in rec
+
+
 # --- the fit records the choice; the replay walks it -----------------------------------------------------------
 
 def test_a_base_fit_file_is_unchanged_and_an_extended_one_records_its_list(table, small_lists):
@@ -159,6 +182,21 @@ def _otc_dump() -> TcdTable:
     if "MA2" not in t:
         pytest.skip(f"{p} is not the OTC TCD's dump")
     return t
+
+
+def test_the_xtide_tcd_dump_is_refused_in_scope():
+    # N1 on the real XTide dump ($OTC_WORK/tcd_table.json, no MA2/MB2)
+    from gesla.read_gesla import otc_work
+    p = otc_work() / "tcd_table.json"
+    if not p.is_file():
+        pytest.skip(f"needs {p}")
+    t = TcdTable.load(p)
+    if "MA2" in t:
+        pytest.skip(f"{p} is not the XTide TCD's dump")
+    t_ = np.arange(_ts(2008), _ts(2025, 8), 3600, dtype=np.int64)
+    s = Series("x-1-nor-test", t_, np.zeros(len(t_)), {})
+    with pytest.raises(ValueError, match="has no MA2, MB2"):
+        sc.select_candidate_list(t, s, country="NOR")
 
 
 def test_every_extended_candidate_is_in_the_otc_tcd_and_mo3_is_2mk3s_speed():

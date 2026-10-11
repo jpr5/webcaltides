@@ -428,9 +428,17 @@ def select_candidate_list(table: TcdTable, series: Series, *, country: str | Non
     The base list stays (with the reason) when window A has fewer than MIN_WINDOW_A_HOURS samples, when either
     the selection span or the whole fit span leaves a candidate of the extended list unresolved (Rayleigh drops:
     the extended list is for records that resolve all of it, so it never makes a record short), or when a
-    selection copy cannot be fitted (FitError)."""
+    selection copy cannot be fitted (FitError).
+
+    In scope, a TCD dump without every extended candidate (the XTide TCD's has no MA2 or MB2) raises ValueError:
+    the Rayleigh walk would skip the missing names and the rule could choose an "extended" list without them. The
+    fit is then an error of the run (gesla.fit_run: outcome error, exit 5), never a quiet 45-list fit."""
     if not in_fix_const_scope(country):
         return "base", None
+    missing = tcd_missing(table, EXTENDED_CANDIDATES)
+    if missing:
+        raise ValueError(f"{series.record_id}: the TCD dump {table.tcd_sha256[:12]} has no {', '.join(missing)}: the "
+                         "extended list needs the OTC TCD's dump (TCD_TABLE)")
     a0, a1 = WINDOW_A
     t, h = series.times_s, series.heights_m
     rec: dict = {"rule": "window A RMS, extended only when strictly lower", "window_a": ["2024-08-01", "2025-08-01"]}
