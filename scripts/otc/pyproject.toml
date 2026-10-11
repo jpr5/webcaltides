@@ -1,0 +1,45 @@
+[project]
+name = "otc-pipeline"
+version = "0.1.0"
+description = "OpenTideConstants release pipeline: release writer and validator, source adapters"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "jsonschema[format-nongpl]==4.25.1",
+    # GaugeRecord (manifest §2.1) lives in the GESLA project; gauge adapters build it.
+    # "gesla" is not published on PyPI. A bare name would let pip (outside uv) resolve it from
+    # PyPI, where anyone can register it, so it is a direct file reference to the sibling
+    # project (hatchling expands {root:parent:uri}). uv uses [tool.uv.sources] below.
+    "gesla @ {root:parent:uri}/gesla",
+    "timezonefinder==9.0.0",
+    "tzdata==2026.5",
+]
+
+[project.optional-dependencies]
+parquet = ["pyarrow==21.0.0"]
+
+[dependency-groups]
+dev = [
+    "pytest==8.4.2",
+    "pyarrow==21.0.0",
+]
+
+[tool.uv.sources]
+gesla = { path = "../gesla", editable = true }
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true   # the gesla file reference above
+
+[tool.hatch.build.targets.wheel]
+packages = ["otc_pipeline"]
+
+# The schema copy lives in scripts/otc/schema/ (sync_schema.sh); a wheel carries it inside the
+# package, where default_schema_path() looks first.
+[tool.hatch.build.targets.wheel.force-include]
+"schema/otc-0.5.schema.json" = "otc_pipeline/schema/otc-0.5.schema.json"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

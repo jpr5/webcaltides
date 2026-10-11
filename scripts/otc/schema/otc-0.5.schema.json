@@ -1,0 +1,477 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opentideconstants.org/schema/otc-0.5.schema.json",
+  "title": "OpenTideConstants release document",
+  "description": "DRAFT, format_version 0.5. Schema for OTC_{YYYYMMDD}.json. Each line of OTC_{YYYYMMDD}.jsonl (and of the optional OTC_{YYYYMMDD}.jsonl.gz) is one station document, valid against #/$defs/station. OTC_{YYYYMMDD}.meta.json is the same document without `stations`, valid against #/$defs/meta, so a .jsonl reader can get the conventions, licences, constituent table and release metadata. Units: metres, metres per second (current amplitudes), degrees, degrees per hour, UTC. Every pattern ends with $(?![\\s\\S]) so that a validator whose $ also matches before a final newline (Python re) still rejects one. Cross-references (convention_id, licence_id, recommended_set_id, constituent names, default_current_bin, current_offsets reference_station_id and reference_bin) must resolve inside the same release, alias ids must be unique within each alias system across the release, and bin numbers must be unique within a set's current_bins and within a station's current_offsets; JSON Schema cannot express that, so the release build checks it separately.",
+  "type": "object",
+  "required": ["format_version", "release", "conventions", "licences", "constituents", "stations"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": { "$ref": "#/$defs/format_version" },
+    "release": { "$ref": "#/$defs/release" },
+    "conventions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/convention" }
+    },
+    "licences": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/licence" }
+    },
+    "constituents": {
+      "description": "Release-level constituent table: one row per constituent name and constituent_table_version that the release uses.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/constituent_definition" }
+    },
+    "stations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/station" }
+    }
+  },
+  "$defs": {
+    "meta": {
+      "description": "OTC_{YYYYMMDD}.meta.json: the release document without stations.",
+      "type": "object",
+      "required": ["format_version", "release", "conventions", "licences", "constituents"],
+      "additionalProperties": false,
+      "properties": {
+        "format_version": { "$ref": "#/$defs/format_version" },
+        "release": { "$ref": "#/$defs/release" },
+        "conventions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/convention" } },
+        "licences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/licence" } },
+        "constituents": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/constituent_definition" } }
+      }
+    },
+    "format_version": {
+      "description": "MAJOR.MINOR. A new field is a minor change; a removed or renamed field, or a changed unit or convention, is a major change.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$(?![\\s\\S])"
+    },
+    "datestamp": {
+      "description": "Release id: YYYYMMDD in UTC, the day the release was built, with an optional .N counter for a second release on the same day.",
+      "type": "string",
+      "pattern": "^[0-9]{8}(\\.[2-9]|\\.[1-9][0-9]+)?$(?![\\s\\S])"
+    },
+    "release": {
+      "type": "object",
+      "required": ["datestamp", "created", "source_versions"],
+      "additionalProperties": false,
+      "properties": {
+        "datestamp": { "$ref": "#/$defs/datestamp" },
+        "created": { "type": "string", "format": "date-time" },
+        "doi": {
+          "description": "Version DOI of this release, or null until it is minted.",
+          "type": ["string", "null"],
+          "pattern": "^10\\.[0-9]{4,9}/\\S+$(?![\\s\\S])"
+        },
+        "concept_doi": { "type": ["string", "null"], "pattern": "^10\\.[0-9]{4,9}/\\S+$(?![\\s\\S])" },
+        "source_versions": {
+          "description": "Upstream version per source, e.g. {\"gesla\": \"4.1\", \"noaa\": \"20261008\"}.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "build_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$(?![\\s\\S])" },
+        "changelog_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "convention": {
+      "type": "object",
+      "required": ["convention_id", "phase_reference", "v0_model", "nodal_handling", "constituent_table_version"],
+      "additionalProperties": false,
+      "properties": {
+        "convention_id": { "type": "string", "minLength": 1 },
+        "phase_reference": {
+          "description": "Phase reference of the source data before conversion. Published phases are always Greenwich (UTC).",
+          "enum": ["greenwich_utc", "local"]
+        },
+        "utc_offset_hours": {
+          "description": "Required when phase_reference is local.",
+          "type": "number"
+        },
+        "v0_model": { "description": "Astronomical-argument model, e.g. schureman_tcd or tamura_iho2006.", "type": "string" },
+        "nodal_handling": { "enum": ["f_u_at_prediction", "none"] },
+        "nodal_formula_ids": {
+          "description": "Node-factor formula id per constituent name, when nodal_handling is f_u_at_prediction.",
+          "type": "object",
+          "additionalProperties": { "type": ["string", "integer"] }
+        },
+        "constituent_table_version": { "type": "string" },
+        "tables_sha256": { "$ref": "#/$defs/sha256" },
+        "canary": {
+          "description": "Result of the per-source convention check that confirmed this convention.",
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["pass", "fail", "not_applicable"] },
+            "gauges": { "type": "integer", "minimum": 0 },
+            "median_amp_diff_m": { "type": "number" },
+            "median_phase_diff_deg": { "type": "number" }
+          }
+        }
+      },
+      "if": { "properties": { "phase_reference": { "const": "local" } } },
+      "then": { "required": ["utc_offset_hours"] }
+    },
+    "licence": {
+      "type": "object",
+      "required": ["licence_id", "spdx", "provider", "attribution"],
+      "additionalProperties": false,
+      "properties": {
+        "licence_id": { "type": "string", "minLength": 1 },
+        "spdx": {
+          "description": "SPDX id, or a LicenseRef- id where SPDX has none (e.g. LicenseRef-PublicDomain-USGov).",
+          "type": "string",
+          "pattern": "^([A-Za-z0-9.+-]+|LicenseRef-[A-Za-z0-9.-]+)$(?![\\s\\S])"
+        },
+        "provider": { "type": "string" },
+        "citation": { "type": "string" },
+        "attribution": { "type": "string" },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "constituent_name": {
+      "description": "OTC canonical constituent name. At most 15 characters, so that a C reader can hold it in char[16].",
+      "type": "string",
+      "pattern": "^[A-Z0-9]+$(?![\\s\\S])",
+      "maxLength": 15
+    },
+    "constituent_definition": {
+      "type": "object",
+      "required": ["constituent_table_version", "name", "speed_deg_per_hour"],
+      "additionalProperties": false,
+      "properties": {
+        "constituent_table_version": { "description": "Matches convention.constituent_table_version.", "type": "string" },
+        "name": { "$ref": "#/$defs/constituent_name" },
+        "doodson": { "type": "string", "pattern": "^[0-9]{3} ?[0-9]{3}$(?![\\s\\S])" },
+        "speed_deg_per_hour": { "type": "number", "minimum": 0 },
+        "nodal_formula_id": { "description": "Node-factor formula id, as in convention.nodal_formula_ids.", "type": ["string", "integer"] }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])" },
+    "station": {
+      "type": "object",
+      "required": ["station_id", "status"],
+      "properties": {
+        "station_id": {
+          "description": "Stable id in the OTC namespace. Never changed, never reused.",
+          "type": "string",
+          "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])"
+        },
+        "status": { "enum": ["active", "removed"] }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/active_station" },
+        { "$ref": "#/$defs/tombstone" }
+      ]
+    },
+    "tombstone": {
+      "description": "A removed station keeps a row with its reason.",
+      "type": "object",
+      "required": ["station_id", "status", "removed_in", "removed_reason"],
+      "additionalProperties": false,
+      "properties": {
+        "station_id": true,
+        "status": { "const": "removed" },
+        "name": { "type": "string" },
+        "removed_in": { "$ref": "#/$defs/datestamp" },
+        "removed_reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "active_station": {
+      "type": "object",
+      "required": ["station_id", "status", "name", "country", "lat", "lon", "timezone", "type", "recommended_set_id", "constant_sets"],
+      "additionalProperties": false,
+      "properties": {
+        "station_id": true,
+        "status": { "const": "active" },
+        "name": { "type": "string", "minLength": 1 },
+        "country": { "description": "ISO 3166-1 alpha-3.", "type": "string", "pattern": "^[A-Z]{3}$(?![\\s\\S])" },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "timezone": {
+          "description": "IANA time zone name of the station, e.g. Europe/Oslo, for showing local times. Constants and phases stay in UTC.",
+          "type": "string",
+          "pattern": "^(UTC|[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+)+)$(?![\\s\\S])"
+        },
+        "type": { "enum": ["reference", "subordinate"] },
+        "aliases": {
+          "description": "Ids of the same station in other systems. Within one release an alias id is unique within its system: no two stations share a noaa id, a gesla id, and so on. The release build checks this.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "noaa": { "type": "string" },
+            "gesla": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "ticon": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "xtide": { "type": "string" },
+            "kartverket": { "type": "string" },
+            "slackwater": { "type": "string" },
+            "webcaltides": { "type": "string" },
+            "linz": { "description": "LINZ site id: the prefix of its *_Harm_* file name, e.g. 077NELSON.", "type": "string", "pattern": "^[0-9]{1,4}[A-Z][A-Z0-9]*$(?![\\s\\S])" },
+            "shom": { "description": "SHOM REFMAR tide gauge id (shom_id), e.g. 3 for Brest.", "type": "string", "pattern": "^[0-9]{1,6}$(?![\\s\\S])" },
+            "pegelonline": { "description": "PEGELONLINE station uuid, e.g. aad49293-242a-43ad-a8b1-e91d7792c4b2 for Cuxhaven Steubenhöft. Not the shortname, which can change.", "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$(?![\\s\\S])" },
+            "rws": { "description": "Rijkswaterstaat Waterwebservices location code, e.g. hoekvanholland.", "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$(?![\\s\\S])" },
+            "mi": { "description": "Marine Institute Irish National Tide Gauge Network station_id, e.g. Ballycotton Harbour.", "type": "string", "pattern": "^\\S(.*\\S)?$(?![\\s\\S])" },
+            "dmi": { "description": "DMI oceanObs stationId, e.g. 20002 for Skagen Havn.", "type": "string", "pattern": "^[0-9]{5,7}$(?![\\s\\S])" },
+            "smhi": { "description": "SMHI oceanographic observation station id, e.g. 2545 for Arkö.", "type": "string", "pattern": "^[0-9]{1,6}$(?![\\s\\S])" },
+            "fmi": { "description": "FMI station id (fmisid), e.g. 132310.", "type": "string", "pattern": "^[0-9]{1,7}$(?![\\s\\S])" },
+            "uhslc": { "description": "UHSLC station number, three digits as in the Fast Delivery file name h{NNN}.csv, e.g. 001.", "type": "string", "pattern": "^[0-9]{3}$(?![\\s\\S])" }
+          }
+        },
+        "recommended_set_id": {
+          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only.",
+          "type": ["string", "null"]
+        },
+        "constant_sets": { "type": "array", "items": { "$ref": "#/$defs/constant_set" } },
+        "subordinate_offsets": { "$ref": "#/$defs/subordinate_offsets" },
+        "default_current_bin": {
+          "description": "Current stations only: the bin to show by default (NOAA currbin). It names a bin of the recommended set's current_bins, or of current_offsets for a subordinate current station.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "current_offsets": {
+          "description": "Subordinate current stations only: one entry per bin, each tied to a bin of a reference current station, as NOAA currentpredictionoffsets gives them.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/current_offset" }
+        },
+        "validation": { "type": "array", "items": { "$ref": "#/$defs/validation" } }
+      }
+    },
+    "constant_set": {
+      "type": "object",
+      "required": ["set_id", "source", "source_type", "quantity", "source_record_id", "source_version", "convention_id", "licence_id", "qc_status", "constituents", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "set_id": { "type": "string", "minLength": 1 },
+        "source": { "description": "e.g. gesla-fit, noaa, kartverket.", "type": "string", "pattern": "^[a-z0-9-]+$(?![\\s\\S])" },
+        "source_type": {
+          "description": "official: constants published by the agency that runs the gauge; gauge: an OTC fit to gauge observations; model: interpolated from a global tide model.",
+          "enum": ["official", "gauge", "model"]
+        },
+        "quantity": {
+          "description": "What the constants predict. A station's kind comes from its recommended set, or from its reference station's recommended set if it is subordinate.",
+          "enum": ["water_level", "current"]
+        },
+        "source_record_id": { "type": "string" },
+        "source_version": { "type": "string" },
+        "record_span": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" },
+            "good_samples": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "datum": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "msl_offset_m": { "type": "number" },
+            "named": {
+              "description": "Named datums in metres relative to the constants' zero, as the source gives them.",
+              "type": "object",
+              "additionalProperties": { "type": "number" }
+            }
+          }
+        },
+        "convention_id": { "type": "string", "minLength": 1 },
+        "licence_id": { "type": "string", "minLength": 1 },
+        "qc_status": { "enum": ["accepted", "fallback", "excluded"] },
+        "qc_flags": { "type": "array", "items": { "$ref": "#/$defs/qc_flag" } },
+        "constituents": {
+          "description": "Water-level constituents. Empty for a current set, whose constants are in current_bins.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/constituent" }
+        },
+        "current_bins": {
+          "description": "Current sets only: tidal-current ellipse constants, one entry per depth bin.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/current_bin" }
+        },
+        "dropped_constituents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "dropped_reason"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "$ref": "#/$defs/constituent_name" },
+              "dropped_reason": { "enum": ["rayleigh", "noise", "long_period_rule", "non_tidal_rule", "convention", "other"] },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      },
+      "if": { "properties": { "quantity": { "const": "current" } } },
+      "then": {
+        "required": ["current_bins"],
+        "properties": { "constituents": { "maxItems": 0 } }
+      },
+      "else": { "not": { "required": ["current_bins"] } }
+    },
+    "constituent": {
+      "type": "object",
+      "required": ["name", "speed_deg_per_hour", "amplitude_m", "phase_deg"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/constituent_name" },
+        "source_name": {
+          "description": "The source's own name. At most 31 characters, so that a C reader can hold it in char[32].",
+          "type": "string",
+          "maxLength": 31
+        },
+        "doodson": { "type": "string", "pattern": "^[0-9]{3} ?[0-9]{3}$(?![\\s\\S])" },
+        "speed_deg_per_hour": { "type": "number", "minimum": 0 },
+        "amplitude_m": { "type": "number", "minimum": 0 },
+        "phase_deg": { "description": "Greenwich phase lag g.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "amp_uncertainty_m": { "type": "number", "minimum": 0 },
+        "phase_uncertainty_deg": { "type": "number", "minimum": 0 },
+        "kept_reason": { "type": "string" }
+      }
+    },
+    "current_depth_type": {
+      "description": "How depth_m is measured: below_surface (NOAA depthType S), below_chart_datum (NOAA depthType B, which NOAA's metadata API documents as 'below chart datum') or unknown (NOAA depthType U). above_bottom is kept only so that 0.4 data stays valid; no source uses it, and NOAA's B is below_chart_datum, not above_bottom.",
+      "enum": ["below_surface", "below_chart_datum", "unknown", "above_bottom"]
+    },
+    "direction_deg": { "description": "Degrees true, clockwise from north.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+    "current_bin": {
+      "description": "Ellipse constants for one depth bin: per constituent, the amplitude and phase of the current along the major axis (azimuth_deg) and along the minor axis, perpendicular to it, as NOAA harcon gives them.",
+      "type": "object",
+      "required": ["bin", "depth_m", "depth_type", "azimuth_deg", "constituents"],
+      "additionalProperties": false,
+      "properties": {
+        "bin": { "description": "Source bin number (NOAA binNbr).", "type": "integer", "minimum": 1 },
+        "depth_m": { "description": "Bin depth in metres, or null if the source gives none.", "type": ["number", "null"], "minimum": 0 },
+        "depth_type": { "$ref": "#/$defs/current_depth_type" },
+        "azimuth_deg": { "description": "Major-axis direction (NOAA azi).", "$ref": "#/$defs/direction_deg" },
+        "mean_flood_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "mean_ebb_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "mean_major_ms": { "description": "Mean current along the major axis in metres per second, signed: positive toward azimuth_deg. A constant added to the major-axis harmonic sum at every time. NOAA majorMeanSpeed (cm/s) divided by 100. Absent if the source gives none; a reader then adds 0.", "type": "number" },
+        "mean_minor_ms": { "description": "Mean current along the minor axis in metres per second, signed in the same sense as the minor-axis harmonic terms. A constant added to the minor-axis harmonic sum at every time. NOAA minorMeanSpeed (cm/s) divided by 100. Absent if the source gives none; a reader then adds 0.", "type": "number" },
+        "constituents": { "type": "array", "items": { "$ref": "#/$defs/current_constituent" } }
+      }
+    },
+    "current_constituent": {
+      "description": "One constituent of a current bin. Amplitudes in metres per second (NOAA cm/s divided by 100). Phases are Greenwich phase lags under the set's convention (NOAA majorPhaseGMT and minorPhaseGMT). The mean current is not a constituent: it goes in the bin's mean_major_ms and mean_minor_ms, so the name Z0 is not allowed here.",
+      "type": "object",
+      "required": ["name", "speed_deg_per_hour", "major_amplitude_ms", "major_phase_deg", "minor_amplitude_ms", "minor_phase_deg"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "allOf": [{ "$ref": "#/$defs/constituent_name" }, { "not": { "const": "Z0" } }] },
+        "source_name": {
+          "description": "The source's own name. At most 31 characters, so that a C reader can hold it in char[32].",
+          "type": "string",
+          "maxLength": 31
+        },
+        "speed_deg_per_hour": { "description": "Constituent speed, as in the constituent table.", "type": "number", "minimum": 0 },
+        "major_amplitude_ms": { "type": "number", "minimum": 0 },
+        "major_phase_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "minor_amplitude_ms": { "type": "number", "minimum": 0 },
+        "minor_phase_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+      }
+    },
+    "current_offset": {
+      "description": "Offsets for one bin of a subordinate current station. Time adjustments in minutes, added to the reference bin's event times; amplitude ratios multiply the reference bin's speeds. A value the source gives as null stays null.",
+      "type": "object",
+      "required": ["bin", "reference_station_id", "reference_bin", "time_adj_max_flood_min", "time_adj_slack_before_ebb_min", "time_adj_max_ebb_min", "time_adj_slack_before_flood_min", "flood_amp_ratio", "ebb_amp_ratio"],
+      "additionalProperties": false,
+      "properties": {
+        "bin": { "description": "Bin number of this station (the _N suffix of the NOAA id).", "type": "integer", "minimum": 1 },
+        "depth_m": { "type": ["number", "null"], "minimum": 0 },
+        "depth_type": { "$ref": "#/$defs/current_depth_type" },
+        "reference_station_id": { "type": "string", "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])" },
+        "reference_bin": { "description": "NOAA refStationBin.", "type": "integer", "minimum": 1 },
+        "mean_flood_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "mean_ebb_dir_deg": { "$ref": "#/$defs/direction_deg" },
+        "time_adj_max_flood_min": { "description": "NOAA mfcTimeAdjMin.", "type": ["number", "null"] },
+        "time_adj_slack_before_ebb_min": { "description": "NOAA sbeTimeAdjMin.", "type": ["number", "null"] },
+        "time_adj_max_ebb_min": { "description": "NOAA mecTimeAdjMin.", "type": ["number", "null"] },
+        "time_adj_slack_before_flood_min": { "description": "NOAA sbfTimeAdjMin.", "type": ["number", "null"] },
+        "flood_amp_ratio": { "description": "NOAA mfcAmpAdj.", "type": ["number", "null"], "minimum": 0 },
+        "ebb_amp_ratio": { "description": "NOAA mecAmpAdj.", "type": ["number", "null"], "minimum": 0 },
+        "licence_id": { "type": "string" }
+      }
+    },
+    "qc_flag": {
+      "type": "object",
+      "required": ["flag"],
+      "additionalProperties": false,
+      "properties": {
+        "flag": { "enum": ["time_base", "broken_record", "microtidal", "non_tidal_signal", "short_record", "sibling_disagreement"] },
+        "verdict": { "type": "string" },
+        "values": { "type": "object" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "build_commit": { "type": "string" },
+        "adapter_version": { "type": "string" },
+        "input_sha256": { "type": "array", "items": { "$ref": "#/$defs/sha256" } },
+        "time_base": {
+          "type": "object",
+          "properties": {
+            "verdict": { "type": "string" },
+            "correction": { "type": "string" },
+            "comparators": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "selection_reason": { "type": "string" },
+        "decision": {
+          "type": "object",
+          "properties": {
+            "tier": { "enum": ["rule", "review", "fallback"] },
+            "outcome": { "enum": ["accept", "fallback"] },
+            "rule": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "subordinate_offsets": {
+      "type": "object",
+      "required": ["reference_station_id", "height_adjusted_type"],
+      "additionalProperties": false,
+      "properties": {
+        "reference_station_id": { "type": "string", "pattern": "^OTC-[A-Za-z0-9_-]+$(?![\\s\\S])" },
+        "time_offset_high_min": { "type": "number" },
+        "time_offset_low_min": { "type": "number" },
+        "height_offset_high": { "type": "number" },
+        "height_offset_low": { "type": "number" },
+        "height_adjusted_type": { "description": "R = ratio, A = additive (metres), as NOAA gives it.", "enum": ["R", "A"] },
+        "licence_id": { "type": "string" }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["set_id", "reference_source", "window", "time_mae_min", "height_mae_m"],
+      "additionalProperties": false,
+      "properties": {
+        "set_id": { "type": "string" },
+        "reference_source": { "type": "string" },
+        "reference_station": { "type": "string" },
+        "reference_distance_km": { "type": "number", "minimum": 0 },
+        "window": { "type": "string" },
+        "time_mae_min": { "type": "number", "minimum": 0 },
+        "time_p95_min": { "type": "number", "minimum": 0 },
+        "time_bias_min": { "type": "number" },
+        "height_mae_m": { "type": "number", "minimum": 0 },
+        "range_error_m": { "type": "number" },
+        "missed_events": { "type": "integer", "minimum": 0 },
+        "extra_events": { "type": "integer", "minimum": 0 },
+        "previous_release": {
+          "description": "The same metrics for the previous release, or null.",
+          "type": ["object", "null"]
+        }
+      }
+    }
+  }
+}

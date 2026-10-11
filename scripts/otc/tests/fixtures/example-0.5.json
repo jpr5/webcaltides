@@ -1,0 +1,208 @@
+{
+  "format_version": "0.5",
+  "release": {
+    "datestamp": "20991231",
+    "created": "2099-12-31T00:00:00Z",
+    "doi": null,
+    "concept_doi": null,
+    "source_versions": { "gesla": "4.1", "kartverket": "20991231", "noaa": "20991231" }
+  },
+  "conventions": [
+    {
+      "convention_id": "otc-greenwich-schureman-v1",
+      "phase_reference": "greenwich_utc",
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "canary": { "status": "not_applicable" }
+    },
+    {
+      "convention_id": "kartverket-utc1-v1",
+      "phase_reference": "local",
+      "utc_offset_hours": 1,
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "canary": { "status": "pass", "gauges": 3 }
+    },
+    {
+      "convention_id": "noaa-greenwich-schureman-v1",
+      "phase_reference": "greenwich_utc",
+      "v0_model": "schureman_tcd",
+      "nodal_handling": "f_u_at_prediction",
+      "constituent_table_version": "example",
+      "canary": { "status": "not_applicable" }
+    }
+  ],
+  "licences": [
+    {
+      "licence_id": "gesla-derived",
+      "spdx": "CC-BY-4.0",
+      "provider": "Example provider via GESLA",
+      "attribution": "Example attribution text."
+    },
+    {
+      "licence_id": "kartverket",
+      "spdx": "CC-BY-4.0",
+      "provider": "Kartverket",
+      "attribution": "Example attribution text."
+    },
+    {
+      "licence_id": "noaa",
+      "spdx": "LicenseRef-PublicDomain-USGov",
+      "provider": "NOAA CO-OPS",
+      "attribution": "Example attribution text."
+    }
+  ],
+  "constituents": [
+    { "constituent_table_version": "example", "name": "M2", "doodson": "255 555", "speed_deg_per_hour": 28.9841042, "nodal_formula_id": "M2" },
+    { "constituent_table_version": "example", "name": "S2", "doodson": "273 555", "speed_deg_per_hour": 30.0 },
+    { "constituent_table_version": "example", "name": "N2", "doodson": "245 655", "speed_deg_per_hour": 28.4397295, "nodal_formula_id": "M2" },
+    { "constituent_table_version": "example", "name": "K1", "doodson": "165 555", "speed_deg_per_hour": 15.0410686, "nodal_formula_id": "K1" },
+    { "constituent_table_version": "example", "name": "O1", "doodson": "145 555", "speed_deg_per_hour": 13.9430356, "nodal_formula_id": "O1" },
+    { "constituent_table_version": "example", "name": "SA", "doodson": "056 555", "speed_deg_per_hour": 0.0410686 }
+  ],
+  "stations": [
+    {
+      "station_id": "OTC-EXAMPLE-0001",
+      "status": "active",
+      "name": "Example Harbour (illustrative values, not data)",
+      "country": "NOR",
+      "lat": 60.0,
+      "lon": 5.0,
+      "timezone": "Europe/Oslo",
+      "type": "reference",
+      "aliases": { "kartverket": "EXA", "gesla": ["example-file-id"] },
+      "recommended_set_id": "OTC-EXAMPLE-0001/gesla-fit",
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0001/gesla-fit",
+          "source": "gesla-fit",
+          "source_type": "gauge",
+          "quantity": "water_level",
+          "source_record_id": "example-file-id",
+          "source_version": "4.1",
+          "record_span": { "start": "2007-01-01T00:00:00Z", "end": "2026-01-01T00:00:00Z", "good_samples": 160000 },
+          "datum": { "msl_offset_m": 1.0 },
+          "convention_id": "otc-greenwich-schureman-v1",
+          "licence_id": "gesla-derived",
+          "qc_status": "accepted",
+          "qc_flags": [{ "flag": "time_base", "verdict": "utc_instant" }],
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 0.5, "phase_deg": 100.0, "amp_uncertainty_m": 0.001, "phase_uncertainty_deg": 0.1, "kept_reason": "snr" },
+            { "name": "K1", "speed_deg_per_hour": 15.0410686, "amplitude_m": 0.05, "phase_deg": 200.0 }
+          ],
+          "dropped_constituents": [{ "name": "SA", "dropped_reason": "long_period_rule" }],
+          "provenance": {
+            "build_commit": "0000000",
+            "time_base": { "verdict": "utc_instant", "correction": "none" },
+            "selection_reason": "only eligible record",
+            "decision": { "tier": "rule", "outcome": "accept" }
+          }
+        },
+        {
+          "set_id": "OTC-EXAMPLE-0001/kartverket",
+          "source": "kartverket",
+          "source_type": "official",
+          "quantity": "water_level",
+          "source_record_id": "EXA",
+          "source_version": "20991231",
+          "convention_id": "kartverket-utc1-v1",
+          "licence_id": "kartverket",
+          "qc_status": "accepted",
+          "constituents": [
+            { "name": "M2", "speed_deg_per_hour": 28.9841042, "amplitude_m": 0.5, "phase_deg": 100.2 }
+          ],
+          "provenance": { "adapter_version": "example" }
+        }
+      ],
+      "validation": [
+        { "set_id": "OTC-EXAMPLE-0001/gesla-fit", "reference_source": "example", "window": "W1", "time_mae_min": 1.0, "height_mae_m": 0.01, "previous_release": null }
+      ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0002",
+      "status": "removed",
+      "removed_in": "20991231",
+      "removed_reason": "Example tombstone: the only input record contained no tide."
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0003",
+      "status": "active",
+      "name": "Pollock Rip Channel (Butler Hole)",
+      "country": "USA",
+      "lat": 41.55,
+      "lon": -69.9833,
+      "timezone": "America/New_York",
+      "type": "reference",
+      "aliases": { "noaa": "ACT1616" },
+      "recommended_set_id": "OTC-EXAMPLE-0003/noaa",
+      "default_current_bin": 1,
+      "constant_sets": [
+        {
+          "set_id": "OTC-EXAMPLE-0003/noaa",
+          "source": "noaa",
+          "source_type": "official",
+          "quantity": "current",
+          "source_record_id": "ACT1616",
+          "source_version": "20991231",
+          "convention_id": "noaa-greenwich-schureman-v1",
+          "licence_id": "noaa",
+          "qc_status": "accepted",
+          "constituents": [],
+          "current_bins": [
+            {
+              "bin": 1,
+              "depth_m": 2.13,
+              "depth_type": "below_surface",
+              "azimuth_deg": 37.0,
+              "mean_flood_dir_deg": 37.0,
+              "mean_ebb_dir_deg": 226.0,
+              "mean_major_ms": 0.0772,
+              "mean_minor_ms": 0.0,
+              "constituents": [
+                { "name": "M2", "speed_deg_per_hour": 28.9841042, "major_amplitude_ms": 0.9353, "major_phase_deg": 322.3, "minor_amplitude_ms": 0.0, "minor_phase_deg": 0.0 },
+                { "name": "S2", "speed_deg_per_hour": 30.0, "major_amplitude_ms": 0.1389, "major_phase_deg": 356.3, "minor_amplitude_ms": 0.0, "minor_phase_deg": 0.0 },
+                { "name": "N2", "speed_deg_per_hour": 28.4397295, "major_amplitude_ms": 0.1502, "major_phase_deg": 282.5, "minor_amplitude_ms": 0.0, "minor_phase_deg": 0.0 },
+                { "name": "K1", "speed_deg_per_hour": 15.0410686, "major_amplitude_ms": 0.0525, "major_phase_deg": 25.8, "minor_amplitude_ms": 0.0, "minor_phase_deg": 0.0 },
+                { "name": "O1", "speed_deg_per_hour": 13.9430356, "major_amplitude_ms": 0.0381, "major_phase_deg": 324.6, "minor_amplitude_ms": 0.0, "minor_phase_deg": 0.0 }
+              ]
+            }
+          ],
+          "provenance": { "adapter_version": "example" }
+        }
+      ]
+    },
+    {
+      "station_id": "OTC-EXAMPLE-0004",
+      "status": "active",
+      "name": "Example Current Narrows (illustrative values, not data)",
+      "country": "USA",
+      "lat": 41.6,
+      "lon": -70.0,
+      "timezone": "America/New_York",
+      "type": "subordinate",
+      "recommended_set_id": null,
+      "default_current_bin": 1,
+      "constant_sets": [],
+      "current_offsets": [
+        {
+          "bin": 1,
+          "depth_m": null,
+          "depth_type": "unknown",
+          "reference_station_id": "OTC-EXAMPLE-0003",
+          "reference_bin": 1,
+          "mean_flood_dir_deg": 210.0,
+          "mean_ebb_dir_deg": 40.0,
+          "time_adj_max_flood_min": -15,
+          "time_adj_slack_before_ebb_min": 0,
+          "time_adj_max_ebb_min": 10,
+          "time_adj_slack_before_flood_min": null,
+          "flood_amp_ratio": 1.2,
+          "ebb_amp_ratio": 1.1,
+          "licence_id": "noaa"
+        }
+      ]
+    }
+  ]
+}
