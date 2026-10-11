@@ -1,10 +1,20 @@
 """otc_pipeline.gesla_build: the release is built from committed code only, into an empty directory. The build
-itself runs on real inputs (the release-integration proof); these tests cover the guards around it."""
+itself runs on real inputs (the release-integration proof); these tests cover the guards around it, the wiring of
+build() (which input reaches which step) and the provenance it writes to BUILD_REPORT.json."""
+import hashlib
+import json
 import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from otc_pipeline import gesla_build as gb
+from otc_pipeline import gesla_release as gr
+from otc_pipeline import gesla_sets as gs
+from otc_pipeline import station_map as sm
+from otc_pipeline import ticon_sets as ts
 
 ARGS = ["--fit-run", "r", "--audit-dir", "a", "--verdicts-dir", "v", "--calibration", "c", "--ticon-csv", "t.csv",
         "--ticon-refs", "refs.json", "--congen-run", "g", "--datestamp", "20261011", "--created", "2026-10-11T00:00:00Z"]
@@ -43,3 +53,157 @@ def test_the_output_directory_must_be_empty(tmp_path):
 def test_abbreviated_flags_are_refused():
     with pytest.raises(SystemExit):
         gb.main(["--fit", "r", *ARGS[2:], "--out", "o"])
+
+
+# --- build() wiring and the provenance it records (review B2/B3) ---------------------------------------------
+
+def _sha(p):
+    return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def _inputs(tmp_path):
+    """Input dirs with the files build() hashes; their contents are only bytes to hash."""
+    def put(rel, text):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        return p
+    put("run/results.jsonl", '{"record": "a", "outcome": "fitted"}\n{"record": "b", "outcome": "short"}\n')
+    put("run/timebase_manifest.json", '{"run": 1}')
+    put("overlay/results.jsonl", '{"record": "a", "outcome": "fitted"}\n')
+    put("overlay/timebase_manifest.json", '{"overlay": 1}')
+    put("audit/timebase_manifest.json", '{"audit": 1}')
+    put("final/timebase_manifest.json", '{"final": 1}')
+    put("congen/PROVENANCE.json", '{"congen": 1}')
+    put("ticon.csv", "ticon\n")
+    put("refs.json", "{}")
+    put("tcd.json", "{}")
+    (tmp_path / "cal").mkdir()
+    return {k: tmp_path / v for k, v in dict(fit_run="run", overlay_run="overlay", audit_dir="audit",
+                                              verdicts_dir="final", congen_run="congen", ticon_csv="ticon.csv",
+                                              ticon_refs="refs.json", calibration_dir="cal", tcd_path="tcd.json").items()}
+
+
+class _Run(SimpleNamespace):
+    """Stands for astro_tables.CongenRun: unpacks as (congen, tcd)."""
+    congen, tcd, run_dir = "congen", "tcd", None
+
+    def __iter__(self):
+        return iter((self.congen, self.tcd))
+
+
+@pytest.fixture
+def fakes(tmp_path, monkeypatch):
+    """Every heavy step of build() replaced by a recorder: the test sees what build() hands to each."""
+    seen = {}
+    audits = {"audit": SimpleNamespace(rows={"a": {"time_base_status": "verified"}}, csv_sha256="1" * 64,
+                                       decided_build_commit="aud0001"),
+              "final": SimpleNamespace(rows={"a": {"time_base_status": "disputed", "disputed_reason": "eot20_whole_hour"}},
+                                       csv_sha256="2" * 64, decided_build_commit="fin0001")}
+    table = SimpleNamespace(tcd_sha256="t" * 64)
+    crun = _Run()
+    cal = {"cal_version": 6, "_sha256": "c" * 64}
+    doc = {"record_id": "a", "fit": {"constituents": {"M2": {}}}}
+
+    def docs_from_fit_run(run, dump, rel, ids, **kw):
+        seen["docs_from_fit_run"] = dict(run=run, ids=list(ids), **kw)
+        return [doc], [{"record": "b", "reason": "too_short"}]
+
+    def load_congen_run(run_dir, *, tcd_sha256):
+        seen["congen"] = (run_dir, tcd_sha256)
+        crun.run_dir = Path(run_dir)
+        return crun
+
+    def from_audit(records, final, meta, *, references_path):
+        seen["ticon_audit"], seen["ticon_refs"] = final, references_path
+        return SimpleNamespace(records=[])
+
+    def build_release(docs, **kw):
+        seen["build_release"] = dict(docs=docs, **kw)
+        return {"release": 1}, gr.BuildReport()
+    smap = SimpleNamespace(record_ids=lambda: {"a": "OTC-1"}, sibling_flags=lambda: {}, tombstones=lambda: [],
+                           inputs={"fit_run_results_sha256": "x"}, release_aliases=lambda: {})
+    monkeypatch.setattr(gb, "GeslaRelease", lambda: SimpleNamespace(metadata=lambda: {}))
+    monkeypatch.setattr(gs, "load_tcd_dump", lambda p: SimpleNamespace(table=table, sha256="d" * 64, path=Path(p)))
+    monkeypatch.setattr(gs, "load_audit", lambda d: audits[Path(d).name])
+    monkeypatch.setattr(gs, "docs_from_fit_run", docs_from_fit_run)
+    monkeypatch.setattr(gb, "read_calibration", lambda d: seen.setdefault("calibration_dir", d) and cal)
+    monkeypatch.setattr(gb, "gesla_licences", lambda docs: ([], {}))
+    monkeypatch.setattr(sm, "load", lambda: smap)
+    monkeypatch.setattr(sm, "load_epoch_hours", lambda: {})
+    monkeypatch.setattr(ts, "load_ticon", lambda p: seen.setdefault("ticon_csv", p) and [])
+    monkeypatch.setattr(ts.TiconCarry, "from_audit", from_audit)
+    monkeypatch.setattr(ts, "carried_names", lambda records, table: set())
+    monkeypatch.setattr(gb, "load_congen_run", load_congen_run)
+    monkeypatch.setattr(gb, "astro_table", lambda congen, tcd, names, table_id: {"names": list(names)})
+    monkeypatch.setattr(gr, "build_release", build_release)
+    return SimpleNamespace(seen=seen, audits=audits, cal=cal, crun=crun, doc=doc, paths=_inputs(tmp_path))
+
+
+def _build(fakes, **over):
+    kw = dict(fakes.paths, datestamp="20261011", created="2026-10-11T00:00:00Z", build_commit="abc1234", log=lambda m: None)
+    return gb.build(**{**kw, **over})
+
+
+def test_build_hands_each_input_to_its_step(fakes):
+    p = fakes.paths
+    release, report, crun, prov = _build(fakes)
+    seen = fakes.seen
+    assert seen["docs_from_fit_run"] == dict(run=p["fit_run"], ids=["a"], audit_dir=p["audit_dir"],
+                                             calibration=fakes.cal, overlay_dir=p["overlay_run"])
+    assert seen["calibration_dir"] == p["calibration_dir"] and seen["ticon_csv"] == p["ticon_csv"]
+    # the final verdicts, not the fit's audit, decide what is disputed and annotate TICON-4
+    assert seen["ticon_audit"] is fakes.audits["final"] and seen["ticon_refs"] == p["ticon_refs"]
+    br = seen["build_release"]
+    assert br["disputed_reasons"] == {"a": "eot20_whole_hour"}
+    assert br["fit_run_results_sha256"] == _sha(p["fit_run"] / "results.jsonl")
+    assert br["congen_run"] is fakes.crun is crun and br["build_commit"] == "abc1234"
+    assert br["refused"] == [{"record": "b", "reason": "too_short"}] and br["docs"] == [fakes.doc]
+    assert seen["congen"] == (p["congen_run"], "t" * 64)
+
+
+def test_build_records_the_identity_of_every_input(fakes):
+    p = fakes.paths
+    *_, prov = _build(fakes)
+    assert prov["build_commit"] == "abc1234"
+    assert prov["fit_run"] == {"path": str(p["fit_run"].resolve()),
+                               "results_sha256": _sha(p["fit_run"] / "results.jsonl"),
+                               "manifest_sha256": _sha(p["fit_run"] / "timebase_manifest.json")}
+    assert prov["overlay_run"] == {"path": str(p["overlay_run"].resolve()),
+                                   "results_sha256": _sha(p["overlay_run"] / "results.jsonl"),
+                                   "manifest_sha256": _sha(p["overlay_run"] / "timebase_manifest.json")}
+    for key, name, csv_sha, commit in (("audit", "audit_dir", "1" * 64, "aud0001"),
+                                       ("verdicts", "verdicts_dir", "2" * 64, "fin0001")):
+        assert prov[key] == {"path": str(p[name].resolve()),
+                             "manifest_sha256": _sha(p[name] / "timebase_manifest.json"),
+                             "timebase_csv_sha256": csv_sha, "commit": commit}, key
+    assert prov["calibration"] == {"path": str(p["calibration_dir"].resolve()), "sha256": "c" * 64}
+    assert prov["congen_run"] == {"path": str(p["congen_run"].resolve()),
+                                  "provenance_sha256": _sha(p["congen_run"] / "PROVENANCE.json")}
+    assert prov["tcd"] == {"path": str(p["tcd_path"].resolve()), "sha256": "d" * 64}
+    assert prov["ticon_csv"] == {"path": str(p["ticon_csv"].resolve()), "sha256": _sha(p["ticon_csv"])}
+    assert prov["ticon_refs"] == {"path": str(p["ticon_refs"].resolve()), "sha256": _sha(p["ticon_refs"])}
+
+
+def test_no_overlay_is_recorded_as_none(fakes):
+    *_, prov = _build(fakes, overlay_run=None)
+    assert fakes.seen["docs_from_fit_run"]["overlay_dir"] is None and prov["overlay_run"] is None
+
+
+def test_the_build_report_carries_the_provenance_and_the_command_line(fakes, tmp_path, monkeypatch):
+    p, out = fakes.paths, tmp_path / "out"
+    argv = ["--fit-run", str(p["fit_run"]), "--audit-dir", str(p["audit_dir"]), "--verdicts-dir", str(p["verdicts_dir"]),
+            "--calibration", str(p["calibration_dir"]), "--overlay-run", str(p["overlay_run"]),
+            "--ticon-csv", str(p["ticon_csv"]), "--ticon-refs", str(p["ticon_refs"]), "--congen-run", str(p["congen_run"]),
+            "--tcd", str(p["tcd_path"]), "--datestamp", "20261011", "--created", "2026-10-11T00:00:00Z", "--out", str(out)]
+    monkeypatch.setattr(gb, "head_commit", lambda: "abc1234")
+    monkeypatch.setattr(gb, "validate_release", lambda release: [])
+    monkeypatch.setattr(gb, "write_release", lambda release, out, **kw: [])
+    assert gb.main(argv) == 0
+    rep = json.loads((out / "BUILD_REPORT.json").read_text())
+    prov = rep["provenance"]
+    assert prov["command_line"] == [sys.executable, "-m", "otc_pipeline.gesla_build", *argv]
+    assert prov["cwd"] == str(Path.cwd())
+    assert prov["fit_run"]["results_sha256"] == _sha(p["fit_run"] / "results.jsonl")
+    assert prov["calibration"]["sha256"] == "c" * 64 and prov["build_commit"] == "abc1234"
+    assert rep["refused_by_reason"] == {} and rep["published"] == 0     # the report itself is still all there

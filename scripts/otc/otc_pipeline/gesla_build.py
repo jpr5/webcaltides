@@ -22,12 +22,20 @@ Inputs (none of them is in git; each is checked where it is read):
 The station map, epoch hours, licences and withheld switches are the committed files under data/. build_commit is
 the repository HEAD; a tree with uncommitted changes to tracked files is refused, so the output is the committed
 code's. Writes the release files (release_writer.write_release) and BUILD_REPORT.json to OUT, which must be empty.
+
+BUILD_REPORT.json carries `provenance` (the 1.0 release document has no place for it): the command line and working
+directory, build_commit, and each input's path (resolved) and content hash: the fit run's and the overlay's
+results.jsonl and timebase_manifest.json, each audit dir's timebase_manifest.json (which binds its outputs) and
+timebase.csv with its commit, the calibration's short_accuracy.json, the congen run's PROVENANCE.json, the TCD dump,
+the TICON-4 csv and refs.json.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
+import secrets
 import subprocess
 import sys
 import time
@@ -62,14 +70,35 @@ def head_commit(repo: Path = REPO) -> str:
                           check=True).stdout.strip()
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _path(path: Path) -> str:
+    return str(Path(path).resolve())
+
+
+def _run_identity(run: Path) -> dict:
+    return {"path": _path(run), "results_sha256": _sha256(run / "results.jsonl"),
+            "manifest_sha256": _sha256(run / "timebase_manifest.json")}
+
+
+def _audit_identity(audit_dir: Path, audit: gs.Audit) -> dict:
+    return {"path": _path(audit_dir), "manifest_sha256": _sha256(audit_dir / "timebase_manifest.json"),
+            "timebase_csv_sha256": audit.csv_sha256, "commit": audit.decided_build_commit}
+
+
 def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir: Path, overlay_run: Path | None,
           ticon_csv: Path, ticon_refs: Path, congen_run: Path, datestamp: str, created: str, build_commit: str,
           tcd_path: Path | None = None, log=print):
-    """(release document, build report, congen run) (see the module docstring)."""
+    """(release document, build report, congen run, provenance) (see the module docstring); provenance is
+    BUILD_REPORT.json's, without the command line (main adds it)."""
     rel = GeslaRelease()
-    dump = gs.load_tcd_dump(tcd_path or otc_work() / "tcd_table.json")
+    tcd_path = tcd_path or otc_work() / "tcd_table.json"
+    dump = gs.load_tcd_dump(tcd_path)
     table = dump.table
-    rows = [json.loads(x) for x in (fit_run / "results.jsonl").read_text().splitlines() if x.strip()]
+    results = (fit_run / "results.jsonl").read_bytes()      # one read: hashed (the station map pin), then parsed
+    rows = [json.loads(x) for x in results.decode("utf-8").splitlines() if x.strip()]
     fitted = sorted(r["record"] for r in rows if r["outcome"] == "fitted")
     cal = read_calibration(calibration_dir)
     docs, refused = gs.docs_from_fit_run(fit_run, dump, rel, fitted, audit_dir=audit_dir, calibration=cal,
@@ -77,21 +106,54 @@ def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir
     log(f"fit documents: {len(docs)} of {len(fitted)} fitted records ({len(rows)} rows), fit-stage refusals {len(refused)}")
     licences, licence_ids = gesla_licences(docs)
     smap = sm.load()
+    audit = gs.load_audit(audit_dir)
     final = gs.load_audit(verdicts_dir)
     carry = ts.TiconCarry.from_audit(ts.load_ticon(ticon_csv), final, rel.metadata(), references_path=ticon_refs)
     names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table)
     crun = load_congen_run(congen_run, tcd_sha256=table.tcd_sha256)
     congen, tcd = crun
     astro = [astro_table(congen, tcd, sorted(names), table_id=TABLE_ID)]
+    results_sha256 = hashlib.sha256(results).hexdigest()
     release, report = gr.build_release(
         docs, table=table, table_id=TABLE_ID, datestamp=datestamp, created=created, build_commit=build_commit,
         station_ids=smap.record_ids(), licences=licences, licence_ids=licence_ids, withheld=withheld_licences(),
         astro_tables=astro, congen_run=crun, refused=refused, epoch_hours=sm.load_epoch_hours(),
         sibling_flags=smap.sibling_flags(), tombstones=smap.tombstones(), station_map_inputs=smap.inputs,
         station_aliases=smap.release_aliases(),
-        fit_run_results_sha256=hashlib.sha256((fit_run / "results.jsonl").read_bytes()).hexdigest(),
+        fit_run_results_sha256=results_sha256,
         disputed_reasons=gr.disputed_reasons_of(final.rows), ticon=carry)
-    return release, report, crun
+    fit_identity = _run_identity(fit_run)
+    if fit_identity["results_sha256"] != results_sha256:
+        raise SystemExit(f"{fit_run}/results.jsonl changed during the build")
+    provenance = {
+        "build_commit": build_commit,
+        "fit_run": fit_identity,
+        "overlay_run": _run_identity(overlay_run) if overlay_run is not None else None,
+        "audit": _audit_identity(audit_dir, audit),
+        "verdicts": _audit_identity(verdicts_dir, final),
+        "calibration": {"path": _path(calibration_dir), "sha256": cal["_sha256"]},
+        "congen_run": {"path": _path(crun.run_dir), "provenance_sha256": _sha256(crun.run_dir / "PROVENANCE.json")},
+        "tcd": {"path": _path(dump.path), "sha256": dump.sha256},
+        "ticon_csv": {"path": _path(ticon_csv), "sha256": _sha256(ticon_csv)},
+        "ticon_refs": {"path": _path(ticon_refs), "sha256": _sha256(ticon_refs)},
+    }
+    return release, report, crun, provenance
+
+
+def write_report(report: gr.BuildReport, provenance: dict, path: Path) -> Path:
+    """BUILD_REPORT.json: the build report (BuildReport.as_dict) with `provenance`, through a temp file and an
+    atomic rename."""
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    try:
+        with open(tmp, "xb") as fh:
+            fh.write((json.dumps({**report.as_dict(), "provenance": provenance}, sort_keys=True, indent=1)
+                      + "\n").encode())
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -102,13 +164,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tcd", type=Path, help="the TCD dump (default $OTC_WORK/tcd_table.json)")
     ap.add_argument("--datestamp", required=True)
     ap.add_argument("--created", required=True)
+    argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
     t0 = time.time()
     if a.out.exists() and any(a.out.iterdir()):
         raise SystemExit(f"{a.out}: not empty")
     commit = head_commit()
     _log(t0, f"build_commit {commit}")
-    release, report, crun = build(fit_run=a.fit_run, audit_dir=a.audit_dir, verdicts_dir=a.verdicts_dir,
+    release, report, crun, provenance = build(fit_run=a.fit_run, audit_dir=a.audit_dir, verdicts_dir=a.verdicts_dir,
                                   calibration_dir=a.calibration, overlay_run=a.overlay_run, ticon_csv=a.ticon_csv,
                                   ticon_refs=a.ticon_refs, congen_run=a.congen_run, datestamp=a.datestamp,
                                   created=a.created, build_commit=commit, tcd_path=a.tcd,
@@ -122,7 +185,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     a.out.mkdir(parents=True, exist_ok=True)
     files = write_release(release, a.out, datestamp=a.datestamp, app_export=None, congen_run=crun)
-    report.write(a.out / "BUILD_REPORT.json")
+    provenance = {"command_line": [sys.executable, "-m", "otc_pipeline.gesla_build", *argv], "cwd": os.getcwd(),
+                  **provenance}
+    write_report(report, provenance, a.out / "BUILD_REPORT.json")
     _log(t0, f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
     return 0
 
