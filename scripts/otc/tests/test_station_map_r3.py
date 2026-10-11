@@ -4,6 +4,7 @@ offset sides (B2, A6), the D1 limits from both sides (B3), the rank order (B1, A
 Synthetic data only."""
 import json
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -419,8 +420,11 @@ def mint_cli(tmp_path, monkeypatch):
     state = {"pins": {"fit_run_results_sha256": "1" * 64, "audit_timebase_sha256": "a" * 64}, "epoch_audit": "a" * 64}
 
     def fake_derived(fit_run, weak_inputs, release, *, audit_dir, tcd=None):
+        state["tcd"] = tcd
         return {}, {}, {}, dict(state["pins"]), {"gesla_tide_summary.csv": "x\n", "gesla_eot20_lag.csv": "y\n"}
     monkeypatch.setattr(sm, "derived_inputs", fake_derived)
+    from otc_pipeline import gesla_sets as gs
+    monkeypatch.setattr(gs, "load_tcd_dump", lambda p: ("dump of", Path(p)))
 
     def run(*extra):
         sm._write_csv(sm.EPOCH_PATH, sm.EPOCH_COLUMNS, [["a-1-nor-test", "s" * 64, 10, "utc_instant", state["epoch_audit"]]])
@@ -436,6 +440,13 @@ def test_mint_check_reports_each_moved_input(mint_cli, capsys):
     assert run("--check") == 1
     out = capsys.readouterr().out
     assert f"input fit_run_results_sha256: map pins {'1' * 64}, now {'2' * 64}" in out and "would change" in out
+
+
+def test_mint_reads_the_tcd_dump_it_is_given(mint_cli):
+    # the OTC TCD's fit dump (FIX-CONST): the fit run's TCD, not $OTC_WORK/tcd_table.json, which check_fit_run refuses
+    run, state, data = mint_cli
+    assert run("--tcd", "/x/tcd-1900-2100.json") == 0 and state["tcd"] == ("dump of", Path("/x/tcd-1900-2100.json"))
+    assert run() == 0 and state["tcd"] is None
 
 
 def test_mint_refuses_derived_out_in_a_work_tree_and_an_epoch_csv_of_another_audit(mint_cli, tmp_path):

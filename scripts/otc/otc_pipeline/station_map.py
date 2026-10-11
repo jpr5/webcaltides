@@ -1137,6 +1137,8 @@ def main(argv: list[str] | None = None) -> int:
     mp.add_argument("--audit-dir", type=Path, required=True, help="the time-base audit the fit run used")
     mp.add_argument("--weak-inputs", type=Path, required=True, help="G04d weak_inputs.json (EOT20 at each gauge)")
     mp.add_argument("--derived-out", type=Path, help="also write the derived tables here (outside any git work tree)")
+    mp.add_argument("--tcd", type=Path, help="the TCD dump the fit run used (default $OTC_WORK/tcd_table.json; the OTC "
+                                             "TCD's is the congen run's tcd-1900-2100.json)")
     ep = sub.add_parser("epoch-hours", help="count each record's good hours in 2002-2020 (reads the GESLA cache)")
     ep.add_argument("--workers", type=int, default=4)
     ep.add_argument("--audit-dir", type=Path, required=True, help="the time-base audit the fit used (bad months)")
@@ -1154,7 +1156,9 @@ def main(argv: list[str] | None = None) -> int:
             if top:
                 raise SystemExit(f"--derived-out {a.derived_out} is inside the git work tree {top}: "
                                  "derived constants are never committed")
-        tides, hours, eot20, pins, texts = derived_inputs(a.fit_run, a.weak_inputs, rel, audit_dir=a.audit_dir)
+        from otc_pipeline import gesla_sets as gs
+        tcd = gs.load_tcd_dump(a.tcd) if a.tcd is not None else None
+        tides, hours, eot20, pins, texts = derived_inputs(a.fit_run, a.weak_inputs, rel, audit_dir=a.audit_dir, tcd=tcd)
         inputs.update(pins)
         epoch_audit = {e["audit_timebase_sha256"] for e in load_epoch_hours(EPOCH_PATH).values()}
         if epoch_audit != {pins["audit_timebase_sha256"]}:
