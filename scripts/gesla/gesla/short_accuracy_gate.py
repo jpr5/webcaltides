@@ -24,8 +24,9 @@ published pair for every constituent (version 1), so the gate also measures what
         [--apply | --until-pass]
 --apply writes the failed cells into the calibration as claim limits once and gates again; --until-pass repeats
 that until no claimed cell fails (a new limit can expose a failing cell elsewhere: S2 phase on 183-364, then on
-coastal, then on all), at most MAX_PASSES times, and stops with exit 6 when a pass adds no limit. Both name the
-commit in each gate entry and need a checkout with no uncommitted changes.
+coastal, then on all), at most MAX_PASSES times, and stops with exit 6 when a pass adds no limit. Both need a
+checkout with no uncommitted changes and a calibration made from the fit runs given (short_accuracy.check_bound),
+and name the commit and the runs' identities in each gate entry.
 Exit 0: no claimed group fails; 6: a claimed group fails.
 """
 from __future__ import annotations
@@ -204,7 +205,7 @@ def render(res: Mapping) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     from .read_gesla import otc_work
-    from .short_accuracy import CAL_FILE, CAL_VERSION, _git, load_rows, read_calibration
+    from .short_accuracy import CAL_FILE, CAL_VERSION, _git, check_bound, load_rows, read_calibration
     ap = argparse.ArgumentParser(prog="python -m gesla.short_accuracy_gate")
     ap.add_argument("--calibration", required=True, type=Path)
     ap.add_argument("--fit-run", required=True, type=Path)
@@ -224,6 +225,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     raw = json.loads((a.calibration / CAL_FILE).read_text())
     cal = read_calibration(a.calibration) if raw.get("cal_version") == CAL_VERSION else raw   # v1: the old file
     runs = [a.fit_run] + ([a.overlay_run] if a.overlay_run else [])
+    if a.apply or a.until_pass:                 # limits judged on other fits never go into a calibration
+        try:
+            check_bound(cal, runs)
+        except ValueError as e:
+            raise SystemExit(f"{a.calibration}: {e}") from None
     rows, where = load_rows(runs)
     fits = {r: json.loads((where[r] / "fits" / f"{r}.json").read_text()) for r in rows}
     comp = comparisons(cal, rows, fits, a.noaa_cache)
@@ -237,7 +243,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .short_accuracy import apply_gate
         for n in range(1, (MAX_PASSES if a.until_pass else 1) + 1):
             before = len(cal.get("config", {}).get("claim_limits", []))
-            cal = apply_gate(a.calibration, res, commit=commit)
+            cal = apply_gate(a.calibration, res, commit=commit, fit_runs=runs)
             res = gate(comparisons(cal, rows, fits, a.noaa_cache))
             added = len(cal["config"]["claim_limits"]) - before
             print(f"applied (pass {n}): {added} new claim limits; claim limits {cal['config']['claim_limits']}, "

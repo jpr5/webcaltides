@@ -74,3 +74,93 @@ def test_a_claim_limited_constituent_is_not_gated():
     rows = [row(f"r{i}", [], {"S2": pc(0.02, None, 2.0 if i % 2 else 0.5, 1.0)}) for i in range(20)]
     c = g.gate(rows)["groups"]["all"]["S2"]
     assert c["amp_pairs"] == 0 and c["phase_share_over"] == 0.5 and c["verdict"] == "pass"
+
+
+# --- --apply / --until-pass (FIX-SRCAL r1: B2, N5) --------------------------------------------------------------
+
+from gesla import short_accuracy as sa  # noqa: E402
+
+
+@pytest.fixture
+def gate_cli(tmp_path, monkeypatch):
+    """main() on a calibration bound to a run of short rows; the gate results and apply_gate are scripted."""
+    run = tmp_path / "run"
+    (run / "fits").mkdir(parents=True)
+    (run / "results.jsonl").write_text('{"record": "a", "outcome": "short"}\n')
+    (run / "timebase_manifest.json").write_text('{"run": 1}')
+    other = tmp_path / "other"
+    (other / "fits").mkdir(parents=True)
+    (other / "results.jsonl").write_text('{"record": "a", "outcome": "short", "x": 1}\n')
+    cal_dir = tmp_path / "cal"
+    sa.write_calibration({"cal_version": sa.CAL_VERSION, "config": {}, "targets": {}, "refused": {},
+                          "inputs": {"fit_runs": [sa.run_identity(run)]}}, cal_dir)
+    h = type("H", (), {})()
+    h.run, h.other, h.cal, h.out = run, other, cal_dir, tmp_path / "gate.json"
+    h.gates, h.adds, h.applied, h.dirty = [], [], [], ""
+
+    def gate(rows):
+        return {"passed": h.gates.pop(0)}
+
+    def apply_gate(cal_dir, res, *, commit=None, fit_runs=None):
+        h.applied.append({"commit": commit, "fit_runs": fit_runs})
+        n = sum(h.adds[:len(h.applied)])
+        return {"config": {"claim_limits": [{"n": i} for i in range(n)], "validation": {}}}
+    monkeypatch.setattr(g, "comparisons", lambda cal, rows, fits, cache: [])
+    monkeypatch.setattr(g, "gate", gate)
+    monkeypatch.setattr(g, "render", lambda res: "table")
+    monkeypatch.setattr(sa, "apply_gate", apply_gate)
+    monkeypatch.setattr(sa, "_git", lambda a: h.dirty if a[0] == "status" else "c0ffee")
+    h.argv = ["--calibration", str(cal_dir), "--fit-run", str(run), "--out", str(h.out), "--noaa-cache", str(tmp_path)]
+    return h
+
+
+def test_until_pass_applies_until_no_cell_fails(gate_cli):
+    h = gate_cli
+    h.gates, h.adds = [False, False, False, True], [1, 1, 2]
+    assert g.main([*h.argv, "--until-pass"]) == 0
+    assert len(h.applied) == 3 and all(a == {"commit": "c0ffee", "fit_runs": [h.run]} for a in h.applied)
+    assert [p.name for p in sorted(h.out.parent.glob("gate.applied*.json"))] == \
+        ["gate.applied-2.json", "gate.applied-3.json", "gate.applied.json"]
+
+
+def test_until_pass_stops_when_a_pass_adds_no_limit(gate_cli):
+    h = gate_cli
+    h.gates, h.adds = [False, False, False], [0, 1]
+    assert g.main([*h.argv, "--until-pass"]) == 6
+    assert len(h.applied) == 1
+
+
+def test_until_pass_stops_at_max_passes(gate_cli, monkeypatch):
+    h = gate_cli
+    monkeypatch.setattr(g, "MAX_PASSES", 3)
+    h.gates, h.adds = [False] * 10, [1] * 10
+    assert g.main([*h.argv, "--until-pass"]) == 6
+    assert len(h.applied) == 3
+
+
+def test_apply_is_one_pass(gate_cli):
+    h = gate_cli
+    h.gates, h.adds = [False, False], [1]
+    assert g.main([*h.argv, "--apply"]) == 6
+    assert len(h.applied) == 1
+
+
+def test_apply_needs_a_clean_checkout(gate_cli):
+    h = gate_cli
+    h.dirty, h.gates = " M gesla/short_accuracy.py", [False, True]
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        g.main([*h.argv, "--until-pass"])
+    assert h.applied == []
+
+
+def test_apply_needs_the_calibrations_own_fit_runs(gate_cli):
+    # B2: limits judged on other fits never go into a calibration; reporting on them is still allowed
+    h = gate_cli
+    argv = [a if a != str(h.run) else str(h.other) for a in h.argv]
+    for flag in ("--apply", "--until-pass"):
+        h.gates = [False, True]
+        with pytest.raises(SystemExit, match="re-run gesla.short_accuracy"):
+            g.main([*argv, flag])
+    assert h.applied == []
+    h.gates = [True]
+    assert g.main(argv) == 0

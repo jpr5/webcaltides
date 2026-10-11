@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 import statistics
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -694,9 +695,11 @@ def test_a_gate_written_into_a_calibration_names_its_commit(tmp_path):
     cell = {"verdict": "pass", "amp_share_over": 0.5, "phase_share_over": 0.5}
     res = {"groups": {b: {"pooled": cell} for b in ("<=30", "31-90", "91-182", "183-364")}, "band": [0.35, 0.65],
            "failed_cells": [], "passed": True, "records": 0, "comparators": {}}
-    cal = sa.apply_gate(tmp_path, res, commit="abc1234")
+    run = _run(tmp_path, "run", '{"record": "a"}\n', {"fits_sha256": {"a": "1" * 64}})
+    cal = sa.apply_gate(tmp_path, res, commit="abc1234", fit_runs=[run])
     assert cal["config"]["gates"][-1]["commit"] == "abc1234"
-    assert sa.read_calibration(tmp_path)["config"]["gates"][-1]["commit"] == "abc1234"
+    entry = sa.read_calibration(tmp_path)["config"]["gates"][-1]
+    assert entry["commit"] == "abc1234" and entry["fit_runs"] == [sa.run_identity(run)]
 
 
 def test_a_fit_whose_selection_is_not_rebuilt_stops_r8_and_the_plan():
@@ -718,16 +721,32 @@ def test_a_fit_whose_selection_is_not_rebuilt_stops_r8_and_the_plan():
     assert sorted(e.value.mismatch) == ["L7", "L9"]
 
 
-def test_a_donor_is_cut_with_its_own_candidate_list():
-    from gesla.select_constituents import CANDIDATE_LISTS
-    assert sa.station_candidates({}) == CANDIDATE_LISTS["base"]
-    assert sa.station_candidates({"candidate_list": "base"}) == CANDIDATE_LISTS["base"]
-    assert sa.station_candidates({"candidate_list": "extended"}) == CANDIDATE_LISTS["extended"]
-    with pytest.raises(ValueError, match="not one of"):
-        sa.station_candidates({"candidate_list": "nope"})
+def test_a_cut_takes_the_list_fit_run_would_choose_for_its_data(monkeypatch):
+    # N4: production's choice for a record of the cut (scope, window A, both spans resolving the extended list),
+    # never the station's own full-record list
+    import test_fix_const as fc
+    from gesla import select_constituents as sc
+    def table(names):
+        n = 2030 - 2000 + 1
+        return TcdTable({"years": [2000, 2030], "tcd_sha256": "s" * 64, "aliases": {},
+                         "constituents": {k: {"speed": fc.SPEEDS[k], "v0u": [0.0] * n, "f": [1.0] * n} for k in names}})
+    tab = table(fc.SPEEDS)
+    monkeypatch.setattr(sc, "CANDIDATE_LISTS", {"base": fc.BASE, "extended": fc.EXT})
+    monkeypatch.setattr(sc, "EXTENDED_CANDIDATES", fc.EXT)
+    full = fc.series(tab, ma2=0.05)                         # 2008-2025-08, window A covered, MA2 present
+    assert sa.cut_candidate_list(tab, full, "NOR") == "extended"
+    assert sa.cut_candidate_list(tab, full, "USA") == "base"                   # out of scope
+    t = full.times_s
+    for lo, hi in ((fc._ts(2024, 9), fc._ts(2024, 12)),                      # 3 months in window A: MA2 unresolved
+                   (fc._ts(2015, 1), fc._ts(2015, 12))):                     # no window-A data
+        cut = Series("cut", t[(t >= lo) & (t < hi)], full.heights_m[(t >= lo) & (t < hi)], {})
+        assert sa.cut_candidate_list(tab, cut, "NOR") == sc.select_candidate_list(tab, cut, country="NOR")[0] == "base"
+    bare = table([k for k in fc.SPEEDS if k not in ("MA2", "MB2")])              # no MA2/MB2: as in fit_run
+    with pytest.raises(ValueError, match="extended list needs the OTC TCD"):
+        sa.cut_candidate_list(bare, full, "NOR")
 
 
-def test_the_station_job_refits_cuts_with_the_donors_list(tmp_path, monkeypatch):
+def test_the_station_job_fits_each_cut_with_its_own_choice(tmp_path, monkeypatch):
     from gesla.select_constituents import CANDIDATE_LISTS
     tab = fake_table()
     t = T2019 + np.arange(400 * 24, dtype=np.int64) * HOUR
@@ -737,23 +756,31 @@ def test_the_station_job_refits_cuts_with_the_donors_list(tmp_path, monkeypatch)
     (tmp_path / "fits").mkdir()
     (tmp_path / "fits" / "donor.json").write_text(json.dumps(full))
     hours = sa.series_hours(s)
-    seen = []
+    chosen, used = [], []
 
     class A:
         def consts(self):
             return {c: (a, g) for c, (a, g) in TRUTH.items()}
 
+    def select(table, cut, *, country):
+        chosen.append((len(cut), country))
+        return ("extended" if len(chosen) == 2 else "base"), None
+
     def analyse(table, series, *, candidates=None):
-        seen.append(candidates)
+        used.append(candidates)
         return A()
+    monkeypatch.setattr(sa, "select_candidate_list", select)
     monkeypatch.setattr(sa, "analyse", analyse)
     monkeypatch.setattr(sa, "_fit_window", lambda rid: s)
-    monkeypatch.setattr(sa, "cut_shifts", lambda sh, th, seed: [(1, hours[: 30 * 24])])
+    monkeypatch.setattr(sa, "cut_shifts", lambda sh, th, seed: [(1, hours[: 30 * 24]), (2, hours[: 60 * 24])])
     monkeypatch.setitem(sa._W, "table", tab)
     monkeypatch.setitem(sa._W, "fit_dirs", [tmp_path])
     monkeypatch.setitem(sa._W, "masks", {"t": hours[: 30 * 24]})
-    sa._station_job("donor", ["t"])
-    assert seen == [CANDIDATE_LISTS["extended"]]
+    monkeypatch.setitem(sa._W, "rel", type("R", (), {"metadata": lambda self: {"donor": {"COUNTRY": "NOR"}}})())
+    d = sa._station_job("donor", ["t"])
+    assert chosen == [(30 * 24, "NOR"), (60 * 24, "NOR")]
+    assert used == [CANDIDATE_LISTS["base"], CANDIDATE_LISTS["extended"]]
+    assert [c["candidate_list"] for c in d["cuts"]["t"]] == ["base", "extended"]
 
 
 def test_a_calibration_made_on_another_tcd_dump_is_not_bound(tmp_path):
@@ -762,3 +789,135 @@ def test_a_calibration_made_on_another_tcd_dump_is_not_bound(tmp_path):
     sa.check_bound(cal, [run], tcd_table_sha256="e" * 64)
     with pytest.raises(ValueError, match="made on the TCD dump e+, the build uses 7+"):
         sa.check_bound(cal, [run], tcd_table_sha256="7" * 64)
+
+
+# --- calibrate(): the TCD dump it hands the workers, and the resume (FIX-SRCAL r1, N5/B1) -----------------------
+
+class _Fut:
+    def __init__(self, v):
+        self._v = v
+
+    def result(self):
+        return self._v
+
+
+class _Pool:
+    """ProcessPoolExecutor stand-in: runs each job inline and records the worker initializer's arguments."""
+    inits: list = []
+
+    def __init__(self, max_workers, initializer, initargs):
+        _Pool.inits.append(initargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def submit(self, fn, *a):
+        return _Fut(fn(*a))
+
+
+@pytest.fixture
+def cal_harness(tmp_path, monkeypatch):
+    """calibrate() on a two-record fit run (target t1, station s1), every heavy step replaced by a recorder."""
+    import gesla.read_gesla as rg
+    tab = fake_table()
+    dump = tmp_path / "otc-dump.json"
+    dump.write_text('{"otc": 1}')
+    run = tmp_path / "run"
+    (run / "fits").mkdir(parents=True)
+    rows = [{"record": r, "outcome": "fitted", "lat": 50.0, "lon": 1.0} for r in ("s1", "t1")]
+    (run / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    for r in ("s1", "t1"):
+        (run / "fits" / f"{r}.json").write_text(json.dumps(_fit(tab, 800 if r == "s1" else 40)))
+    (run / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": str(dump), "sha256": sa.sha256_file(dump)}}}))
+    gesla_root = tmp_path / "gesla"
+    gesla_root.mkdir()
+    (gesla_root / "MANIFEST.json").write_text("{}")
+    h = type("H", (), {})()
+    h.run, h.dump, h.loaded, h.cut, h.commit = run, dump, [], [], "c0ffee"
+    _Pool.inits = []
+    monkeypatch.setattr(sa, "_git", lambda a: "" if a[0] == "status" else h.commit)
+    monkeypatch.setattr(sa.TcdTable, "load", staticmethod(lambda p: h.loaded.append(Path(p)) or tab))
+    monkeypatch.setattr(rg, "GeslaRelease", lambda: type("Rel", (), {"metadata": lambda self: {}, "version": "4.1",
+                                                                     "root": str(gesla_root)})())
+    monkeypatch.setattr(sa, "plan", lambda rows, fits, table, meta, seed, holdout_n: {
+        "clusters": {}, "refused": {}, "stations": {"s1": "s1"}, "holdout": {}, "long": ["s1"],
+        "short": {"t1": {"M2": 1.0}}, "pools": {"t1": [("s1", 5.0)]},
+        "targets": {"t1": {"why": None, "good_hours": 960.0, "regime": "semidiurnal", "reference": ["M2", 1.0],
+                           "fit_sha256": sa.fit_sha256(fits["t1"])}}})
+    monkeypatch.setattr(sa, "ProcessPoolExecutor", _Pool)
+    monkeypatch.setattr(sa, "as_completed", lambda fs: list(fs))
+    monkeypatch.setattr(sa, "_mask_job", lambda rid: (rid, np.arange(24, dtype=np.int64) * HOUR, None))
+
+    def station_job(station, targets):
+        h.cut.append(station)
+        full = json.loads((run / "fits" / f"{station}.json").read_text())
+        return {"station": station, "full_sha256": sa.fit_sha256(full), "secs": 0.0,
+                "cuts": {t: [{"k": 1, "n": 24, "target_n": 24, "candidate_list": "base", "errors": None}] for t in targets}}
+    monkeypatch.setattr(sa, "_station_job", station_job)
+    return h
+
+
+def test_calibrate_reads_and_hands_its_workers_the_fit_runs_dump(cal_harness, tmp_path):
+    h = cal_harness
+    cal = sa.calibrate([h.run], tmp_path / "out", workers=1)
+    assert h.loaded == [h.dump]
+    assert [i[2] for i in _Pool.inits] == [str(h.dump), str(h.dump)]           # the mask pool, then the cut pool
+    assert cal["inputs"]["tcd_table"] == str(h.dump)
+    assert cal["inputs"]["tcd_table_sha256"] == sa.sha256_file(h.dump)
+    assert "selection_mismatch" not in cal                                      # N3: no dead field
+
+
+def test_a_resume_reuses_only_rows_stamped_by_this_run(cal_harness, tmp_path):
+    h, out = cal_harness, tmp_path / "out"
+    sa.calibrate([h.run], out, workers=1)
+    assert h.cut == ["s1"]
+    (row,) = [json.loads(x) for x in (out / sa.CUTS_FILE).read_text().splitlines()]
+    assert row["stamp"] == {"commit": "c0ffee", "tcd_table_sha256": sa.sha256_file(h.dump), "seed": 0,
+                            "cut_list_rule": sa.CUT_LIST_RULE}
+    sa.calibrate([h.run], out, workers=1)
+    assert h.cut == ["s1"]                                                      # reused
+    for change in ("no stamp", "no list", "commit", "seed"):
+        h.cut.clear()
+        r = dict(row)
+        if change == "no stamp":                                                # a row from before the stamp
+            r.pop("stamp")
+        if change == "no list":
+            r["cuts"] = {"t1": [{k: v for k, v in c.items() if k != "candidate_list"} for c in r["cuts"]["t1"]]}
+        (out / sa.CUTS_FILE).write_text(json.dumps(r) + "\n")
+        h.commit = "beef" if change == "commit" else "c0ffee"
+        sa.calibrate([h.run], out, workers=1, seed=1 if change == "seed" else 0)
+        assert h.cut == ["s1"], change                                          # cut again
+        (row,) = [json.loads(x) for x in (out / sa.CUTS_FILE).read_text().splitlines()]
+        assert row["stamp"]["commit"] == h.commit
+    h.cut.clear()
+    h.commit = "c0ffee"
+    row["stamp"] = dict(row["stamp"], tcd_table_sha256="0" * 64)
+    (out / sa.CUTS_FILE).write_text(json.dumps(row) + "\n")
+    sa.calibrate([h.run], out, workers=1)
+    assert h.cut == ["s1"]                                                      # another TCD dump: cut again
+
+
+def test_reusable_needs_stamp_fit_targets_and_lists():
+    stamp = sa.cut_stamp("c", "d" * 64, 0)
+    row = {"stamp": stamp, "full_sha256": "f", "cuts": {"t": [{"candidate_list": "base"}]}}
+    assert sa.reusable(row, stamp, {"t"}, "f")
+    assert not sa.reusable(row, sa.cut_stamp("c", "e" * 64, 0), {"t"}, "f")
+    assert not sa.reusable(row, stamp, {"t", "u"}, "f")
+    assert not sa.reusable(row, stamp, {"t"}, "g")
+    assert not sa.reusable({**row, "cuts": {"t": [{}]}}, stamp, {"t"}, "f")
+
+
+def test_a_relative_dump_path_is_the_manifests(tmp_path, monkeypatch):
+    run = _run(tmp_path, "run", "", None)
+    (run / "dump.json").write_text('{"d": 1}')
+    (run / "timebase_manifest.json").write_text(json.dumps(
+        {"inputs": {"tcd_table": {"path": "dump.json", "sha256": sa.sha256_file(run / "dump.json")}}}))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "dump.json").write_text('{"other": 1}')                       # a same-named file in the cwd
+    monkeypatch.chdir(elsewhere)
+    assert sa.fit_runs_tcd([run]) == run / "dump.json"
