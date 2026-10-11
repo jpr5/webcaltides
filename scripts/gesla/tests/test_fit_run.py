@@ -278,6 +278,7 @@ def test_one_fits_the_list_the_window_a_rule_chose_and_records_it(tmp_path, monk
 
 
 def test_the_fit_reads_tcd_table_when_set(monkeypatch, tmp_path):
+    monkeypatch.delenv("OTC_TCD_TABLE", raising=False)
     monkeypatch.setenv("TCD_TABLE", str(tmp_path / "otc.json"))
     assert fr.tcd_table_path() == tmp_path / "otc.json"
     monkeypatch.delenv("TCD_TABLE")

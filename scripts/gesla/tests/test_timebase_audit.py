@@ -1872,6 +1872,7 @@ def _main_with_fakes(monkeypatch, tmp_path, gates, out, result=None, rc=0, metad
 
     monkeypatch.setenv("OTC_WORK", str(work))
     monkeypatch.setenv("OTC_GATES_DIR", str(gates))
+    monkeypatch.delenv("TCD_TABLE", raising=False)      # the run's dump is $OTC_TCD_TABLE (tcd_table.dump_path)
     monkeypatch.setenv("OTC_TCD_TABLE", str(table))
     monkeypatch.setattr(ta, "GeslaRelease", Release)
     monkeypatch.setattr(ta.TcdTable, "load", staticmethod(lambda p: None))
