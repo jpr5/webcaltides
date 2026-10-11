@@ -407,14 +407,15 @@ def fit_records(table: TcdTable, release: GeslaRelease, record_ids: Iterable[str
                 eot20: Mapping[str, Mapping] | None = None) -> tuple[list[dict], list[dict]]:
     """Fit each record from the verified cache with its published time base (G03c default: QC, the
     last 19 years), from the audit in audit_dir (load_audit: the gate runs before any fit). Returns
-    (documents, refused); a refused entry (build-report shape) names the record, the reason class
+    (documents, refused); the candidate list is gesla.fit_run's (select_candidate_list, FIX-CONST). A refused
+    entry (build-report shape) names the record, the reason class
     (too_short, fit_unusable, or a NotPublishable reason), the message and its good hours. The
     sampling response of the time base is divided out after fit_record, once per record; any error
     from that step (a correction other than the series', a second pass) stops the build."""
     from gesla.fit import FitError
     from gesla.qc import clean
-    from gesla.select_constituents import (FIT_SPAN_YEARS, fit_record, in_tcd_years, last_years, record_hours,
-                                           sampling_corrected)
+    from gesla import select_constituents as sc
+    from gesla.select_constituents import FIT_SPAN_YEARS, in_tcd_years, last_years, record_hours, sampling_corrected
     audit = load_audit(audit_dir)
     docs, skipped = [], []
     meta_all = release.metadata()
@@ -438,7 +439,10 @@ def fit_records(table: TcdTable, release: GeslaRelease, record_ids: Iterable[str
                                    hours))
             continue
         try:
-            rf = fit_record(table, series)
+            # the candidate list as gesla.fit_run chooses it (FIX-CONST: the window-A rule for German and Norwegian
+            # records), recorded in the fit only when it is the extended list
+            clist, selection = sc.select_candidate_list(table, series, country=meta.get("COUNTRY"))
+            rf = sc.fit_record(table, series, candidate_list=clist, selection=selection if clist != "base" else None)
         except FitError as e:
             skipped.append(refusal(rid, "fit_unusable", f"{rid}: FitError: {e}", hours))
             continue

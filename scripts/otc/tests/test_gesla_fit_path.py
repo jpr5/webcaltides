@@ -115,6 +115,36 @@ def test_an_instant_record_is_unchanged_by_the_division(table, tmp_path):
     assert {n: c["amp_m"] for n, c in d["fit"]["constituents"].items()} == {n: c["amp_m"] for n, c in raw.items()}
 
 
+def test_the_in_repo_path_fits_the_list_the_window_a_rule_chooses(table, tmp_path, monkeypatch):
+    # FIX-CONST: fit_records chooses the list as gesla.fit_run does, from the record's COUNTRY, so a refit
+    # reproduces the run; the fit records the choice only for the extended list
+    import gesla.select_constituents as sc
+    t = np.arange(1_577_836_800, 1_577_836_800 + 2 * 366 * 86400, 3600, dtype=np.int64)
+    rid = "synthetic-4-nor-test"
+    rec = GaugeRecord(record_id=rid, source="gesla", source_version="4.1", contributor="TEST", originator=True,
+                      licence_class="A", lat=60.4, lon=5.3, gauge_type="Coastal", sampling="instantaneous",
+                      interval_min=60, declared_time_base=None, member_sha256="a" * 64, times_s=t,
+                      heights_m=hourly_means(table, t), good=np.ones(len(t), dtype=bool))
+    meta = {"FILE NAME": rid, "SITE NAME": "Synthetic", "COUNTRY": "NOR", "LATITUDE": "60.4", "LONGITUDE": "5.3",
+            "TIME ZONE HOURS": "0"}
+    seen, real_fit = {}, sc.fit_record
+
+    def choose(tab, series, *, country):
+        seen["country"] = country
+        return seen["choice"]
+
+    def fit(tab, series, **kw):
+        seen["kw"] = kw
+        return real_fit(tab, series)
+    monkeypatch.setattr(sc, "select_candidate_list", choose)
+    monkeypatch.setattr(sc, "fit_record", fit)
+    for choice, want in ((("extended", {"chosen": "extended"}), {"candidate_list": "extended", "selection": {"chosen": "extended"}}),
+                         (("base", {"chosen": "base"}), {"candidate_list": "base", "selection": None})):
+        seen["choice"] = choice
+        fit_records(table, FakeRelease(rec, meta), [rid], audit_dir=stub_audit(tmp_path / choice[0], []))
+        assert seen["country"] == "NOR" and seen["kw"] == want
+
+
 @pytest.fixture(scope="module")
 def real(tmp_path_factory):
     tb_csv = os.environ.get("OTC_TIMEBASE_CSV")
