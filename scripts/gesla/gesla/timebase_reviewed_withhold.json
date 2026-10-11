@@ -110,6 +110,39 @@
     "numbers": "NOAA harcon 9491253 (29-day, 2003-09): M2 +66, S2 +50, N2 +59 min; NOAA official predictions 9491253: HW +70.1, LW +64.3 (708 events); EOT20 at 2.94 km: M2 +48.4"
    },
    "date": "2026-10-11"
+  },
+  {
+   "file_id": "san_felipe-307a-mex-uhslc_rq",
+   "short": "owner-delegated withhold",
+   "reason": "UHSLC RQ San Felipe (Gulf of California, M2 1.6 m), the station's only set. EOT20 at 6.8 km on the open coast puts it about +57 min late, uniform across M2, S2, N2 and K1 (O1 +40). No official or same-site reference exists, so no rule reaches it; the owner delegated the decision to withhold it.",
+   "evidence": {
+    "reviewer": "owner (delegated to the coordinator, FIX-LST-6); TB-SIB gate C",
+    "report": "scratchpad/gateC-tbsib-7q3/ (gate-C.md 4B/4C, evidence3.json); scratchpad/rev43/; FIX-LST/report.md",
+    "numbers": "EOT20 6.78 km: M2 +57, S2 +57, K1 +54, N2 +59, O1 +40 min (joint +58.0, M2 ratio 0.98)"
+   },
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "settlement_point-257-bhs-uhslc_fd",
+   "short": "owner-delegated withhold",
+   "reason": "UHSLC FD Settlement Point (Grand Bahama). About +88 min against NOAA 9710441 Settlement Point's harmonic constants 2.6 km away. The gauge moved in 2002 and the frequency-dependent, damped lag is likely physical (FIX-LST false-positive review), but a user would see high water about 1.5 h off the official table, and NOAA's set already covers the station. The owner delegated the decision to withhold it.",
+   "evidence": {
+    "reviewer": "owner (delegated to the coordinator, FIX-LST-6); TB-SIB gate C",
+    "report": "scratchpad/gateC-tbsib-7q3/ (gate-C.md 4B/4C, evidence3.json); scratchpad/rev43/; FIX-LST/report.md",
+    "numbers": "NOAA harcon 9710441 2.6 km: M2 +86, S2 +89, K1 +98, O1 +112 min (joint +88.5, M2 ratio 0.84); EOT20 +85.0"
+   },
+   "date": "2026-10-11"
+  },
+  {
+   "file_id": "settlement_point-257b-bhs-uhslc_rq",
+   "short": "owner-delegated withhold",
+   "reason": "UHSLC RQ Settlement Point, the same gauge as 257: about +88 min against NOAA 9710441's harmonic constants 2.6 km away. Likely a physical response at the relocated gauge, but users would see high water about 1.5 h off the official table, and NOAA's set already covers the station. The owner delegated the decision to withhold it.",
+   "evidence": {
+    "reviewer": "owner (delegated to the coordinator, FIX-LST-6); TB-SIB gate C",
+    "report": "scratchpad/gateC-tbsib-7q3/ (gate-C.md 4B/4C, evidence3.json); scratchpad/rev43/; FIX-LST/report.md",
+    "numbers": "NOAA harcon 9710441 2.6 km: joint +87.5 (M2 ratio 0.83); EOT20 +84.5"
+   },
+   "date": "2026-10-11"
   }
  ]
 }

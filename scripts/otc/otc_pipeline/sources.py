@@ -2,7 +2,9 @@
 
 EXPECTED names all 16 sources of the first release and what each adapter emits. SOURCES maps a
 source to its adapter class; each adapter slot adds exactly one line to it. The combined build
-(C2a, D11) refuses to run while `missing_sources()` is non-empty.
+(otc_pipeline.build_otc, C2a) includes the sources of combine.AGENCY_SOURCES; D11 for this release
+(owner-delegated decision, 2026-10-11): the release passes when every INCLUDED source passes its
+canary. The sources still missing (`missing_sources()`) join later.
 """
 from __future__ import annotations
 

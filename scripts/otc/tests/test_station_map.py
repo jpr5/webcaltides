@@ -8,6 +8,7 @@ import random
 import pytest
 
 from otc_pipeline import station_map as sm
+from otc_pipeline.combine import AGENCY_SOURCES
 from otc_pipeline.gesla_release import Candidate, recommend
 from otc_pipeline.release_writer import validate_release
 from otc_pipeline.station_map import MintConflict, RecordInfo, mint, new_id, site_names_agree
@@ -167,7 +168,9 @@ def test_the_committed_station_map_loads_and_has_every_epoch_count():
     assert len(rids) == sum(len(s["records"]) for s in m.stations.values())
     assert all(sm.ID_RE.fullmatch(s) for s in m.stations)
     epoch = sm.load_epoch_hours()
-    assert set(epoch) == set(rids)
+    # epoch hours are a GESLA ranking input: every GESLA record has them; agency records (combine, <source>:<id>)
+    # carry no gauge record
+    assert set(epoch) == {r for r in rids if r.split(":", 1)[0] not in AGENCY_SOURCES}
     assert all(0 <= e["hours"] <= 19 * 366 * 24 for e in epoch.values())
     aliases = m.release_aliases()
     tids = [a["webcaltides"] for a in aliases.values()]

@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from otc_pipeline.adapter import FetchResult, InputFile, SourceSet
+from otc_pipeline.adapters.noaa import NOAA_LICENCE
 from otc_pipeline.constituent_speeds import TableSpeeds, dropped_no_row
 from otc_pipeline.http import PoliteFetcher
 
@@ -266,14 +267,7 @@ class NoaaCurrentsAdapter:
                 "constituent_table_version": CONSTITUENT_TABLE_VERSION}
 
     def licence(self) -> dict:
-        return {"licence_id": "noaa-public-domain", "spdx": "LicenseRef-PublicDomain-USGov",
-                "provider": "NOAA Center for Operational Oceanographic Products and Services (CO-OPS)",
-                "attribution": "NOAA CO-OPS data (a U.S. Government work, not subject to copyright). Units "
-                               "converted to SI (cm/s to m/s) and constituent speeds set to the release's astro "
-                               "table by OpenTideConstants; not official NOAA material.",
-                "url": "https://tidesandcurrents.noaa.gov/disclaimers.html",
-                # a U.S. Government work is public domain (17 U.S.C. 105): commercial use is allowed
-                "commercial_use": True}
+        return dict(NOAA_LICENCE)   # one object for both NOAA sources (one licence_id per release)
 
     def _speed(self, name: str) -> float | None:
         """The astro row's speed for a NOAA constituent (NOAA's within 1e-4 deg/h, else SpeedDeviation),

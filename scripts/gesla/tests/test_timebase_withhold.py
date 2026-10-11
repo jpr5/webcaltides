@@ -110,8 +110,13 @@ def test_the_committed_list_is_valid_and_names_the_six_reviewed_records():
     assert sorted(e["file_id"] for e in got) == sorted([
         "wcoco_t_navd88-wcoco-usa-sfwmd", "calahootchieriver_s79_t-s79_t-usa-sfwmd", "burgassouth-bur-bgr-cmems",
         "crms0590-crms0590-usa-crms", "crms0511-crms0511-usa-crms", "crms0531-crms0531-usa-crms",
-        "s197_t-s197-usa-sfwmd", "mbts_navd88-mbts-usa-sfwmd", "mdts-mdts-usa-sfwmd", "kivalina-9491253-usa-noaa"])
-    assert not any("san_felipe" in e["file_id"] for e in got)          # an owner decision, not a reviewed withhold
+        "s197_t-s197-usa-sfwmd", "mbts_navd88-mbts-usa-sfwmd", "mdts-mdts-usa-sfwmd", "kivalina-9491253-usa-noaa",
+        "san_felipe-307a-mex-uhslc_rq", "settlement_point-257-bhs-uhslc_fd", "settlement_point-257b-bhs-uhslc_rq"])
+    owner = [e for e in got if e["short"] == "owner-delegated withhold"]       # FIX-LST-6: the owner's decision
+    assert sorted(e["file_id"] for e in owner) == ["san_felipe-307a-mex-uhslc_rq", "settlement_point-257-bhs-uhslc_fd",
+                                                    "settlement_point-257b-bhs-uhslc_rq"]
+    assert all("owner" in e["evidence"]["reviewer"] for e in owner)
+    assert not any(e["file_id"].startswith("settlement_point-257a") for e in got)   # 257a is verified: never listed
 
 
 def test_the_audit_applies_the_list_and_stops_on_a_strong_listed_record(monkeypatch):
