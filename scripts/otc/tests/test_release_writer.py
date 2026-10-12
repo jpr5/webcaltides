@@ -1021,3 +1021,88 @@ def test_csv_commercial_use_follows_the_licence(release, tmp_path):
     assert sets["OTC-EXAMPLE-0005/gesla-fit-b"]["commercial_use"] == "false"
     assert sets["OTC-EXAMPLE-0005/gesla-fit-a"]["commercial_use"] == "true"
     assert next(r for r in rows if r["record_type"] == "offset")["commercial_use"] == "false"
+
+
+@pytest.fixture(scope="module")
+def historical_real_release():
+    path = os.environ.get("OTC_NOAA_HISTORICAL_REAL_RELEASE")
+    report_path = os.environ.get("OTC_FALLBACK_BUILD_REPORT")
+    if not path or not report_path:
+        pytest.skip("requires the sealed actual NOAA historical projection and native build report")
+    doc = json.loads(Path(path).read_text())
+    report = json.loads(Path(report_path).read_text())
+    run = load_congen_run(Path(report["provenance"]["congen_run"]["path"]),
+                          tcd_sha256=report["provenance"]["otc_tcd"]["sha256"])
+    return doc, run
+
+
+def test_historical_real_release_lossless_formats(historical_real_release, tmp_path):
+    doc, run = historical_real_release
+    original = copy.deepcopy(doc)
+    assert validate_release(doc) == []
+    paths = write_release(doc, tmp_path, datestamp=doc["release"]["datestamp"],
+                          app_export=None, congen_run=run, parquet=True, jsonl_gz=True)
+    stem = "OTC_" + doc["release"]["datestamp"]
+    for suffix in (".json", ".json.gz", ".jsonl", ".jsonl.gz"):
+        raw = (tmp_path / (stem + suffix)).read_bytes()
+        if suffix.endswith(".gz"):
+            raw = gzip.decompress(raw)
+        if ".jsonl" in suffix:
+            assert [json.loads(line) for line in raw.splitlines()] == doc["stations"]
+        else:
+            assert json.loads(raw) == doc
+    rows = read_csv(tmp_path / (stem + ".csv"))
+    parquet = pq.read_table(tmp_path / (stem + ".parquet")).to_pylist()
+    expected = {st["station_id"]: st["subordinate_offsets"] for st in doc["stations"] if "subordinate_offsets" in st}
+    assert len(expected) == 2
+    assert str(pq.read_schema(tmp_path / (stem + ".parquet")).field("subordinate_offsets").type) == "string"
+    for table_rows, missing in ((rows, ""), (parquet, None)):
+        offsets = [row for row in table_rows if row["record_type"] == "offset"]
+        assert {row["station_id"] for row in offsets} == set(expected)
+        for row in offsets:
+            wanted = expected[row["station_id"]]
+            assert json.loads(row["subordinate_offsets"]) == wanted
+            for key in ("time_offset_high_min", "time_offset_low_min", "height_offset_high", "height_offset_low"):
+                assert float(row[key]) == wanted[key]
+            assert row["height_adjusted_type"] == wanted["height_adjusted_type"]
+            assert row["licence_id"] == "noaa-public-domain" and row["commercial_use"] == "true"
+        assert all(row["subordinate_offsets"] == missing for row in table_rows if row["record_type"] != "offset")
+        for st in doc["stations"]:
+            station_row = next(row for row in table_rows if row["record_type"] == "station" and row["station_id"] == st["station_id"])
+            assert json.loads(station_row["source_records"]) == st["source_records"]
+    csv_payloads = {row["station_id"]: row["subordinate_offsets"] for row in rows if row["record_type"] == "offset"}
+    assert all(row["subordinate_offsets"].encode("utf-8") == csv_payloads[row["station_id"]].encode("utf-8")
+               for row in parquet if row["record_type"] == "offset")
+    assert json.loads((tmp_path / (stem + ".meta.json")).read_text()) == {key: value for key, value in doc.items() if key != "stations"}
+    assert check_release_dir(tmp_path) == [] and len(paths) == 8
+    assert doc == original
+
+
+@pytest.mark.parametrize("change,needle", [
+    ("reference_alias", "reference binding"),
+    ("raw_clock", "raw_values_json"),
+    ("source_record", "original source"),
+])
+def test_historical_real_semantic_links(historical_real_release, change, needle):
+    doc = copy.deepcopy(historical_real_release[0])
+    st = _station(doc, "OTC-28c56e20")
+    off = st["subordinate_offsets"]
+    if change == "reference_alias":
+        _station(doc, off["reference_station_id"])["aliases"].pop("noaa")
+    elif change == "raw_clock":
+        raw = json.loads(off["provenance"]["raw_values_json"])
+        raw["daylight_saving_applied_in_book"] = True
+        value = json.dumps(raw, ensure_ascii=False, separators=(",", ":"))
+        off["provenance"]["raw_values_json"] = value
+        st["source_records"][0]["original_metadata"]["raw_values_json"] = value
+    else:
+        st.pop("source_records")
+    errors = validate_release(doc)
+    assert any(needle in error for error in errors), errors
+
+
+def test_csv_unknown_offset_key_still_refuses(release):
+    release["stations"].append(subordinate({"reference_station_id": "OTC-EXAMPLE-0001",
+                                           "height_adjusted_type": "R", "unexpected_offset": 1}))
+    with pytest.raises(ValueError, match="unexpected_offset"):
+        rw._csv_rows(release)

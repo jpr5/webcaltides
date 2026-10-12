@@ -104,11 +104,13 @@ CSV_COLUMNS = [
     "missed_events", "extra_events", "previous_release",
     # Station-only original source identities/rows; append to preserve prior column order.
     "source_records",
+    # Complete subordinate profile on its offset row; preserve prior column order.
+    "subordinate_offsets",
 ]
 
 JSON_COLUMNS = {"aliases", "datum_named", "datum_basis", "qc_flags", "dropped_constituents", "provenance",
                 "nodal_formula_ids", "canary", "previous_release", "time_base", "record_issues",
-                "fit_segment", "expected_accuracy", "fallback", "source_records"}
+                "fit_segment", "expected_accuracy", "fallback", "source_records", "subordinate_offsets"}
 FLOAT_COLUMNS = {"lat", "lon", "time_offset_high_min", "time_offset_low_min", "height_offset_high",
                  "height_offset_low", "datum_msl_offset_m", "speed_deg_per_hour", "amplitude_m",
                  "phase_deg", "amp_uncertainty_m", "phase_uncertainty_deg", "utc_offset_hours",
@@ -153,7 +155,9 @@ _ROW_KEYS = {
 }
 _CHILD_KEYS = {
     "station": {"constant_sets", "subordinate_offsets", "current_offsets", "validation"},
-    "offset": {"datum"},
+    # Historical metadata is carried whole by the subordinate_offsets JSON column.
+    "offset": {"datum", "offset_id", "source", "source_type", "source_version", "source_record_id",
+               "qc_status", "qc_flags", "fallback", "vintage", "provenance"},
     "constant_set": {"constituents", "current_bins", "record_span", "datum"},
     "current_bin": {"constituents"},
 }
@@ -161,8 +165,8 @@ _CHILD_KEYS = {
 FORMAT_VERSION = "1.0"
 SCHEMA_NAME = f"otc-{FORMAT_VERSION}.schema.json"
 # SHA-256 of the site's src/schema/otc-1.0.schema.json at the commit sync_schema.sh pins
-# (6935d31, approved source identities, original rows and restricted TICON policies). sync_schema.sh holds the same value; a test keeps the two equal.
-SCHEMA_SHA256 = "f720cf62a566865d46bba0a664170a519dd6317ba8cf60f54b82d89fc8333eeb"
+# (e2ae45a, approved source identities, original rows and restricted TICON policies). sync_schema.sh holds the same value; a test keeps the two equal.
+SCHEMA_SHA256 = "33a760ad17ea48301f4a7fa4371608de328522c2c9625458aef8e7353d5b09fd"
 _MISSING = object()  # "key not present"; never equal to a value read from JSON
 _UNSUPPORTED_TICON_NAMES = {"3L2", "3N2", "MSQM", "MTM", "R3", "T3"}
 
@@ -565,6 +569,90 @@ def _current_station_errors(st: dict, where: str, by_id: dict, licences: dict,
                           f"{'current_offsets' if cur_off else 'recommended set'}")
 
 
+def _historical_offset_errors(release: dict) -> list[str]:
+    """The canonical historical source/rights/reference links; no accuracy claim."""
+    errors = []
+    stations = {st["station_id"]: st for st in _dicts(release.get("stations"))
+                if isinstance(st.get("station_id"), str)}
+    licences = {lic["licence_id"]: lic for lic in _dicts(release.get("licences"))
+                if isinstance(lic.get("licence_id"), str)}
+    for st in stations.values():
+        offsets = st.get("subordinate_offsets")
+        if not isinstance(offsets, dict) or not offsets.get("offset_id"):
+            continue
+        provenance = offsets.get("provenance")
+        if not isinstance(provenance, dict):
+            continue  # The pinned schema reports missing/malformed historical fields.
+        where = f"{st['station_id']} historical offsets"
+        own_licence = offsets.get("licence_id")
+        if not isinstance(own_licence, str) or own_licence not in licences:
+            errors.append(f"{where}: own licence_id must resolve")
+        binding = provenance.get("reference_binding")
+        if not isinstance(binding, dict):
+            continue
+        ref_id = offsets.get("reference_station_id")
+        reference = stations.get(ref_id) if isinstance(ref_id, str) else None
+        if reference is None:
+            errors.append(f"{where}: reference_station_id must resolve")
+        else:
+            aliases = reference.get("aliases")
+            if (binding.get("station_id") != reference["station_id"] or not isinstance(aliases, dict)
+                    or aliases.get("noaa") != binding.get("noaa_id")):
+                errors.append(f"{where}: reference binding must match the actual NOAA identity")
+            selected = next((cs for cs in _dicts(reference.get("constant_sets"))
+                             if cs.get("set_id") == reference.get("recommended_set_id")), {})
+            datum = selected.get("datum")
+            datum = datum if isinstance(datum, dict) else {}
+            bases = datum.get("basis")
+            basis = bases.get("mllw") if isinstance(bases, dict) else None
+            basis = basis if isinstance(basis, dict) else {}
+            named = datum.get("named")
+            reference_licence = selected.get("licence_id")
+            if (selected.get("quantity") != "water_level" or selected.get("source") != "noaa"
+                    or not isinstance(reference_licence, str) or reference_licence not in licences
+                    or datum.get("chart_datum") != "mllw" or not isinstance(named, dict) or "mllw" not in named
+                    or basis.get("kind") != "published" or basis.get("method") != "source"):
+                errors.append(f"{where}: reference requires actual NOAA water-level source rights and published MLLW")
+        crosswalk = provenance.get("id_crosswalk")
+        aliases = st.get("aliases")
+        if isinstance(crosswalk, dict) and isinstance(aliases, dict) and aliases.get("noaa") == crosswalk.get("legacy_id"):
+            errors.append(f"{where}: inferred legacy association must not become a NOAA alias")
+        try:
+            raw = json.loads(provenance.get("raw_values_json", ""))
+        except (TypeError, ValueError):
+            raw = None
+        numbers = ("height_adjusted_type", "time_offset_high_min", "time_offset_low_min",
+                   "height_offset_high", "height_offset_low")
+        expected_clock = -5 if provenance.get("book") == "atlantic" else -8
+        if (not isinstance(raw, dict)
+                or raw.get("contract_numeric_representation") != {key: offsets.get(key) for key in numbers}
+                or raw.get("chart_datum") != "MLLW" or raw.get("table_fixed_utc_offset_hours") != expected_clock
+                or raw.get("daylight_saving_applied_in_book") is not False
+                or raw.get("annual_table_row") != provenance.get("annual_table_row")
+                or raw.get("candidate_reference_noaa_id") != binding.get("noaa_id")):
+            errors.append(f"{where}: raw_values_json must retain the actual source numbers, fixed clock, MLLW and reference")
+        records = [record for record in _dicts(st.get("source_records"))
+                   if (record.get("source"), record.get("source_version"), record.get("source_record_id"))
+                   == (offsets.get("source"), offsets.get("source_version"), offsets.get("source_record_id"))]
+        if len(records) != 1:
+            errors.append(f"{where}: retain exactly one original source tuple")
+            continue
+        record = records[0]
+        metadata = record.get("original_metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        record_provenance = record.get("provenance")
+        record_provenance = record_provenance if isinstance(record_provenance, dict) else {}
+        if (record.get("role") != "reference" or record.get("disposition") != "retained"
+                or record.get("published_set_ids") != [] or record.get("licence_id") != offsets.get("licence_id")
+                or record_provenance.get("inventory_sha256") != provenance.get("source_manifest_sha256")
+                or record_provenance.get("input_sha256") != provenance.get("input_sha256")
+                or metadata.get("offset_id") != offsets.get("offset_id")
+                or metadata.get("raw_row_text") != provenance.get("raw_row_text")
+                or metadata.get("raw_values_json") != provenance.get("raw_values_json")):
+            errors.append(f"{where}: original source record must retain the same raw row, source rights and provenance")
+    return errors
+
+
 def validate_release(release: dict) -> list[str]:
     """Errors against the pinned schema (pinned_schema: raises SchemaPinError off the pin; no other
     schema can be passed) + cross-reference errors (convention_id, licence_id,
@@ -584,6 +672,7 @@ def validate_release(release: dict) -> list[str]:
             schema_errors.add((tuple(str(p) for p in e.absolute_path), f"{_path(e.absolute_path)}: {e.message}"))
     errors += [msg for _, msg in sorted(schema_errors)]
     errors += _cross_reference_errors(release)
+    errors += _historical_offset_errors(release)
     errors += astro_table_errors(release)
     return errors
 
@@ -637,7 +726,7 @@ def _csv_rows(release: dict) -> list[dict]:
         rows.append(_row("station", st))
         if "subordinate_offsets" in st:
             off = st["subordinate_offsets"]
-            rows.append(_row("offset", off, _datum_cells(off.get("datum", {}), {"station_id": sid})))
+            rows.append(_row("offset", off, _datum_cells(off.get("datum", {}), {"station_id": sid, "subordinate_offsets": off})))
         for co in st.get("current_offsets", []):
             rows.append(_row("current_offset", co, {"station_id": sid}))
         for cs in st["constant_sets"]:
