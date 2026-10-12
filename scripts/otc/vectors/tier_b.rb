@@ -393,6 +393,28 @@ module OTCTierB
             expected
         end
 
+        def verify_bgo_version_binding(station, record, row, mapping)
+            require_value(record.fetch('source_version') == '20261008' && record.fetch('role') == 'gauge_station' &&
+                          record.fetch('disposition') == 'metadata_only', 'original BGO metadata-only identity changed')
+            require_value(record.fetch('published_set_ids').empty?, 'invalid cross-version BGO published-set link')
+            tested = station.fetch('constant_sets').find { |set| set.fetch('set_id') == mapping.fetch('set_id') }
+            original_station = @original.fetch('stations').find { |item| item.fetch('station_id') == mapping.fetch('station_id') }
+            accepted = original_station.fetch('constant_sets').find { |set| set.fetch('set_id') == mapping.fetch('set_id') }
+            require_value(tested.fetch('source_version') == accepted.fetch('source_version') &&
+                          tested.fetch('source_version') == '20261010', 'tested BGO source version changed')
+            unchanged(tested.fetch('provenance').fetch('input_sha256'), accepted.fetch('provenance').fetch('input_sha256'),
+                      'BGO tested source input hashes')
+            constituents_sha = Digest::SHA256.hexdigest(JSON.generate(tested.fetch('constituents').map { |value| value.sort.to_h }))
+            expected = [{ 'row_id' => row.fetch('id'), 'set_id' => mapping.fetch('set_id'),
+                          'original_source_version' => record.fetch('source_version'),
+                          'tested_set_source_version' => tested.fetch('source_version'),
+                          'comparison_sha256' => PINNED.fetch(:comparison),
+                          'tested_input_sha256' => tested.fetch('provenance').fetch('input_sha256'),
+                          'tested_constituents_sha256' => constituents_sha }]
+            actual = JSON.parse(record.fetch('original_metadata').fetch('OTC_metric_tested_set_bindings_json'))
+            require_value(actual == expected, 'BGO tested-set binding differs from accepted source version, subject or hashes')
+        end
+
         def verify_label(row, mapping)
             identity = original_identity(mapping.fetch('source'), mapping.fetch('source_record_id'))
             records = @release.fetch('stations').flat_map do |station|
@@ -407,10 +429,14 @@ module OTCTierB
             provenance = record.fetch('provenance')
             require_value(provenance.fetch('inventory_sha256') == PINNED.fetch(:inventory), "source inventory provenance changed #{row['id']}")
             require_value(provenance.fetch('input_sha256').sort == identity.fetch('input_sha256').sort, "original input provenance changed #{row['id']}")
-            linked = record.fetch('published_set_ids')
-            expected_links = mapping['set_id'] ? [mapping['set_id']] : []
-            require_value(linked == expected_links, "wrong published set or offset link #{row['id']}")
-            require_value(record.fetch('disposition') == 'retained', "source disposition changed #{row['id']}")
+            if mapping['source'] == 'kartverket' && mapping['source_record_id'] == 'BGO'
+                verify_bgo_version_binding(station, record, row, mapping)
+            else
+                linked = record.fetch('published_set_ids')
+                expected_links = mapping['set_id'] ? [mapping['set_id']] : []
+                require_value(linked == expected_links, "wrong published set or offset link #{row['id']}")
+                require_value(record.fetch('disposition') == 'retained', "source disposition changed #{row['id']}")
+            end
             detail = record.fetch('detail')
             require_value(!detail.match?(/hourly heights?\s+(?:fail|failed|fails|failure)/i), "blanket BGO hourly height failure claim #{row['id']}") if mapping['source_record_id'] == 'BGO'
             labels = detail.lines.filter_map { |line| JSON.parse(line.delete_prefix(PREFIX)) if line.start_with?(PREFIX) }

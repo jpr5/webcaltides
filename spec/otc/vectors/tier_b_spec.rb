@@ -129,12 +129,72 @@ RSpec.describe 'the native Tier B official comparison' do
 
     it 'rejects a false blanket Bergen hourly height failure' do
         changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
-            record = document.fetch('stations').find { |station| station['station_id'] == 'OTC-e75bb97b' }.fetch('source_records').first
+            station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-e75bb97b' }
+            record = station.fetch('source_records').find { |item| item['source'] == 'kartverket' }
             record['detail'] += "\nHourly heights fail."
             File.write(path, JSON.generate(document))
             log, status, report = coverage_gate(release: path)
             expect(status.success?).to be(false), log
             expect(report.fetch('violations').join).to include('blanket BGO hourly height failure')
+        end
+    end
+
+    it 'retains the actual metadata-only BGO source version and its separate tested-set binding' do
+        log, status, report = coverage_gate(release: ENV.fetch('OTC_TIER_B_RELEASE'))
+        expect(status.success?).to be(true), log
+        label = report.fetch('labels').find { |item| item['row_id'] == 'kartverket/BGO/extremes' }
+        expect(label.fetch('source_version')).to eq('20261008')
+        document = JSON.parse(File.read(ENV.fetch('OTC_TIER_B_RELEASE')))
+        station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-e75bb97b' }
+        record = station.fetch('source_records').find { |item| item['source'] == 'kartverket' }
+        expect(record).to include('role' => 'gauge_station', 'disposition' => 'metadata_only', 'published_set_ids' => [])
+    end
+
+    %w[original_source_version tested_set_source_version tested_input_sha256 tested_constituents_sha256 set_id comparison_sha256].each do |field|
+        it "rejects an altered BGO tested-set binding #{field}" do
+            changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+                station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-e75bb97b' }
+                record = station.fetch('source_records').find { |item| item['source'] == 'kartverket' }
+                metadata = record.fetch('original_metadata')
+                binding = JSON.parse(metadata.fetch('OTC_metric_tested_set_bindings_json'))
+                binding.first[field] = if field == 'tested_input_sha256'
+                                           binding.first.fetch(field).each_with_index.map { |hash, index| index.zero? ? '0' * 64 : hash }
+                                       elsif field.end_with?('sha256')
+                                           '0' * 64
+                                       elsif field == 'set_id'
+                                           'OTC-e75bb97b/gesla-fit/bergen-bgo-nor-nhs'
+                                       else
+                                           '20261011'
+                                       end
+                metadata['OTC_metric_tested_set_bindings_json'] = JSON.generate(binding)
+                File.write(path, JSON.generate(document))
+                log, status, report = coverage_gate(release: path)
+                expect(status.success?).to be(false), log
+                expect(report.fetch('violations').join).to include('BGO tested-set binding')
+            end
+        end
+    end
+
+    it 'rejects a false cross-version BGO published-set ownership link' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-e75bb97b' }
+            record = station.fetch('source_records').find { |item| item['source'] == 'kartverket' }
+            record['published_set_ids'] = ['OTC-e75bb97b/kartverket/BGO']
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('invalid cross-version BGO published-set link')
+        end
+    end
+
+    it 'rejects a wrong source version on the actual tested BGO set' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-e75bb97b' }
+            station.fetch('constant_sets').find { |item| item['source'] == 'kartverket' }['source_version'] = '20261008'
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('tested BGO source version changed')
         end
     end
 
