@@ -2457,6 +2457,47 @@
           }
         }
       ]
+    },
+    {
+      "station_id": "OTC-1f91a5ad",
+      "status": "active",
+      "name": "Phipi Reef",
+      "lat": -9.6,
+      "lon": 142.53333333333333,
+      "timezone": "Etc/GMT-10",
+      "type": "reference",
+      "aliases": {},
+      "constant_sets": [],
+      "recommended_set_id": null,
+      "source_records": [
+        {
+          "source": "bom",
+          "source_version": "capture:0f7e85837771c8e320acf4258ca427d9ea74802be920ec6002d852d275a70ff0",
+          "source_record_id": "QLD_TP121",
+          "role": "gauge_station",
+          "disposition": "metadata_only",
+          "detail": "Original acquired metadata; captured output rows are summaries, not recomputed observations. No compatible accepted licence row is projected; original rights remain in retained input metadata.",
+          "licence_id": null,
+          "published_set_ids": [],
+          "provenance": {
+            "input_sha256": [
+              "0f7e85837771c8e320acf4258ca427d9ea74802be920ec6002d852d275a70ff0",
+              "8b2f1c1d9a826733c5f280879a10cd9ebef9465d743cac513cae0c94d4cbb450"
+            ],
+            "inventory_sha256": "28c1d1391164a736add779dd92e61210fe2d0e633085a4e893d19fd379c9dcd1"
+          },
+          "original_metadata": {
+            "inventory_rows_json": "[{\"granularity\":\"comparator_station_metadata\",\"input_sha256\":[\"0f7e85837771c8e320acf4258ca427d9ea74802be920ec6002d852d275a70ff0\",\"8b2f1c1d9a826733c5f280879a10cd9ebef9465d743cac513cae0c94d4cbb450\"],\"name\":\"Phipi Reef\",\"source\":\"bom\",\"upstream_record_id\":\"QLD_TP121\",\"version\":\"capture:0f7e85837771c8e320acf4258ca427d9ea74802be920ec6002d852d275a70ff0\"}]",
+            "captured_rows_json": "[]",
+            "raw_metadata_rows_json": "[{\"geometry\":{\"coordinates\":[142.53333333333333,-9.6],\"type\":\"Point\"},\"properties\":{\"AAC\":\"QLD_TP121\",\"ABBR_NAME\":\"ph\",\"ALT_REF\":58025,\"AVAIL_FLAG\":\"Y\",\"LAT\":-9.6,\"LON\":142.53333333333333,\"NOTES\":null,\"OFFICE\":\"QLDRO\",\"OPER_FLAG\":null,\"PORT_NAME\":\"Phipi Reef\",\"PS_FLAG\":\"S\",\"Priority\":4,\"QUADRANT\":4,\"STATE_CODE\":\"QLD\",\"STATE_NAME\":\"QUEENSLAND\",\"TIME_ZONE\":\"Australia/Brisbane\",\"TYPE\":\"TIDE\",\"TZ_DIFF\":-1000},\"type\":\"Feature\"}]",
+            "metadata_inputs_json": "[{\"path\":\"/Users/jpr5/.local/share/opentideconstants/work/cache/bom/sites.json\",\"sha256\":\"0f7e85837771c8e320acf4258ca427d9ea74802be920ec6002d852d275a70ff0\",\"size\":361064}]",
+            "inventory_sha256": "28c1d1391164a736add779dd92e61210fe2d0e633085a4e893d19fd379c9dcd1",
+            "load_datestamp": "20261011",
+            "accepted_licence_json": "null"
+          }
+        }
+      ],
+      "country": null
     }
   ]
 }

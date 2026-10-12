@@ -299,7 +299,7 @@
         "station_id": true,
         "status": { "const": "active" },
         "name": { "type": "string", "minLength": 1 },
-        "country": { "description": "ISO 3166-1 alpha-3.", "type": "string", "pattern": "^[A-Z]{3}$(?![\\s\\S])" },
+        "country": { "description": "ISO 3166-1 alpha-3, or null when no country is established from retained source evidence.", "type": ["string", "null"], "pattern": "^[A-Z]{3}$(?![\\s\\S])" },
         "lat": { "type": "number", "minimum": -90, "maximum": 90 },
         "lon": { "type": "number", "minimum": -180, "maximum": 180 },
         "timezone": {
