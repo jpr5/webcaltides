@@ -767,7 +767,7 @@ def _canonical_name(record_id: str, name: str) -> str:
     return name
 
 
-def source_set(doc: Mapping, *, licence_id: str) -> SourceSet:
+def source_set(doc: Mapping, *, licence_id: str, retain_source_values: bool = False) -> SourceSet:
     """A fit document as a gesla-fit `SourceSet` (format 1.0 constant_set without set_id and
     provenance.build, which the build adds). Scientific findings remain labelled fallbacks;
     an uncalibrated short record has no invented accuracy. Raises FitIntegrityError
@@ -775,7 +775,7 @@ def source_set(doc: Mapping, *, licence_id: str) -> SourceSet:
     `licence_id` is required: no licence is assumed."""
     if not isinstance(licence_id, str) or not licence_id:
         raise ValueError(f"{doc.get('record_id')}: no licence id (the per-contributor licences, L-NC, assign it)")
-    ss = comparator_set(doc, retain_findings=True)
+    ss = comparator_set(doc, retain_findings=True, retain_source_values=retain_source_values)
     return SourceSet(station_hint=ss.station_hint, constant_set={**ss.constant_set, "licence_id": licence_id})
 
 
@@ -831,7 +831,7 @@ def no_constants_set(row: Mapping, meta: Mapping, *, source_version: str, member
                       "aliases": {"gesla": [rid]}}, cs)
 
 
-def comparator_set(doc: Mapping, *, retain_findings: bool = False) -> SourceSet:
+def comparator_set(doc: Mapping, *, retain_findings: bool = False, retain_source_values: bool = False) -> SourceSet:
     """COMPARATOR ONLY by default: scientific refusal checks remain unchanged for canaries.
     Publication explicitly retains findings; neither path changes fit coefficients or stamp checks.
     With no licence_id this is never a release set:
@@ -875,7 +875,8 @@ def comparator_set(doc: Mapping, *, retain_findings: bool = False) -> SourceSet:
                                     "(no long_period_reference: attach_long_period_references)")
         long_period = short_accuracy.long_period_drops(f, speeds, doc["long_period_reference"])
     retained = retain_findings and (refused or uncalibrated)
-    held = set() if retained else {d["name"] for d in long_period}
+    preserve_all = retained or retain_source_values
+    held = set() if preserve_all else {d["name"] for d in long_period}
     cons = []
     for name in sorted(f["constituents"]):
         if name in held:
@@ -900,7 +901,7 @@ def comparator_set(doc: Mapping, *, retain_findings: bool = False) -> SourceSet:
     }
     dropped = [dict(d, name=_canonical_name(rid, d["name"]))
                for d in sorted(short_accuracy.dropped_constituents(drops, sorted(f.get("snr_dropped", ()))) +
-                               ([] if retained else long_period),
+                               ([] if preserve_all else long_period),
                                key=lambda d: d["name"])]
     if dropped:
         cs["dropped_constituents"] = dropped

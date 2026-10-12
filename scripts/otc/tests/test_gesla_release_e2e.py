@@ -37,6 +37,7 @@ from gesla.select_constituents import CANDIDATES
 from gesla.short_accuracy import UNCALIBRATED
 
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
+from otc_pipeline import gesla_sets as gs
 from otc_pipeline.astro_tables import astro_table, load_congen_run
 from otc_pipeline.gesla_release import EOT20_WHOLE_HOUR, build_release, disputed_reasons_of
 from otc_pipeline.gesla_sets import (FitIntegrityError, docs_from_fit_run, fit_records, load_audit, load_tcd_dump,
@@ -215,14 +216,14 @@ def test_retained_native_release_preserves_real_values_and_nofit_identities():
         assert cs["qc_status"] == "flagged" and cs["fallback"]["otc_finding"]
         assert any(f["flag"] == "fallback:" + cs["fallback"]["reason"] for f in cs["qc_flags"])
         published = {c["name"]: c for c in cs["constituents"]}
-        for name in ("M2", "S2", "K1", "O1"):
-            if name in document["fit"]["constituents"]:
-                actual = published[name]
-                original = document["fit"]["constituents"][name]
-                assert actual["amplitude_m"] == original["amp_m"]
-                assert actual["phase_deg"] == original["phase_deg"] % 360
-                if "u_m" in original:
-                    assert actual["amp_uncertainty_m"] == original["u_m"]
+        for name, original in document["fit"]["constituents"].items():
+            canonical = gs._canonical_name(rid, name)
+            assert canonical in published, (rid, name)
+            actual = published[canonical]
+            assert actual["amplitude_m"] == original["amp_m"]
+            assert actual["phase_deg"] == original["phase_deg"] % 360
+            if "u_m" in original:
+                assert actual["amp_uncertainty_m"] == original["u_m"]
     for row in fixture["nonfit_rows"]:
         assert row["record"] in sets, row["record"]
         cs = sets[row["record"]]

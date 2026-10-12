@@ -539,6 +539,16 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
             else:
                 reason = "reliability_withheld" if "reviewer_evidence" in why.split() else "time_base_disputed"
                 finding = f"{rid}: time-base audit disputes this record ({why})"
+            if cs["source"] == SOURCE:
+                document = next(doc for doc in docs if doc["record_id"] == rid)
+                original = source_set(document, licence_id=cs["licence_id"], retain_source_values=True).constant_set
+                names = {c["name"] for c in original["constituents"]}
+                restored = [d for d in cs.get("dropped_constituents", []) if d["name"] in names]
+                cs["constituents"] = original["constituents"]
+                if restored:
+                    cs["dropped_constituents"] = [d for d in cs["dropped_constituents"] if d["name"] not in names]
+                    finding += "; retained fitted lines despite the original qualification: " + "; ".join(
+                        f"{d['name']}: {d.get('detail', d['dropped_reason'])}" for d in restored)
             label_fallback(cs, reason, finding, basis="Retained existing fitted/source values; no time-base correction invented")
     report.retained = [{"record": c.cs["source_record_id"], "set_id": c.cs["set_id"], **c.cs["fallback"]}
                        for entries in by_station.values() for c, _ in entries if c.cs.get("fallback")]
