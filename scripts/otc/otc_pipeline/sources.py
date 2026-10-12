@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from otc_pipeline.adapters.dmi import DmiAdapter
+from otc_pipeline.adapters.fmi import FmiAdapter
 from otc_pipeline.adapters.jma import JmaAdapter
 from otc_pipeline.adapters.kartverket import KartverketAdapter
 from otc_pipeline.adapters.linz import LinzAdapter
@@ -18,6 +20,9 @@ from otc_pipeline.adapters.mi import MarineInstituteAdapter
 from otc_pipeline.adapters.noaa import NoaaAdapter
 from otc_pipeline.adapters.noaa_currents import NoaaCurrentsAdapter
 from otc_pipeline.adapters.pegelonline import PegelonlineAdapter
+from otc_pipeline.adapters.rws import RwsAdapter
+from otc_pipeline.adapters.shom_refmar import ShomRefmarAdapter
+from otc_pipeline.adapters.smhi import SmhiAdapter
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,11 @@ SOURCES: dict[str, type] = {
     "jma": JmaAdapter,
     "pegelonline": PegelonlineAdapter,
     "marine-institute": MarineInstituteAdapter,
+    "dmi": DmiAdapter,
+    "fmi": FmiAdapter,
+    "rws": RwsAdapter,
+    "shom-refmar": ShomRefmarAdapter,
+    "smhi": SmhiAdapter,
 }
 
 
