@@ -403,7 +403,8 @@ def test_the_build_report_carries_the_provenance_and_the_command_line(fakes, tmp
     assert prov["cwd"] == str(Path.cwd())
     assert prov["fit_run"]["results_sha256"] == _sha(p["fit_run"] / "results.jsonl")
     assert prov["calibration"]["sha256"] == "c" * 64 and prov["build_commit"] == "abc1234"
-    assert rep["refused_by_reason"] == {} and rep["published"] == 0     # the report itself is still all there
+    assert rep["refused_by_reason"] == {"too_short": 1} and rep["published"] == 0
+    assert rep["records"]["refused"] == [{"record": "b", "reason": "too_short", "message": "short"}]
 
 
 def test_a_congen_run_the_astro_tables_refuse_is_a_one_line_exit(fakes, monkeypatch):

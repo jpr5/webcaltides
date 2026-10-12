@@ -145,8 +145,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--currents-canary-start", default=cc.START)
     ap.add_argument("--datestamp", required=True)
     ap.add_argument("--created", required=True)
+    gb.inventory_arguments(ap)
     argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
+    inventory = gb.inventory_from_arguments(a)
     t0 = time.time()
 
     def log(msg: str) -> None:
@@ -193,7 +195,8 @@ def main(argv: list[str] | None = None) -> int:
                   "position_corrections_sha256": _sha256(combine.CORRECTIONS_PATH),
                   "canary_exceptions_sha256": _sha256(EXCEPTIONS_PATH),
                   "currents_canary_cache": str(a.currents_canary_cache.resolve())}
-    gb.write_report(parts.report, provenance, a.out / "BUILD_REPORT.json", extra={"agency": arep.as_dict()})
+    gb.write_report(parts.report, provenance, a.out / "BUILD_REPORT.json", extra={"agency": arep.as_dict()},
+                    release=release, inventory=inventory)
     log(f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
     return 0
 

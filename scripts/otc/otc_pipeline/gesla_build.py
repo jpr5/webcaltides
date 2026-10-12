@@ -61,6 +61,8 @@ from otc_pipeline.astro_tables import (OTC_ADDED, SOURCE_TCD_SHA256, TABLE_ID, T
                                        astro_table, load_congen_run)
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline.release_writer import validate_release, write_release
+from otc_pipeline.source_inventory import (SourceInventory, inventory_arguments, inventory_from_arguments,
+                                           load_source_inventory, report_inventory)
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -247,6 +249,9 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
         station_aliases=smap.release_aliases(),
         fit_run_results_sha256=results_sha256,
         disputed_reasons=disputed, ticon=carry)
+    # Scientific selection (including TICON neighbour choices) uses the same
+    # fitted documents. Account for existing non-fit outcomes only afterwards.
+    account_nonfit(rows, report)
     fit_identity = _run_identity(fit_run)
     if fit_identity["results_sha256"] != results_sha256:
         raise SystemExit(f"{fit_run}/results.jsonl changed during the build")
@@ -267,13 +272,37 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
     return BuildParts(release, report, crun, provenance, docs, disputed, smap.sibling_flags(), table)
 
 
-def write_report(report: gr.BuildReport, provenance: dict, path: Path, extra: dict | None = None) -> Path:
+def account_nonfit(rows: list[dict], report: gr.BuildReport) -> None:
+    """Retain actual fit-run non-fit outcomes in reporting without adding constants."""
+    seen = set()
+    accounted = set(report.published) | {r["record"] for r in report.refused}
+    pending = []
+    for row in rows:
+        rid, outcome = row["record"], row["outcome"]
+        if rid in seen:
+            raise ValueError(f"duplicate fit-run record: {rid}")
+        seen.add(rid)
+        if outcome not in {"fitted", "short", "unusable"}:
+            raise ValueError(f"unknown fit-run outcome for {rid}: {outcome}")
+        if outcome != "fitted" and rid not in accounted:
+            pending.append(gs.refusal(rid, "too_short" if outcome == "short" else "fit_unusable",
+                                       row.get("reason", outcome), row.get("data_hours")))
+    report.refused.extend(pending)
+
+
+def write_report(report: gr.BuildReport, provenance: dict, path: Path, extra: dict | None = None, *,
+                 release: dict | None = None, inventory: SourceInventory | None = None) -> Path:
     """BUILD_REPORT.json: the build report (BuildReport.as_dict) with `provenance` (and the `extra` sections of a
     combined build), through a temp file and an atomic rename."""
+    body = {**report.as_dict(), "provenance": provenance, **(extra or {})}
+    if inventory is not None:
+        if release is None:
+            raise ValueError("source inventory reporting requires the actual release")
+        body["source_inventory"] = report_inventory(inventory, release, report)
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     try:
         with open(tmp, "xb") as fh:
-            fh.write((json.dumps({**report.as_dict(), "provenance": provenance, **(extra or {})}, sort_keys=True, indent=1)
+            fh.write((json.dumps(body, sort_keys=True, indent=1)
                       + "\n").encode())
             fh.flush()
             os.fsync(fh.fileno())
@@ -292,8 +321,10 @@ def main(argv: list[str] | None = None) -> int:
                     "$OTC_TCD_TABLE, else $OTC_WORK/tcd_table.json)")
     ap.add_argument("--datestamp", required=True)
     ap.add_argument("--created", required=True)
+    inventory_arguments(ap)
     argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
+    inventory = inventory_from_arguments(a)
     t0 = time.time()
     if a.out.exists() and any(a.out.iterdir()):
         raise SystemExit(f"{a.out}: not empty")
@@ -315,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     files = write_release(release, a.out, datestamp=a.datestamp, app_export=None, congen_run=crun)
     provenance = {"command_line": [sys.executable, "-m", "otc_pipeline.gesla_build", *argv], "cwd": os.getcwd(),
                   **provenance}
-    write_report(report, provenance, a.out / "BUILD_REPORT.json")
+    write_report(report, provenance, a.out / "BUILD_REPORT.json", release=release, inventory=inventory)
     _log(t0, f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
     return 0
 
