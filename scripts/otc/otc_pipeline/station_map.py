@@ -7,6 +7,9 @@ Committed files (data/otc/):
 
 - station_ids.json: the station map. Every GESLA record of the metadata belongs to exactly one
   station id, published or not, so a record that is fitted later finds its id already there.
+  Audited TICON-only published source identities also belong to one stable station. These
+  identities have no GESLA epoch-hours row. An established source alias keeps its existing id;
+  an unverified possible duplicate stays separate. Identity links do not certify fitted tides.
 - station_review.json: what the mint did not decide alone. `proposals`: held-apart groups;
   `review`: merged groups with a reason to look at them; `time_base_defects`: joined record pairs
   whose phases differ by one clock offset (for the time-base audit); `time_base_suspects` and

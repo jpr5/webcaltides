@@ -1717,7 +1717,8 @@
    "founder": "sint_annaland_haven-sin-nld-rws",
    "records": [
     "sint_annaland_haven-sin-nld-rws",
-    "sint_annaland_haven_steiger-sin-nld-rws"
+    "sint_annaland_haven_steiger-sin-nld-rws",
+    "sint_annaland_haven_steiger-sintanlhvsgr-nld-rws"
    ]
   },
   "OTC-05c557b6": {
@@ -2781,7 +2782,8 @@
   "OTC-0951a691": {
    "founder": "schaar_van_de_noord-sch-nld-rws",
    "records": [
-    "schaar_van_de_noord-sch-nld-rws"
+    "schaar_van_de_noord-sch-nld-rws",
+    "schaar_van_de_noord-schaarvdnd-nld-rws"
    ]
   },
   "OTC-0958804f": {
@@ -4362,6 +4364,12 @@
     "Te2294fb"
    ]
   },
+  "OTC-0ec58bb9": {
+   "founder": "l9_platform-l9pfm-nld-rws",
+   "records": [
+    "l9_platform-l9pfm-nld-rws"
+   ]
+  },
   "OTC-0ec8bb52": {
    "founder": "noaa:8656569",
    "records": [
@@ -4522,6 +4530,7 @@
    "founder": "botlek_geulhaven-bot-nld-rws",
    "records": [
     "botlek_geulhaven-bot-nld-rws",
+    "geulhaven-geulhvn-nld-rws",
     "geulhaven-geulhvn-nld-rws_hist"
    ],
    "registry": [
@@ -5611,7 +5620,8 @@
    "founder": "oosterschelde11tg-oos-nld-cmems",
    "records": [
     "oosterschelde11tg-oos-nld-cmems",
-    "oosterschelde_11-oos-nld-rws"
+    "oosterschelde_11-oos-nld-rws",
+    "oosterschelde_11-oostsde11-nld-rws"
    ],
    "registry": [
     "T4c39cc3"
@@ -12745,7 +12755,8 @@
   "OTC-2d587551": {
    "founder": "maasmond_stroommeetpaal-maa-nld-rws",
    "records": [
-    "maasmond_stroommeetpaal-maa-nld-rws"
+    "maasmond_stroommeetpaal-maa-nld-rws",
+    "maasmond_stroommeetpaal-maasmsmpl-nld-rws"
    ]
   },
   "OTC-2d5ff29f": {
@@ -14735,6 +14746,7 @@
   "OTC-33e52ffe": {
    "founder": "cadzand_2-cad-nld-rws",
    "records": [
+    "cadzand-cadzd-nld-rws",
     "cadzand_2-cad-nld-rws"
    ],
    "registry": [
@@ -14790,6 +14802,7 @@
   "OTC-341526a1": {
    "founder": "tholen_bergse_diepsluis_buiten-tho-nld-rws",
    "records": [
+    "bergse_diepsluis_west-bergsdswt-nld-rws",
     "tholen_bergse_diepsluis_buiten-tho-nld-rws"
    ],
    "registry": [
@@ -14800,6 +14813,7 @@
    "founder": "moerdijk-moe-nld-rws",
    "records": [
     "moerdijk-moe-nld-rws",
+    "moerdijk-moerdk-nld-rws",
     "moerdijk-moerdk-nld-rws_hist"
    ],
    "registry": [
@@ -18078,6 +18092,7 @@
    "founder": "terneuzen-ter-nld-rws",
    "records": [
     "terneuzen-ter-nld-rws",
+    "terneuzen-ternzn-nld-rws",
     "terneuzen-ternzn-nld-rws_hist"
    ],
    "registry": [
@@ -20155,6 +20170,7 @@
   "OTC-455311cf": {
    "founder": "stellendam_buitenhaven-ste-nld-rws",
    "records": [
+    "stellendam_buiten-stelldbtn-nld-rws",
     "stellendam_buitenhaven-ste-nld-rws"
    ],
    "registry": [
@@ -22313,7 +22329,8 @@
   "OTC-4c864fcf": {
    "founder": "oosterschelde_14-oos-nld-rws",
    "records": [
-    "oosterschelde_14-oos-nld-rws"
+    "oosterschelde_14-oos-nld-rws",
+    "oosterschelde_14-oostsde14-nld-rws"
    ]
   },
   "OTC-4c884f76": {
@@ -25428,6 +25445,7 @@
   "OTC-57575ba0": {
    "founder": "eemshaven-eemshvn-nld-rws_hist",
    "records": [
+    "eemshaven-eemshvn-nld-rws",
     "eemshaven-eemshvn-nld-rws_hist",
     "eemshaven_haven-eem-nld-rws"
    ],
@@ -25814,6 +25832,12 @@
     "T83016cf"
    ]
   },
+  "OTC-588e03ba": {
+   "founder": "platform_hoorn_q1_a-q1-nld-rws",
+   "records": [
+    "platform_hoorn_q1_a-q1-nld-rws"
+   ]
+  },
   "OTC-58973d1d": {
    "founder": "chignik-9458917-usa-noaa",
    "records": [
@@ -25897,6 +25921,7 @@
   "OTC-58c58a98": {
    "founder": "schiermonnikoog-schiermnog-nld-rws_hist",
    "records": [
+    "schiermonnikoog-schiermnog-nld-rws",
     "schiermonnikoog-schiermnog-nld-rws_hist",
     "schiermonnikoog_waddenzee-sch-nld-rws",
     "schiermonnikoogwaddentg-sch-nld-cmems"
@@ -26297,7 +26322,8 @@
   "OTC-59fe48a8": {
    "founder": "hoek_van_holland_maeslantkering_beneden_noord-hoe-nld-rws",
    "records": [
-    "hoek_van_holland_maeslantkering_beneden_noord-hoe-nld-rws"
+    "hoek_van_holland_maeslantkering_beneden_noord-hoe-nld-rws",
+    "maeslantkering_zeezijde-maeslkrzzde-nld-rws"
    ]
   },
   "OTC-5a01062c": {
@@ -27413,6 +27439,7 @@
    "founder": "stavenisse-sta-nld-rws",
    "records": [
     "stavenisse-sta-nld-rws",
+    "stavenisse-stavnse-nld-rws",
     "stavenisse-stavnse-nld-rws_hist"
    ],
    "registry": [
@@ -28026,6 +28053,12 @@
     "T235ab13"
    ]
   },
+  "OTC-607a1052": {
+   "founder": "platform_f16_a-f16-nld-rws",
+   "records": [
+    "platform_f16_a-f16-nld-rws"
+   ]
+  },
   "OTC-608751c4": {
    "founder": "noaa-currents:PCT5886",
    "records": [
@@ -28258,6 +28291,7 @@
    "founder": "scheveningen-sch-nld-rws",
    "records": [
     "scheveningen-sch-nld-rws",
+    "scheveningen-schevngn-nld-rws",
     "scheveningen-schevngn-nld-rws_hist",
     "scheveningentg-sch-nld-cmems"
    ],
@@ -28558,7 +28592,8 @@
   "OTC-62687e1f": {
    "founder": "marollegat-mar-nld-rws",
    "records": [
-    "marollegat-mar-nld-rws"
+    "marollegat-mar-nld-rws",
+    "marollegat-marlgt-nld-rws"
    ]
   },
   "OTC-627d83cf": {
@@ -28945,7 +28980,8 @@
   "OTC-63ef1949": {
    "founder": "yerseke-yer-nld-rws",
    "records": [
-    "yerseke-yer-nld-rws"
+    "yerseke-yer-nld-rws",
+    "yerseke-yerske-nld-rws"
    ]
   },
   "OTC-63f35066": {
@@ -29481,7 +29517,8 @@
   "OTC-657a5879": {
    "founder": "a121tg-a12-nld-cmems",
    "records": [
-    "a121tg-a12-nld-cmems"
+    "a121tg-a12-nld-cmems",
+    "platform_a12-a12-nld-rws"
    ],
    "registry": [
     "T6a8bcde"
@@ -30139,6 +30176,12 @@
    "founder": "noaa-currents:PCT3681",
    "records": [
     "noaa-currents:PCT3681"
+   ]
+  },
+  "OTC-67992fae": {
+   "founder": "north_cormorant-northcmrt-nld-rws",
+   "records": [
+    "north_cormorant-northcmrt-nld-rws"
    ]
   },
   "OTC-679acb13": {
@@ -33482,6 +33525,7 @@
   "OTC-730d7688": {
    "founder": "euro_platform-eurpfm-nld-rws_hist",
    "records": [
+    "euro_platform-eurpfm-nld-rws",
     "euro_platform-eurpfm-nld-rws_hist",
     "europlatformtg-eur-nld-cmems"
    ],
@@ -33957,7 +34001,8 @@
   "OTC-74c13e16": {
    "founder": "d151tg-d15-nld-cmems",
    "records": [
-    "d151tg-d15-nld-cmems"
+    "d151tg-d15-nld-cmems",
+    "platform_d15_a-d15-nld-rws"
    ],
    "registry": [
     "T26e33e0"
@@ -35692,6 +35737,7 @@
   "OTC-7ad4aeb2": {
    "founder": "awgtg-awg-nld-cmems",
    "records": [
+    "amelander_westgat_platform-awgpfm-nld-rws",
     "awgtg-awg-nld-cmems"
    ],
    "registry": [
@@ -37887,6 +37933,7 @@
    "founder": "ijmuiden_buitenhaven-ijm-nld-rws",
    "records": [
     "ijmuiden_buitenhaven-ijm-nld-rws",
+    "ijmuiden_buitenhaven-ijmdbthvn-nld-rws",
     "ijmuiden_buitenhaven-ijmdbthvn-nld-rws_hist",
     "ijmuidentg-ijm-nld-cmems"
    ],
@@ -39247,7 +39294,8 @@
   "OTC-8721828f": {
    "founder": "oosterschelde_15-oos-nld-rws",
    "records": [
-    "oosterschelde_15-oos-nld-rws"
+    "oosterschelde_15-oos-nld-rws",
+    "oosterschelde_15-oostsde15-nld-rws"
    ]
   },
   "OTC-8726dc93": {
@@ -39738,7 +39786,8 @@
   "OTC-887930b2": {
    "founder": "suurhofbrug_noordzijde-suu-nld-rws",
    "records": [
-    "suurhofbrug_noordzijde-suu-nld-rws"
+    "suurhofbrug_noordzijde-suu-nld-rws",
+    "suurhofbrug_noordzijde-suurhbnzde-nld-rws"
    ]
   },
   "OTC-888bdb2a": {
@@ -39893,6 +39942,7 @@
    "founder": "petten_zuid-pet-nld-rws",
    "records": [
     "petten_zuid-pet-nld-rws",
+    "petten_zuid-pettzd-nld-rws",
     "petten_zuid-pettzd-nld-rws_hist",
     "pettenzuidtg-pet-nld-cmems"
    ],
@@ -39938,6 +39988,7 @@
    "founder": "terschelling_noordzee-ter-nld-rws",
    "records": [
     "terschelling_noordzee-ter-nld-rws",
+    "terschelling_noordzee-terslnze-nld-rws",
     "terschelling_noordzee-terslnze-nld-rws_hist",
     "terschellingnoordzeetg-ter-nld-cmems"
    ],
@@ -40782,6 +40833,7 @@
    "founder": "schoonhoven-sch-nld-rws",
    "records": [
     "schoonhoven-sch-nld-rws",
+    "schoonhoven-schoonhvn-nld-rws",
     "schoonhoven-schoonhvn-nld-rws_hist",
     "schoonhoventg-sch-nld-cmems"
    ],
@@ -41556,7 +41608,8 @@
   "OTC-8ed6229a": {
    "founder": "goeree_lichteiland-goe-nld-rws",
    "records": [
-    "goeree_lichteiland-goe-nld-rws"
+    "goeree_lichteiland-goe-nld-rws",
+    "lichteiland_goeree-lichtelgre-nld-rws"
    ],
    "registry": [
     "T76007da"
@@ -42341,7 +42394,8 @@
   "OTC-91910ee0": {
    "founder": "antwerpen_prosperpolder-ant-nld-rws",
    "records": [
-    "antwerpen_prosperpolder-ant-nld-rws"
+    "antwerpen_prosperpolder-ant-nld-rws",
+    "antwerpen_prosperpolder-antwppppdr-nld-rws"
    ]
   },
   "OTC-919404d2": {
@@ -46264,6 +46318,7 @@
   "OTC-9e9bac97": {
    "founder": "werkendam_nieuwe_merwede-wer-nld-rws",
    "records": [
+    "werkendam_buiten-werkdbtn-nld-rws",
     "werkendam_nieuwe_merwede-wer-nld-rws"
    ],
    "registry": [
@@ -48210,6 +48265,12 @@
     "noaa-currents:ACT1081"
    ]
   },
+  "OTC-a4f93015": {
+   "founder": "aukfield_platform-aukfpfm-nld-rws",
+   "records": [
+    "aukfield_platform-aukfpfm-nld-rws"
+   ]
+  },
   "OTC-a4fe9c37": {
    "founder": "nagoya-ma22-jpn-jodc_jma",
    "records": [
@@ -48223,6 +48284,7 @@
   "OTC-a4ffdacb": {
    "founder": "spijkenisse-spijknse-nld-rws_hist",
    "records": [
+    "spijkenisse-spijknse-nld-rws",
     "spijkenisse-spijknse-nld-rws_hist",
     "spijkenisse_oude_maas-spi-nld-rws",
     "spijkenissetg-spi-nld-cmems"
@@ -52821,7 +52883,8 @@
    "founder": "ijgeul_1-ijg-nld-rws",
    "records": [
     "ijgeul_1-ijg-nld-rws",
-    "ijgeulstroompaal1tg-ijg-nld-cmems"
+    "ijgeulstroompaal1tg-ijg-nld-cmems",
+    "ijmuiden_stroommeetpaal-ijmdsmpl-nld-rws"
    ],
    "registry": [
     "T2e158ea"
@@ -54818,7 +54881,8 @@
   "OTC-bb915177": {
    "founder": "terschelling_west-ter-nld-rws",
    "records": [
-    "terschelling_west-ter-nld-rws"
+    "terschelling_west-ter-nld-rws",
+    "west_terschelling-westtslg-nld-rws"
    ],
    "registry": [
     "T95d0c57"
@@ -55781,6 +55845,7 @@
    "founder": "westkapelle-wes-nld-rws",
    "records": [
     "westkapelle-wes-nld-rws",
+    "westkapelle-westkple-nld-rws",
     "westkapelle-westkple-nld-rws_hist",
     "westkapelletg-wes-nld-cmems"
    ],
@@ -56844,6 +56909,7 @@
    "founder": "wierumergronden-wie-nld-rws",
    "records": [
     "wierumergronden-wie-nld-rws",
+    "wierumergronden-wiermgdn-nld-rws",
     "wierumergronden-wiermgdn-nld-rws_hist",
     "wierumergrondentg-wie-nld-cmems"
    ],
@@ -57509,6 +57575,7 @@
    "founder": "vlissingen-vli-nld-rws",
    "records": [
     "vlissingen-vli-nld-rws",
+    "vlissingen-vlis-nld-rws",
     "vlissingen-vlissgn-nld-rws_hist",
     "vlissingentg-vli-nld-cmems"
    ],
@@ -57926,7 +57993,8 @@
   "OTC-c5a3e2c2": {
    "founder": "oosterschelde_13-oos-nld-rws",
    "records": [
-    "oosterschelde_13-oos-nld-rws"
+    "oosterschelde_13-oos-nld-rws",
+    "oosterschelde_13-oostsde13-nld-rws"
    ]
   },
   "OTC-c5a9fc47": {
@@ -59012,6 +59080,7 @@
   "OTC-c9acbb22": {
    "founder": "oudeschild-oudsd-nld-rws_hist",
    "records": [
+    "oudeschild-oudsd-nld-rws",
     "oudeschild-oudsd-nld-rws_hist",
     "oudeschildtg-oud-nld-cmems",
     "texel_oudeschild-tex-nld-rws"
@@ -59415,6 +59484,7 @@
   "OTC-cae6b6a0": {
    "founder": "goidschalxoord-goidsod-nld-rws_hist",
    "records": [
+    "goidschalxoord-goidsod-nld-rws",
     "goidschalxoord-goidsod-nld-rws_hist",
     "heinenoord_goidschalxoord-hei-nld-rws"
    ],
@@ -60201,6 +60271,7 @@
    "founder": "brouwershavensche_gat_08-bro-nld-rws",
    "records": [
     "brouwershavensche_gat_08-bro-nld-rws",
+    "brouwershavensche_gat_08-brouwhvsgt08-nld-rws",
     "brouwershavensche_gat_08-brouwhvsgt08-nld-rws_hist"
    ],
    "registry": [
@@ -61400,6 +61471,7 @@
    "founder": "texel_noordzee-tex-nld-rws",
    "records": [
     "texel_noordzee-tex-nld-rws",
+    "texel_noordzee-texnze-nld-rws",
     "texel_noordzee-texnze-nld-rws_hist"
    ],
    "registry": [
@@ -62136,6 +62208,12 @@
     "noaa:9466079"
    ]
   },
+  "OTC-d4c14187": {
+   "founder": "platform_j6-j6-nld-rws",
+   "records": [
+    "platform_j6-j6-nld-rws"
+   ]
+  },
   "OTC-d4d20406": {
    "founder": "noaa-currents:PCT0236",
    "records": [
@@ -62417,6 +62495,7 @@
   "OTC-d5b7f36a": {
    "founder": "lauwersoog-lauwog-nld-rws_hist",
    "records": [
+    "lauwersoog-lauwog-nld-rws",
     "lauwersoog-lauwog-nld-rws_hist",
     "lauwersoog_waddenzee-lau-nld-rws",
     "lauwersoogtg-lau-nld-cmems"
@@ -63582,6 +63661,7 @@
   "OTC-d97bb15f": {
    "founder": "k13atg-k13-nld-cmems",
    "records": [
+    "k13a_platform-k13apfm-nld-rws",
     "k13atg-k13-nld-cmems"
    ],
    "registry": [
@@ -65200,6 +65280,7 @@
   "OTC-deca8f61": {
    "founder": "maasvlakte_amaliahaven-maa-nld-rws",
    "records": [
+    "amaliahaven-amlahvn-nld-rws",
     "maasvlakte_amaliahaven-maa-nld-rws"
    ]
   },
@@ -66009,7 +66090,8 @@
   "OTC-e1923a56": {
    "founder": "zeelandbrug_noord-zee-nld-rws",
    "records": [
-    "zeelandbrug_noord-zee-nld-rws"
+    "zeelandbrug_noord-zee-nld-rws",
+    "zeelandbrug_noord-zeelbnd-nld-rws"
    ]
   },
   "OTC-e1993a68": {
@@ -66380,7 +66462,8 @@
    "records": [
     "perkpolder_walsoorden-per-nld-rws",
     "perkpolder_walsoorden-perkpdwodn-nld-rws_hist",
-    "walsoorden-wal-nld-rws"
+    "walsoorden-wal-nld-rws",
+    "walsoorden-walsodn-nld-rws"
    ],
    "registry": [
     "Td1360ba"
@@ -69833,7 +69916,8 @@
   "OTC-ee7df2cd": {
    "founder": "brouwersdam_brouwershavense_gat_2-bro-nld-rws",
    "records": [
-    "brouwersdam_brouwershavense_gat_2-bro-nld-rws"
+    "brouwersdam_brouwershavense_gat_2-bro-nld-rws",
+    "brouwershavensche_gat_punt_02-brouwhvsgt02-nld-rws"
    ],
    "registry": [
     "Tbdcf38d"
@@ -71690,7 +71774,8 @@
   "OTC-f464598f": {
    "founder": "parksluis-par-nld-rws",
    "records": [
-    "parksluis-par-nld-rws"
+    "parksluis-par-nld-rws",
+    "parksluis-parkss-nld-rws"
    ]
   },
   "OTC-f4671f18": {
@@ -72213,6 +72298,7 @@
    "records": [
     "gouda-gou-nld-rws",
     "gouda-gouda-nld-rws_hist",
+    "gouda_brug-goudbg-nld-rws",
     "gouda_brug-goudbg-nld-rws_hist",
     "gouda_hanepraaisluis-gou-nld-rws",
     "gouda_hanepraaisluis-goudhnpss-nld-rws_hist",

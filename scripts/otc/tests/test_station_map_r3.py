@@ -248,7 +248,7 @@ def pick(*cands):
 
 
 def test_the_rank_steps_are_the_published_ones():
-    assert gr.RANK_STEPS == ("tier", "time_base", "short_record", "instantaneous", "sub_hourly", "current", "originator",
+    assert gr.RANK_STEPS == ("fallback", "tier", "time_base", "short_record", "instantaneous", "sub_hourly", "current", "originator",
                              "commercial", "epoch_hours", "recency", "research_quality", "record_id")
     assert CURRENT_S == 2 * YEAR and EPOCH_TIE == 0.02
 
@@ -462,27 +462,28 @@ def test_mint_refuses_derived_out_in_a_work_tree_and_an_epoch_csv_of_another_aud
         run()
 
 
-# --- fix-r4 decision 2: clock-offset-only stations are withheld ------------------------------------
+# --- U1b: clock-offset-only stations retain their values and findings ------------------------------
 
-def test_a_station_whose_every_set_has_a_clock_offset_flag_is_refused_and_reported(table):  # noqa: F811
+def test_a_station_whose_every_set_has_a_clock_offset_flag_is_retained_and_reported(table):  # noqa: F811
     docs = two(table)
     ffbh = {"kind": "split_off", "verdict": "clock_offset_far", "clock_offset_h": -8.1, "distance_km": 1.35,
             "against": ["fremantle-62230-aus-bom"], "station_id": "OTC-ONE"}
-    sid = {d["record_id"]: "OTC-ONE" for d in docs}
-    eh = {d["record_id"]: {"member_sha256": d["member_sha256"], "hours": 1} for d in docs}
-    with pytest.raises(ValueError, match="no record is publishable"):
-        from test_format_1_0 import build
-        build(table, docs, station_ids=sid, epoch_hours=eh, sibling_flags={d["record_id"]: ffbh for d in docs})
+    release = built(table, docs, (1, 1), sibling_flags={d["record_id"]: ffbh for d in docs})
+    (st,) = release["stations"]
+    assert {cs["source_record_id"] for cs in st["constant_sets"]} == {d["record_id"] for d in docs}
+    assert all(cs["qc_status"] == "flagged" and cs["fallback"]["reason"] == "time_base_unresolved"
+               and cs["constituents"] for cs in st["constant_sets"])
     # one clean set in the station: published, the flagged one stays an alternate
     release = built(table, docs, (1, 2), sibling_flags={"r1-nor-test": ffbh})
     assert [cs["source_record_id"] for cs in release["stations"][0]["constant_sets"]] == ["r0-nor-test", "r1-nor-test"]
-    # a station of its own with only a clock-offset set is withheld; an amplitude-only flag is not
+    # A clock-offset-only station remains present with its unresolved finding.
     other = {d["record_id"]: f"OTC-{i}" for i, d in enumerate(docs)}
     release, report = gr.build_release(docs, **_kw(table, docs, other, {"r1-nor-test": ffbh}))
-    assert [s["station_id"] for s in release["stations"]] == ["OTC-0"]
-    (r,) = [x for x in report.refused if x["reason"] == "clock_offset_unresolved"]
-    assert r["record"] == "r1-nor-test" and "OTC-1" in r["message"] and "-8.10 h" in r["message"]
-    assert report.published == ["r0-nor-test"] and report.counts() == {"clock_offset_unresolved": 1}
+    assert [s["station_id"] for s in release["stations"]] == ["OTC-0", "OTC-1"]
+    (r,) = report.retained
+    assert r["record"] == "r1-nor-test" and r["set_id"].startswith("OTC-1/")
+    assert r["reason"] == "time_base_unresolved" and "-8.10 h" in r["otc_finding"]
+    assert report.published == ["r0-nor-test", "r1-nor-test"] and report.counts() == {} and report.refused == []
     amp = {"kind": "amplitude_only", "clock_offset_h": None, "against": ["x"], "decided_by": "eot20"}
     release, report = gr.build_release(docs, **_kw(table, docs, other, {"r1-nor-test": amp}))
     assert len(release["stations"]) == 2 and report.counts() == {}

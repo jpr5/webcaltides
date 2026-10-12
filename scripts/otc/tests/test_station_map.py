@@ -168,9 +168,9 @@ def test_the_committed_station_map_loads_and_has_every_epoch_count():
     assert len(rids) == sum(len(s["records"]) for s in m.stations.values())
     assert all(sm.ID_RE.fullmatch(s) for s in m.stations)
     epoch = sm.load_epoch_hours()
-    # epoch hours are a GESLA ranking input: every GESLA record has them; agency records (combine, <source>:<id>)
-    # carry no gauge record
-    assert set(epoch) == {r for r in rids if r.split(":", 1)[0] not in AGENCY_SOURCES}
+    # Epoch hours rank GESLA observations. Agency records and the audited TICON-only
+    # published harmonic records have no GESLA observations to count.
+    assert set(epoch) == {r for r in rids if r.split(":", 1)[0] not in AGENCY_SOURCES} - set(TICON_ONLY_RWS)
     assert all(0 <= e["hours"] <= 19 * 366 * 24 for e in epoch.values())
     aliases = m.release_aliases()
     tids = [a["webcaltides"] for a in aliases.values()]
@@ -480,17 +480,24 @@ def test_the_station_takes_name_and_position_from_its_recommended_set(table):
         assert (st["name"], st["lat"]) == (name, lat)
 
 
-def test_a_disputed_set_is_never_published_as_recommended_or_alternate(table):
-    # owner rule: disputed -> not carried (TB-SIB gate C, section 4)
+def test_a_disputed_set_is_retained_with_a_truthful_fallback_label(table):
+    # U1b retains fitted values; F0b ranks an ordinary set before a fallback.
     disputed = tb_row("disputed", comparator_kind="b", time_base_code="disputed:comparators_disagree",
                       time_base_reason="declared utc_instant kept; evidence disagrees")
-    with pytest.raises(ValueError, match=r"no record is publishable .*'time_base_disputed': 2"):
-        built(table, two(table, rows=(disputed, disputed)), (100, 9000))
+    release = built(table, two(table, rows=(disputed, disputed)), (100, 9000))
+    (st,) = release["stations"]
+    assert {cs["source_record_id"] for cs in st["constant_sets"]} == {"r0-nor-test", "r1-nor-test"}
+    assert all(cs["qc_status"] == "flagged" and cs["fallback"]["reason"] == "time_base_disputed"
+               and cs["constituents"] for cs in st["constant_sets"])
+    assert validate_release(release) == []
     # the disputed set has more epoch hours, so it would rank first on every other step
     release = built(table, two(table, rows=(None, disputed)), (100, 9000))
     (st,) = release["stations"]
-    assert [cs["source_record_id"] for cs in st["constant_sets"]] == ["r0-nor-test"]
-    assert st["recommended_set_id"].endswith("r0-nor-test") and st["aliases"]["gesla"] == ["r0-nor-test"]
+    assert [cs["source_record_id"] for cs in st["constant_sets"]] == ["r0-nor-test", "r1-nor-test"]
+    assert st["recommended_set_id"].endswith("r0-nor-test") and st["aliases"]["gesla"] == ["r0-nor-test", "r1-nor-test"]
+    assert "fallback" not in st["constant_sets"][0]
+    assert st["constant_sets"][1]["fallback"]["reason"] == "time_base_disputed"
+    assert st["constant_sets"][1]["fallback"]["preferred_set_id"] == st["recommended_set_id"]
     assert validate_release(release) == []
 
 
@@ -534,3 +541,94 @@ def test_validate_release_allows_null_only_when_every_set_is_no_constants(table)
     for cs in st["constant_sets"]:
         cs["qc_status"] = "no_constants"
     assert not any("recommended_set_id is null" in e for e in validate_release(release))
+
+
+# TICON-4's 56 RWS identities absent from GESLA 4.1. Audited source aliases
+# keep existing IDs; uncertain offshore crosslinks stay separate. This does not
+# assert scientific agreement or 56 new places.
+TICON_ONLY_RWS = {
+    "amaliahaven-amlahvn-nld-rws": "OTC-deca8f61",
+    "amelander_westgat_platform-awgpfm-nld-rws": "OTC-7ad4aeb2",
+    "antwerpen_prosperpolder-antwppppdr-nld-rws": "OTC-91910ee0",
+    "aukfield_platform-aukfpfm-nld-rws": "OTC-a4f93015",
+    "bergse_diepsluis_west-bergsdswt-nld-rws": "OTC-341526a1",
+    "brouwershavensche_gat_08-brouwhvsgt08-nld-rws": "OTC-cdb2418f",
+    "brouwershavensche_gat_punt_02-brouwhvsgt02-nld-rws": "OTC-ee7df2cd",
+    "cadzand-cadzd-nld-rws": "OTC-33e52ffe",
+    "eemshaven-eemshvn-nld-rws": "OTC-57575ba0",
+    "euro_platform-eurpfm-nld-rws": "OTC-730d7688",
+    "geulhaven-geulhvn-nld-rws": "OTC-0f8f071b",
+    "goidschalxoord-goidsod-nld-rws": "OTC-cae6b6a0",
+    "gouda_brug-goudbg-nld-rws": "OTC-f693ace0",
+    "ijmuiden_buitenhaven-ijmdbthvn-nld-rws": "OTC-826c08c4",
+    "ijmuiden_stroommeetpaal-ijmdsmpl-nld-rws": "OTC-b45a591d",
+    "k13a_platform-k13apfm-nld-rws": "OTC-d97bb15f",
+    "l9_platform-l9pfm-nld-rws": "OTC-0ec58bb9",
+    "lauwersoog-lauwog-nld-rws": "OTC-d5b7f36a",
+    "lichteiland_goeree-lichtelgre-nld-rws": "OTC-8ed6229a",
+    "maasmond_stroommeetpaal-maasmsmpl-nld-rws": "OTC-2d587551",
+    "maeslantkering_zeezijde-maeslkrzzde-nld-rws": "OTC-59fe48a8",
+    "marollegat-marlgt-nld-rws": "OTC-62687e1f",
+    "moerdijk-moerdk-nld-rws": "OTC-34162955",
+    "north_cormorant-northcmrt-nld-rws": "OTC-67992fae",
+    "oosterschelde_11-oostsde11-nld-rws": "OTC-13a3a3b4",
+    "oosterschelde_13-oostsde13-nld-rws": "OTC-c5a3e2c2",
+    "oosterschelde_14-oostsde14-nld-rws": "OTC-4c864fcf",
+    "oosterschelde_15-oostsde15-nld-rws": "OTC-8721828f",
+    "oudeschild-oudsd-nld-rws": "OTC-c9acbb22",
+    "parksluis-parkss-nld-rws": "OTC-f464598f",
+    "petten_zuid-pettzd-nld-rws": "OTC-890e4883",
+    "platform_a12-a12-nld-rws": "OTC-657a5879",
+    "platform_d15_a-d15-nld-rws": "OTC-74c13e16",
+    "platform_f16_a-f16-nld-rws": "OTC-607a1052",
+    "platform_hoorn_q1_a-q1-nld-rws": "OTC-588e03ba",
+    "platform_j6-j6-nld-rws": "OTC-d4c14187",
+    "schaar_van_de_noord-schaarvdnd-nld-rws": "OTC-0951a691",
+    "scheveningen-schevngn-nld-rws": "OTC-6165b135",
+    "schiermonnikoog-schiermnog-nld-rws": "OTC-58c58a98",
+    "schoonhoven-schoonhvn-nld-rws": "OTC-8c144a20",
+    "sint_annaland_haven_steiger-sintanlhvsgr-nld-rws": "OTC-05ae1373",
+    "spijkenisse-spijknse-nld-rws": "OTC-a4ffdacb",
+    "stavenisse-stavnse-nld-rws": "OTC-5e1e6b46",
+    "stellendam_buiten-stelldbtn-nld-rws": "OTC-455311cf",
+    "suurhofbrug_noordzijde-suurhbnzde-nld-rws": "OTC-887930b2",
+    "terneuzen-ternzn-nld-rws": "OTC-3eccfc5c",
+    "terschelling_noordzee-terslnze-nld-rws": "OTC-89261d11",
+    "texel_noordzee-texnze-nld-rws": "OTC-d21b1c7d",
+    "vlissingen-vlis-nld-rws": "OTC-c4170535",
+    "walsoorden-walsodn-nld-rws": "OTC-e31edaa7",
+    "werkendam_buiten-werkdbtn-nld-rws": "OTC-9e9bac97",
+    "west_terschelling-westtslg-nld-rws": "OTC-bb915177",
+    "westkapelle-westkple-nld-rws": "OTC-be2b5365",
+    "wierumergronden-wiermgdn-nld-rws": "OTC-c1dd24b1",
+    "yerseke-yerske-nld-rws": "OTC-63ef1949",
+    "zeelandbrug_noord-zeelbnd-nld-rws": "OTC-e1923a56",
+}
+
+
+def test_the_committed_map_retains_all_56_ticon_only_rws_identities():
+    mapped = sm.load().record_ids()
+    assert len(TICON_ONLY_RWS) == 56
+    assert {rid: mapped.get(rid) for rid in TICON_ONLY_RWS} == TICON_ONLY_RWS
+
+
+@pytest.mark.parametrize("rid, gesla_alias", [
+    ("amaliahaven-amlahvn-nld-rws", "maasvlakte_amaliahaven-maa-nld-rws"),
+    ("scheveningen-schevngn-nld-rws", "scheveningen-sch-nld-rws"),
+    ("vlissingen-vlis-nld-rws", "vlissingen-vli-nld-rws"),
+])
+def test_actual_ticon_rws_aliases_keep_the_existing_gauge_id(rid, gesla_alias):
+    mapped = sm.load().record_ids()
+    assert mapped.get(rid) == mapped[gesla_alias]
+
+
+@pytest.mark.parametrize("rid, possible_alias", [
+    ("platform_hoorn_q1_a-q1-nld-rws", "q11tg-q11-nld-cmems"),
+    ("platform_j6-j6-nld-rws", "j61tg-j61-nld-cmems"),
+    ("l9_platform-l9pfm-nld-rws", "l91tg-l91-nld-cmems"),
+    ("north_cormorant-northcmrt-nld-rws", "northcormoranttg-nor-gbr-cmems"),
+])
+def test_unverified_offshore_crosslinks_do_not_merge_existing_gauges(rid, possible_alias):
+    mapped = sm.load().record_ids()
+    assert mapped.get(rid) == TICON_ONLY_RWS[rid]
+    assert mapped[rid] != mapped[possible_alias]
