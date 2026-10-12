@@ -323,6 +323,21 @@ def test_current_subordinates_map_every_bin_reference():
     assert st["default_current_bin"] == 1
 
 
+def test_merge_keeps_licences_referenced_only_by_retained_source_records():
+    release = gesla_release()
+    release["licences"].extend([
+        {"licence_id": "source-only", "commercial_use": False},
+        {"licence_id": "upstream-only", "commercial_use": True},
+    ])
+    release["stations"][0]["source_records"] = [
+        {"licence_id": "source-only", "upstream_licence_id": "upstream-only"},
+        {"licence_id": None},
+    ]
+    out, _ = combine.merge(release, {}, station_ids=IDS, build_commit="1234567",
+                           table_id=TABLE, canaries={})
+    assert {lic["licence_id"] for lic in out["licences"]} == {"gesla-a", "source-only", "upstream-only"}
+
+
 def test_a_source_whose_canary_fails_stops_the_build():
     with pytest.raises(CombineError, match="D11"):
         combine.merge(gesla_release(), {"noaa": agency(ref("8443970", 42.3551, -71.05))}, station_ids=IDS,

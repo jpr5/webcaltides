@@ -585,6 +585,8 @@ def merge(release: dict, agency: Mapping[str, AgencySource], *, station_ids: Map
     used = {cs["licence_id"] for st in active for cs in st["constant_sets"]}
     used |= {st["subordinate_offsets"]["licence_id"] for st in active if "licence_id" in st.get("subordinate_offsets", {})}
     used |= {co["licence_id"] for st in active for co in st.get("current_offsets", []) if "licence_id" in co}
+    used |= {record[key] for st in active for record in st.get("source_records", [])
+             for key in ("licence_id", "upstream_licence_id") if record.get(key) is not None}
     out["licences"] = [licences[i] for i in sorted(used)]
     rows = {(r["constituent_table_version"], r["name"]): r for r in out["constituents"]}
     astro = {t["astro_table_id"]: t for t in out["astro_tables"]}[table_id]["constituents"]
