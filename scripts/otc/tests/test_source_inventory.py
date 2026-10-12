@@ -95,3 +95,20 @@ def test_alias_and_direct_set_lineage_are_distinguished_from_versions(tmp_path):
         ("gesla", "published_source_set"), ("noaa", "published_source_identity")]
     assert body["identities"][0]["published_set_ids"] == ["fit"]
     assert body["identities"][1]["station_ids"] == ["OTC-1"]
+
+
+def test_current_subordinate_retains_actual_noaa_alias_lineage(tmp_path):
+    path, pin, raw = inventory_file(tmp_path)
+    digest = hashlib.sha256(raw.read_bytes()).hexdigest()
+    path, pin, _raw = inventory_file(tmp_path, [{"source": "noaa-currents", "version": "20261008",
+                                               "upstream_record_id": "ACT0091", "granularity": "native_source_set",
+                                               "input_sha256": [digest]}])
+    inventory = gb.load_source_inventory(path, pin)
+    release = {"stations": [{"station_id": "OTC-current", "status": "active", "aliases": {"noaa": "ACT0091"},
+                             "constant_sets": [], "current_offsets": [{"reference_station_id": "OTC-reference"}]}]}
+    report_path = tmp_path / "BUILD_REPORT.json"
+    gb.write_report(BuildReport(), {}, report_path, release=release, inventory=inventory)
+    row = json.loads(report_path.read_text())["source_inventory"]["identities"][0]
+    assert row["disposition"] == "published_source_identity"
+    assert row["station_ids"] == ["OTC-current"]
+    assert row["published_set_ids"] == []

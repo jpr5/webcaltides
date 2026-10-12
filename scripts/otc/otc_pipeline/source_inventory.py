@@ -102,6 +102,10 @@ def report_inventory(inventory: SourceInventory, release: dict, report) -> dict:
         for source, values in station.get("aliases", {}).items():
             for rid in ([values] if isinstance(values, str) else values):
                 aliases[(source, rid)].add(sid)
+                # Current offsets retain the upstream NOAA station alias. Its
+                # existing release representation identifies the source branch.
+                if source == "noaa" and station.get("current_offsets"):
+                    aliases[("noaa-currents", rid)].add(sid)
         for cs in station.get("constant_sets", []):
             key = (cs["source"], cs["source_version"], cs["source_record_id"])
             sets[key].append((sid, cs["set_id"]))
