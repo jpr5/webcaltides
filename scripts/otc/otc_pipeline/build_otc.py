@@ -153,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source-quality-findings-sha256")
     ap.add_argument("--original-derived-inputs", type=Path)
     ap.add_argument("--original-derived-inputs-sha256")
+    ap.add_argument("--country-resolutions", type=Path)
+    ap.add_argument("--country-resolutions-sha256")
     gb.inventory_arguments(ap)
     argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
@@ -163,7 +165,10 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--source-quality-findings and --source-quality-findings-sha256 must be supplied together")
     if (a.original_derived_inputs is None) != (a.original_derived_inputs_sha256 is None):
         raise ValueError("--original-derived-inputs and --original-derived-inputs-sha256 must be supplied together")
-    if inventory is None and (a.chs_identities is not None or a.source_quality_findings is not None or a.original_derived_inputs is not None):
+    if (a.country_resolutions is None) != (a.country_resolutions_sha256 is None):
+        raise ValueError("--country-resolutions and --country-resolutions-sha256 must be supplied together")
+    if inventory is None and (a.chs_identities is not None or a.source_quality_findings is not None
+                              or a.original_derived_inputs is not None or a.country_resolutions is not None):
         raise ValueError("original source publication inputs require the actual pinned --source-inventory")
     chs = None
     if a.chs_identities is not None:
@@ -174,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("source quality findings SHA-256 mismatch")
     if a.original_derived_inputs is not None and _sha256(a.original_derived_inputs) != a.original_derived_inputs_sha256:
         raise ValueError("original derived-input manifest SHA-256 mismatch")
+    if a.country_resolutions is not None and _sha256(a.country_resolutions) != a.country_resolutions_sha256:
+        raise ValueError("country resolution cache SHA-256 mismatch")
     t0 = time.time()
 
     def log(msg: str) -> None:
@@ -200,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
                                   table_id=TABLE_ID, canaries=conv)
     arep.canaries = full
     log("agency: " + json.dumps(arep.sources, sort_keys=True))
-    original_retention = quality_findings = derived_inputs = None
+    original_retention = quality_findings = derived_inputs = country_resolutions = None
     if inventory is not None:
         from otc_pipeline.original_metadata import load_original_metadata
         metadata = load_original_metadata(inventory, tcd_path=tcd, datestamp=a.datestamp)
@@ -216,6 +223,11 @@ def main(argv: list[str] | None = None) -> int:
             quality_findings = original_sources.apply_quality_findings(
                 release, inventory, path=a.source_quality_findings, sha256=a.source_quality_findings_sha256)
             log("source quality findings: " + json.dumps(quality_findings, sort_keys=True))
+        original_sources.require_country_resolution_cache(release, a.country_resolutions)
+        if a.country_resolutions is not None:
+            country_resolutions = original_sources.apply_country_resolution_cache(
+                release, path=a.country_resolutions, sha256=a.country_resolutions_sha256)
+            log("country resolutions: " + json.dumps(country_resolutions, sort_keys=True))
     errs = validate_release(release)
     log(f"validate_release: {len(errs)} errors")
     for e in errs[:20]:
@@ -239,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
                   "currents_canary_cache": str(a.currents_canary_cache.resolve())}
     gb.write_report(parts.report, provenance, a.out / "BUILD_REPORT.json", extra={"agency": arep.as_dict(),
                     "original_source_retention": original_retention, "source_quality_findings": quality_findings,
-                    "original_derived_inputs": derived_inputs},
+                    "original_derived_inputs": derived_inputs, "country_resolutions": country_resolutions},
                     release=release, inventory=inventory)
     log(f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
     return 0

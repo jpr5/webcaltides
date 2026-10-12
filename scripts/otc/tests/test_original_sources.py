@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 
 def _env(name):
@@ -20,6 +21,67 @@ def test_restored_original_observation_adapters_are_registered():
     names = {"dmi", "fmi", "rws", "smhi", "shom-refmar"}
     assert names <= set(SOURCES)
     assert registry_errors() == []
+
+
+def test_actual_new_source_stations_follow_existing_country_alias_and_licence_shapes():
+    from otc_pipeline.release_writer import pinned_schema
+
+    proof = json.loads(_env("OTC_NATIVE_SHAPE_CELLS").read_text())
+    schema = pinned_schema()
+    validator = Draft202012Validator({"$ref": "#/$defs/active_station", "$defs": schema["$defs"]},
+                                      format_checker=Draft202012Validator.FORMAT_CHECKER)
+    assert len({(c["record"]["source"], c["record"]["source_record_id"]) for c in proof["cells"]}) >= 3
+    errors = [error.message for cell in proof["cells"] for error in validator.iter_errors(cell["station"])]
+    assert errors == []
+
+
+def test_actual_bgo_metric_binding_preserves_original_and_tested_versions():
+    station = json.loads(_env("OTC_NATIVE_BGO_BINDING").read_text())
+    record = next(row for row in station["source_records"] if row["source"] == "kartverket")
+    tested = next(cs for cs in station["constant_sets"] if cs["set_id"] == "OTC-e75bb97b/kartverket/BGO")
+    encoded = record["original_metadata"]["OTC_metric_tested_set_bindings_json"]
+    binding = json.loads(encoded)[0]
+    assert binding["row_id"] == "kartverket/BGO/extremes"
+    assert binding["original_source_version"] == record["source_version"] == "20261008"
+    assert binding["tested_set_source_version"] == tested["source_version"] == "20261010"
+    assert binding["set_id"] == tested["set_id"]
+    assert binding["tested_input_sha256"] == tested["provenance"]["input_sha256"]
+    assert binding["tested_constituents_sha256"] == hashlib.sha256(json.dumps(
+        tested["constituents"], sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    assert binding["comparison_sha256"] == "30f78c762b4b282d5a0801c59bdb268622498d75aa34bc83cd9b7aa7221bef6d"
+    assert record["published_set_ids"] == []
+
+
+def test_native_country_cache_options_require_both_path_and_hash():
+    from otc_pipeline.build_otc import main
+
+    command = json.loads(_env("OTC_NATIVE_COUNTRY_COMMAND").read_text())
+    args = command["argv"][1:]
+    index = args.index("--country-resolutions-sha256")
+    args = args[:index] + args[index + 2:]
+    with pytest.raises(ValueError, match="country-resolutions.*supplied together"):
+        main(args)
+
+
+def test_actual_unknown_country_and_position_records_require_lookup_cache():
+    from otc_pipeline.original_sources import require_country_resolution_cache
+
+    stations = json.loads(_env("OTC_NATIVE_COUNTRY_STATIONS").read_text())
+    assert len(stations) == 4999
+    with pytest.raises(ValueError, match="pinned --country-resolutions"):
+        require_country_resolution_cache({"stations": stations}, None)
+
+
+def test_actual_incomplete_country_cache_requires_explicit_refresh():
+    from otc_pipeline.original_sources import apply_country_resolution_cache
+
+    stations = json.loads(_env("OTC_NATIVE_COUNTRY_STATIONS").read_text())
+    for station in stations:
+        station.setdefault("country", None)
+    path = _env("OTC_NATIVE_INCOMPLETE_COUNTRY_CACHE")
+    with pytest.raises(ValueError, match="explicit refresh.*1 missing/stale.*0 conflicting"):
+        apply_country_resolution_cache({"stations": stations}, path=path,
+                                       sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 def test_native_original_sources_retain_every_spatial_identity_and_real_fit_payload():

@@ -16,6 +16,7 @@ from gesla.read_gesla import GeslaRelease
 from otc_pipeline import gesla_release as gr, station_map as sm
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline.source_inventory import SourceInventory
+from otc_pipeline.release_writer import pinned_schema
 
 NONSPATIAL = {"reference_response_file", "model_grid_artifact", "official_prediction_response_file"}
 ALIASES = {"marine-institute": "mi", "shom-refmar": "shom", "uhslc-fd": "uhslc",
@@ -44,6 +45,31 @@ def _licence(rows: dict, licence: dict | None) -> str | None:
     return lid
 
 
+def require_country_resolution_cache(release: dict, path: Path | None) -> None:
+    """Do not publish missing countries or unreliable points without actual lookup evidence."""
+    if path is None and any(
+            station.get("country") is None or any("position_unreliable" in record.get("detail", "")
+                                                  for record in station.get("source_records", []))
+            for station in release["stations"] if station["status"] == "active"):
+        raise ValueError("original source countries/positions require pinned --country-resolutions and its SHA-256")
+
+
+def apply_country_resolution_cache(release: dict, *, path: Path, sha256: str) -> dict:
+    """Require complete cached lookup coverage before publishing any country interpretation."""
+    from otc_pipeline.country_resolutions import apply_country_resolutions
+
+    report = apply_country_resolutions(release, path=path, sha256=sha256)
+    missing, conflicts = report["refresh_required"], report["conflicts"]
+    if missing or conflicts:
+        raise ValueError(f"country resolution cache requires explicit refresh: {len(missing)} missing/stale "
+                         f"and {len(conflicts)} conflicting source interpretations")
+    stations = {station["station_id"]: station for station in release["stations"]}
+    for correction in report["corrected_positions"]:
+        station = stations[correction["station_id"]]
+        station["timezone"] = gr.station_timezone(station["lat"], station["lon"])
+    return report
+
+
 def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_run: Path,
                             docs: list, report: gr.BuildReport, source_metadata: dict,
                             chs=None) -> dict:
@@ -52,6 +78,7 @@ def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_ru
     licences = {row["licence_id"]: row for row in release["licences"]}
     stations = {row["station_id"]: row for row in release["stations"] if row["status"] == "active"}
     taken = {row["station_id"] for row in release["stations"]}
+    alias_properties = pinned_schema()["$defs"]["active_station"]["properties"]["aliases"]["properties"]
     record_station, alias_station = {}, {}
     for sid, station in stations.items():
         for source, values in station.get("aliases", {}).items():
@@ -108,10 +135,14 @@ def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_ru
             taken.add(sid)
         station = stations[sid]
         system = ALIASES.get(source, source)
-        values = station.setdefault("aliases", {}).setdefault(system, [])
-        if isinstance(values, str):
-            values = [values]
-        station["aliases"][system] = sorted(set(values) | {parent})
+        if system in alias_properties:
+            aliases = station.setdefault("aliases", {})
+            if alias_properties[system]["type"] == "array":
+                aliases[system] = sorted(set(aliases.get(system, [])) | {parent})
+            elif system not in aliases:
+                aliases[system] = parent
+            # An existing scalar alias stays unchanged. Every additional actual
+            # upstream identity remains in source_records, not a new alias API.
         alias_station.setdefault((system, parent), set()).add(sid)
         record_station[(source, parent)] = sid
         return station
@@ -134,7 +165,7 @@ def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_ru
                     "lon": float(meta["LONGITUDE"]), "country": meta["COUNTRY"]}
             lid = gesla_ids[rid]
             outcome = original["fit_outcome"]
-            disposition = "not_fitted" if outcome != "fitted" else "licence_restricted" if lid in withheld else "retained"
+            disposition = "licence_restricted" if outcome == "fitted" and lid in withheld else "retained"
             detail = f"Actual original GESLA fit outcome: {outcome}; {original.get('fit_reason', '')}."
             if rid in refusals:
                 detail += " Actual publication finding: " + json.dumps(refusals[rid], ensure_ascii=False)
@@ -167,13 +198,20 @@ def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_ru
             if "original_constant_set_json" in data:
                 source_set = json.loads(data["original_constant_set_json"])
                 if source_set.get("provenance", {}).get("redistribution") == "comparator_only":
-                    disposition = "licence_restricted"
+                    disposition = "retained"
                     detail += " Original comparator-only scientific payload retained without an admitted predictive set or inherited publication permission."
         station = station_for(source, rid, data)
         native_source = NATIVE_SOURCE.get(source, source)
         parent = rid.split("#bin:", 1)[0] if source == "noaa-currents" else rid
         sets = [cs["set_id"] for cs in station["constant_sets"]
-                if cs["source"] == native_source and cs["source_record_id"] == parent]
+                if cs["source"] == native_source and cs["source_record_id"] == rid
+                and cs["source_version"] == version]
+        if original["granularity"] == "raw_station_bin_metadata":
+            parent_sets = [cs["set_id"] for cs in station["constant_sets"]
+                           if cs["source"] == native_source and cs["source_record_id"] == parent]
+            raw_metadata["OTC_parent_source_record_id"] = parent
+            raw_metadata["OTC_parent_published_set_ids_json"] = json.dumps(parent_sets, separators=(",", ":"))
+            detail += " Original raw bin metadata is retained separately from its parent native source set; parent lineage is recorded without asserting a same-tuple fit."
         if source != "gesla" and sets and disposition == "metadata_only":
             disposition = "retained"
             detail += " The existing native source set remains available; metadata does not replace its values."
@@ -201,7 +239,10 @@ def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_ru
     release["licences"] = [licences[lid] for lid in sorted(licences)]
     release["stations"] = sorted(stations.values(), key=lambda station: station["station_id"]) + [
         station for station in release["stations"] if station["status"] != "active"]
-    return {"retained_original_spatial_units": len(added), "original_nonspatial_units": len(nonspatial),
+    return {"retained_original_spatial_units": len(inventory.document["identities"]) - len(nonspatial),
+            "new_chs_source_records": len(chs.records) if chs is not None else 0,
+            "source_records_added": len(added), "total_source_records": sum(len(st.get("source_records", [])) for st in stations.values()),
+            "original_nonspatial_units": len(nonspatial),
             "nonspatial_roles": sorted(NONSPATIAL), "inventory_sha256": inventory.provenance["sha256"],
             "chs": chs.provenance if chs is not None else None, "unique_place_claim": False}
 
@@ -303,8 +344,32 @@ def apply_quality_findings(release: dict, inventory: SourceInventory, *, path: P
               or finding["native_value"] != 182 or finding["official_value"] is not None
               or not any(cs["set_id"] == finding["set_id"] for cs in station["constant_sets"])):
             raise ValueError("source quality tide finding changes its timing metric, bound or actual set")
-        actions.append((records[0], detail))
-    for record, detail in actions:
+        binding = None
+        if finding["set_id"] is not None:
+            tested = next(cs for cs in station["constant_sets"] if cs["set_id"] == finding["set_id"])
+            if (tested["source"], tested["source_record_id"]) != (identity["source"], identity["source_record_id"]):
+                raise ValueError("source quality finding tested set differs from its actual source identity")
+            if tested["source_version"] != identity["source_version"]:
+                binding = {"row_id": finding["row_id"], "set_id": tested["set_id"],
+                           "original_source_version": identity["source_version"],
+                           "tested_set_source_version": tested["source_version"],
+                           "comparison_sha256": finding["comparison_sha256"],
+                           "tested_input_sha256": list(tested["provenance"]["input_sha256"]),
+                           "tested_constituents_sha256": hashlib.sha256(json.dumps(
+                               tested["constituents"], sort_keys=True, ensure_ascii=False,
+                               separators=(",", ":")).encode("utf-8")).hexdigest()}
+        actions.append((records[0], detail, binding))
+    for record, detail, binding in actions:
         record["detail"] += "\n" + detail
+        if binding is not None:
+            metadata = record.setdefault("original_metadata", {})
+            key = "OTC_metric_tested_set_bindings_json"
+            bindings = json.loads(metadata.get(key, "[]"))
+            bindings.append(binding)
+            metadata[key] = json.dumps(bindings, ensure_ascii=False, separators=(",", ":"))
+            record["detail"] += ("\nMetric finding refers to the separately retained tested set version "
+                                 + binding["tested_set_source_version"] + "; original captured metadata version "
+                                 + binding["original_source_version"]
+                                 + " is unchanged. No original-version harmonic equality is asserted.")
     return {"path": str(Path(path).resolve()), "sha256": sha256, "labelled_failed_rows": len(actions),
             "scientific_results_changed": False}
