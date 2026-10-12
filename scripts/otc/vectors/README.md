@@ -68,3 +68,69 @@ Mutations 8, 8b, 8c and 9–9d must fail a native refusal, outcome or pinned ite
 Mutations 10 and 11 must retain all items within one second and the unchanged numerical tolerance.
 The omitted-table mutation must fail the independent hand sum.
 This tool does not implement an SDK or replace official-prediction and real-station vector checks.
+
+## NOAA prediction vectors
+
+The vector release contains the selected NOAA constants and offsets, plus one labelled synthetic station.
+The builder reads copied cache responses and their original `MANIFEST.json` files without network requests.
+For later datum responses, it uses the cached response receipts.
+Every consumed response must match its SHA-256 and size.
+The NOAA adapters retain source amplitudes, Greenwich phases, datum levels and offset values.
+
+The selected tide stations are Boston, Seattle, San Francisco, Hull, Charlestown and Ano Nuevo Island.
+Lockheed Shipyard supplies the folded ratio offsets.
+Ebon Atoll supplies the folded additive offsets and requires the Kwajalein reference station.
+The current stations are ACT1616 bin 1, BOS1101 bins 1/15, PUG1501 bins 1/6 and subordinate ACT1591 bin 1.
+ACT1591 carries all four current time adjustments.
+The release contains no Kartverket or JMA sets.
+
+The synthetic station copies Boston's constants and adds MA2 and MB2 first, at amplitudes 0.05 m and 0.03 m.
+Its name and selection reason mark the station as synthetic vector input.
+Its NOAA alias is empty, so it cannot impersonate Boston.
+The added phases are 0° and have no scientific claim.
+This input is not a production station or a production release.
+
+The shared `astro_entry.py` wrapper makes the table from the accepted congen run.
+The generator separately checks the table against the own-TCD file and its checked dump.
+The check includes every yearly value and the `NAME_TO_TCD` mappings.
+The strict engine receives the release table through `AstroTable.from_h` for every call.
+The generator never changes the strict engine or constituent definitions.
+
+Run these commands from the repository root:
+
+```sh
+uv run --project scripts/otc python scripts/otc/vectors/build_vectors_release.py \
+    --cache-dir "$INPUTS/cache" --run-dir "$INPUTS/congen" \
+    --schema "$INPUTS/otc-1.0.schema.json" --output "$OUTPUT/vectors-release.json"
+ruby scripts/otc/vectors/generate.rb \
+    --release "$OUTPUT/vectors-release.json" --run-dir "$INPUTS/congen" \
+    --output "$OUTPUT/vectors.json"
+```
+
+`vectors.json` uses the existing runner `op`, `args` and `expect.prediction` encodings.
+Every prediction includes the complete metadata and its expected items.
+Heights use at least 200 whole-second instants across 1990–2060, including leap day and both sides of New Year.
+Each event target uses three 31-day windows, including one across New Year.
+The generator refuses windows in bands 1, 2 or 4 and tries the next daily window.
+Band 3 is permitted for vectors, with the unchanged Tier A event-time tolerance of one second.
+Heights and velocities use seven decimal places.
+The output carries the release hash, strict-source hash, own-TCD identity and numerical checks.
+
+`--only NOAA_ID` selects one diagnostic station and marks the output incomplete.
+`--instant UTC` adds a fixed instant and refuses a fractional second.
+`--strict-source PATH` selects an isolated strict-engine copy for mutation proofs.
+
+Run the native tests with the copied inputs:
+
+```sh
+OTC_VECTOR_INPUTS="$INPUTS" uv run --project scripts/otc pytest \
+    scripts/otc/tests/test_build_vectors_release.py
+OTC_VECTOR_INPUTS="$INPUTS" OTC_VECTOR_RELEASE="$OUTPUT/vectors-release.json" \
+    rspec --options /dev/null spec/otc/vectors/generate_spec.rb
+ruby scripts/otc/vectors/lib/check_vector_mutations.rb \
+    "$OUTPUT/vectors-release.json" "$INPUTS/congen" "$MUTATION_OUTPUT" "$OUTPUT/vectors.json"
+```
+
+The mutation tool compares native outputs with the complete pinned vector run at the approved Tier A tolerances.
+Mutations 1 and 2 target M2 in 2010, which has dense instants and a 31-day event window.
+Mutation outputs and logs stay in the separate evidence directory.
