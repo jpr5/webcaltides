@@ -134,3 +134,71 @@ ruby scripts/otc/vectors/lib/check_vector_mutations.rb \
 The mutation tool compares native outputs with the complete pinned vector run at the approved Tier A tolerances.
 Mutations 1 and 2 target M2 in 2010, which has dense instants and a 31-day event window.
 Mutation outputs and logs stay in the separate evidence directory.
+
+## Tier B agency and XTide comparison
+
+`tier_b_sets.py` reads original, verified agency caches through the existing adapters.
+It makes no network requests. A missing cache entry stops the run.
+The caller supplies the original prediction responses and their request and response hash metadata.
+Keep these files outside the repository and retain them with the comparison evidence.
+
+Run this command from the repository root:
+
+```sh
+uv run --project scripts/otc python scripts/otc/vectors/tier_b_sets.py \
+    --cache "$ORIGINAL_CACHE" --official "$OFFICIAL_RESPONSES" \
+    --run-dir "$CONGEN_RUN" --table-id "$TABLE_ID" \
+    --tcd-sha256 "$TCD_SHA256" --out "$OUTPUT/official-calls.json"
+```
+
+The common window is October 1 through October 31, 2026, in UTC.
+Current direction samples cover October 1 through October 7.
+The stop instant is exclusive. Each response must match its pinned request.
+
+The rows cover Boston, Seattle and San Francisco reference tides; Hull, Tenants Harbor and Ebon Atoll subordinate tides;
+ACT1616 bin 1, BOS1101 bins 1 and 15, PUG1501 bins 1 and 6, and ACT0091 bin 1 currents;
+JMA TK, OS, KR and NG heights; and Kartverket BGO, TRD and SVG heights and extremes.
+ACT0091 uses its published EPT0003 bin 11 reference and unchanged offsets.
+The adapter keeps source phase, unit and datum conversions. The strict engine stays unchanged.
+
+Build XTide 2.16 locally before running its comparison.
+The build context must contain the approved `xtide-2.16.tar.xz` and `libtcd-2.2.7-r3.tar.xz` files.
+The Dockerfile verifies both hashes. Use the local default Docker builder:
+
+```sh
+docker --context=default buildx build --builder default --load \
+    -f scripts/otc/vectors/xtide/Dockerfile \
+    -t otc-kp1t-xtide:2.16 "$XTIDE_BUILD_CONTEXT"
+
+uv run --project scripts/otc python scripts/otc/vectors/xtide/compare.py \
+    --input "$OUTPUT/official-calls.json" --own-tcd "$OWN_TCD" \
+    --published-tcd data/harmonics-dwf-20251228-free.tcd \
+    --out "$OUTPUT/xtide"
+
+ruby scripts/otc/vectors/tier_b.rb --input "$OUTPUT/official-calls.json" \
+    --xtide-report "$OUTPUT/xtide/xtide-report.json" --out "$OUTPUT/comparison"
+```
+
+XTide uses the accepted own-TCD table and the same native adapter values for the two folded curves.
+The utility adds comparison records to a copy of the TCD. It defines no new constituents and preserves the source file.
+The New Year output uses unchanged published TCD data for Pensacola from December 31, 2052, through January 1, 2053.
+The report retains its raw CSV, tide events, image ID and input hashes.
+
+`comparison.json` records each bound, value error, event pair and unmatched event.
+Event pairing chooses the closest unused pairs of the same type across the complete window.
+Its 90-minute candidate window can include secondary extrema. The report retains this pairing uncertainty.
+NOAA event rows require exact event counts. Kartverket extreme rows apply the approved time bound and retain count differences.
+An exceeded bound or required count mismatch returns exit status 1.
+A selected subset never establishes complete acceptance.
+
+Run the native tests against the same actual inputs:
+
+```sh
+OTC_TIER_B_INPUT="$OUTPUT/official-calls.json" \
+    rspec --options /dev/null spec/otc/vectors/tier_b_spec.rb
+```
+
+The phase-error and omitted-table mutations must fail on the actual Bergen hourly comparison.
+The accepted phase conversion must pass the same hourly comparison.
+The complete agency test requires all 30 official rows to pass.
+Keep actual scientific failures and original responses; do not change source values, expected events or approved bounds to pass this test.
