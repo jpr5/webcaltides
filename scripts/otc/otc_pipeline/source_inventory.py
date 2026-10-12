@@ -94,11 +94,18 @@ def inventory_from_arguments(args) -> SourceInventory | None:
 
 
 def report_inventory(inventory: SourceInventory, release: dict, report) -> dict:
-    """Every acquired unit receives its actual current lineage or pending disposition."""
+    """Every acquired unit receives actual publication and retained-record lineage."""
     inventory.verify()
     sets, versions, aliases = defaultdict(list), defaultdict(list), defaultdict(set)
+    source_records = defaultdict(list)
     for station in release["stations"]:
         sid = station["station_id"]
+        for record in station.get("source_records", []):
+            key = (record["source"], record["source_version"], record["source_record_id"])
+            # Link to the emitted record without duplicating its raw metadata or
+            # harmonic payload. Its licence, role and disposition stay verbatim.
+            source_records[key].append({"station_id": sid, **{k: v for k, v in record.items()
+                                                             if k not in {"original_metadata", "original_harmonics"}}})
         for source, values in station.get("aliases", {}).items():
             for rid in ([values] if isinstance(values, str) else values):
                 aliases[(source, rid)].add(sid)
@@ -155,6 +162,12 @@ def report_inventory(inventory: SourceInventory, release: dict, report) -> dict:
             disposition = "reported_unpublished_record"
         else:
             disposition = "acquired_identity_pending_publication"
+        retained = source_records[(source, version, rid)]
+        if retained:
+            row["source_record_lineage"] = sorted(retained, key=lambda r: r["station_id"])
+            row["station_ids"] = sorted(set(row["station_ids"]) | {r["station_id"] for r in retained})
+            if "pending" in disposition:
+                disposition = "retained_source_record"
         if source == "gesla" and rid in refused:
             row["fit_publication_disposition"] = refused[rid]
         if source in {"gesla", "ticon"}:
@@ -164,9 +177,19 @@ def report_inventory(inventory: SourceInventory, release: dict, report) -> dict:
                 row["ticon_publication_disposition"] = not_carried[rid]
         row["disposition"] = disposition
         rows.append(row)
+    original_keys = {(r["source"], r["version"], r["upstream_record_id"]) for r in rows}
+    additional = [record for key in sorted(source_records) if key not in original_keys
+                  for record in sorted(source_records[key], key=lambda r: r["station_id"])]
+    retained_records = [record for records in source_records.values() for record in records]
     return {"inventory_version": 1, "provenance": inventory.provenance,
             "identity_count": len(rows), "identities": rows,
             "counts_by_source": dict(sorted(Counter(r["source"] for r in rows).items())),
             "counts_by_disposition": dict(sorted(Counter(r["disposition"] for r in rows).items())),
+            "additional_source_records": additional,
+            "source_record_summary": {"total": len(retained_records),
+                                      "original": len(retained_records) - len(additional),
+                                      "additional": len(additional),
+                                      "counts_by_disposition": dict(sorted(Counter(r["disposition"] for r in retained_records).items())),
+                                      "count_unit": "source/version/upstream record identities; not distinct places or predictive sets"},
             "count_unit": "source/version/upstream record identities; not distinct places",
             "limitations": inventory.document["limitations"]}
