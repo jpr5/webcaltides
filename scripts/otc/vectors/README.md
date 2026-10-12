@@ -135,6 +135,7 @@ The mutation tool compares native outputs with the complete pinned vector run at
 Mutations 1 and 2 target M2 in 2010, which has dense instants and a 31-day event window.
 Mutation outputs and logs stay in the separate evidence directory.
 
+
 ## Tier B agency and XTide comparison
 
 `tier_b_sets.py` reads original, verified agency caches through the existing adapters.
