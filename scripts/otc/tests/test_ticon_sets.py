@@ -3,6 +3,7 @@ record whose own OTC fit is withheld is published with TICON-4's constants, as a
 under the ticon-4 licence, with OTC's time-base annotation of the same record. Synthetic numbers only."""
 import hashlib
 import json
+import csv
 
 import pytest
 
@@ -34,6 +35,16 @@ def ticon_csv(tmp_path, recs):
     p = tmp_path / "ticon.csv"
     p.write_text("\n".join(lines) + "\n")
     return p, hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def test_native_loader_retains_every_original_csv_cell_as_a_string(tmp_path):
+    path, sha = ticon_csv(tmp_path, [("original-1-can-meds", "gesla4.MEDS", "Possible datum issues")])
+    record = ts.load_ticon(path, sha256=sha)["original-1-can-meds"]
+    with path.open(newline="") as stream:
+        rows = list(csv.reader(stream))
+    assert list(ts.TICON_COLUMNS) == rows[0]
+    assert record.original_rows == rows[1:]
+    assert record.country == "NOR"
 
 
 WINDOW = ("2010-01-01", "2011-12-31")    # the audit's checked span, covering the synthetic TICON span 2010-2011

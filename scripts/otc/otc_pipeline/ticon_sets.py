@@ -58,6 +58,9 @@ SOURCE_VERSION = "4"
 LICENCE_ID = "ticon-4"
 CONVENTION_ID = "ticon4-greenwich-schureman-v1"
 TICON_SHA256 = "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366"   # SEANOE 122848.csv
+TICON_COLUMNS = ("lat", "lon", "con", "amp", "pha", "amp_std", "pha_std", "missing_obs", "no_of_obs",
+                 "years_of_obs", "start_date", "end_date", "gesla_source", "tide_gauge_name", "type", "country",
+                 "record_quality", "datum_information")
 CMEMS = "gesla4.CMEMS"         # CMEMS-relayed records: CC BY-NC, never under the ticon-4 licence
 NO_ISSUES = "No obvious issues"
 SITE_KM = 1.0                  # a site match: a TICON record within 1 km of the GESLA gauge
@@ -107,6 +110,8 @@ class TiconRecord:
     amp_std: dict = field(default_factory=dict)        # source name -> TICON-4's amplitude standard error (cm)
     gauge_type: str = ""                               # TICON-4's `type`: Coastal, River, Lake
     n_obs: int = 0                                     # TICON-4's no_of_obs: the samples its analysis used
+    country: str = ""                                # original CSV country, including TICON-only identities
+    original_rows: list = field(default_factory=list)  # exact original CSV cells, not predictive constituents
 
 
 def load_ticon(path: Path, sha256: str = TICON_SHA256) -> dict[str, TiconRecord]:
@@ -121,14 +126,16 @@ def load_ticon(path: Path, sha256: str = TICON_SHA256) -> dict[str, TiconRecord]
         name = r["tide_gauge_name"]
         head = (float(r["lat"]), float(r["lon"]), r["gesla_source"], r["start_date"], r["end_date"], r["record_quality"])
         rec = out.setdefault(name, {"head": head, "cons": {}, "std": {}, "type": r.get("type", ""),
-                                    "n": int(float(r.get("no_of_obs") or 0))})
+                                    "n": int(float(r.get("no_of_obs") or 0)), "country": r["country"], "rows": []})
         if rec["head"] != head:
             raise ValueError(f"{path}: {name}: rows disagree on position, source, span or quality")
         if r["con"] in rec["cons"]:
             raise ValueError(f"{path}: {name}: constituent {r['con']} given twice")
         rec["cons"][r["con"]] = (float(r["amp"]), float(r["pha"]))
         rec["std"][r["con"]] = float(r["amp_std"])
-    return {n: TiconRecord(n, *v["head"], constituents=v["cons"], amp_std=v["std"], gauge_type=v["type"], n_obs=v["n"])
+        rec["rows"].append([r[column] for column in TICON_COLUMNS])
+    return {n: TiconRecord(n, *v["head"], constituents=v["cons"], amp_std=v["std"], gauge_type=v["type"], n_obs=v["n"],
+                            country=v["country"], original_rows=v["rows"])
             for n, v in out.items()}
 
 
