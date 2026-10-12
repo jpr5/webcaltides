@@ -53,3 +53,22 @@ def test_changed_consumed_capture_is_refused(tmp_path):
     (tmp_path / 'gauge_dmi.json').write_text('{}')
     with pytest.raises(ValueError, match='integrity mismatch'):
         load_original_metadata(inv, tcd_path=Path('unused'), datestamp='20261011')
+
+
+def test_bom_unsigned_angle_does_not_claim_verified_physical_position(tmp_path):
+    # Actual frozen INT_TP054 metadata, not a guessed corrected Vaitupu location.
+    feature = {'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': [188.6833, -7.4833]},
+               'properties': {'AAC': 'INT_TP054', 'PORT_NAME': 'Vaitupu',
+                              'LAT': -7.4833, 'LON': 188.6833, 'TIME_ZONE': 'Pacific/Vaitupu'}}
+    row = {**identity('INT_TP054'), 'source': 'bom', 'granularity': 'comparator_station_metadata'}
+    inv = inventory(tmp_path, {'bom/sites.json': {'type': 'FeatureCollection', 'features': [feature]}}, [row])
+    result = load_original_metadata(inv, tcd_path=Path('unused'), datestamp='20261011')['bom', 'INT_TP054']
+    assert result['lon'] == pytest.approx(-171.3167)
+    assert result['lat'] == -7.4833
+    assert 'position_unreliable' in result['detail']
+    assert 'physical location has not been verified' in result['detail']
+    assert json.loads(result['original_metadata']['raw_metadata_rows_json']) == [feature]
+    interpretation = json.loads(result['original_metadata']['OTC_position_interpretation_json'])
+    assert interpretation['physical_location_verified'] is False
+    assert interpretation['original_longitude'] == 188.6833
+    assert result['licence'] is None

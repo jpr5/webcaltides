@@ -227,6 +227,16 @@ def load_original_metadata(inventory: SourceInventory, *, tcd_path: Path, datest
             name, lat, lon, country = None, None, None, None
             notes.append('Explicit metadata gap: conflicting captured/raw place fields.' if unique
                          else 'Explicit metadata gap: missing captured/raw place fields.')
+        if source == 'bom' and isinstance(lon, (int, float)) and 180 < lon <= 360:
+            original_lon = lon
+            lon -= 360
+            metadata['OTC_position_interpretation_json'] = _json({
+                'original_longitude': original_lon, 'signed_longitude': lon,
+                'interpretation': 'equivalent angular representation only',
+                'position_unreliable': True, 'physical_location_verified': False})
+            notes.append('position_unreliable: signed longitude is only an equivalent representation of the '
+                         'acquired angle; physical location has not been verified. Retain as metadata only, '
+                         'without a usable prediction or accuracy claim.')
         if name is None or lat is None or lon is None:
             notes.append('Explicit metadata gap: name or coordinates unresolved; original rows retained.')
         if licence is None:
