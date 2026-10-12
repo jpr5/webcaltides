@@ -203,4 +203,5 @@ class SmhiAdapter:
                 "provider": "Swedish Meteorological and Hydrological Institute (SMHI)",
                 "attribution": "Contains data from the Swedish Meteorological and Hydrological "
                                "Institute (SMHI), licensed under CC BY 4.0.",
-                "url": "https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning"}
+                "url": "https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning",
+                "commercial_use": True}

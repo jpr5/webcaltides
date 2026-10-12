@@ -242,7 +242,8 @@ class RwsAdapter:
     def licence(self) -> dict:
         return {"licence_id": "rws-cc0-1.0", "spdx": "CC0-1.0", "provider": "Rijkswaterstaat",
                 "attribution": "Contains data from Rijkswaterstaat (waterinfo / Waterwebservices).",
-                "url": "https://rijkswaterstaatdata.nl/waterdata/"}
+                "url": "https://rijkswaterstaatdata.nl/waterdata/",
+                "commercial_use": True}
 
     def watch_keys(self, fetched: FetchResult) -> dict[str, str]:
         """Station code -> SHA-256 of its normalised series (stamp, value, quality code)."""

@@ -226,4 +226,5 @@ class DmiAdapter:
                 "provider": "Danish Meteorological Institute (DMI)",
                 "attribution": "Contains data from the Danish Meteorological Institute (DMI), "
                                "licensed under CC BY 4.0.",
-                "url": "https://www.dmi.dk/friedata/dokumentation/terms-of-use"}
+                "url": "https://www.dmi.dk/friedata/dokumentation/terms-of-use",
+                "commercial_use": True}

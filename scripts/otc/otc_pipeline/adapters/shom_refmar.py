@@ -333,4 +333,5 @@ class ShomRefmarAdapter:
                             "(REFMAR partner gauges). Licence Ouverte / Open Licence 2.0 (Etalab). "
                             f"{updated}"),
             "url": "https://www.etalab.gouv.fr/licence-ouverte-open-licence/",
+            "commercial_use": True,
         }

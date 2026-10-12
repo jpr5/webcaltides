@@ -255,4 +255,5 @@ class FmiAdapter:
                 "provider": "Finnish Meteorological Institute (FMI)",
                 "attribution": "Contains data from the Finnish Meteorological Institute (FMI), "
                                "licensed under CC BY 4.0.",
-                "url": "https://en.ilmatieteenlaitos.fi/open-data-licence"}
+                "url": "https://en.ilmatieteenlaitos.fi/open-data-licence",
+                "commercial_use": True}
