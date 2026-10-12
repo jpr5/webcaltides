@@ -151,6 +151,47 @@
       "restriction": "Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'.",
       "terms_url": "https://www.bodc.ac.uk/data/documents/nodb/267795/",
       "spdx": "NOASSERTION"
+    },
+    {
+      "licence_id": "ticon-4-cmems-restricted",
+      "spdx": "NOASSERTION",
+      "provider": "TICON-4 (DGFI-TUM); underlying record: Copernicus Marine Service (CMEMS) via GESLA",
+      "citation": "Hart-Davis, M., Dettmering, D., Seitz, F. (2025). TICON-4: TIdal CONstants based on GESLA-4 sea-level records. SEANOE. doi:10.17882/109129\nUnderlying record citation (stored metadata): Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+      "attribution": "Internal restricted policy: NOASSERTION means OTC does not conclude a combined licence. Published TICON attribution: Contains constants from TICON-4 (DGFI-TUM), CC BY 4.0. Hart-Davis, M., Dettmering, D., Seitz, F. (2025). TICON-4: TIdal CONstants based on GESLA-4 sea-level records. SEANOE. doi:10.17882/109129.\nUnderlying record attribution (stored metadata): Generated using E.U. Copernicus Marine Service Information; https://doi.org/10.48670/moi-00036, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+      "url": "https://doi.org/10.17882/109129",
+      "commercial_use": false,
+      "restriction": "Non-commercial use only: the GESLA licence page lists CMEMS records for research use; commercial use needs the data owner's permission.",
+      "terms_url": "https://gesla787883612.wordpress.com/license/"
+    },
+    {
+      "licence_id": "dmi-cc-by-4.0",
+      "spdx": "CC-BY-4.0",
+      "provider": "Danish Meteorological Institute (DMI)",
+      "attribution": "Contains data from the Danish Meteorological Institute (DMI), licensed under CC BY 4.0.",
+      "url": "https://www.dmi.dk/friedata/dokumentation/terms-of-use",
+      "commercial_use": true
+    },
+    {
+      "attribution": "Contains water level data owned by the Canadian Hydrographic Service, Fisheries and Oceans Canada, via MEDS and GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+      "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+      "commercial_use": false,
+      "licence_id": "gesla-chs-withheld",
+      "provider": "Canadian Hydrographic Service (CHS), Fisheries and Oceans Canada, via MEDS and GESLA",
+      "restriction": "Non-commercial use only, and withheld: DFO's terms say 'If you wish to reproduce Canadian Hydrographic Service navigational charts, publications, data or other hydrographic products, please contact CHS directly'; CHS owns the copyright in the data, and its licence agreement for website-delivered data excludes derivative products for commercial purposes.",
+      "spdx": "CC-BY-NC-4.0",
+      "terms_url": "https://www.dfo-mpo.gc.ca/terms-avis/terms-conditions-avis-eng.htm",
+      "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode"
+    },
+    {
+      "attribution": "Contains sea level data from the University of Hawaii Sea Level Center and its originating agencies, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+      "citation": "Caldwell, P. C., M. A. Merrifield, P. R. Thompson (2015), Sea level measured by tide gauges from global oceans - the Joint Archive for Sea Level holdings (NCEI Accession 0019568), Version 5.5, NOAA National Centers for Environmental Information, Dataset, doi:10.7289/V5V40S7W; Fast Delivery data obtained (via GESLA-4.1) through 2026-04-30; Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+      "commercial_use": false,
+      "licence_id": "gesla-uhslc-nc",
+      "provider": "University of Hawaii Sea Level Center (UHSLC, research quality and fast delivery) and its national originators, via GESLA",
+      "restriction": "Non-commercial use only: the originating agency's terms for these records are not documented or do not clearly cover derived constants; commercial use needs the data owner's permission.",
+      "spdx": "CC-BY-NC-4.0",
+      "terms_url": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0019568",
+      "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode"
     }
   ],
   "constituents": [
@@ -1791,6 +1832,631 @@
       "timezone": "Europe/London",
       "type": "reference",
       "recommended_is_fallback": true
+    },
+    {
+      "aliases": {
+        "gesla": [
+          "a121tg-a12-nld-cmems"
+        ],
+        "webcaltides": "T6a8bcde"
+      },
+      "country": "NLD",
+      "lat": 55.400002,
+      "lon": 3.8099999,
+      "name": "A121TG",
+      "station_id": "OTC-657a5879",
+      "status": "active",
+      "timezone": "Etc/GMT",
+      "type": "reference",
+      "recommended_set_id": "OTC-657a5879/ticon-4/a121tg-a12-nld-cmems",
+      "recommended_is_fallback": true,
+      "constant_sets": [
+        {
+          "set_id": "OTC-657a5879/ticon-4/a121tg-a12-nld-cmems",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "a121tg-a12-nld-cmems",
+          "source_version": "4",
+          "record_span": {
+            "end": "2025-06-30T23:59:59Z",
+            "start": "2015-06-28T00:00:00Z"
+          },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4-cmems-restricted",
+          "qc_status": "flagged",
+          "time_base": {
+            "code": "unverified",
+            "decided_build_commit": "ecd91f6c64b7f116e521fb31ab0a2a7d65effc69",
+            "decided_in": "20261011",
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "reason": "declared utc_instant kept; no comparator; provider CMEMS (interval 600 s) has 85 judged records with verdicts ['unexplained', 'utc_instant']; weak evidence insufficient: EOT20 n/a (constituent lags disagree (> 30.0 min from tau)); served n/a (built from the record under test (a121tg-a12-nld-cmems): agrees by construction); DST no_step"
+          },
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 0.27384,
+              "phase_deg": 131.041803
+            }
+          ],
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base unverified: declared utc_instant kept; no comparator; provider CMEMS (interval 600 s) has 85 judged records with verdicts ['unexplained', 'utc_instant']; weak evidence insufficient: EOT20 n/a (constituent lags disagree (> 30.0 min from tau)); served n/a (built from the record under test (a121tg-a12-nld-cmems): agrees by construction); DST no_step"
+            },
+            {
+              "flag": "fallback:licence_reading",
+              "reason": "a121tg-a12-nld-cmems: CMEMS-relayed (CC BY-NC); the ticon-4 licence does not cover it"
+            },
+            {
+              "flag": "source_quality_note",
+              "reason": "TICON-4 record quality: Possible datum and quality control issues"
+            }
+          ],
+          "fallback": {
+            "reason": "licence_reading",
+            "basis": "TICON-4 publication: CC BY 4.0, doi:10.17882/109129. Underlying record: gesla-cmems-nc; Non-commercial use only: the GESLA licence page lists CMEMS records for research use; commercial use needs the data owner's permission. Terms: https://gesla787883612.wordpress.com/license/. NOASSERTION means OTC does not conclude a combined licence. No additional permission evidence is recorded.",
+            "otc_finding": "a121tg-a12-nld-cmems: CMEMS-relayed (CC BY-NC); the ticon-4 licence does not cover it"
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "8f92a1351f6772458b29d20c553763dda0011a5a"
+            },
+            "input_sha256": [
+              "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366",
+              "394951d30c4c0794df9e7d8b616e0311fe70ab40200137d304c0f3eb2b7b98a9"
+            ],
+            "selection_reason": "Controlled schema projection from actual native inputs, not publisher output. Underlying record licence resolves to gesla-cmems-nc; actual source identity a121tg-a12-nld-cmems."
+          }
+        }
+      ]
+    },
+    {
+      "aliases": {
+        "gesla": [
+          "immingham-imm-gbr-bodc"
+        ],
+        "ticon": [
+          "immingham-imm-gbr-bodc"
+        ],
+        "webcaltides": "T6c5fb97"
+      },
+      "country": "GBR",
+      "lat": 53.630417,
+      "lon": -0.187528,
+      "name": "Immingham",
+      "station_id": "OTC-db83a9a9",
+      "status": "active",
+      "timezone": "Europe/London",
+      "type": "reference",
+      "recommended_set_id": "OTC-db83a9a9/ticon-4/immingham-imm-gbr-cmems",
+      "recommended_is_fallback": true,
+      "constant_sets": [
+        {
+          "set_id": "OTC-db83a9a9/ticon-4/immingham-imm-gbr-cmems",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "immingham-imm-gbr-cmems",
+          "source_version": "4",
+          "record_span": {
+            "end": "2025-06-30T23:59:59Z",
+            "start": "1990-01-01T00:00:00Z"
+          },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4-bodc-restricted",
+          "qc_status": "flagged",
+          "time_base": {
+            "code": "disputed",
+            "decided_build_commit": "ecd91f6c64b7f116e521fb31ab0a2a7d65effc69",
+            "decided_in": "20261011",
+            "declared": "utc_instant",
+            "evidence": [
+              {
+                "comparator_id": "eot20",
+                "comparator_kind": "model",
+                "detail": "off (+30.5)",
+                "lag_min": 30.5
+              },
+              {
+                "comparator_id": "T6c5fb97",
+                "comparator_kind": "served_constants",
+                "detail": "0 (-1.5) T6c5fb97 dependent",
+                "lag_min": -1.5
+              },
+              {
+                "comparator_id": "immingham-imm-gbr-cmems",
+                "comparator_kind": "dst_selftest",
+                "detail": "no_step (+3.3)"
+              }
+            ],
+            "published": "utc_instant",
+            "reason": "declared utc_instant kept; evidence disagrees: EOT20 off, served constants 0 (whole hours / off)"
+          },
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 2.240237,
+              "phase_deg": 161.584807
+            }
+          ],
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base disputed: declared utc_instant kept; evidence disagrees: EOT20 off, served constants 0 (whole hours / off)"
+            },
+            {
+              "flag": "fallback:time_base_disputed",
+              "reason": "immingham-imm-gbr-cmems: CMEMS-relayed (CC BY-NC); the ticon-4 licence does not cover it\nOTC time-base finding: declared utc_instant kept; evidence disagrees: EOT20 off, served constants 0 (whole hours / off)"
+            }
+          ],
+          "fallback": {
+            "reason": "time_base_disputed",
+            "basis": "TICON-4 publication: CC BY 4.0, doi:10.17882/109129. Underlying record: gesla-bodc-nc; Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'. Terms: https://www.bodc.ac.uk/data/documents/nodb/267795/. NOASSERTION means OTC does not conclude a combined licence. No additional permission evidence is recorded.",
+            "otc_finding": "immingham-imm-gbr-cmems: CMEMS-relayed (CC BY-NC); the ticon-4 licence does not cover it\nOTC time-base finding: declared utc_instant kept; evidence disagrees: EOT20 off, served constants 0 (whole hours / off)"
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "8f92a1351f6772458b29d20c553763dda0011a5a"
+            },
+            "input_sha256": [
+              "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366",
+              "394951d30c4c0794df9e7d8b616e0311fe70ab40200137d304c0f3eb2b7b98a9"
+            ],
+            "selection_reason": "Controlled schema projection from actual native inputs, not publisher output. Underlying record licence resolves to gesla-bodc-nc; actual source identity immingham-imm-gbr-cmems."
+          }
+        }
+      ]
+    },
+    {
+      "aliases": {
+        "gesla": [
+          "port_louis-103-mus-uhslc_fd",
+          "port_louis-103a-mus-uhslc_rq",
+          "port_louis-103c-mus-uhslc_rq"
+        ],
+        "ticon": [
+          "port_louis-103a-mus-uhslc_rq"
+        ],
+        "webcaltides": "T33cc693"
+      },
+      "country": "MUS",
+      "lat": -20.155,
+      "lon": 57.495,
+      "name": "Port Louis",
+      "station_id": "OTC-51c65693",
+      "status": "active",
+      "timezone": "Indian/Mauritius",
+      "type": "reference",
+      "recommended_set_id": "OTC-51c65693/ticon-4/port_louis-103b-mus-uhslc_rq",
+      "recommended_is_fallback": true,
+      "constant_sets": [
+        {
+          "set_id": "OTC-51c65693/ticon-4/port_louis-103b-mus-uhslc_rq",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "port_louis-103b-mus-uhslc_rq",
+          "source_version": "4",
+          "record_span": {
+            "end": "1965-12-31T23:59:59Z",
+            "start": "1964-03-01T00:00:00Z"
+          },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4-bodc-restricted",
+          "qc_status": "flagged",
+          "time_base": {
+            "code": "disputed",
+            "decided_build_commit": "ecd91f6c64b7f116e521fb31ab0a2a7d65effc69",
+            "decided_in": "20261011",
+            "declared": "utc_instant",
+            "evidence": [
+              {
+                "comparator_id": "T33cc693",
+                "comparator_kind": "served_constants",
+                "detail": "off (-7.5) T33cc693 dependent",
+                "lag_min": -7.5
+              }
+            ],
+            "published": "utc_instant",
+            "reason": "declared utc_instant kept; evidence disagrees: EOT20 n/a, served constants off (whole hours / off)"
+          },
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 0.142149,
+              "phase_deg": 268.341441
+            }
+          ],
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base disputed: declared utc_instant kept; evidence disagrees: EOT20 n/a, served constants off (whole hours / off)"
+            },
+            {
+              "flag": "fallback:time_base_disputed",
+              "reason": "port_louis-103b-mus-uhslc_rq: OTC disputes the record's time base: declared utc_instant kept; evidence disagrees: EOT20 n/a, served constants off (whole hours / off)"
+            }
+          ],
+          "fallback": {
+            "reason": "time_base_disputed",
+            "basis": "TICON-4 publication: CC BY 4.0, doi:10.17882/109129. Underlying record: gesla-bodc-nc; Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'. Terms: https://www.bodc.ac.uk/data/documents/nodb/267795/. NOASSERTION means OTC does not conclude a combined licence. No additional permission evidence is recorded.",
+            "otc_finding": "port_louis-103b-mus-uhslc_rq: OTC disputes the record's time base: declared utc_instant kept; evidence disagrees: EOT20 n/a, served constants off (whole hours / off)"
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "8f92a1351f6772458b29d20c553763dda0011a5a"
+            },
+            "input_sha256": [
+              "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366",
+              "394951d30c4c0794df9e7d8b616e0311fe70ab40200137d304c0f3eb2b7b98a9"
+            ],
+            "selection_reason": "Controlled schema projection from actual native inputs, not publisher output. Underlying record licence resolves to gesla-bodc-nc; actual source identity port_louis-103b-mus-uhslc_rq."
+          }
+        }
+      ]
+    },
+    {
+      "aliases": {
+        "gesla": [
+          "takoradi-231a-gha-uhslc_rq",
+          "takoradi-231c-gha-uhslc_rq"
+        ],
+        "ticon": [
+          "takoradi-231c-gha-uhslc_rq"
+        ],
+        "webcaltides": "Tff0e6cf"
+      },
+      "country": "GHA",
+      "lat": 4.883,
+      "lon": -1.75,
+      "name": "Takoradi",
+      "station_id": "OTC-8b79d129",
+      "status": "active",
+      "timezone": "Africa/Accra",
+      "type": "reference",
+      "recommended_set_id": "OTC-8b79d129/ticon-4/takoradi-231-gha-uhslc_fd",
+      "recommended_is_fallback": true,
+      "constant_sets": [
+        {
+          "set_id": "OTC-8b79d129/ticon-4/takoradi-231-gha-uhslc_fd",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "takoradi-231-gha-uhslc_fd",
+          "source_version": "4",
+          "record_span": {
+            "end": "2012-09-08T23:59:59Z",
+            "start": "2007-01-04T00:00:00Z"
+          },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4-bodc-restricted",
+          "qc_status": "flagged",
+          "time_base": {
+            "code": "disputed",
+            "decided_build_commit": "ecd91f6c64b7f116e521fb31ab0a2a7d65effc69",
+            "decided_in": "20261011",
+            "declared": "utc_instant",
+            "evidence": [
+              {
+                "comparator_id": "eot20",
+                "comparator_kind": "model",
+                "detail": "0 (+1.5)",
+                "lag_min": 1.5
+              },
+              {
+                "comparator_id": "Tff0e6cf",
+                "comparator_kind": "served_constants",
+                "detail": "off (-7.5) Tff0e6cf dependent",
+                "lag_min": -7.5
+              },
+              {
+                "comparator_id": "takoradi-231-gha-uhslc_fd",
+                "comparator_kind": "dst_selftest",
+                "detail": "no_step (+0.2)"
+              }
+            ],
+            "published": "utc_instant",
+            "reason": "declared utc_instant kept; evidence disagrees: EOT20 0, served constants off (whole hours / off)"
+          },
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 0.472493,
+              "phase_deg": 112.260872
+            }
+          ],
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base disputed: declared utc_instant kept; evidence disagrees: EOT20 0, served constants off (whole hours / off)"
+            },
+            {
+              "flag": "fallback:time_base_disputed",
+              "reason": "takoradi-231-gha-uhslc_fd: OTC disputes the record's time base: declared utc_instant kept; evidence disagrees: EOT20 0, served constants off (whole hours / off)"
+            }
+          ],
+          "fallback": {
+            "reason": "time_base_disputed",
+            "basis": "TICON-4 publication: CC BY 4.0, doi:10.17882/109129. Underlying record: gesla-bodc-nc; Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'. Terms: https://www.bodc.ac.uk/data/documents/nodb/267795/. NOASSERTION means OTC does not conclude a combined licence. No additional permission evidence is recorded.",
+            "otc_finding": "takoradi-231-gha-uhslc_fd: OTC disputes the record's time base: declared utc_instant kept; evidence disagrees: EOT20 0, served constants off (whole hours / off)"
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "8f92a1351f6772458b29d20c553763dda0011a5a"
+            },
+            "input_sha256": [
+              "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366",
+              "394951d30c4c0794df9e7d8b616e0311fe70ab40200137d304c0f3eb2b7b98a9"
+            ],
+            "selection_reason": "Controlled schema projection from actual native inputs, not publisher output. Underlying record licence resolves to gesla-bodc-nc; actual source identity takoradi-231-gha-uhslc_fd."
+          }
+        }
+      ]
+    },
+    {
+      "station_id": "OTC-215da48c",
+      "status": "active",
+      "name": "Acadia_Cove",
+      "country": "CAN",
+      "lat": 61.34,
+      "lon": -64.9,
+      "timezone": "America/Iqaluit",
+      "type": "reference",
+      "aliases": {
+        "gesla": [
+          "acadia_cove-4170-can-meds"
+        ]
+      },
+      "recommended_set_id": null,
+      "constant_sets": [],
+      "source_records": [
+        {
+          "source": "gesla",
+          "source_version": "4.1",
+          "source_record_id": "acadia_cove-4170-can-meds",
+          "role": "gauge_station",
+          "disposition": "licence_restricted",
+          "detail": "acadia_cove-4170-can-meds: licence gesla-chs-withheld is withheld: DFO terms: 'If you wish to reproduce Canadian Hydrographic Service navigational charts, publications, data or other hydrographic products, please contact CHS directly'; withheld until CHS permits.",
+          "licence_id": "gesla-chs-withheld",
+          "published_set_ids": [],
+          "original_metadata": {
+            "FILE NAME": "acadia_cove-4170-can-meds",
+            "SITE NAME": "Acadia_Cove",
+            "SITE CODE": "4170",
+            "COUNTRY": "CAN",
+            "CONTRIBUTOR (ABBREVIATED)": "MEDS",
+            "CONTRIBUTOR (FULL)": "Marine Environmental Data Section",
+            "CONTRIBUTOR WEBSITE": "https://isdm-gdsi.gc.ca/isdm-gdsi/twl-mne/inventory-inventaire/index-eng.htm",
+            "CONTRIBUTOR CONTACT": "Jenny.Chiu@dfo-mpo.gc.ca",
+            "ORGINATOR": "Marine Environmental Data Section",
+            "ORIGINATOR WEBSITE": "https://isdm-gdsi.gc.ca/isdm-gdsi/twl-mne/inventory-inventaire/index-eng.htm",
+            "ORIGINATOR CONTACT": "Jenny.Chiu@dfo-mpo.gc.ca",
+            "LATITUDE": "61.34000000",
+            "LONGITUDE": "-64.90000000",
+            "COORDINATE SYSTEM": "Unspecified",
+            "START DATE/TIME": "2013/07/15 14:00:00",
+            "END DATE/TIME": "2014/08/02 17:00:00",
+            "NUMBER OF YEARS": "2",
+            "TIME ZONE HOURS": "0",
+            "DATUM INFORMATION": "Chart Datum (CD)",
+            "INSTRUMENT": "Unspecified",
+            "PRECISION": "Unspecified",
+            "NULL VALUE": "-99.9999",
+            "GAUGE TYPE": "Coastal",
+            "OVERALL RECORD QUALITY": "No obvious issues",
+            "DOWNLOAD LINK": "https://d2lyy96te42c83.cloudfront.net/v4-1/acadia_cove-4170-can-meds"
+          },
+          "provenance": {
+            "input_sha256": [
+              "cd158c2d0e0407fa7786f8d0be825ab71a862931a0568cf3b77b91cb45f12c1a",
+              "574b5ce6f1777dda3ac98930d597adc040346775fd42464e15cb34b47f79e6e3",
+              "3dfe631e4f4c2527cbffd20a81c0789800aa49880b6b5d7fdb008ef6f51b3e02",
+              "4cc7ddedd102eda66eb926d701bde1caef5e402c77eaaaf14d14f3538a3d8e09",
+              "8b2f1c1d9a826733c5f280879a10cd9ebef9465d743cac513cae0c94d4cbb450"
+            ],
+            "inventory_sha256": "28c1d1391164a736add779dd92e61210fe2d0e633085a4e893d19fd379c9dcd1"
+          }
+        }
+      ]
+    },
+    {
+      "station_id": "OTC-a2722283",
+      "status": "active",
+      "name": "Hirtshals Havn II",
+      "country": "DNK",
+      "lat": 57.5951,
+      "lon": 9.9625,
+      "timezone": "Europe/Copenhagen",
+      "type": "reference",
+      "aliases": {
+        "dmi": "20043"
+      },
+      "recommended_set_id": null,
+      "constant_sets": [],
+      "source_records": [
+        {
+          "source": "dmi",
+          "source_version": "capture:aede9cfe9c3eb7ff8e336b936134b2bffcb2d5d720e1532b097a963297660b46",
+          "source_record_id": "20043",
+          "role": "gauge_station",
+          "disposition": "metadata_only",
+          "detail": "Original station metadata is cached; no acquired observations or actual fit outcome is recorded for this capture.",
+          "licence_id": "dmi-cc-by-4.0",
+          "published_set_ids": [],
+          "original_metadata": {
+            "source": "dmi",
+            "id": "dmi:20043",
+            "name": "Hirtshals Havn II",
+            "lat": 57.5951,
+            "lon": 9.9625,
+            "quantity": "water_level",
+            "kind": "gauge_station",
+            "country": "DNK",
+            "cached_obs": false
+          },
+          "provenance": {
+            "input_sha256": [
+              "aede9cfe9c3eb7ff8e336b936134b2bffcb2d5d720e1532b097a963297660b46"
+            ],
+            "inventory_sha256": "28c1d1391164a736add779dd92e61210fe2d0e633085a4e893d19fd379c9dcd1"
+          }
+        }
+      ]
+    },
+    {
+      "aliases": {
+        "gesla": [
+          "san_felipe-307a-mex-uhslc_rq"
+        ]
+      },
+      "constant_sets": [],
+      "country": "MEX",
+      "lat": 31.018,
+      "lon": -114.818,
+      "name": "San Felipe",
+      "recommended_set_id": null,
+      "station_id": "OTC-e00b60ee",
+      "status": "active",
+      "timezone": "America/Tijuana",
+      "type": "reference",
+      "source_records": [
+        {
+          "source": "ticon",
+          "source_version": "4",
+          "source_record_id": "san_felipe-307a-mex-uhslc_rq",
+          "role": "published_harmonic_record",
+          "disposition": "retained",
+          "detail": "All 50 original TICON rows retained unchanged; six names lack a definition in the accepted predictive TCD.",
+          "licence_id": "gesla-uhslc-nc",
+          "upstream_licence_id": "ticon-4",
+          "published_set_ids": [],
+          "original_harmonics": {
+            "format": "ticon-4-csv",
+            "columns": [
+              "lat",
+              "lon",
+              "con",
+              "amp",
+              "pha",
+              "amp_std",
+              "pha_std",
+              "missing_obs",
+              "no_of_obs",
+              "years_of_obs",
+              "start_date",
+              "end_date",
+              "gesla_source",
+              "tide_gauge_name",
+              "type",
+              "country",
+              "record_quality",
+              "datum_information"
+            ],
+            "rows": [
+            ["31.018","-114.818","M2","159.430839","-63.691084","0.460267","0.000519","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","N2","41.965095","-78.836712","0.206588","0.003359","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","S2","92.971521","-54.906976","0.257348","0.000853","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","K2","25.759871","-58.907493","0.051139","0.002208","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","2N2","6.931512","-106.4423","0.019911","0.01187","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","S1","1.540147","-99.500534","0.004255","0.051371","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","K1","40.284945","-158.118927","0.097218","0.001716","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","P1","11.990484","-162.213523","0.033168","0.006611","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","O1","25.248067","-172.122597","0.056068","0.00252","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","Q1","4.473613","174.537218","0.00994","0.014224","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","M1","1.576346","56.995362","0.00595","0.068605","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","M4","1.766139","-111.589587","0.005268","0.048399","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MM","1.672587","-0.18313","0.005307","0.054962","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MF","1.626409","81.386597","0.002767","0.029942","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","SA","22.811595","140.934869","0.068645","0.003808","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","SSA","2.122596","16.854385","0.006175","0.036942","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","T2","5.912455","-53.491459","0.016435","0.01347","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","J1","1.784717","-153.773814","0.003434","0.030912","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","L2","4.782617","-57.750348","0.015777","0.019758","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","R2","0.687763","-89.319254","0.001909","0.11559","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","2Q1","0.566844","160.407134","0.001562","0.139329","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MSF","2.296605","25.241274","0.006358","0.034407","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MSQM","0.672058","88.140536","0.001856","0.117218","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","EP2","1.535919","-158.764982","0.004234","0.051413","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","M3","1.014638","54.134558","0.002968","0.082576","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MU2","6.42807","-109.957349","0.018461","0.012803","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MTM","0.661693","75.107805","0.001826","0.119229","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","NU2","6.823793","-72.488766","0.019771","0.012165","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","LAMBDA2","2.669143","-29.315159","0.007751","0.031179","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MN4","1.208531","-166.070998","0.003604","0.070707","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MS4","0.47021","-167.669521","0.001349","0.174691","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MKS2","2.178739","169.879497","0.006059","0.036586","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","N4","0.311278","166.035774","0.000857","0.253512","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","M6","0.843824","-38.081761","0.002324","0.093505","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","M8","0.336818","93.941974","0.001044","0.263684","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","S4","0.995655","-122.6336","0.002742","0.079246","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","OO1","1.362426","-122.701895","0.003753","0.057904","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","S3","0.370926","62.837702","0.001022","0.212879","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MA2","2.137094","126.243177","0.006191","0.038833","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","MB2","0.080801","139.012811","0.000234","1.026173","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","T3","0.464394","-16.80374","0.001284","0.170606","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","R3","0.338258","133.524545","0.000936","0.234247","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","RHO1","1.094412","135.56259","0.003019","0.072201","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","SGM","0.694471","-98.498277","0.001915","0.113675","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","3L2","2.864466","164.427813","0.008324","0.029061","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","3N2","1.061654","132.490138","0.004156","0.105648","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","2SM2","2.048474","178.631143","0.005877","0.040133","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","2MS6","1.308142","-28.706581","0.003603","0.060314","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","2MK5","0.496415","177.312559","0.001367","0.1589","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"],
+            ["31.018","-114.818","2MO5","0.609195","0.663468","0.001677","0.129507","0.0","21959","5.0","02/01/1982","09/10/1986","gesla4.UHSLC_RQ","san_felipe-307a-mex-uhslc_rq","Coastal","MEX","No obvious issues","Unspecified"]
+          ],
+            "amplitude_unit": "cm",
+            "amplitude_unit_basis": "native_ticon_loader",
+            "phase_unit": "deg",
+            "phase_convention": "as_published",
+            "amplitude_uncertainty_unit": "cm",
+            "amplitude_uncertainty_unit_basis": "native_ticon_loader_interpretation",
+            "annotations": [
+              {
+                "row": 22,
+                "reason": "unsupported_definition",
+                "detail": "TICON-4 MSQM has no definition in the TCD the release predicts with"
+              },
+              {
+                "row": 26,
+                "reason": "unsupported_definition",
+                "detail": "TICON-4 MTM has no definition in the TCD the release predicts with"
+              },
+              {
+                "row": 40,
+                "reason": "unsupported_definition",
+                "detail": "TICON-4 T3 has no definition in the TCD the release predicts with"
+              },
+              {
+                "row": 41,
+                "reason": "unsupported_definition",
+                "detail": "TICON-4 R3 has no definition in the TCD the release predicts with"
+              },
+              {
+                "row": 44,
+                "reason": "unsupported_definition",
+                "detail": "TICON-4 3L2 has no definition in the TCD the release predicts with"
+              },
+              {
+                "row": 45,
+                "reason": "unsupported_definition",
+                "detail": "TICON-4 3N2 has no definition in the TCD the release predicts with"
+              }
+            ]
+          },
+          "provenance": {
+            "input_sha256": [
+              "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366"
+            ],
+            "inventory_sha256": "28c1d1391164a736add779dd92e61210fe2d0e633085a4e893d19fd379c9dcd1"
+          }
+        }
+      ]
     }
   ]
 }

@@ -102,11 +102,13 @@ CSV_COLUMNS = [
     "reference_source", "reference_station", "reference_distance_km", "window",
     "time_mae_min", "time_p95_min", "time_bias_min", "height_mae_m", "range_error_m",
     "missed_events", "extra_events", "previous_release",
+    # Station-only original source identities/rows; append to preserve prior column order.
+    "source_records",
 ]
 
 JSON_COLUMNS = {"aliases", "datum_named", "datum_basis", "qc_flags", "dropped_constituents", "provenance",
                 "nodal_formula_ids", "canary", "previous_release", "time_base", "record_issues",
-                "fit_segment", "expected_accuracy", "fallback"}
+                "fit_segment", "expected_accuracy", "fallback", "source_records"}
 FLOAT_COLUMNS = {"lat", "lon", "time_offset_high_min", "time_offset_low_min", "height_offset_high",
                  "height_offset_low", "datum_msl_offset_m", "speed_deg_per_hour", "amplitude_m",
                  "phase_deg", "amp_uncertainty_m", "phase_uncertainty_deg", "utc_offset_hours",
@@ -123,7 +125,7 @@ INT_COLUMNS = {"good_samples", "missed_events", "extra_events", "default_current
 # Keys handled specially (children, split objects) are listed in _CHILD_KEYS.
 _ROW_KEYS = {
     "station": ["station_id", "status", "name", "country", "lat", "lon", "timezone", "type",
-                "aliases", "recommended_set_id", "recommended_is_fallback", "default_current_bin"],
+                "aliases", "recommended_set_id", "recommended_is_fallback", "default_current_bin", "source_records"],
     "tombstone": ["station_id", "status", "name", "removed_in", "removed_reason", "merged_into", "detail"],
     "offset": ["reference_station_id", "time_offset_high_min", "time_offset_low_min",
                "height_offset_high", "height_offset_low", "height_adjusted_type", "licence_id"],
@@ -159,9 +161,10 @@ _CHILD_KEYS = {
 FORMAT_VERSION = "1.0"
 SCHEMA_NAME = f"otc-{FORMAT_VERSION}.schema.json"
 # SHA-256 of the site's src/schema/otc-1.0.schema.json at the commit sync_schema.sh pins
-# (533eafa, approved explicit restricted TICON policy binding). sync_schema.sh holds the same value; a test keeps the two equal.
-SCHEMA_SHA256 = "c304322a7efc4546dcf720bb81710fc0dfec6cd9eaa63dfeb184e377508046b9"
+# (d1878dc, approved source identities, original rows and restricted TICON policies). sync_schema.sh holds the same value; a test keeps the two equal.
+SCHEMA_SHA256 = "b509ab65cf08b68cdf5a635652e714ace6889fd073514e5e51d337db95a6b0fd"
 _MISSING = object()  # "key not present"; never equal to a value read from JSON
+_UNSUPPORTED_TICON_NAMES = {"3L2", "3N2", "MSQM", "MTM", "R3", "T3"}
 
 
 class SchemaPinError(RuntimeError):
@@ -282,6 +285,80 @@ def _dicts(value) -> list[dict]:
     return [x for x in _list(value) if isinstance(x, dict)]
 
 
+def _source_record_errors(st: dict, where: str, own_sets: dict, licences: dict,
+                          source_owners: dict, release: dict, errors: list[str]) -> None:
+    """Original source references and row annotations; never convert them to predictions."""
+    for ri, record in enumerate(_dicts(st.get("source_records"))):
+        source, version, record_id = (record.get(key) for key in ("source", "source_version", "source_record_id"))
+        if not isinstance(source, str) or not isinstance(version, str) or not isinstance(record_id, str):
+            continue  # The schema reports malformed source identities.
+        identity = (source, version, record_id)
+        sw = f"{where} source_records/{ri} {identity}"
+        if identity in source_owners:
+            errors.append(f"{sw}: duplicate source tuple, already at {source_owners[identity]}")
+        else:
+            source_owners[identity] = st.get("station_id")
+        for key in ("licence_id", "upstream_licence_id"):
+            licence_id = record.get(key)
+            if isinstance(licence_id, str) and licence_id not in licences:
+                errors.append(f"{sw}: {key} does not resolve")
+        licence_id = record.get("licence_id")
+        licence = licences.get(licence_id) if isinstance(licence_id, str) else None
+        if record.get("disposition") == "licence_restricted" and licence is not None:
+            if licence.get("commercial_use") is not False or not licence.get("restriction") or not licence.get("terms_url"):
+                errors.append(f"{sw}: licence_restricted requires the actual noncommercial restriction and terms")
+        for set_id in _list(record.get("published_set_ids")):
+            if not isinstance(set_id, str):
+                continue
+            cs = own_sets.get(set_id)
+            if cs is None:
+                errors.append(f"{sw}: published_set_ids must resolve at the same station")
+            else:
+                set_source = {"gesla": "gesla-fit", "ticon": "ticon-4"}.get(source, source)
+                if (cs.get("source"), cs.get("source_version"), cs.get("source_record_id")) != (set_source, version, record_id):
+                    errors.append(f"{sw}: published_set_ids must come from the original source tuple")
+        raw = record.get("original_harmonics")
+        if not isinstance(raw, dict):
+            continue
+        if licence is None:
+            errors.append(f"{sw}: original harmonics require resolved applicable terms")
+        predictive = [c for cs in own_sets.values() for c in _dicts(cs.get("constituents"))]
+        predictive += [c for cs in own_sets.values() for b in _dicts(cs.get("current_bins"))
+                       for c in _dicts(b.get("constituents"))]
+        if any(isinstance(name, str) and name in _UNSUPPORTED_TICON_NAMES
+               for c in predictive for name in (c.get("name"), c.get("source_name"))):
+            errors.append(f"{sw}: unsupported original rows must not become predictive constituents")
+        if any(isinstance(c.get("name"), str) and c["name"] in _UNSUPPORTED_TICON_NAMES
+               for c in _dicts(release.get("constituents"))):
+            errors.append(f"{sw}: unsupported original rows must not create constituent definitions")
+        for table in _dicts(release.get("astro_tables")):
+            constituents = table.get("constituents")
+            if isinstance(constituents, dict) and _UNSUPPORTED_TICON_NAMES.intersection(constituents):
+                errors.append(f"{sw}: unsupported original rows must not create astro definitions")
+        rows = raw.get("rows")
+        if not isinstance(rows, list) or not all(isinstance(row, list) and len(row) == 18 and
+                                                all(isinstance(cell, str) for cell in row) for row in rows):
+            continue  # The schema reports malformed original rows.
+        if any(row[13] != record_id for row in rows):
+            errors.append(f"{sw}: original harmonic rows must retain this source_record_id")
+        annotations = raw.get("annotations")
+        if not isinstance(annotations, list):
+            continue
+        indexes = []
+        for annotation in _dicts(annotations):
+            index = annotation.get("row")
+            if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(rows):
+                errors.append(f"{sw}: unsupported annotation index is outside the original rows")
+                continue
+            indexes.append(index)
+            expected = f"TICON-4 {rows[index][2]} has no definition in the TCD the release predicts with"
+            if annotation.get("detail") != expected:
+                errors.append(f"{sw}: unsupported annotation must retain the native refusal")
+        expected_indexes = [i for i, row in enumerate(rows) if row[2] in _UNSUPPORTED_TICON_NAMES]
+        if sorted(indexes) != expected_indexes:
+            errors.append(f"{sw}: annotate exactly the original unsupported-definition rows once")
+
+
 def _cross_reference_errors(release: dict) -> list[str]:
     """Checks the schema cannot express. Schema-invalid parts are skipped, not trusted: an id is
     only looked up when it is a string and a container is only walked when it has the right type
@@ -314,6 +391,7 @@ def _cross_reference_errors(release: dict) -> list[str]:
     set_ids: set[str] = set()
     alias_owner: dict[tuple[str, str], object] = {}
     current_refs: list[tuple[int, dict, str]] = []
+    source_owners = {}
 
     for si, st in enumerate(stations):
         sid = st.get("station_id")
@@ -360,6 +438,7 @@ def _cross_reference_errors(release: dict) -> list[str]:
                 if isinstance(version, str) and (version, name) not in table:
                     errors.append(f"{sw}: constituents name {name!r} is not in the constituents "
                                   f"table for constituent_table_version {version!r}")
+        _source_record_errors(st, where, own_by_id, licences, source_owners, release, errors)
         rec = st.get("recommended_set_id", _MISSING)
         off = st.get("subordinate_offsets")
         cur_off = _dicts(st.get("current_offsets"))
@@ -368,7 +447,10 @@ def _cross_reference_errors(release: dict) -> list[str]:
         if rec is None:
             sets = _dicts(st.get("constant_sets"))
             if st.get("type") != "subordinate":
-                if not sets or any(cs.get("qc_status") != "no_constants" for cs in sets):
+                identity_only = (st.get("type") == "reference" and not sets and
+                                 bool(_dicts(st.get("source_records"))) and
+                                 not any(key in st for key in ("subordinate_offsets", "current_offsets", "default_current_bin")))
+                if (not sets and not identity_only) or any(cs.get("qc_status") != "no_constants" for cs in sets):
                     errors.append(f"{where}: recommended_set_id is null but the station is not subordinate "
                                   "and not every set is no_constants (build check 6)")
             elif not isinstance(off, dict) and not cur_off:

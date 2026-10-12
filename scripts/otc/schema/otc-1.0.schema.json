@@ -202,7 +202,7 @@
       "properties": {
         "licence_id": { "type": "string", "minLength": 1 },
         "spdx": {
-          "description": "SPDX id, or a LicenseRef- id where SPDX has none (e.g. LicenseRef-PublicDomain-USGov). Only ticon-4-bodc-restricted uses NOASSERTION: a special no-conclusion marker, not a licence identifier or grant.",
+          "description": "SPDX id, or a LicenseRef- id where SPDX has none (e.g. LicenseRef-PublicDomain-USGov). Only ticon-4-bodc-restricted and ticon-4-cmems-restricted use NOASSERTION: a special no-conclusion marker, not a licence identifier or grant.",
           "type": "string",
           "pattern": "^([A-Za-z0-9.+-]+|LicenseRef-[A-Za-z0-9.-]+)$(?![\\s\\S])"
         },
@@ -227,7 +227,8 @@
       },
       "allOf": [
         {"if": {"required": ["licence_id"],"properties": {"licence_id": {"const": "ticon-4-bodc-restricted"}}},"then": {"required": ["restriction","terms_url"],"properties": {"spdx": {"const": "NOASSERTION"},"commercial_use": {"const": false},"provider": {"minLength": 1},"attribution": {"minLength": 1},"terms_url": {"const": "https://www.bodc.ac.uk/data/documents/nodb/267795/"}}}},
-        {"if": {"required": ["spdx"],"properties": {"spdx": {"const": "NOASSERTION"}}},"then": {"properties": {"licence_id": {"const": "ticon-4-bodc-restricted"},"commercial_use": {"const": false}}}}
+        {"if": {"required": ["licence_id"],"properties": {"licence_id": {"const": "ticon-4-cmems-restricted"}}},"then": {"required": ["restriction","terms_url"],"properties": {"spdx": {"const": "NOASSERTION"},"commercial_use": {"const": false},"provider": {"minLength": 1},"attribution": {"minLength": 1},"terms_url": {"const": "https://gesla787883612.wordpress.com/license/"}}}},
+        {"if": {"required": ["spdx"],"properties": {"spdx": {"const": "NOASSERTION"}}},"then": {"properties": {"licence_id": {"enum": ["ticon-4-bodc-restricted","ticon-4-cmems-restricted"]},"commercial_use": {"const": false}}}}
       ],
       "if": { "required": ["commercial_use"], "properties": { "commercial_use": { "const": false } } },
       "then": { "required": ["restriction", "terms_url"] }
@@ -331,11 +332,15 @@
           }
         },
         "recommended_set_id": {
-          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, or for a station whose every set is no_constants. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. Non-fallbacks rank before fallbacks; the other criteria apply within each group. A set flagged short_record never outranks a set of the same quantity at the same station and in the same fallback group that has constants and more hours of good data (record_span.good_hours), whatever their source types. The release build checks these.",
+          "description": "The set_id of the set chosen by the published recommendation rule, or null for a subordinate station with offsets only, for a station whose every set is no_constants, or for an identity-only reference with source_records. Only sets of one quantity compete: water-level sets for a tide station, current sets for a current station. The recommended set is never a no_constants set. Non-fallbacks rank before fallbacks; the other criteria apply within each group. A set flagged short_record never outranks a set of the same quantity at the same station and in the same fallback group that has constants and more hours of good data (record_span.good_hours), whatever their source types. The release build checks these.",
           "type": ["string", "null"]
         },
         "recommended_is_fallback": { "description": "True exactly when recommended_set_id selects a fallback; otherwise omitted. The release checker verifies this cross-reference.", "type": "boolean" },
         "constant_sets": { "type": "array", "items": { "$ref": "#/$defs/constant_set" } },
+        "source_records": {
+          "description": "Original upstream identities and material, separate from predictive sets. The release checker verifies source-tuple uniqueness, licence and set references, and raw row annotations. Identity-only references have no constants or prediction path.",
+          "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source_record" }
+        },
         "subordinate_offsets": { "$ref": "#/$defs/subordinate_offsets" },
         "default_current_bin": {
           "description": "Current stations only: the bin to show by default (NOAA currbin). It names a bin of the recommended set's current_bins, or of current_offsets for a subordinate current station.",
@@ -352,7 +357,17 @@
       },
       "if": { "properties": { "type": { "const": "reference" } } },
       "then": {
-        "properties": { "constant_sets": { "minItems": 1 } },
+        "anyOf": [
+          { "properties": { "constant_sets": { "minItems": 1 } } },
+          {
+            "required": ["source_records"],
+            "properties": { "constant_sets": { "maxItems": 0 }, "recommended_set_id": { "const": null } },
+            "not": { "anyOf": [
+              { "required": ["subordinate_offsets"] }, { "required": ["current_offsets"] },
+              { "required": ["default_current_bin"] }, { "required": ["recommended_is_fallback"] }
+            ] }
+          }
+        ],
         "if": { "properties": { "constant_sets": { "contains": { "properties": { "qc_status": { "not": { "const": "no_constants" } } } } } } },
         "then": { "properties": { "recommended_set_id": { "type": "string" } } }
       },
@@ -362,6 +377,95 @@
           { "required": ["current_offsets"] },
           { "properties": { "constant_sets": { "minItems": 1 } } }
         ]
+      }
+    },
+    "source_record": {
+      "description": "An original source tuple, not an OTC fit or predictive constituent set. Preserve the actual source identity and restrictions when no constants can be published. Nonspatial model/reference files remain in the retained input inventory.",
+      "type": "object",
+      "required": ["source", "source_version", "source_record_id", "role", "disposition", "detail", "licence_id", "published_set_ids", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "source_version": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "source_record_id": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "role": { "enum": ["gauge_station", "published_harmonic_record", "model", "reference"] },
+        "disposition": {
+          "description": "metadata_only: identifying metadata without acquired observations or harmonic material for this capture. not_fitted: actual observations without an actual fit outcome. licence_restricted: actual coefficients or a fit whose publication is restricted. unavailable: an observed acquisition/input failure. retained: original harmonic material, an actual no-fit outcome, or a published set is retained. Alternatives never erase another original's disposition.",
+          "enum": ["metadata_only", "not_fitted", "licence_restricted", "unavailable", "retained"]
+        },
+        "detail": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "licence_id": {
+          "description": "The actual applicable restrictive licence/policy in the release table, or null for unresolved terms. Null grants no permission. Explicit noncommercial restrictions remain noncommercial under both readings.",
+          "type": ["string", "null"], "minLength": 1
+        },
+        "upstream_licence_id": {
+          "description": "Separately published source terms, when different. Resolves in the release table and never overrides the applicable restrictive licence_id.",
+          "type": "string", "minLength": 1
+        },
+        "published_set_ids": {
+          "description": "Actual same-station sets produced from this source tuple; empty when none. No inferred fit or prediction claim.",
+          "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 }
+        },
+        "provenance": { "$ref": "#/$defs/source_record_provenance" },
+        "original_metadata": {
+          "description": "Original named scalar values, without normalization or invented scientific fields. Numbers must be finite; the release checker verifies this.",
+          "type": "object", "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+        },
+        "original_harmonics": { "$ref": "#/$defs/original_harmonics" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "disposition": { "not": { "const": "retained" } } }, "required": ["disposition"] },
+          "then": { "properties": { "published_set_ids": { "maxItems": 0 } }, "not": { "required": ["original_harmonics"] } }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "licence_restricted" } }, "required": ["disposition"] },
+          "then": { "properties": { "licence_id": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "if": { "required": ["original_harmonics"] },
+          "then": { "properties": {
+            "source": { "const": "ticon" }, "source_version": { "const": "4" },
+            "role": { "const": "published_harmonic_record" }, "licence_id": { "type": "string", "minLength": 1 }
+          } }
+        }
+      ]
+    },
+    "source_record_provenance": {
+      "description": "Exact input artifacts and the pinned retained inventory binding this original source tuple to them. The source tuple locates the record; original metadata preserves any actual member/row locator. An inventory-file hash is not an observation-member hash.",
+      "type": "object", "required": ["input_sha256", "inventory_sha256"], "additionalProperties": false,
+      "properties": {
+        "input_sha256": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/sha256" } },
+        "inventory_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "original_harmonics": {
+      "description": "Lossless original TICON-4 CSV material, not predictive constituents. Retain all 50 rows and 18 ordered string cells, including signed phases, uncertainty and missing/sentinel text. Unit interpretations do not certify phase compatibility or create TCD definitions.",
+      "type": "object",
+      "required": ["format", "columns", "rows", "amplitude_unit", "amplitude_unit_basis", "phase_unit", "phase_convention", "amplitude_uncertainty_unit", "amplitude_uncertainty_unit_basis", "annotations"],
+      "additionalProperties": false,
+      "properties": {
+        "format": { "const": "ticon-4-csv" },
+        "columns": { "const": ["lat", "lon", "con", "amp", "pha", "amp_std", "pha_std", "missing_obs", "no_of_obs", "years_of_obs", "start_date", "end_date", "gesla_source", "tide_gauge_name", "type", "country", "record_quality", "datum_information"] },
+        "rows": {
+          "type": "array", "minItems": 50, "maxItems": 50,
+          "items": { "type": "array", "minItems": 18, "maxItems": 18, "items": { "type": "string" } }
+        },
+        "amplitude_unit": { "const": "cm" },
+        "amplitude_unit_basis": { "const": "native_ticon_loader" },
+        "phase_unit": { "const": "deg" },
+        "phase_convention": { "const": "as_published" },
+        "amplitude_uncertainty_unit": { "const": "cm" },
+        "amplitude_uncertainty_unit_basis": { "const": "native_ticon_loader_interpretation" },
+        "annotations": { "type": "array", "items": { "$ref": "#/$defs/raw_harmonic_annotation" } }
+      }
+    },
+    "raw_harmonic_annotation": {
+      "type": "object", "required": ["row", "reason", "detail"], "additionalProperties": false,
+      "properties": {
+        "row": { "type": "integer", "minimum": 0, "maximum": 49 },
+        "reason": { "const": "unsupported_definition" },
+        "detail": { "type": "string", "minLength": 1, "pattern": "\\S" }
       }
     },
     "fallback": {
@@ -558,12 +662,12 @@
           "else": { "properties": { "provenance": { "not": { "required": ["modified"] } } } }
         },
         {
-          "description": "The source names its source type: ticon-4 is an analysis, gesla-fit is a gauge fit. Only the ticon-4 and ticon-4-bodc-restricted policy IDs go with the ticon-4 source. The restricted ID requires a labelled licence_reading fallback.",
+          "description": "The source names its source type: ticon-4 is an analysis, gesla-fit is a gauge fit. Only ticon-4, ticon-4-bodc-restricted and ticon-4-cmems-restricted go with the ticon-4 source. Both restricted IDs require a labelled time_base_disputed fallback exactly when the retained time_base code is disputed; otherwise they require licence_reading. Their source restrictions remain independent of the primary scientific finding.",
           "allOf": [
             { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "source_type": { "const": "analysis" } } } },
-            { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "licence_id": { "enum": ["ticon-4", "ticon-4-bodc-restricted"] } } } },
-            { "if": { "properties": { "licence_id": { "enum": ["ticon-4", "ticon-4-bodc-restricted"] } }, "required": ["licence_id"] }, "then": { "required": ["source"], "properties": { "source": { "const": "ticon-4" } } } },
-            {"if": {"required": ["licence_id"],"properties": {"licence_id": {"const": "ticon-4-bodc-restricted"}}},"then": {"required": ["fallback"],"properties": {"fallback": {"properties": {"reason": {"const": "licence_reading"}}}}}},
+            { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "licence_id": { "enum": ["ticon-4", "ticon-4-bodc-restricted", "ticon-4-cmems-restricted"] } } } },
+            { "if": { "properties": { "licence_id": { "enum": ["ticon-4", "ticon-4-bodc-restricted", "ticon-4-cmems-restricted"] } }, "required": ["licence_id"] }, "then": { "required": ["source"], "properties": { "source": { "const": "ticon-4" } } } },
+            {"if": {"required": ["licence_id"],"properties": {"licence_id": {"enum": ["ticon-4-bodc-restricted","ticon-4-cmems-restricted"]}}},"then": {"required": ["fallback"],"if": {"required": ["time_base"],"properties": {"time_base": {"required": ["code"],"properties": {"code": {"const": "disputed"}}}}},"then": {"properties": {"fallback": {"properties": {"reason": {"const": "time_base_disputed"}}}}},"else": {"properties": {"fallback": {"properties": {"reason": {"const": "licence_reading"}}}}}}},
             { "if": { "properties": { "source": { "const": "gesla-fit" } }, "required": ["source"] }, "then": { "properties": { "source_type": { "const": "gauge" } } } }
           ]
         },

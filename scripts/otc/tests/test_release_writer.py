@@ -11,6 +11,7 @@ import io
 import json
 import os
 import stat
+import time
 from datetime import date
 from pathlib import Path
 
@@ -176,6 +177,162 @@ def test_fallback_semantics_does_not_rerank_or_mutate(release):
     original = copy.deepcopy(release)
     assert validate_release(release) == []
     assert release == original
+
+
+@pytest.fixture(scope="module")
+def real_source_records():
+    real_path = os.environ.get("OTC_SOURCE_RECORDS_REAL_RELEASE")
+    report_path = os.environ.get("OTC_FALLBACK_BUILD_REPORT")
+    csv_path = os.environ.get("OTC_SOURCE_RECORDS_TICON_CSV")
+    if not real_path or not report_path or not csv_path:
+        pytest.skip("requires the pinned real source-record release, build and CSV evidence")
+    doc = json.loads(Path(real_path).read_text())
+    report = json.loads(Path(report_path).read_text())
+    run = load_congen_run(Path(report["provenance"]["congen_run"]["path"]),
+                          tcd_sha256=report["provenance"]["otc_tcd"]["sha256"])
+    ids = {sr["source_record_id"] for st in doc["stations"] for sr in st.get("source_records", [])
+           if "original_harmonics" in sr}
+    assert len(ids) >= 3, "the local proof requires three actual original TICON records"
+    originals = {record_id: [] for record_id in ids}
+    with Path(csv_path).open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        columns = reader.fieldnames
+        assert columns is not None
+        for row in reader:
+            if row["tide_gauge_name"] in originals:
+                originals[row["tide_gauge_name"]].append([row[key] for key in columns])
+    return doc, run, columns, originals
+
+
+def _assert_original_source_rows(stations, columns, originals):
+    checked = set()
+    for st in stations:
+        for sr in st.get("source_records", []):
+            raw = sr.get("original_harmonics")
+            if raw is None:
+                continue
+            record_id = sr["source_record_id"]
+            assert raw["columns"] == columns
+            assert len(raw["rows"]) == 50
+            assert raw["rows"] == originals[record_id]
+            assert all(len(row) == 18 and all(isinstance(cell, str) for cell in row) for row in raw["rows"])
+            checked.add(record_id)
+    assert checked == set(originals)
+
+
+def test_source_records_real_release_roundtrip(real_source_records, tmp_path):
+    doc, run, columns, originals = real_source_records
+    _assert_original_source_rows(doc["stations"], columns, originals)
+    assert validate_release(doc) == []
+    started = time.perf_counter()
+    paths = write_release(doc, tmp_path, datestamp=doc["release"]["datestamp"],
+                          congen_run=run, app_export=None, parquet=True, jsonl_gz=True)
+    stem = "OTC_" + doc["release"]["datestamp"]
+    for suffix in (".json", ".json.gz", ".jsonl", ".jsonl.gz"):
+        raw = (tmp_path / (stem + suffix)).read_bytes()
+        if suffix.endswith(".gz"):
+            raw = gzip.decompress(raw)
+        if ".jsonl" in suffix:
+            stations = [json.loads(line) for line in raw.splitlines()]
+        else:
+            back = json.loads(raw)
+            assert back == doc
+            stations = back["stations"]
+        assert stations == doc["stations"]
+        _assert_original_source_rows(stations, columns, originals)
+    expected = {st["station_id"]: st.get("source_records") for st in doc["stations"] if st["status"] == "active"}
+    with (tmp_path / (stem + ".csv")).open(newline="") as handle:
+        csv_stations = [row for row in csv.DictReader(handle) if row["record_type"] == "station"]
+    parquet_rows = pq.read_table(tmp_path / (stem + ".parquet"),
+                                 columns=["record_type", "station_id", "source_records"]).to_pylist()
+    parquet_stations = [row for row in parquet_rows if row["record_type"] == "station"]
+    for rows, omitted in ((csv_stations, ""), (parquet_stations, None)):
+        assert {row["station_id"] for row in rows} == set(expected)
+        reconstructed = []
+        for row in rows:
+            wanted = expected[row["station_id"]]
+            if wanted is None:
+                assert row["source_records"] == omitted
+            else:
+                restored = json.loads(row["source_records"])
+                assert restored == wanted
+                reconstructed.append({"source_records": restored})
+        _assert_original_source_rows(reconstructed, columns, originals)
+    csv_payloads = {row["station_id"]: row["source_records"] for row in csv_stations}
+    for row in parquet_stations:
+        if row["source_records"] is not None:
+            assert row["source_records"].encode("utf-8") == csv_payloads[row["station_id"]].encode("utf-8")
+    meta = json.loads((tmp_path / (stem + ".meta.json")).read_text())
+    assert meta == {key: value for key, value in doc.items() if key != "stations"}
+    for policy_id in ("ticon-4-bodc-restricted", "ticon-4-cmems-restricted"):
+        row = next(lic for lic in meta["licences"] if lic["licence_id"] == policy_id)
+        assert row["spdx"] == "NOASSERTION" and row["commercial_use"] is False
+    assert check_release_dir(tmp_path) == []
+    print(json.dumps({"write_and_roundtrip_seconds": time.perf_counter() - started,
+                      "raw_records": len(originals), "raw_rows": sum(map(len, originals.values())),
+                      "source_records_column": "source_records", "bytes": {p.name: p.stat().st_size for p in paths}}))
+
+
+def test_original_rows_cannot_be_changed_or_predictive(real_source_records):
+    doc, _run, columns, originals = real_source_records
+    actual = _station(doc, "OTC-e00b60ee")
+    record_id = actual["source_records"][0]["source_record_id"]
+    one_original = {record_id: originals[record_id]}
+    _assert_original_source_rows([actual], columns, one_original)
+    changed = copy.deepcopy(actual)
+    rows = changed["source_records"][0]["original_harmonics"]["rows"]
+    t3 = next(row for row in rows if row[2] == "T3")
+    assert t3[4] == "-16.80374"
+    t3[4] = str(float(t3[4]) % 360)
+    with pytest.raises(AssertionError):
+        _assert_original_source_rows([changed], columns, one_original)
+    for speed in (None, 1.0):
+        subset = dict(doc, stations=[copy.deepcopy(actual)])
+        invented = {"name": "3L2", "amplitude_m": 0.1, "phase_deg": 0.0}
+        if speed is not None:
+            invented["speed_deg_per_hour"] = speed
+        subset["stations"][0]["constant_sets"][0]["constituents"].append(invented)
+        errors = validate_release(subset)
+        assert any("3L2" in error and ("table" in error or "unsupported" in error) for error in errors), errors
+
+
+@pytest.mark.parametrize("change,needle", [
+    ("duplicate", "duplicate source tuple"),
+    ("unknown_licence", "licence_id does not resolve"),
+    ("unknown_set", "published_set_ids must resolve"),
+    ("wrong_source_set", "original source tuple"),
+    ("annotation_bound", "annotation index"),
+    ("annotation_duplicate", "annotate exactly"),
+    ("annotation_detail", "native refusal"),
+    ("wrong_original_id", "retain this source_record_id"),
+    ("unsupported_predictive", "unsupported original rows"),
+])
+def test_source_record_semantic_negative_controls(real_source_records, change, needle):
+    doc, _run, _columns, _originals = real_source_records
+    st = copy.deepcopy(_station(doc, "OTC-e00b60ee"))
+    subset = dict(doc, stations=[st])
+    sr = st["source_records"][0]
+    raw = sr["original_harmonics"]
+    if change == "duplicate":
+        st["source_records"].append(copy.deepcopy(sr))
+    elif change == "unknown_licence":
+        sr["licence_id"] = "not-known"
+    elif change == "unknown_set":
+        sr["published_set_ids"] = ["OTC-unknown/set"]
+    elif change == "wrong_source_set":
+        sr["published_set_ids"] = [st["constant_sets"][0]["set_id"]]
+    elif change == "annotation_bound":
+        raw["annotations"].append(dict(raw["annotations"][0], row=500))
+    elif change == "annotation_duplicate":
+        raw["annotations"].append(copy.deepcopy(raw["annotations"][0]))
+    elif change == "annotation_detail":
+        raw["annotations"][0]["detail"] = "an altered original refusal"
+    elif change == "wrong_original_id":
+        raw["rows"][0][13] = "a-different-upstream-id"
+    else:
+        st["constant_sets"][0]["constituents"][0]["source_name"] = "3L2"
+    errors = validate_release(subset)
+    assert any(needle in error for error in errors), errors
 
 
 def test_missing_convention_id_is_rejected(release):

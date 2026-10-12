@@ -19,11 +19,11 @@
 # same schema SHA-256 (SCHEMA_SHA256) and refuses a copy that does not match it.
 set -euo pipefail
 
-SITE_COMMIT=533eafa0ad1e5a79f9c3da6cd024f200b131fc03   # approved explicit restricted TICON policy binding
+SITE_COMMIT=d1878dc29aa0fc3e5b7d9769daec90ac504b13c2   # approved source identities, original rows and restricted TICON policies
 SCHEMA_SRC=src/schema/otc-1.0.schema.json
-SCHEMA_SHA256=c304322a7efc4546dcf720bb81710fc0dfec6cd9eaa63dfeb184e377508046b9
+SCHEMA_SHA256=b509ab65cf08b68cdf5a635652e714ace6889fd073514e5e51d337db95a6b0fd
 EXAMPLE_SRC=src/schema/example.json
-EXAMPLE_SHA256=6fb0eecbd80ddce8c7ff9ecdc67da9ee1d89ff33979271b3de45e6c4ae99205a
+EXAMPLE_SHA256=2e1db2476fba676828c160ca3fdfd12cb7eebb09789339b031af7cc6104f9c7e
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 schema_dst="$here/schema/otc-1.0.schema.json"
