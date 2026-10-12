@@ -108,6 +108,19 @@ def gesla_release():
                  "removed_reason": "merged", "merged_into": "OTC-aaaaaaaa"}]}
 
 
+def test_official_merge_clears_the_previous_fallback_marker():
+    release = gesla_release()
+    station = release["stations"][0]
+    station["recommended_is_fallback"] = True
+    station["constant_sets"][0]["fallback"] = {"reason": "refused_fit", "basis": "retained fit", "otc_finding": "bad fit"}
+    result, _report = combine.merge(release, {"noaa": agency(ref("8443970", 42.355, -71.05))},
+                                    station_ids={"noaa:8443970": "OTC-aaaaaaaa"}, build_commit="abcdef0",
+                                    table_id=TABLE, canaries={"noaa": PASS})
+    actual = next(s for s in result["stations"] if s["station_id"] == "OTC-aaaaaaaa")
+    assert actual["recommended_set_id"].endswith("/noaa/8443970")
+    assert "recommended_is_fallback" not in actual
+
+
 PASS = {"status": "pass", "gauges": 5}
 
 

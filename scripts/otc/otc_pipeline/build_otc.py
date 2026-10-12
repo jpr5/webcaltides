@@ -180,8 +180,9 @@ def main(argv: list[str] | None = None) -> int:
     for e in errs[:20]:
         print("  ", e)
     disputed = [cs["set_id"] for st in release["stations"] if st["status"] == "active" for cs in st["constant_sets"]
-                if (cs.get("time_base") or {}).get("code") == "disputed"]
-    log(f"sets with a disputed time base: {len(disputed)}")
+                if (cs.get("time_base") or {}).get("code") == "disputed" and cs.get("qc_status") != "no_constants"
+                and not cs.get("fallback")]
+    log(f"unlabelled sets with a disputed time base: {len(disputed)}")
     if errs or disputed:
         return 1
     a.out.mkdir(parents=True, exist_ok=True)

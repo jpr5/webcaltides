@@ -16,6 +16,8 @@ from gesla.select_constituents import CANDIDATES
 from gesla.tcd_table import TcdTable
 
 from otc_pipeline import release_writer
+from otc_pipeline import gesla_release as gr
+from otc_pipeline import gesla_sets as gs
 from otc_pipeline.gesla_release import build_release
 from otc_pipeline.gesla_sets import (FitIntegrityError, NotPublishable, attach_long_period_references, fit_document,
                                      source_set, time_base_annotation)
@@ -247,18 +249,17 @@ def test_a_corrected_mean60_record_needs_its_sampling_response_divided(table):
     assert cs["qc_status"] == "ok"
 
 
-def test_a_short_record_without_a_calibration_is_refused_not_crashed(table):
-    with pytest.raises(NotPublishable, match="no calibration") as e:
-        source_set(doc(table, fit=fit_dict(rayleigh_hours=SHORT_HOURS)), licence_id="gesla-derived")
-    assert e.value.reason == "short_record_uncalibrated"
+def test_a_short_record_with_missing_calibration_retains_the_exact_finding(table):
+    cs = source_set(doc(table, fit=fit_dict(rayleigh_hours=SHORT_HOURS)), licence_id="gesla-derived").constant_set
+    assert "no calibration" in cs["fallback"]["otc_finding"]
     f = fit_dict(rayleigh_hours=SHORT_HOURS)
     other = short_calibration(f, rid="someone-else")
-    with pytest.raises(NotPublishable, match="not a target") as e:
-        source_set(doc(table, fit=f, calibration=other), licence_id="gesla-derived")
-    assert e.value.reason == "short_record_uncalibrated"
+    cs = source_set(doc(table, fit=f, calibration=other), licence_id="gesla-derived").constant_set
+    assert "not a target" in cs["fallback"]["otc_finding"]
     refit = fit_dict(amp_m2=1.01, rayleigh_hours=SHORT_HOURS)
-    with pytest.raises(NotPublishable, match="differs") as e:
-        source_set(doc(table, fit=refit, calibration=short_calibration(f)), licence_id="gesla-derived")
+    cs = source_set(doc(table, fit=refit, calibration=short_calibration(f)), licence_id="gesla-derived").constant_set
+    assert "differs" in cs["fallback"]["otc_finding"]
+    assert cs["fallback"]["reason"] == "short_record_uncalibrated" and "expected_accuracy" not in cs
 
 
 def test_a_calibrated_short_record_is_published_with_its_accuracy(table):
@@ -353,13 +354,46 @@ def test_a_short_record_never_checked_against_the_long_records_is_not_published(
         source_set(lp_doc(table_lp, f, attach=False), licence_id="gesla-derived")
 
 
-def test_an_implausible_fit_is_refused(table):
+def test_an_implausible_fit_is_retained_with_its_actual_finding(table):
     f = fit_dict()
     cal = {"cal_version": 2, "refused": {"synthetic-1-nor-test": {"reason": "implausible_fit", "detail": "M2 17.67 m"}},
            "targets": {}}
-    with pytest.raises(NotPublishable, match="17.67") as e:
-        source_set(doc(table, fit=f, calibration=cal), licence_id="gesla-derived")
-    assert e.value.reason == "implausible_fit"
+    cs = source_set(doc(table, fit=f, calibration=cal), licence_id="gesla-derived").constant_set
+    assert cs["fallback"]["reason"] == "refused_fit"
+    assert "17.67" in cs["fallback"]["otc_finding"]
+    assert cs["qc_status"] == "flagged"
+    assert next(c for c in cs["constituents"] if c["name"] == "M2")["amplitude_m"] == f["constituents"]["M2"]["amp_m"]
+
+
+def test_uncalibrated_short_record_has_no_invented_accuracy(table):
+    f = fit_dict(rayleigh_hours=SHORT_HOURS)
+    cs = source_set(doc(table, fit=f), licence_id="gesla-derived").constant_set
+    assert cs["fallback"]["reason"] == "short_record_uncalibrated"
+    assert "expected_accuracy" not in cs
+    assert any(flag["flag"] == "short_record" for flag in cs["qc_flags"])
+
+
+def test_nofit_identity_keeps_actual_span_and_reason():
+    row = {"record": META["FILE NAME"], "outcome": "unusable", "reason": "rank deficiency",
+           "data_hours": 480.0, "first": 1577836800, "last": 1580428800, "window_samples": 480}
+    cs = gs.no_constants_set(row, META, source_version="4.1", member_sha256="a" * 64,
+                              licence_id="gesla-derived", tcd_sha256="c" * 64,
+                              time_base=time_base_annotation(None, 0, row["record"], decided_in=D)).constant_set
+    assert cs["qc_status"] == "no_constants" and cs["constituents"] == []
+    assert cs["no_constants_reason"] == "fit_unusable"
+    assert cs["record_span"]["start"] == "2020-01-01T00:00:00Z"
+    assert cs["record_issues"][0]["reason"] == "rank deficiency"
+    assert "expected_accuracy" not in cs
+
+
+def test_fallback_cannot_override_a_nonfallback_even_by_source_tier():
+    bad = gr.Candidate({"set_id": "official", "source_type": "official", "quantity": "water_level",
+                        "source_record_id": "official", "fallback": {"reason": "refused_fit"}}, 0, 0)
+    good = gr.Candidate({"set_id": "gauge", "source_type": "gauge", "quantity": "water_level",
+                         "source_record_id": "gauge"}, 0, 0)
+    assert gr.rank([bad, good])[0][0] is good
+    assert gr.recommend([bad, good])[0] is good
+    assert gr.set_order(good, [bad, good]) == [good, bad]
 
 
 def test_build_needs_the_inputs_other_slots_own(table):

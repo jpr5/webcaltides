@@ -769,20 +769,72 @@ def _canonical_name(record_id: str, name: str) -> str:
 
 def source_set(doc: Mapping, *, licence_id: str) -> SourceSet:
     """A fit document as a gesla-fit `SourceSet` (format 1.0 constant_set without set_id and
-    provenance.build, which the build adds). Raises NotPublishable for a record this build cannot
-    publish yet: a short record (a candidate dropped by the Rayleigh rule needs short_record,
-    dropped_constituents with not_separable_from and expected_accuracy). Raises FitIntegrityError
+    provenance.build, which the build adds). Scientific findings remain labelled fallbacks;
+    an uncalibrated short record has no invented accuracy. Raises FitIntegrityError
     for a time base that attenuates the tide on a fit with no matching sampling_corrected stamp.
     `licence_id` is required: no licence is assumed."""
     if not isinstance(licence_id, str) or not licence_id:
         raise ValueError(f"{doc.get('record_id')}: no licence id (the per-contributor licences, L-NC, assign it)")
-    ss = comparator_set(doc)
+    ss = comparator_set(doc, retain_findings=True)
     return SourceSet(station_hint=ss.station_hint, constant_set={**ss.constant_set, "licence_id": licence_id})
 
 
-def comparator_set(doc: Mapping) -> SourceSet:
-    """COMPARATOR ONLY: the fit document's set as `source_set` makes it, with the same checks, but with
-    no licence_id. For comparisons inside the pipeline (the per-source canary), never for a release:
+def label_fallback(cs: dict, reason: str, finding: str, *, basis: str) -> None:
+    """Retain a publication finding, preserving a prior primary reason and its evidence."""
+    if cs.get("qc_status") == "no_constants":
+        raise ValueError("a no_constants identity is not a predictive fallback")
+    previous = cs.get("fallback")
+    if previous:
+        reason, basis = previous["reason"], previous["basis"]
+        finding = previous["otc_finding"] if finding in previous["otc_finding"] else previous["otc_finding"] + "; " + finding
+    cs["fallback"] = {"reason": reason, "basis": basis, "otc_finding": finding}
+    cs["qc_status"] = "flagged"
+    flags = cs.setdefault("qc_flags", [])
+    flags[:] = [flag for flag in flags if not flag["flag"].startswith("fallback:")]
+    flags.append({"flag": f"fallback:{reason}", "reason": finding})
+
+
+def no_constants_set(row: Mapping, meta: Mapping, *, source_version: str, member_sha256: str,
+                     licence_id: str, tcd_sha256: str, time_base: Mapping) -> SourceSet:
+    """An actual unavailable fit remains an identity; no measurements/accuracy are invented."""
+    rid, outcome = row["record"], row["outcome"]
+    if outcome not in {"short", "unusable"}:
+        raise FitIntegrityError(f"{rid}: not an existing non-fit outcome: {outcome}")
+    n_decl = declared_hours(meta)
+    first, last = row.get("first"), row.get("last")
+    from_header = first is None and last is None
+    if from_header:
+        first, last = (int(datetime.strptime(meta[key], "%Y/%m/%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp())
+                       - n_decl * 3600 for key in ("START DATE/TIME", "END DATE/TIME"))
+    if first is None or last is None or last < first:
+        raise FitIntegrityError(f"{rid}: no faithful source span for the non-fit identity")
+    reason = "too_short" if outcome == "short" else "fit_unusable"
+    flag = "short_record" if outcome == "short" else "broken_record"
+    annotation = dict(time_base)
+    cs = {"source": SOURCE, "source_type": "gauge", "quantity": "water_level", "source_record_id": rid,
+          "source_version": source_version, "licence_id": licence_id, "convention_id": CONVENTION_ID,
+          "qc_status": "no_constants", "no_constants_reason": reason, "constituents": [],
+          "qc_flags": [{"flag": flag, "reason": row["reason"]}],
+          "record_span": {"start": _iso(first), "end": _iso(last), "good_hours": row["data_hours"]},
+          "time_base": annotation,
+          "provenance": {"input_sha256": [member_sha256], "tcd_sha256": tcd_sha256,
+                         "selection_reason": "no fitted constants; source header span in declared UTC" if from_header else
+                                             "no fitted constants; actual fit-run processing span"}}
+    if row.get("window_samples") is not None:
+        cs["record_span"]["good_samples"] = row["window_samples"]
+    if outcome == "unusable":
+        cs["record_issues"] = [{"issue": "unstable_constituents", "reason": row["reason"]}]
+    if cs["time_base"]["code"] in {"unverified", "disputed"}:
+        cs["qc_flags"].append({"flag": "time_base", "reason": cs["time_base"]["reason"]})
+    return SourceSet({"name": meta["SITE NAME"], "country": meta["COUNTRY"], "lat": float(meta["LATITUDE"]),
+                      "lon": float(meta["LONGITUDE"]), "type": "reference", "timezone": None,
+                      "aliases": {"gesla": [rid]}}, cs)
+
+
+def comparator_set(doc: Mapping, *, retain_findings: bool = False) -> SourceSet:
+    """COMPARATOR ONLY by default: scientific refusal checks remain unchanged for canaries.
+    Publication explicitly retains findings; neither path changes fit coefficients or stamp checks.
+    With no licence_id this is never a release set:
     the schema requires licence_id on every set, so a release holding a comparator fails
     validate_release, and the build (build_release) never takes one."""
     if doc.get("doc_version") != DOC_VERSION:
@@ -799,7 +851,7 @@ def comparator_set(doc: Mapping) -> SourceSet:
     check_stamp(rid, f, tb["published"], corr=_label_correction(rid, tb["published"]), speed=speed,
                 span=(int(f["first_s"]), int(f["last_s"]) + 3600))
     refused = doc.get("refusal")
-    if refused:
+    if refused and not retain_findings:
         raise NotPublishable(refused["detail"], refused["reason"])
     clist = f.get("candidate_list", "base")                         # the list the fit walked ("base" when absent)
     if clist not in CANDIDATE_LISTS:
@@ -810,7 +862,8 @@ def comparator_set(doc: Mapping) -> SourceSet:
     if {d["name"] for d in drops} != missing:
         raise FitIntegrityError(f"{rid}: rayleigh_drops {sorted(d['name'] for d in drops)} are not the Rayleigh "
                                 f"rule's drops {sorted(missing)}")
-    if missing and not doc.get("expected_accuracy"):
+    uncalibrated = missing and not doc.get("expected_accuracy")
+    if uncalibrated and not retain_findings:
         raise NotPublishable(f"{rid}: short record ({doc['good_hours']:.0f} good hours) with no expected_accuracy",
                              short_accuracy.UNCALIBRATED)
     speeds = doc["speeds_deg_per_hour"]
@@ -821,7 +874,8 @@ def comparator_set(doc: Mapping) -> SourceSet:
             raise FitIntegrityError(f"{rid}: short record not checked against the run's long records "
                                     "(no long_period_reference: attach_long_period_references)")
         long_period = short_accuracy.long_period_drops(f, speeds, doc["long_period_reference"])
-    held = {d["name"] for d in long_period}
+    retained = retain_findings and (refused or uncalibrated)
+    held = set() if retained else {d["name"] for d in long_period}
     cons = []
     for name in sorted(f["constituents"]):
         if name in held:
@@ -845,17 +899,20 @@ def comparator_set(doc: Mapping) -> SourceSet:
         "provenance": {"input_sha256": [doc["member_sha256"]], "tcd_sha256": doc["tcd_sha256"]},
     }
     dropped = [dict(d, name=_canonical_name(rid, d["name"]))
-               for d in sorted(short_accuracy.dropped_constituents(drops, sorted(f.get("snr_dropped", ()))) + long_period,
+               for d in sorted(short_accuracy.dropped_constituents(drops, sorted(f.get("snr_dropped", ()))) +
+                               ([] if retained else long_period),
                                key=lambda d: d["name"])]
     if dropped:
         cs["dropped_constituents"] = dropped
     flags = []
     if drops:
-        cs["expected_accuracy"] = dict(doc["expected_accuracy"])
+        if doc.get("expected_accuracy"):
+            cs["expected_accuracy"] = dict(doc["expected_accuracy"])
         flags.append({"flag": "short_record",
                       "reason": clip(short_accuracy.short_record_reason(doc["good_hours"], drops,
                                                                         notes=doc.get("accuracy_notes") or ())),
-                      "values": short_accuracy.flag_values(doc["accuracy_by_constituent"])})
+                      **({"values": short_accuracy.flag_values(doc["accuracy_by_constituent"])}
+                         if doc.get("accuracy_by_constituent") else {})})
         if doc.get("microtidal"):
             flags.append({"flag": "microtidal", "reason": "every main constituent (M2, S2, K1, O1) is under 5 mm: "
                                                           "the phases are not meaningful as tide phases"})
@@ -864,6 +921,12 @@ def comparator_set(doc: Mapping) -> SourceSet:
     cs["qc_status"] = "flagged" if flags else "ok"
     if flags:
         cs["qc_flags"] = flags
+    if retained:
+        reason = "short_record_uncalibrated" if uncalibrated else "refused_fit"
+        finding = refused["detail"] if refused else f"{rid}: short record with no expected_accuracy"
+        if long_period:
+            finding += "; retained fitted long-period lines without a qualified reference: " + ", ".join(d["name"] for d in long_period)
+        label_fallback(cs, reason, finding, basis="OTC fitted values on the pinned TCD; source licence and uncertainty retained")
     return SourceSet(
         station_hint={"name": doc["site_name"], "country": doc["country"], "lat": doc["lat"], "lon": doc["lon"],
                       "type": "reference", "timezone": None, "aliases": {"gesla": [rid]}},

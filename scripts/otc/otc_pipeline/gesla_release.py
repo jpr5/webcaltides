@@ -1,7 +1,7 @@
 """A format 1.0 release document from GESLA fit documents (the GESLA side of the release build).
 
     build_release(docs, ...) -> (release, BuildReport)   the release is valid input for write_release;
-                                                         the report lists every record left out, by reason
+                                                         the report lists retained findings and licence omissions
 
 One active reference station per OTC station id, with one gesla-fit set per record and one set
 recommended (recommend()). The pieces another slot owns come in as arguments, never made up here:
@@ -48,7 +48,7 @@ from gesla.tcd_table import TcdTable
 
 from otc_pipeline.astro_tables import CongenRun, astro_table_errors, release_table_errors
 from otc_pipeline.gesla_sets import (CONVENTION_ID, FIT_MIN_GOOD_HOURS, SOURCE, FitIntegrityError, NotPublishable,
-                                     licence_of, refusal, source_set)
+                                     label_fallback, licence_of, refusal, source_set)
 from otc_pipeline.release_writer import FORMAT_VERSION, BuiltRelease
 from otc_pipeline import ticon_sets as ts
 
@@ -82,7 +82,7 @@ def gesla_convention(table_id: str, table: TcdTable) -> dict:
 
 
 TIER = {"official": 0, "gauge": 1, "analysis": 2, "model": 3}   # format 1.0 source_type order (23aedbe)
-RANK_STEPS = ("tier", "time_base", "short_record", "instantaneous", "sub_hourly", "current", "originator", "commercial",
+RANK_STEPS = ("fallback", "tier", "time_base", "short_record", "instantaneous", "sub_hourly", "current", "originator", "commercial",
               "epoch_hours", "recency", "research_quality", "record_id")
 CURRENT_S = 2 * 365.25 * 86400     # "current": ends within 2 years of the newest set
 EPOCH_TIE = 0.02                   # epoch hours closer than 2 % of the larger count are a tie
@@ -121,6 +121,7 @@ class Candidate:
 
 
 _STEPS = (  # (name, key: smaller is better) applied in order; current and epoch_hours are tolerance filters
+    ("fallback", lambda c: bool(c.cs.get("fallback"))),
     ("tier", lambda c: TIER[c.cs["source_type"]]),
     ("time_base", lambda c: c.disputed),
     ("short_record", lambda c: _is_short(c.cs)),
@@ -138,8 +139,8 @@ assert tuple(n for n, _ in _STEPS) == RANK_STEPS
 
 
 def _best(cands: list[Candidate]) -> tuple[Candidate, str]:
-    """The first set by the rank steps, in the order the method page (method.html#selection) and the
-    sources page publish: source tier; not disputed (nor flagged against its siblings); not short;
+    """The first set by fallback group, then the existing published rank steps:
+    source tier; not disputed (nor flagged against its siblings); not short;
     instantaneous before averaged; sub-hourly before hourly; current (ends within 2 years of the newest
     remaining set); the originating agency before a copy; a commercial-use licence; good hours in
     2002-2020 (a difference under 2 % is a tie); the most recent; research quality before fast delivery;
@@ -204,6 +205,8 @@ def recommend(cands: list[Candidate]) -> tuple[Candidate | None, dict]:
     live = [c for c in cands if c.cs.get("qc_status") != "no_constants"]
     if not live:
         return None, {"recommended": None, "decided_by": "no_constants", "overridden": None, "candidates": []}
+    # Fallback groups precede every existing criterion and reference override.
+    live = [c for c in live if not c.cs.get("fallback")] or live
     # a third party's analysis never outranks an OTC fit or an official set of the station, by rank or by the
     # override rules below (site sources/ticon-4: "below official constants and any OTC gauge fit"): with any
     # other set present, the analysis sets do not compete
@@ -249,6 +252,19 @@ def set_order(win: Candidate | None, cands: list[Candidate]) -> list[Candidate]:
     rest = [c for c, _ in rank(live) if c is not win]
     dead = sorted((c for c in cands if c.cs.get("qc_status") == "no_constants"), key=lambda c: c.cs["source_record_id"])
     return ([win] if win is not None else []) + rest + dead
+
+
+def reconcile_recommendation(station: dict, win: Candidate | None) -> None:
+    """Reconcile marker and preferred links with the actual chosen set after every merge."""
+    station["recommended_set_id"] = win.cs["set_id"] if win else None
+    station.pop("recommended_is_fallback", None)
+    if win is not None and win.cs.get("fallback"):
+        station["recommended_is_fallback"] = True
+    for cs in station["constant_sets"]:
+        if cs.get("fallback"):
+            cs["fallback"].pop("preferred_set_id", None)
+            if win is not None and not win.cs.get("fallback") and win.cs["quantity"] == cs["quantity"]:
+                cs["fallback"]["preferred_set_id"] = win.cs["set_id"]
 
 
 def _flag(cs: dict, reason: str, **values: float) -> None:
@@ -323,12 +339,14 @@ class BuildReport:
     carried: list[dict] = field(default_factory=list)
     not_carried: list[dict] = field(default_factory=list)
     ticon_audit: str | None = None
+    retained: list[dict] = field(default_factory=list)
 
     def counts(self) -> dict[str, int]:
         return dict(sorted(Counter(r["reason"] for r in self.refused).items()))
 
     def as_dict(self) -> dict:
         return {"published": len(self.published), "refused": len(self.refused), "refused_by_reason": self.counts(),
+                "retained": sorted(self.retained, key=lambda r: r["record"]),
                 "withheld_stations": dict(sorted(self.withheld_stations.items())),
                 "ticon": {"audit": self.ticon_audit, "carried": sorted(self.carried, key=lambda r: r["record"]),
                           "not_carried": sorted(self.not_carried, key=lambda r: r["record"])},
@@ -497,51 +515,33 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
         report.published.append(rid)
     stations = []
     for sid in sorted(by_station):
-        # decision fix-r4 (2): a station whose every set is on the offset side of a clock offset is not published
-        # until the time-base audit corrects it; its records are refused and reported, as withheld records are
-        # the offset evidence itself: any of a record's flags that carries a clock offset (fix-r6)
+        entries = by_station[sid]
         offsets = [next((f for f in _flag_list(suspects.get(c.cs["source_record_id"]))
-                         if f.get("clock_offset_h") is not None), None) for c, _ in by_station[sid]]
-        # TB-SIB: a record the audit disputes for a whole-hour EOT20 lag of 3 h or more is unresolved too
+                         if f.get("clock_offset_h") is not None), None) for c, _ in entries]
         whole = [EOT20_WHOLE_HOUR in (disputed_reasons.get(c.cs["source_record_id"]) or "").split()
-                 for c, _ in by_station[sid]]
-        # owner rule: a disputed time base is not carried, as the recommended set or as an alternate (FIX-DISP);
-        # the station rule is about OTC's fits: when every gauge set of the station is disputed or unresolved,
-        # those sets are refused; a clean TICON-4 set of another record keeps the station, with that set
-        # recommended, and never makes an unresolved OTC fit publishable
-        disp = [_time_base_disputed(c.cs, disputed_reasons) for c, _ in by_station[sid]]
-        bad = [f is not None or w or d for f, w, d in zip(offsets, whole, disp)]
-        withheld = all(b for (c, _), b in zip(by_station[sid], bad) if c.cs["source_type"] != "analysis")
-        keep = []
-        for (c, h), f, w, d, b in zip(by_station[sid], offsets, whole, disp, bad):
-            rid = c.cs["source_record_id"]
-            if not d and not (withheld and b):
-                keep.append((c, h))
+                 for c, _ in entries]
+        disputed = [_time_base_disputed(c.cs, disputed_reasons) for c, _ in entries]
+        all_unresolved = all(f is not None or w or d for (c, _), f, w, d in zip(entries, offsets, whole, disputed)
+                             if c.cs["source_type"] != "analysis")
+        for (candidate, _hint), offset, hour, is_disputed in zip(entries, offsets, whole, disputed):
+            cs = candidate.cs
+            rid = cs["source_record_id"]
+            if not is_disputed and not (all_unresolved and (offset is not None or hour)):
                 continue
-            if c.cs["source_type"] == "analysis":
-                _uncarry(report, c.cs, "eot20_whole_hour_unresolved" if w else
-                         "time_base_disputed" if d else "clock_offset_unresolved")
-                continue
-            report.published.remove(rid)
-            if w:
-                report.refused.append(refusal(rid, "eot20_whole_hour_unresolved",
-                                              f"{rid}: station {sid}: this set is disputed by the time-base audit for "
-                                              f"a whole-hour EOT20 lag ({EOT20_WHOLE_HOUR}); "
-                                              "withheld until the audit corrects it", _good(c.cs)))
-            elif f is not None and withheld:
-                report.refused.append(refusal(rid, "clock_offset_unresolved",
-                                              f"{rid}: station {sid}: every set is flagged for a clock offset or disputed "
-                                              f"({f['clock_offset_h']:+.2f} h against {', '.join(list(f.get('against', []))[:3])}); "
-                                              "withheld until the time-base audit corrects it", _good(c.cs)))
+            why = disputed_reasons.get(rid) or (cs.get("time_base") or {}).get("reason", "")
+            if hour:
+                reason = "time_base_unresolved"
+                finding = f"{rid}: whole-hour EOT20 lag remains unresolved ({why})"
+            elif offset is not None and all_unresolved:
+                reason = "time_base_unresolved"
+                finding = (f"{rid}: unresolved clock offset {offset['clock_offset_h']:+.2f} h against "
+                           f"{', '.join(list(offset.get('against', []))[:3])}; {why}")
             else:
-                why = disputed_reasons.get(rid) or "no reason given"
-                report.refused.append(refusal(rid, "time_base_disputed",
-                                              f"{rid}: station {sid}: the time-base audit disputes this set's time base "
-                                              f"({why}); a disputed time base is not published", _good(c.cs)))
-        if keep:
-            by_station[sid] = keep
-        else:
-            del by_station[sid]
+                reason = "reliability_withheld" if "reviewer_evidence" in why.split() else "time_base_disputed"
+                finding = f"{rid}: time-base audit disputes this record ({why})"
+            label_fallback(cs, reason, finding, basis="Retained existing fitted/source values; no time-base correction invented")
+    report.retained = [{"record": c.cs["source_record_id"], "set_id": c.cs["set_id"], **c.cs["fallback"]}
+                       for entries in by_station.values() for c, _ in entries if c.cs.get("fallback")]
     for sid, cands in sorted(by_station.items()):
         win, how = recommend([c for c, _ in cands])
         report.recommendations.append({"station_id": sid, **how})
@@ -561,6 +561,7 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
                          "type": "reference", "aliases": dict(sorted(aliases.items())),
                          "recommended_set_id": win.cs["set_id"] if win else None,
                          "constant_sets": [c.cs for c in set_order(win, [c for c, _ in cands])]})
+        reconcile_recommendation(stations[-1], win)
     active = {st["station_id"] for st in stations}
     report.withheld_stations = {sid: "; ".join(why) for sid, why in withheld_sids.items() if sid not in active}
     for t in tombstones:
@@ -603,6 +604,50 @@ def build_release(docs: Iterable[Mapping], *, table: TcdTable, table_id: str, da
     if astro:
         raise ValueError(f"build check 7 (astro tables): {len(astro)} errors: " + "; ".join(astro[:10]))
     return release, report
+
+
+def retain_nofit(release: dict, report: BuildReport, source_sets: list, *, station_ids: Mapping,
+                 licences: list[dict]) -> None:
+    """Append unavailable-fit identities after the unchanged fitted/TICON selection."""
+    by_station = {s["station_id"]: s for s in release["stations"] if s["status"] == "active"}
+    known_licences = {lic["licence_id"]: lic for lic in release["licences"]}
+    offered_licences = {lic["licence_id"]: lic for lic in licences}
+    added = set()
+    for source_set in sorted(source_sets, key=lambda ss: ss.constant_set["source_record_id"]):
+        cs = copy.deepcopy(source_set.constant_set)
+        rid = cs["source_record_id"]
+        if cs["qc_status"] != "no_constants" or cs["constituents"]:
+            raise FitIntegrityError(f"{rid}: non-fit publication received fitted constants")
+        if rid in added or rid in report.published:
+            raise ValueError(f"{rid}: duplicate non-fit publication")
+        added.add(rid)
+        sid = station_ids[rid]
+        lid = cs["licence_id"]
+        licence = offered_licences[lid]
+        if lid in known_licences and known_licences[lid] != licence:
+            raise ValueError(f"{rid}: inconsistent source licence {lid}")
+        known_licences[lid] = licence
+        cs["set_id"] = f"{sid}/{SOURCE}/{rid}"
+        cs["provenance"]["build"] = {"build_commit": release["release"]["build_commit"]}
+        hint = source_set.station_hint
+        if sid not in by_station:
+            station = {"station_id": sid, "status": "active", "name": hint["name"], "country": hint["country"],
+                       "lat": hint["lat"], "lon": hint["lon"], "timezone": station_timezone(hint["lat"], hint["lon"]),
+                       "type": "reference", "aliases": {}, "recommended_set_id": None, "constant_sets": []}
+            by_station[sid] = station
+            release["stations"].append(station)
+        station = by_station[sid]
+        station["constant_sets"].append(cs)
+        station.setdefault("aliases", {})["gesla"] = sorted(set(station.get("aliases", {}).get("gesla", [])) | {rid})
+        report.published.append(rid)
+        report.retained.append({"record": rid, "set_id": cs["set_id"], "reason": cs["no_constants_reason"],
+                                "finding": next(f["reason"] for f in cs["qc_flags"] if f["flag"] != "time_base"),
+                                "representation": "no_constants", "good_hours": cs["record_span"]["good_hours"]})
+        report.withheld_stations.pop(sid, None)
+    report.refused[:] = [r for r in report.refused if r["record"] not in added]
+    release["licences"] = [known_licences[lid] for lid in sorted(known_licences)]
+    active = sorted((s for s in release["stations"] if s["status"] == "active"), key=lambda s: s["station_id"])
+    release["stations"] = active + [s for s in release["stations"] if s["status"] != "active"]
 
 
 def _uncarry(report: BuildReport, cs: Mapping, reason: str) -> None:

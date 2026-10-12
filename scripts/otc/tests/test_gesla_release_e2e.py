@@ -162,8 +162,12 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
         sibling_flags={}, tombstones=[], station_map_inputs={"fit_run_results_sha256": "f" * 64},
         fit_run_results_sha256="f" * 64, disputed_reasons=disputed,
         astro_tables=[astro_table(congen, tcd, names, table_id=TABLE_ID)], congen_run=crun)
-    assert {r["record"]: r["reason"] for r in report.refused} == refuse
-    assert sorted(report.published) == sorted(published)
+    blocked = {rid: reason for rid, reason in refuse.items() if reason == "withheld"}
+    retained = set(refuse) - set(blocked)
+    represented = set(published) | retained
+    assert {r["record"]: r["reason"] for r in report.refused} == blocked
+    assert set(report.published) == represented
+    assert {r["record"] for r in report.retained} >= retained
     write_release(release, tmp_path, datestamp="20261010", app_export=None, congen_run=crun)
     assert check_release_dir(tmp_path) == []
     assert hashlib.sha256(SCHEMA_BYTES).hexdigest() == SCHEMA_SHA256
@@ -177,12 +181,10 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
     meta = json.loads((tmp_path / "OTC_20261010.meta.json").read_text())
     assert errors(meta, "meta") == []
     lines = (tmp_path / "OTC_20261010.jsonl").read_text().splitlines()
-    assert len(lines) == len(published) and all(errors(json.loads(x), "station") == [] for x in lines)
+    assert len(lines) == len(represented) and all(errors(json.loads(x), "station") == [] for x in lines)
     sets = {cs["source_record_id"]: cs for st in on_disk["stations"] for cs in st["constant_sets"]}
-    assert sorted(sets) == sorted(published)
-    # FIX-DISP: no set the audit or the final verdicts dispute is in the files
-    assert {cs["time_base"]["code"] for cs in sets.values()} == {"verified", "unverified", "corrected"}
-    assert not set(sets) & set(disputed)
+    assert set(sets) == represented
+    assert all(sets[rid]["fallback"] and sets[rid]["qc_status"] == "flagged" for rid in retained)
     assert on_disk["release"]["source_versions"] == {"gesla": rel.version}
     refit, refit_refused = fit_records(dump.table, rel, published, audit_dir=audit_dir, roles=roles)
     assert refit_refused == []
@@ -191,13 +193,43 @@ def test_a_release_of_real_records_validates_against_1_0(inputs, tmp_path):
         m2 = next(c for c in cs["constituents"] if c["name"] == "M2")["amplitude_m"]
         run_fit = json.loads((run / "fits" / f"{rid}.json").read_text())
         assert m2 == pytest.approx(run_fit["constituents"]["M2"]["amp_m"], abs=1e-5), rid
-        assert m2 == pytest.approx(refit_m2[rid], abs=1e-5), rid       # the in-repo refit reproduces the run
+        if rid in refit_m2:
+            assert m2 == pytest.approx(refit_m2[rid], abs=1e-5), rid   # unchanged ordinary fitting proof
         if rid in mean60:
             # the run's fit carries its own sampling stamp: the boxcar attenuation is divided out
             assert (run_fit.get("stats") or {}).get("sampling_corrected"), rid
             assert published_correction(tb[rid], 0).kind == "utc_mean_start60"
             assert cs["time_base"]["correction"] == {"from": "utc_instant", "to": "utc_mean_start60"}
-        assert cs["qc_status"] == ("flagged" if cs["time_base"]["code"] == "unverified" else "ok")
+        if rid not in retained:
+            assert cs["qc_status"] == ("flagged" if cs["time_base"]["code"] == "unverified" else "ok")
+
+
+def test_retained_native_release_preserves_real_values_and_nofit_identities():
+    release = json.loads(_env("OTC_RETENTION_JSON").read_text())
+    fixture = json.loads(_env("OTC_RETENTION_FIXTURE").read_text())
+    sets = {cs["source_record_id"]: cs for st in release["stations"] for cs in st.get("constant_sets", [])
+            if cs["source"] == "gesla-fit"}
+    for rid, document in fixture["docs"].items():
+        assert rid in sets, rid
+        cs = sets[rid]
+        assert cs["qc_status"] == "flagged" and cs["fallback"]["otc_finding"]
+        assert any(f["flag"] == "fallback:" + cs["fallback"]["reason"] for f in cs["qc_flags"])
+        published = {c["name"]: c for c in cs["constituents"]}
+        for name in ("M2", "S2", "K1", "O1"):
+            if name in document["fit"]["constituents"]:
+                actual = published[name]
+                original = document["fit"]["constituents"][name]
+                assert actual["amplitude_m"] == original["amp_m"]
+                assert actual["phase_deg"] == original["phase_deg"] % 360
+                if "u_m" in original:
+                    assert actual["amp_uncertainty_m"] == original["u_m"]
+    for row in fixture["nonfit_rows"]:
+        assert row["record"] in sets, row["record"]
+        cs = sets[row["record"]]
+        assert cs["qc_status"] == "no_constants" and cs["constituents"] == []
+        assert cs["record_span"]["good_hours"] == row["data_hours"]
+        assert "expected_accuracy" not in cs and "fallback" not in cs
+    assert validate_release(release) == []
 
 
 def test_the_gate_refuses_the_real_pre_crash_check_audit():

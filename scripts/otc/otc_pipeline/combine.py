@@ -525,12 +525,9 @@ def merge(release: dict, agency: Mapping[str, AgencySource], *, station_ids: Map
             cands = [_candidate(cs, commercial[cs["licence_id"]]) for cs in sets]
             others = [_candidate(cs, True) for cs in built]
             win, how = gr.recommend(cands + others)
-            if win not in cands:
-                raise CombineError(f"{sid}: recommend() chose {win.cs['set_id'] if win else None}, not an official set")
-            order = [win.cs] + [c.cs for c, _ in gr.rank(cands) if c is not win]
-            st["constant_sets"] = order + built
+            st["constant_sets"] = [c.cs for c in gr.set_order(win, cands + others)]
             was = st["recommended_set_id"]
-            st["recommended_set_id"] = win.cs["set_id"]
+            gr.reconcile_recommendation(st, win)
             st["aliases"] = dict(sorted({**(st.get("aliases") or {}), **aliases}.items()))
             built_place = {k: st[k] for k in ("name", "lat", "lon", "timezone")}
             # G2: a station that holds the agency's own gauge (the same-gauge rule) publishes the agency's official
@@ -566,6 +563,7 @@ def merge(release: dict, agency: Mapping[str, AgencySource], *, station_ids: Map
               "aliases": dict(sorted(aliases.items())),
               "recommended_set_id": win.cs["set_id"] if win else None,
               "constant_sets": [c.cs for c in gr.set_order(win, cands)]}
+        gr.reconcile_recommendation(st, win)
         if "default_current_bin" in h:
             st["default_current_bin"] = h["default_current_bin"]
         subs = [so for _, _, _, so in items if so is not None]

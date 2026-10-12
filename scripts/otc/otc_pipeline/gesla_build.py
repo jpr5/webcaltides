@@ -9,7 +9,7 @@ Inputs (none of them is in git; each is checked where it is read):
   fitted against the audit in AUDIT (gesla_sets.check_fit_run); its results.jsonl is the one the committed station
   map was minted from (build_release checks the pin).
 - FINAL: the newest finished time-base audit (the final verdicts). Its disputed reasons (disputed_reasons_of) decide
-  what is never published (FIX-DISP, the whole-hour EOT20 rule), and it annotates the TICON-4 sets' time bases.
+  the labels on retained disputed/unresolved sets, and it annotates the TICON-4 sets' time bases.
   Its reviewed withholds must be exactly the committed list (check_reviewed_withhold), else the build stops.
   The fit documents keep the annotation of AUDIT, the audit the fit used.
 - AUDIT's weak inputs (EOT20 at each gauge, sha256-checked against its manifest): every fit is screened for a sign
@@ -252,6 +252,20 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
     # Scientific selection (including TICON neighbour choices) uses the same
     # fitted documents. Account for existing non-fit outcomes only afterwards.
     account_nonfit(rows, report)
+    nonfit = [row for row in rows if row["outcome"] != "fitted"]
+    if nonfit:
+        metadata = rel.metadata()
+        original = [{"record_id": row["record"], "contributor": metadata[row["record"]]["CONTRIBUTOR (ABBREVIATED)"]}
+                    for row in nonfit]
+        original_licences, original_ids = gesla_licences(original)
+        identities = [gs.no_constants_set(row, metadata[row["record"]], source_version=rel.version,
+                                         member_sha256=rel.members[row["record"]]["sha256"],
+                                         licence_id=original_ids[row["record"]], tcd_sha256=table.tcd_sha256,
+                                         time_base=gs.time_base_annotation(audit.rows.get(row["record"]),
+                                             gs.declared_hours(metadata[row["record"]]), row["record"],
+                                             decided_in=audit.decided_in, decided_build_commit=audit.decided_build_commit))
+                      for row in nonfit]
+        gr.retain_nofit(release, report, identities, station_ids=smap.record_ids(), licences=original_licences)
     fit_identity = _run_identity(fit_run)
     if fit_identity["results_sha256"] != results_sha256:
         raise SystemExit(f"{fit_run}/results.jsonl changed during the build")

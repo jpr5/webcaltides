@@ -70,7 +70,8 @@ def _inputs(tmp_path):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
         return p
-    put("run/results.jsonl", '{"record": "a", "outcome": "fitted"}\n{"record": "b", "outcome": "short"}\n')
+    put("run/results.jsonl", '{"record": "a", "outcome": "fitted"}\n'
+        '{"record": "b", "outcome": "short", "reason": "short", "data_hours": 216, "first": 0, "last": 777600}\n')
     put("run/timebase_manifest.json", '{"run": 1}')
     put("overlay/results.jsonl", '{"record": "a", "outcome": "fitted"}\n')
     put("overlay/timebase_manifest.json", '{"overlay": 1}')
@@ -103,7 +104,7 @@ def fakes(tmp_path, monkeypatch):
     """Every heavy step of build() replaced by a recorder: the test sees what build() hands to each."""
     seen = {}
     audits = {"audit": SimpleNamespace(rows={"a": {"time_base_status": "verified"}}, csv_sha256="1" * 64,
-                                       decided_build_commit="aud0001"),
+                                       decided_build_commit="aud0001", decided_in="20261010"),
               "final": SimpleNamespace(rows={"a": {"time_base_status": "disputed", "disputed_reason": "eot20_whole_hour"}},
                                        csv_sha256="2" * 64, decided_build_commit="fin0001")}
     table = SimpleNamespace(tcd_sha256=at.TCD_SHA256)
@@ -133,7 +134,10 @@ def fakes(tmp_path, monkeypatch):
         return {"release": 1}, gr.BuildReport()
     smap = SimpleNamespace(record_ids=lambda: {"a": "OTC-1"}, sibling_flags=lambda: {}, tombstones=lambda: [],
                            inputs={"fit_run_results_sha256": "x"}, release_aliases=lambda: {})
-    monkeypatch.setattr(gb, "GeslaRelease", lambda: SimpleNamespace(metadata=lambda: {}))
+    meta = {"b": {"SITE NAME": "Short", "COUNTRY": "NOR", "LATITUDE": "60", "LONGITUDE": "5",
+                  "CONTRIBUTOR (ABBREVIATED)": "TEST", "TIME ZONE HOURS": "0"}}
+    monkeypatch.setattr(gb, "GeslaRelease", lambda: SimpleNamespace(metadata=lambda: meta, version="4.1",
+                                                                    members={"b": {"sha256": "b" * 64}}))
     monkeypatch.setattr(gs, "load_tcd_dump", lambda p: SimpleNamespace(table=table, sha256="d" * 64, path=Path(p)))
     monkeypatch.setattr(gs, "load_audit", lambda d: audits[Path(d).name])
     monkeypatch.setattr(gs, "docs_from_fit_run", docs_from_fit_run)
@@ -145,7 +149,9 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(gs, "load_eot20", load_eot20)
     seen["eot20"] = eot20
     monkeypatch.setattr(gb, "read_calibration", lambda d: seen.setdefault("calibration_dir", d) and cal)
-    monkeypatch.setattr(gb, "gesla_licences", lambda docs: ([], {}))
+    monkeypatch.setattr(gb, "gesla_licences", lambda docs: ([], {"a": "test-derived", "b": "test-derived"}))
+    monkeypatch.setattr(gr, "retain_nofit", lambda release, report, identities, **kw:
+                        seen.setdefault("retain_nofit", {"identities": identities, **kw}))
     monkeypatch.setattr(sm, "load", lambda: smap)
     monkeypatch.setattr(sm, "load_epoch_hours", lambda: {})
     monkeypatch.setattr(ts, "load_ticon", lambda p: seen.setdefault("ticon_csv", p) and [])
@@ -404,7 +410,7 @@ def test_the_build_report_carries_the_provenance_and_the_command_line(fakes, tmp
     assert prov["fit_run"]["results_sha256"] == _sha(p["fit_run"] / "results.jsonl")
     assert prov["calibration"]["sha256"] == "c" * 64 and prov["build_commit"] == "abc1234"
     assert rep["refused_by_reason"] == {"too_short": 1} and rep["published"] == 0
-    assert rep["records"]["refused"] == [{"record": "b", "reason": "too_short", "message": "short"}]
+    assert rep["records"]["refused"] == [{"record": "b", "reason": "too_short", "message": "short", "good_hours": 216}]
 
 
 def test_a_congen_run_the_astro_tables_refuse_is_a_one_line_exit(fakes, monkeypatch):
