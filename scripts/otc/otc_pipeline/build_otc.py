@@ -151,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--chs-identities-sha256")
     ap.add_argument("--source-quality-findings", type=Path)
     ap.add_argument("--source-quality-findings-sha256")
+    ap.add_argument("--original-derived-inputs", type=Path)
+    ap.add_argument("--original-derived-inputs-sha256")
     gb.inventory_arguments(ap)
     argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
@@ -159,7 +161,9 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--chs-identities and --chs-identities-sha256 must be supplied together")
     if (a.source_quality_findings is None) != (a.source_quality_findings_sha256 is None):
         raise ValueError("--source-quality-findings and --source-quality-findings-sha256 must be supplied together")
-    if inventory is None and (a.chs_identities is not None or a.source_quality_findings is not None):
+    if (a.original_derived_inputs is None) != (a.original_derived_inputs_sha256 is None):
+        raise ValueError("--original-derived-inputs and --original-derived-inputs-sha256 must be supplied together")
+    if inventory is None and (a.chs_identities is not None or a.source_quality_findings is not None or a.original_derived_inputs is not None):
         raise ValueError("original source publication inputs require the actual pinned --source-inventory")
     chs = None
     if a.chs_identities is not None:
@@ -168,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
         chs = load_chs_identities(a.chs_identities)
     if a.source_quality_findings is not None and _sha256(a.source_quality_findings) != a.source_quality_findings_sha256:
         raise ValueError("source quality findings SHA-256 mismatch")
+    if a.original_derived_inputs is not None and _sha256(a.original_derived_inputs) != a.original_derived_inputs_sha256:
+        raise ValueError("original derived-input manifest SHA-256 mismatch")
     t0 = time.time()
 
     def log(msg: str) -> None:
@@ -194,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
                                   table_id=TABLE_ID, canaries=conv)
     arep.canaries = full
     log("agency: " + json.dumps(arep.sources, sort_keys=True))
-    original_retention = quality_findings = None
+    original_retention = quality_findings = derived_inputs = None
     if inventory is not None:
         from otc_pipeline.original_metadata import load_original_metadata
         metadata = load_original_metadata(inventory, tcd_path=tcd, datestamp=a.datestamp)
@@ -202,6 +208,10 @@ def main(argv: list[str] | None = None) -> int:
             release, inventory, fit_run=a.fit_run, docs=parts.docs, report=parts.report,
             source_metadata=metadata, chs=chs)
         log("original source retention: " + json.dumps({k: v for k, v in original_retention.items() if k != "chs"}, sort_keys=True))
+        if a.original_derived_inputs is not None:
+            derived_inputs = original_sources.retain_derived_inputs(
+                release, path=a.original_derived_inputs, sha256=a.original_derived_inputs_sha256)
+            log(f"original historical fit documents: {derived_inputs['original_documents']}")
         if a.source_quality_findings is not None:
             quality_findings = original_sources.apply_quality_findings(
                 release, inventory, path=a.source_quality_findings, sha256=a.source_quality_findings_sha256)
@@ -228,7 +238,8 @@ def main(argv: list[str] | None = None) -> int:
                   "canary_exceptions_sha256": _sha256(EXCEPTIONS_PATH),
                   "currents_canary_cache": str(a.currents_canary_cache.resolve())}
     gb.write_report(parts.report, provenance, a.out / "BUILD_REPORT.json", extra={"agency": arep.as_dict(),
-                    "original_source_retention": original_retention, "source_quality_findings": quality_findings},
+                    "original_source_retention": original_retention, "source_quality_findings": quality_findings,
+                    "original_derived_inputs": derived_inputs},
                     release=release, inventory=inventory)
     log(f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
     return 0

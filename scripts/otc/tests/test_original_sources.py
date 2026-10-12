@@ -58,6 +58,23 @@ def test_native_original_sources_retain_every_spatial_identity_and_real_fit_payl
     assert restricted == 1543
 
 
+def test_native_historical_fit_documents_retain_full_original_bytes_and_binding():
+    originals = json.loads(_env("OTC_ORIGINAL_DERIVED_INPUTS").read_text())
+    release = json.loads(_env("OTC_ORIGINAL_RELEASE").read_text())
+    records = {(record["source"], record["source_version"], record["source_record_id"]): record
+               for station in release["stations"] for record in station.get("source_records", [])}
+    assert len(originals) == 9
+    for original in originals:
+        record = records[("gesla", original["source_version"], original["record_id"])]
+        retained = json.loads(record["original_metadata"]["historical_original_fit_documents_json"])
+        actual = next(row for row in retained if row["sha256"] == original["sha256"])
+        raw = Path(original["path"]).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == original["sha256"]
+        assert actual["original_document_json"].encode("utf-8") == raw
+        assert json.loads(actual["original_document_json"]) == json.loads(raw)
+        assert actual["role"] == original["role"]
+
+
 @pytest.mark.parametrize("mutation", ["wrong_hash", "missing_row", "wrong_bin", "widened_bound"])
 def test_actual_quality_ingress_refuses_changed_hash_scope_bin_or_bound(tmp_path, mutation):
     from otc_pipeline.original_sources import apply_quality_findings

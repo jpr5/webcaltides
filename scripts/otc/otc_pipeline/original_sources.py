@@ -206,6 +206,45 @@ def retain_original_sources(release: dict, inventory: SourceInventory, *, fit_ru
             "chs": chs.provenance if chs is not None else None, "unique_place_claim": False}
 
 
+def retain_derived_inputs(release: dict, *, path: Path, sha256: str) -> dict:
+    """Retain pinned earlier fit documents as history, never replacing current science."""
+    raw_manifest = Path(path).read_bytes()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256) or hashlib.sha256(raw_manifest).hexdigest() != sha256:
+        raise ValueError("original derived-input manifest SHA-256 mismatch")
+    originals = json.loads(raw_manifest)
+    records = {(record["source"], record["source_version"], record["source_record_id"]): record
+               for station in release["stations"] for record in station.get("source_records", [])}
+    actions, files = [], []
+    for original in originals:
+        original_path = Path(original["path"])
+        raw = original_path.read_bytes()
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest != original["sha256"]:
+            raise ValueError(f"original historical fit SHA-256 mismatch: {original_path}")
+        document = json.loads(raw)
+        if (document["record_id"] != original["record_id"]
+                or document["source_version"] != original["source_version"]):
+            raise ValueError(f"original historical fit identity mismatch: {original_path}")
+        key = ("gesla", original["source_version"], original["record_id"])
+        if key not in records:
+            raise ValueError(f"original historical fit has no retained source identity: {key}")
+        value = {"path": str(original_path.resolve()), "sha256": digest, "role": original["role"],
+                 "original_document_json": raw.decode("utf-8")}
+        actions.append((records[key], value))
+        files.append({"path": value["path"], "sha256": digest, "record_id": original["record_id"],
+                      "source_version": original["source_version"]})
+    for record, value in actions:
+        metadata = record.setdefault("original_metadata", {})
+        retained = json.loads(metadata.get("historical_original_fit_documents_json", "[]"))
+        if any(row["sha256"] == value["sha256"] for row in retained):
+            raise ValueError("original historical fit document is retained twice")
+        retained.append(value)
+        metadata["historical_original_fit_documents_json"] = json.dumps(retained, ensure_ascii=False, separators=(",", ":"))
+        record["detail"] += " Historical/superseded original scientific fit retained in full; current accepted fit, coefficients and recommendation remain unchanged."
+    return {"path": str(Path(path).resolve()), "sha256": sha256, "original_documents": len(actions),
+            "files": files, "scientific_results_changed": False}
+
+
 def apply_quality_findings(release: dict, inventory: SourceInventory, *, path: Path, sha256: str) -> dict:
     """Attach the six approved metric findings without changing numerical results or bounds."""
     raw = Path(path).read_bytes()
