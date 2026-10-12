@@ -415,6 +415,24 @@ module OTCTierB
             require_value(actual == expected, 'BGO tested-set binding differs from accepted source version, subject or hashes')
         end
 
+        def verify_act_offset_binding(station, record, row, mapping)
+            require_value(record.fetch('source_version') == '20261008' && record.fetch('role') == 'gauge_station' &&
+                          record.fetch('disposition') == 'metadata_only', 'original ACT metadata-only identity changed')
+            require_value(record.fetch('published_set_ids').empty? && station.fetch('constant_sets').empty?,
+                          'invented ACT own-set ownership')
+            require_value(mapping.fetch('set_id').nil? && mapping.fetch('reference_bin_id') == 11,
+                          "ACT offset reference binding changed #{row['id']}")
+            reference = released_station(mapping.fetch('reference_station_id'))
+            tested = published_set(reference, 'noaa-currents', 'EPT0003')
+            accepted_station = original_subject('noaa-currents', 'EPT0003')
+            accepted = accepted_station.fetch('constant_sets').find { |set| set.fetch('set_id') == tested.fetch('set_id') }
+            require_value(tested.fetch('set_id') == mapping.fetch('reference_set_id') &&
+                          tested.fetch('source_version') == accepted.fetch('source_version') &&
+                          tested.fetch('source_version') == '20261008', 'ACT tested reference source version changed')
+            unchanged(tested.fetch('provenance').fetch('input_sha256'), accepted.fetch('provenance').fetch('input_sha256'),
+                      'ACT tested reference source input hashes')
+        end
+
         def verify_label(row, mapping)
             identity = original_identity(mapping.fetch('source'), mapping.fetch('source_record_id'))
             records = @release.fetch('stations').flat_map do |station|
@@ -431,6 +449,8 @@ module OTCTierB
             require_value(provenance.fetch('input_sha256').sort == identity.fetch('input_sha256').sort, "original input provenance changed #{row['id']}")
             if mapping['source'] == 'kartverket' && mapping['source_record_id'] == 'BGO'
                 verify_bgo_version_binding(station, record, row, mapping)
+            elsif mapping['source'] == 'noaa-currents' && mapping['source_record_id'] == 'ACT0091'
+                verify_act_offset_binding(station, record, row, mapping)
             else
                 linked = record.fetch('published_set_ids')
                 expected_links = mapping['set_id'] ? [mapping['set_id']] : []

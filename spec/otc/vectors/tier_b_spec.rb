@@ -150,6 +150,57 @@ RSpec.describe 'the native Tier B official comparison' do
         expect(record).to include('role' => 'gauge_station', 'disposition' => 'metadata_only', 'published_set_ids' => [])
     end
 
+    it 'accepts the actual metadata-only ACT offset model without an invented own set' do
+        log, status, report = coverage_gate(release: ENV.fetch('OTC_TIER_B_RELEASE'))
+        expect(status.success?).to be(true), log
+        mapping = report.fetch('mappings').find { |item| item['row_id'] == 'noaa-currents/ACT0091:1/events' }
+        expect(mapping).to include('set_id' => nil, 'reference_station_id' => 'OTC-6e5989a2',
+                                   'reference_set_id' => 'OTC-6e5989a2/noaa-currents/EPT0003', 'reference_bin_id' => 11)
+    end
+
+    {
+        'parent' => 'source values changed',
+        'bin' => 'source values changed',
+        'version' => 'ACT tested reference source version changed',
+        'offset' => 'source values changed',
+        'reference input hash' => 'ACT tested reference source input hashes',
+        'original raw hash' => 'original input provenance changed',
+        'metric label' => 'metric label differs',
+        'own-set link' => 'invented ACT own-set ownership'
+    }.each do |change, violation|
+        it "rejects an ACT offset association with changed #{change}" do
+            changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+                station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-c93802ca' }
+                record = station.fetch('source_records').find { |item| item['source'] == 'noaa-currents' && item['source_record_id'] == 'ACT0091' }
+                offset = station.fetch('current_offsets').find { |item| item['bin'] == 1 }
+                reference = document.fetch('stations').find { |item| item['station_id'] == 'OTC-6e5989a2' }
+                set = reference.fetch('constant_sets').find { |item| item['set_id'] == 'OTC-6e5989a2/noaa-currents/EPT0003' }
+                case change
+                when 'parent'
+                    offset['reference_station_id'] = 'OTC-f2ecceab'
+                when 'bin'
+                    offset['reference_bin'] = 6
+                when 'version'
+                    set['source_version'] = '20261010'
+                when 'offset'
+                    offset['flood_amp_ratio'] += 0.0001
+                when 'reference input hash'
+                    set.fetch('provenance').fetch('input_sha256')[0] = '0' * 64
+                when 'original raw hash'
+                    record.fetch('provenance').fetch('input_sha256')[0] = '0' * 64
+                when 'metric label'
+                    record['detail'] = record.fetch('detail').gsub('"event_extra":2', '"event_extra":0')
+                when 'own-set link'
+                    record['published_set_ids'] = [set.fetch('set_id')]
+                end
+                File.write(path, JSON.generate(document))
+                log, status, report = coverage_gate(release: path)
+                expect(status.success?).to be(false), log
+                expect(report.fetch('violations').join).to include(violation)
+            end
+        end
+    end
+
     %w[original_source_version tested_set_source_version tested_input_sha256 tested_constituents_sha256 set_id comparison_sha256].each do |field|
         it "rejects an altered BGO tested-set binding #{field}" do
             changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
