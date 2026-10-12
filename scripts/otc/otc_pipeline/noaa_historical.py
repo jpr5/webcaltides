@@ -3,6 +3,7 @@
 This loader retains source parameters and evidence. It does not establish current
 validity, allocate station identities, select references or publish predictions.
 """
+from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
 import hashlib
@@ -10,6 +11,9 @@ import html
 import json
 from pathlib import Path, PurePosixPath
 import re
+
+from timezonefinder import TimezoneFinder
+from otc_pipeline import station_map as sm
 
 
 _MANIFEST = "noaa-two-gap-followup-v1-manifest.json"
@@ -236,3 +240,138 @@ def load_noaa_historical_inputs(bundle: Path, sha256: str) -> HistoricalInputs:
              {"path": matrix["path"], "sha256": matrix["sha256"], "role": "parameter_row_index"},
              *(dict(member, role=_role(member["path"])) for member in members))
     return HistoricalInputs(profiles, sha256, tuple(dict(member) for member in members), roles, matrix["sha256"], manifest)
+
+
+def _same_nominal_position(station: dict, profile: dict) -> bool:
+    """The publisher's one-minute location cell, never a guessed precise gauge."""
+    return all(isinstance(station.get(key), (int, float))
+               and round(station[key] * 60) == round(profile[key] * 60) for key in ("lat", "lon"))
+
+
+def _source_tuple(record: dict) -> tuple:
+    return record.get("source"), record.get("source_version"), record.get("source_record_id")
+
+
+def _historical_reference(stations: list[dict], profile: dict, licences: set[str]) -> dict:
+    offsets = profile["subordinate_offsets"]
+    binding = offsets["provenance"]["reference_binding"]
+    candidates = [st for st in stations if st.get("status") == "active"
+                  and (st.get("aliases", {}).get("noaa") == binding["noaa_id"]
+                       or any(_source_tuple(record) == ("noaa", cs.get("source_version"), binding["noaa_id"])
+                              for record in st.get("source_records", [])
+                              for cs in st.get("constant_sets", []) if cs.get("source") == "noaa"))]
+    if len(candidates) != 1:
+        raise ValueError(f"{offsets['offset_id']}: missing or ambiguous NOAA reference {binding['noaa_id']}")
+    reference = candidates[0]
+    if (reference["station_id"] != binding["station_id"] or reference.get("type") != "reference"
+            or reference.get("aliases", {}).get("noaa") != binding["noaa_id"]):
+        raise ValueError(f"{offsets['offset_id']}: reference identity differs from the approved primary binding")
+    selected = next((cs for cs in reference.get("constant_sets", [])
+                     if cs.get("set_id") == reference.get("recommended_set_id")), {})
+    datum = selected.get("datum", {})
+    basis = datum.get("basis", {}).get("mllw", {})
+    if (offsets["licence_id"] not in licences or selected.get("licence_id") not in licences):
+        raise ValueError(f"{offsets['offset_id']}: own/reference licence must resolve")
+    if (selected.get("source") != "noaa" or selected.get("quantity") != "water_level"
+            or datum.get("chart_datum") != "mllw" or "mllw" not in datum.get("named", {})
+            or basis.get("kind") != "published" or basis.get("method") != "source"):
+        raise ValueError(f"{offsets['offset_id']}: reference requires actual NOAA water-level source and published MLLW")
+    return reference
+
+
+def _historical_target(stations: list[dict], profile: dict) -> dict | None:
+    record_key = _source_tuple(profile["source_records"][0])
+    lineage = [st for st in stations if st.get("status") == "active"
+               and any(_source_tuple(record) == record_key for record in st.get("source_records", []))]
+    named = [st for st in stations if st.get("status") == "active"
+             and " ".join(st.get("name", "").casefold().split()) == " ".join(profile["name"].casefold().split())
+             and _same_nominal_position(st, profile)
+             and not st.get("current_offsets")
+             and not (st.get("constant_sets") and all(cs.get("quantity") == "currents" for cs in st["constant_sets"]))]
+    candidates = {st["station_id"]: st for st in [*lineage, *named]}
+    if len(candidates) > 1:
+        raise ValueError(f"{profile['name']}: ambiguous historical target identity")
+    target = next(iter(candidates.values()), None)
+    if target is not None:
+        if not _same_nominal_position(target, profile):
+            raise ValueError(f"{profile['name']}: existing source lineage has conflicting nominal position")
+        if target.get("country") != "USA":
+            raise ValueError(f"{profile['name']}: ambiguous country binding for the US Table2 row")
+    return target
+
+
+def apply_noaa_historical_offsets(release: dict, inputs: HistoricalInputs, *, build_commit: str) -> dict:
+    """Atomically retain both source profiles; do not select/rerank predictions."""
+    stations = release["stations"]
+    licences = {lic["licence_id"] for lic in release["licences"]}
+    if len(inputs.profiles) != 2 or len(inputs.members) != 56:
+        raise ValueError("historical augmentation requires both verified rows and all 56 members")
+    planned = list(stations)
+    taken = {st["station_id"] for st in stations}
+    created = 0
+    rows = []
+    finder = None
+    for profile in inputs.profiles:
+        reference = _historical_reference(stations, profile, licences)
+        target = _historical_target(stations, profile)
+        off = profile["subordinate_offsets"]
+        if target is None:
+            if finder is None:
+                finder = TimezoneFinder()
+            timezone = finder.timezone_at(lat=profile["lat"], lng=profile["lon"])
+            if timezone is None:
+                raise ValueError(f"{profile['name']}: nominal-position display timezone is unresolved")
+            provenance = off["provenance"]
+            founder = f"noaa:annual-tide-tables-2020:{provenance['book']}:table2:{provenance['annual_table_row']}"
+            sid = sm.new_id(founder, taken)
+            taken.add(sid)
+            target = {"station_id": sid, "status": "active", "name": profile["name"], "country": "USA",
+                      "lat": profile["lat"], "lon": profile["lon"], "timezone": timezone,
+                      "type": "subordinate", "aliases": {}, "constant_sets": [], "recommended_set_id": None}
+            index = len(planned)
+            created += 1
+        else:
+            index = next(i for i, st in enumerate(stations) if st["station_id"] == target["station_id"])
+            target = deepcopy(target)
+        old_offsets = target.get("subordinate_offsets")
+        if old_offsets is not None:
+            numbers = ("height_adjusted_type", "time_offset_high_min", "time_offset_low_min",
+                       "height_offset_high", "height_offset_low")
+            if (old_offsets.get("offset_id") != off["offset_id"]
+                    or any(old_offsets.get(key) != off[key] for key in numbers)
+                    or old_offsets.get("provenance") != off["provenance"]):
+                raise ValueError(f"{profile['name']}: existing ordinary/conflicting offsets must not be overwritten")
+            # Keep measured vintage findings from a previous import; no optimistic reset.
+        elif target.get("current_offsets"):
+            raise ValueError(f"{profile['name']}: existing current offsets cannot be overwritten by historical tides")
+        else:
+            target["subordinate_offsets"] = deepcopy(off)
+            if not target.get("constant_sets") and target.get("recommended_set_id") is None:
+                target["type"] = "subordinate"
+        record = profile["source_records"][0]
+        original = [source for source in target.get("source_records", []) if _source_tuple(source) == _source_tuple(record)]
+        if original and (len(original) != 1 or original[0] != record):
+            raise ValueError(f"{profile['name']}: existing original source tuple conflicts with the sealed row")
+        if not original:
+            target.setdefault("source_records", []).append(deepcopy(record))
+        if index == len(planned):
+            planned.append(target)
+        else:
+            planned[index] = target
+        selected = next(cs for cs in reference["constant_sets"] if cs["set_id"] == reference["recommended_set_id"])
+        rows.append({"station_id": target["station_id"], "offset_id": off["offset_id"],
+                     "source_record_id": off["source_record_id"], "reference_station_id": reference["station_id"],
+                     "reference_set_id": selected["set_id"], "reference_source_version": selected["source_version"],
+                     "source_version": off["source_version"], "licence_id": off["licence_id"]})
+    versions = dict(release["release"].get("source_versions", {}))
+    if versions.get("noaa-historical", "annual-tide-tables-2020") != "annual-tide-tables-2020":
+        raise ValueError("historical augmentation collection version conflicts with existing metadata")
+    versions["noaa-historical"] = "annual-tide-tables-2020"
+    release["stations"] = planned
+    release["release"]["source_versions"] = versions
+    return {"source_manifest_sha256": inputs.manifest_sha256, "matrix_sha256": inputs.matrix_sha256,
+            "build_commit": build_commit, "profile_count": 2, "verified_member_count": 56,
+            "created_stations": created, "reused_stations": 2 - created,
+            "source_records": rows, "members": list(inputs.members), "input_roles": list(inputs.input_roles),
+            "count_unit": "two retained published parameter rows; 56 captured evidence artifacts, not 56 places",
+            "source_status": "historical2020; inferred legacy associations; retired profiles; current validity unestablished; accuracy unverified"}

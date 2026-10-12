@@ -37,6 +37,7 @@ from otc_pipeline import gesla_build as gb
 from otc_pipeline import gesla_sets as gs
 from otc_pipeline import station_map as sm
 from otc_pipeline import original_sources
+from otc_pipeline import noaa_historical
 from otc_pipeline.chs_identities import load_chs_identities
 from otc_pipeline.astro_tables import TABLE_ID
 from otc_pipeline.canary import CANARY_CONSTITUENTS, canary
@@ -155,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--original-derived-inputs-sha256")
     ap.add_argument("--country-resolutions", type=Path)
     ap.add_argument("--country-resolutions-sha256")
+    ap.add_argument("--noaa-historical-inputs", type=Path)
+    ap.add_argument("--noaa-historical-inputs-sha256")
     gb.inventory_arguments(ap)
     argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
@@ -167,8 +170,10 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--original-derived-inputs and --original-derived-inputs-sha256 must be supplied together")
     if (a.country_resolutions is None) != (a.country_resolutions_sha256 is None):
         raise ValueError("--country-resolutions and --country-resolutions-sha256 must be supplied together")
+    if (a.noaa_historical_inputs is None) != (a.noaa_historical_inputs_sha256 is None):
+        raise ValueError("--noaa-historical-inputs and --noaa-historical-inputs-sha256 must be supplied together")
     if inventory is None and (a.chs_identities is not None or a.source_quality_findings is not None
-                              or a.original_derived_inputs is not None or a.country_resolutions is not None):
+                              or a.original_derived_inputs is not None or a.country_resolutions is not None or a.noaa_historical_inputs is not None):
         raise ValueError("original source publication inputs require the actual pinned --source-inventory")
     chs = None
     if a.chs_identities is not None:
@@ -181,10 +186,17 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("original derived-input manifest SHA-256 mismatch")
     if a.country_resolutions is not None and _sha256(a.country_resolutions) != a.country_resolutions_sha256:
         raise ValueError("country resolution cache SHA-256 mismatch")
+    historical_inputs = None
+    if a.noaa_historical_inputs is not None:
+        historical_inputs = noaa_historical.load_noaa_historical_inputs(
+            a.noaa_historical_inputs, a.noaa_historical_inputs_sha256)
     t0 = time.time()
 
     def log(msg: str) -> None:
         gb._log(t0, msg)
+    if historical_inputs is not None:
+        log(f"noaa historical inputs: {len(historical_inputs.profiles)} profiles, "
+            f"{len(historical_inputs.members)} verified members")
     if a.out.exists() and any(a.out.iterdir()):
         raise SystemExit(f"{a.out}: not empty")
     commit = gb.head_commit()
@@ -228,6 +240,13 @@ def main(argv: list[str] | None = None) -> int:
             country_resolutions = original_sources.apply_country_resolution_cache(
                 release, path=a.country_resolutions, sha256=a.country_resolutions_sha256)
             log("country resolutions: " + json.dumps(country_resolutions, sort_keys=True))
+    historical_augmentation = None
+    if historical_inputs is not None:
+        historical_augmentation = noaa_historical.apply_noaa_historical_offsets(
+            release, historical_inputs, build_commit=commit)
+        log("noaa historical augmentation: " + json.dumps(
+            {key: value for key, value in historical_augmentation.items() if key not in {"members", "input_roles"}},
+            sort_keys=True))
     errs = validate_release(release)
     log(f"validate_release: {len(errs)} errors")
     for e in errs[:20]:
@@ -251,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
                   "currents_canary_cache": str(a.currents_canary_cache.resolve())}
     gb.write_report(parts.report, provenance, a.out / "BUILD_REPORT.json", extra={"agency": arep.as_dict(),
                     "original_source_retention": original_retention, "source_quality_findings": quality_findings,
-                    "original_derived_inputs": derived_inputs, "country_resolutions": country_resolutions},
+                    "original_derived_inputs": derived_inputs, "country_resolutions": country_resolutions, "noaa_historical_augmentation": historical_augmentation},
                     release=release, inventory=inventory)
     log(f"wrote {[p.name for p in files]} + BUILD_REPORT.json to {a.out}")
     return 0
