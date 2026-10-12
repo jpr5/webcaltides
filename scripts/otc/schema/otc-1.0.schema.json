@@ -202,7 +202,7 @@
       "properties": {
         "licence_id": { "type": "string", "minLength": 1 },
         "spdx": {
-          "description": "SPDX id, or a LicenseRef- id where SPDX has none (e.g. LicenseRef-PublicDomain-USGov).",
+          "description": "SPDX id, or a LicenseRef- id where SPDX has none (e.g. LicenseRef-PublicDomain-USGov). Only ticon-4-bodc-restricted uses NOASSERTION: a special no-conclusion marker, not a licence identifier or grant.",
           "type": "string",
           "pattern": "^([A-Za-z0-9.+-]+|LicenseRef-[A-Za-z0-9.-]+)$(?![\\s\\S])"
         },
@@ -225,6 +225,10 @@
           "format": "uri"
         }
       },
+      "allOf": [
+        {"if": {"required": ["licence_id"],"properties": {"licence_id": {"const": "ticon-4-bodc-restricted"}}},"then": {"required": ["restriction","terms_url"],"properties": {"spdx": {"const": "NOASSERTION"},"commercial_use": {"const": false},"provider": {"minLength": 1},"attribution": {"minLength": 1},"terms_url": {"const": "https://www.bodc.ac.uk/data/documents/nodb/267795/"}}}},
+        {"if": {"required": ["spdx"],"properties": {"spdx": {"const": "NOASSERTION"}}},"then": {"properties": {"licence_id": {"const": "ticon-4-bodc-restricted"},"commercial_use": {"const": false}}}}
+      ],
       "if": { "required": ["commercial_use"], "properties": { "commercial_use": { "const": false } } },
       "then": { "required": ["restriction", "terms_url"] }
     },
@@ -554,11 +558,12 @@
           "else": { "properties": { "provenance": { "not": { "required": ["modified"] } } } }
         },
         {
-          "description": "The source names its source type: ticon-4 is an analysis, gesla-fit is a gauge fit. The ticon-4 licence goes with the ticon-4 source, and only with it.",
+          "description": "The source names its source type: ticon-4 is an analysis, gesla-fit is a gauge fit. Only the ticon-4 and ticon-4-bodc-restricted policy IDs go with the ticon-4 source. The restricted ID requires a labelled licence_reading fallback.",
           "allOf": [
             { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "source_type": { "const": "analysis" } } } },
-            { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "licence_id": { "const": "ticon-4" } } } },
-            { "if": { "properties": { "licence_id": { "const": "ticon-4" } }, "required": ["licence_id"] }, "then": { "required": ["source"], "properties": { "source": { "const": "ticon-4" } } } },
+            { "if": { "properties": { "source": { "const": "ticon-4" } }, "required": ["source"] }, "then": { "properties": { "licence_id": { "enum": ["ticon-4", "ticon-4-bodc-restricted"] } } } },
+            { "if": { "properties": { "licence_id": { "enum": ["ticon-4", "ticon-4-bodc-restricted"] } }, "required": ["licence_id"] }, "then": { "required": ["source"], "properties": { "source": { "const": "ticon-4" } } } },
+            {"if": {"required": ["licence_id"],"properties": {"licence_id": {"const": "ticon-4-bodc-restricted"}}},"then": {"required": ["fallback"],"properties": {"fallback": {"properties": {"reason": {"const": "licence_reading"}}}}}},
             { "if": { "properties": { "source": { "const": "gesla-fit" } }, "required": ["source"] }, "then": { "properties": { "source_type": { "const": "gauge" } } } }
           ]
         },

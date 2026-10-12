@@ -56,8 +56,14 @@ def test_example_is_valid(release):
     assert validate_release(release) == []
 
 
-def test_fallback_real_release_roundtrip(tmp_path):
-    real_path = os.environ.get("OTC_FALLBACK_REAL_RELEASE")
+@pytest.mark.parametrize("real_env,sid,set_id,policy_id", [
+    ("OTC_FALLBACK_REAL_RELEASE", "OTC-000cb5d3",
+     "OTC-000cb5d3/ticon-4/funafuti-67440-tuv-bom", None),
+    ("OTC_FB_LIC_REAL_RELEASE", "OTC-666303b1",
+     "OTC-666303b1/ticon-4/aberdeen-abe-gbr-cmems", "ticon-4-bodc-restricted"),
+], ids=["labelled-fallback", "restricted-ticon"])
+def test_fallback_real_release_roundtrip(tmp_path, real_env, sid, set_id, policy_id):
+    real_path = os.environ.get(real_env)
     report_path = os.environ.get("OTC_FALLBACK_BUILD_REPORT")
     if not real_path or not report_path:
         pytest.skip("requires the pinned actual build evidence")
@@ -71,10 +77,19 @@ def test_fallback_real_release_roundtrip(tmp_path):
     paths = write_release(doc, tmp_path, datestamp=doc["release"]["datestamp"],
                           congen_run=run, app_export=None, parquet=True, jsonl_gz=True)
     stem = "OTC_" + doc["release"]["datestamp"]
-    sid = "OTC-000cb5d3"
-    set_id = "OTC-000cb5d3/ticon-4/funafuti-67440-tuv-bom"
     expected_st = _station(doc, sid)
     expected_cs = next(c for c in expected_st["constant_sets"] if c["set_id"] == set_id)
+    policy = next(row for row in doc["licences"] if row["licence_id"] == expected_cs["licence_id"])
+    if policy_id is not None:
+        assert policy["licence_id"] == policy_id
+        assert policy["spdx"] == "NOASSERTION"
+        assert policy["commercial_use"] is False
+        assert "prior consent from BODC" in policy["restriction"]
+        assert policy["terms_url"] == "https://www.bodc.ac.uk/data/documents/nodb/267795/"
+        assert "OTC does not conclude a combined licence" in policy["attribution"]
+        m2 = next(c for c in expected_cs["constituents"] if c["name"] == "M2")
+        assert m2["amplitude_m"] == 1.291621
+        assert m2["phase_deg"] == 24.543287
     for suffix in (".json", ".json.gz", ".jsonl", ".jsonl.gz"):
         raw = (tmp_path / (stem + suffix)).read_bytes()
         if suffix.endswith(".gz"):
@@ -88,18 +103,31 @@ def test_fallback_real_release_roundtrip(tmp_path):
         assert stations == doc["stations"]
         st = next(s for s in stations if s["station_id"] == sid)
         cs = next(c for c in st["constant_sets"] if c["set_id"] == set_id)
-        assert st["recommended_is_fallback"] is True
+        assert st.get("recommended_is_fallback") == expected_st.get("recommended_is_fallback")
         assert cs == expected_cs
     with (tmp_path / (stem + ".csv")).open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     parquet_rows = pq.read_table(tmp_path / (stem + ".parquet")).to_pylist()
-    for table_rows in (rows, parquet_rows):
+    for table_rows, missing in ((rows, ""), (parquet_rows, None)):
         st = next(r for r in table_rows if r["record_type"] == "station" and r["station_id"] == sid)
         cs = next(r for r in table_rows if r["record_type"] == "constant_set" and r["set_id"] == set_id)
-        assert st["recommended_is_fallback"] == "true"
+        assert st["recommended_is_fallback"] == ("true" if expected_st.get("recommended_is_fallback") else missing)
+        assert cs["commercial_use"] == ("true" if policy["commercial_use"] else "false")
         assert json.loads(cs["fallback"]) == expected_cs["fallback"]
         assert json.loads(cs["qc_flags"]) == expected_cs["qc_flags"]
-    assert "stations" not in json.loads((tmp_path / (stem + ".meta.json")).read_text())
+        assert cs["licence_id"] == expected_cs["licence_id"]
+        assert cs["source_record_id"] == expected_cs["source_record_id"]
+        assert json.loads(cs["time_base"]) == expected_cs["time_base"]
+        assert json.loads(cs["provenance"]) == expected_cs["provenance"]
+        for edge in ("start", "end"):
+            assert cs["record_span_" + edge] == expected_cs["record_span"][edge]
+        expected_m2 = next(c for c in expected_cs["constituents"] if c["name"] == "M2")
+        m2_row = next(r for r in table_rows if r["record_type"] == "constituent"
+                      and r["set_id"] == set_id and r["name"] == "M2")
+        for key in ("amplitude_m", "phase_deg", "speed_deg_per_hour"):
+            assert float(m2_row[key]) == expected_m2[key]
+    meta = json.loads((tmp_path / (stem + ".meta.json")).read_text())
+    assert meta == {k: v for k, v in doc.items() if k != "stations"}
     assert check_release_dir(tmp_path) == []
     assert any(p.suffix == ".parquet" for p in paths)
 

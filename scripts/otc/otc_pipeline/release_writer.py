@@ -159,8 +159,8 @@ _CHILD_KEYS = {
 FORMAT_VERSION = "1.0"
 SCHEMA_NAME = f"otc-{FORMAT_VERSION}.schema.json"
 # SHA-256 of the site's src/schema/otc-1.0.schema.json at the commit sync_schema.sh pins
-# (ed10d6c, approved labelled publication fallback contract). sync_schema.sh holds the same value; a test keeps the two equal.
-SCHEMA_SHA256 = "d03e887cf122dfe5f693d0816e4261825f242923dc1d78039ea86bc840c62534"
+# (533eafa, approved explicit restricted TICON policy binding). sync_schema.sh holds the same value; a test keeps the two equal.
+SCHEMA_SHA256 = "c304322a7efc4546dcf720bb81710fc0dfec6cd9eaa63dfeb184e377508046b9"
 _MISSING = object()  # "key not present"; never equal to a value read from JSON
 
 

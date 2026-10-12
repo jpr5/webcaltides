@@ -129,6 +129,28 @@
       "provider": "WSV via PEGELONLINE",
       "attribution": "Example attribution text.",
       "commercial_use": true
+    },
+    {
+      "licence_id": "gesla-bodc-nc",
+      "spdx": "CC-BY-NC-4.0",
+      "provider": "British Oceanographic Data Centre (BODC) via GESLA",
+      "citation": "Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+      "attribution": "This uses data provided by the British Oceanographic Data Centre, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+      "url": "https://creativecommons.org/licenses/by-nc/4.0/legalcode",
+      "commercial_use": false,
+      "restriction": "Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'.",
+      "terms_url": "https://www.bodc.ac.uk/data/documents/nodb/267795/"
+    },
+    {
+      "licence_id": "ticon-4-bodc-restricted",
+      "provider": "TICON-4 (DGFI-TUM); underlying record: British Oceanographic Data Centre (BODC) via GESLA",
+      "citation": "Hart-Davis, M., Dettmering, D., Seitz, F. (2025). TICON-4: TIdal CONstants based on GESLA-4 sea-level records. SEANOE. doi:10.17882/109129\nUnderlying record citation (stored metadata): Haigh, I.D., et al. (2023), GESLA Version 3: A major update to the global higher-frequency sea-level dataset, Geoscience Data Journal, https://doi.org/10.1002/gdj3.174",
+      "attribution": "Internal restricted policy: NOASSERTION means OTC does not conclude a combined licence. Published TICON attribution: Contains constants from TICON-4 (DGFI-TUM), CC BY 4.0. Hart-Davis, M., Dettmering, D., Seitz, F. (2025). TICON-4: TIdal CONstants based on GESLA-4 sea-level records. SEANOE. doi:10.17882/109129.\nUnderlying record attribution (stored metadata): This uses data provided by the British Oceanographic Data Centre, via GESLA-4.1. CC BY-NC 4.0: non-commercial use only.",
+      "url": "https://doi.org/10.17882/109129",
+      "commercial_use": false,
+      "restriction": "Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'.",
+      "terms_url": "https://www.bodc.ac.uk/data/documents/nodb/267795/",
+      "spdx": "NOASSERTION"
     }
   ],
   "constituents": [
@@ -1681,6 +1703,93 @@
           ]
         }
       ],
+      "recommended_is_fallback": true
+    },
+    {
+      "aliases": {
+        "gesla": [
+          "aberdeen-abe-gbr-bodc",
+          "aberdeen-abe-gbr-cmems"
+        ],
+        "ticon": [
+          "aberdeen-abe-gbr-bodc",
+          "aberdeen-abe-gbr-cmems"
+        ],
+        "webcaltides": "T1f64c12"
+      },
+      "constant_sets": [
+        {
+          "set_id": "OTC-666303b1/ticon-4/aberdeen-abe-gbr-cmems",
+          "source": "ticon-4",
+          "source_type": "analysis",
+          "quantity": "water_level",
+          "source_record_id": "aberdeen-abe-gbr-cmems",
+          "source_version": "4",
+          "record_span": {
+            "start": "1990-01-01T00:00:00Z",
+            "end": "2025-06-30T23:59:59Z"
+          },
+          "convention_id": "ticon4-greenwich-schureman-v1",
+          "licence_id": "ticon-4-bodc-restricted",
+          "qc_status": "flagged",
+          "time_base": {
+            "declared": "utc_instant",
+            "published": "utc_instant",
+            "decided_in": "20261011",
+            "decided_build_commit": "ecd91f6c64b7f116e521fb31ab0a2a7d65effc69",
+            "code": "unverified",
+            "reason": "declared utc_instant kept; no comparator; provider CMEMS (interval 3600 s) has 45 judged records with verdicts ['unexplained', 'utc_instant']; EOT20 (tau -4.5 min) agrees with utc_instant; the served station T1f64c12 is not independent (aberdeen-abe-gbr-cmems is from a redistributor (CMEMS): its originator cannot be established), so it confirms nothing and EOT20 alone cannot verify"
+          },
+          "constituents": [
+            {
+              "name": "M2",
+              "speed_deg_per_hour": 28.9841042,
+              "amplitude_m": 1.291621,
+              "phase_deg": 24.543287
+            }
+          ],
+          "qc_flags": [
+            {
+              "flag": "time_base",
+              "reason": "time base unverified: declared utc_instant kept; no comparator; provider CMEMS (interval 3600 s) has 45 judged records with verdicts ['unexplained', 'utc_instant']; EOT20 (tau -4.5 min) agrees with utc_instant; the served station T1f64c12 is not independent (aberdeen-abe-gbr-cmems is from a redistributor (CMEMS): its originator cannot be established), so it confirms nothing and EOT20 alone cannot verify"
+            },
+            {
+              "flag": "source_quality_note",
+              "reason": "TICON-4 record quality: Possible quality control issues"
+            },
+            {
+              "flag": "fallback:licence_reading",
+              "reason": "aberdeen-abe-gbr-cmems: licence gesla-bodc-nc is withheld: BODC data licence: 'Users should not give any data or products to third parties without prior consent from BODC'; withheld until BODC consents."
+            }
+          ],
+          "fallback": {
+            "reason": "licence_reading",
+            "basis": "TICON-4 publication: CC BY 4.0, doi:10.17882/109129. Underlying record: gesla-bodc-nc; Non-commercial use only: the BODC data licence says 'Users should not give any data or products to third parties without prior consent from BODC' and that commercial use 'might require additional permission from the data source and may incur a charge'. Terms: https://www.bodc.ac.uk/data/documents/nodb/267795/. NOASSERTION means OTC does not conclude a combined licence. No BODC consent evidence is recorded.",
+            "otc_finding": "aberdeen-abe-gbr-cmems: licence gesla-bodc-nc is withheld: BODC data licence: 'Users should not give any data or products to third parties without prior consent from BODC'; withheld until BODC consents."
+          },
+          "provenance": {
+            "build": {
+              "build_commit": "28d09ef"
+            },
+            "input_sha256": [
+              "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366",
+              "92fd88dcdf8a57d7551870aabdd90d13a1751311e2895837dc271a159b42ab48",
+              "9844a6a267f47c09b7169f5f1c9aaa17aae638b5b2615aff313074f13462c1aa",
+              "394951d30c4c0794df9e7d8b616e0311fe70ab40200137d304c0f3eb2b7b98a9"
+            ],
+            "selection_reason": "Controlled schema proof projection from frozen native loaders; current producer refused cmems_relayed. Originator resolution: originator BODC: GESLA ORIGINATOR 'National Oceanography Centre'"
+          }
+        }
+      ],
+      "country": "GBR",
+      "lat": 57.144028,
+      "lon": -2.080222,
+      "name": "Aberdeen (restricted policy example; source-derived M2 projection)",
+      "recommended_set_id": "OTC-666303b1/ticon-4/aberdeen-abe-gbr-cmems",
+      "station_id": "OTC-666303b1",
+      "status": "active",
+      "timezone": "Europe/London",
+      "type": "reference",
       "recommended_is_fallback": true
     }
   ]
