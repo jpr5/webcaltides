@@ -56,6 +56,8 @@ __all__ = ["CONVENTION_ID", "LEFT_OUT", "LICENCE", "LICENCE_ID", "NAME_MAP", "No
 SOURCE = "ticon-4"
 SOURCE_VERSION = "4"
 LICENCE_ID = "ticon-4"
+RESTRICTED_POLICIES = {"gesla-bodc-nc": "ticon-4-bodc-restricted",
+                       "gesla-cmems-nc": "ticon-4-cmems-restricted"}
 CONVENTION_ID = "ticon4-greenwich-schureman-v1"
 TICON_SHA256 = "cea4a8d11cea3d7a5db02d3b75662c32a1459c262c4427b0eb28bb4fca5de366"   # SEANOE 122848.csv
 TICON_COLUMNS = ("lat", "lon", "con", "amp", "pha", "amp_std", "pha_std", "missing_obs", "no_of_obs",
@@ -270,14 +272,13 @@ def ticon_set(rec: TiconRecord, *, time_base: Mapping | None, table: TcdTable, l
     a TICON-4 record, or NotCarried (cmems_relayed, no_time_base, time_base_disputed, time_base_not_shift,
     time_base_months_dropped, no_constituents). `record_licence` is the GESLA record's own licence id, named in
     selection_reason."""
-    restricted_bodc = (retain_source_values and licence_id == "ticon-4-bodc-restricted"
-                       and record_licence == "gesla-bodc-nc")
-    if retain_source_values and rec.gesla_source == CMEMS and not restricted_bodc:
+    restricted = retain_source_values and licence_id == RESTRICTED_POLICIES.get(record_licence)
+    if retain_source_values and rec.gesla_source == CMEMS and not restricted:
         raise NotCarried(f"{rec.name}: CMEMS-relayed constants need an explicit restricted policy for "
                          f"the actual resolved record licence {record_licence}", "cmems_relayed")
-    if rec.gesla_source == CMEMS and not restricted_bodc:
+    if rec.gesla_source == CMEMS and not restricted:
         raise NotCarried(f"{rec.name}: CMEMS-relayed (CC BY-NC); the ticon-4 licence does not cover it", "cmems_relayed")
-    if licence_id != LICENCE_ID and not restricted_bodc:
+    if licence_id != LICENCE_ID and not restricted:
         raise ValueError(f"{rec.name}: a ticon-4 set has licence {LICENCE_ID}, not {licence_id}")
     if time_base is None:
         raise NotCarried(f"{rec.name}: OTC has no time-base annotation of the record", "no_time_base")

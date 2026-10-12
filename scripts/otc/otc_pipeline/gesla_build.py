@@ -189,18 +189,20 @@ class BuildParts:
 
 def build(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir: Path, overlay_run: Path | None,
           ticon_csv: Path, ticon_refs: Path, congen_run: Path, datestamp: str, created: str, build_commit: str,
-          tcd_path: Path | None = None, log=print):
+          tcd_path: Path | None = None, inventory: SourceInventory | None = None, log=print):
     """(release document, build report, congen run, provenance) (see the module docstring); provenance is
     BUILD_REPORT.json's, without the command line (main adds it)."""
     p = build_parts(fit_run=fit_run, audit_dir=audit_dir, verdicts_dir=verdicts_dir, calibration_dir=calibration_dir,
                     overlay_run=overlay_run, ticon_csv=ticon_csv, ticon_refs=ticon_refs, congen_run=congen_run,
-                    datestamp=datestamp, created=created, build_commit=build_commit, tcd_path=tcd_path, log=log)
+                    datestamp=datestamp, created=created, build_commit=build_commit, tcd_path=tcd_path,
+                    inventory=inventory, log=log)
     return p.release, p.report, p.congen_run, p.provenance
 
 
 def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibration_dir: Path,
                 overlay_run: Path | None, ticon_csv: Path, ticon_refs: Path, congen_run: Path, datestamp: str,
-                created: str, build_commit: str, tcd_path: Path | None = None, extra_names=(), log=print) -> BuildParts:
+                created: str, build_commit: str, tcd_path: Path | None = None, extra_names=(),
+                inventory: SourceInventory | None = None, log=print) -> BuildParts:
     """build(), with its inputs kept (BuildParts). `extra_names`: constituent names the astro table must also
     have (the agency sets' of a combined build, otc_pipeline.build_otc); the GESLA sets do not change."""
     rel = GeslaRelease()
@@ -230,6 +232,9 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
     audit = gs.load_audit(audit_dir)
     carry = ts.TiconCarry.from_audit(ts.load_ticon(ticon_csv), final, rel.metadata(), references_path=ticon_refs)
     names = {n for d in docs for n in d["fit"]["constituents"]} | ts.carried_names(carry.records, table) | set(extra_names)
+    if inventory is not None:
+        names |= {ts._otc_name(name) for rec in carry.records.values() for name in rec.constituents
+                  if ts._otc_name(name) in table}
     try:
         crun = load_congen_run(congen_run, tcd_sha256=table.tcd_sha256)
     except AstroTableMismatch as e:
@@ -266,6 +271,15 @@ def build_parts(*, fit_run: Path, audit_dir: Path, verdicts_dir: Path, calibrati
                                              decided_in=audit.decided_in, decided_build_commit=audit.decided_build_commit))
                       for row in nonfit]
         gr.retain_nofit(release, report, identities, station_ids=smap.record_ids(), licences=original_licences)
+    if inventory is not None:
+        metadata = rel.metadata()
+        original = [{"record_id": rid, "contributor": metadata[rid]["CONTRIBUTOR (ABBREVIATED)"]}
+                    for rid in carry.records if rid in metadata]
+        original_licences, original_ids = gesla_licences(original)
+        gr.retain_ticon_sources(release, report, ticon=carry, table=table, station_ids=smap.record_ids(),
+                                metadata=metadata, licences=original_licences, licence_ids=original_ids,
+                                inventory=inventory, docs=docs, epoch_hours=sm.load_epoch_hours(),
+                                sibling_flags=smap.sibling_flags())
     fit_identity = _run_identity(fit_run)
     if fit_identity["results_sha256"] != results_sha256:
         raise SystemExit(f"{fit_run}/results.jsonl changed during the build")
@@ -347,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
     release, report, crun, provenance = build(fit_run=a.fit_run, audit_dir=a.audit_dir, verdicts_dir=a.verdicts_dir,
                                   calibration_dir=a.calibration, overlay_run=a.overlay_run, ticon_csv=a.ticon_csv,
                                   ticon_refs=a.ticon_refs, congen_run=a.congen_run, datestamp=a.datestamp,
-                                  created=a.created, build_commit=commit, tcd_path=a.tcd,
+                                  created=a.created, build_commit=commit, tcd_path=a.tcd, inventory=inventory,
                                   log=lambda m: _log(t0, m))
     _log(t0, f"build_release: {report.summary()}")
     errs = validate_release(release)

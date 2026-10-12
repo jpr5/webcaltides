@@ -27,6 +27,7 @@ from the congen run (astro_tables.astro_table).
 import hashlib
 import json
 import os
+import csv
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,7 @@ from gesla.short_accuracy import UNCALIBRATED
 
 from otc_pipeline.gesla_licences import gesla_licences, withheld_licences
 from otc_pipeline import gesla_sets as gs
+from otc_pipeline import ticon_sets as ts
 from otc_pipeline.astro_tables import astro_table, load_congen_run
 from otc_pipeline.gesla_release import EOT20_WHOLE_HOUR, build_release, disputed_reasons_of
 from otc_pipeline.gesla_sets import (FitIntegrityError, docs_from_fit_run, fit_records, load_audit, load_tcd_dump,
@@ -230,6 +232,57 @@ def test_retained_native_release_preserves_real_values_and_nofit_identities():
         assert cs["qc_status"] == "no_constants" and cs["constituents"] == []
         assert cs["record_span"]["good_hours"] == row["data_hours"]
         assert "expected_accuracy" not in cs and "fallback" not in cs
+    assert validate_release(release) == []
+
+
+def test_original_native_ticon_records_retain_every_raw_row_and_real_restriction():
+    release = json.loads(_env("OTC_TICON_RETENTION_JSON").read_text())
+    inventory_path = _env("OTC_TICON_INVENTORY")
+    inventory = json.loads(inventory_path.read_text())
+    inventory_hash = hashlib.sha256(inventory_path.read_bytes()).hexdigest()
+    csv_path = _env("OTC_TICON_CSV")
+    assert hashlib.sha256(csv_path.read_bytes()).hexdigest() == ts.TICON_SHA256
+    with csv_path.open(newline="") as stream:
+        raw = list(csv.reader(stream))
+    columns, rows = raw[0], raw[1:]
+    expected = {}
+    for row in rows:
+        expected.setdefault(row[columns.index("tide_gauge_name")], []).append(row)
+    retained = {}
+    stations = {}
+    for station in release["stations"]:
+        for record in station.get("source_records", []):
+            if record["source"] == "ticon" and record["source_version"] == "4":
+                rid = record["source_record_id"]
+                assert rid not in retained, rid
+                retained[rid] = record
+                stations[rid] = station
+    assert set(retained) == set(expected)
+    original = {r["upstream_record_id"]: r for r in inventory["identities"]
+                if r["source"] == "ticon" and r["version"] == "4"}
+    licences = {licence["licence_id"]: licence for licence in release["licences"]}
+    table = load_tcd_dump(_env("OTC_TICON_TCD")).table
+    for rid, record in retained.items():
+        assert record["role"] == "published_harmonic_record" and record["disposition"] == "retained"
+        payload = record["original_harmonics"]
+        assert payload["columns"] == columns and payload["rows"] == expected[rid]
+        assert payload["format"] == "ticon-4-csv" and payload["phase_convention"] == "as_published"
+        assert record["provenance"]["inventory_sha256"] == inventory_hash
+        assert set(record["provenance"]["input_sha256"]) == set(original[rid]["input_sha256"])
+        assert record["licence_id"] in licences
+        expected_unsupported = {i for i, row in enumerate(expected[rid])
+                                if ts.NAME_MAP.get(row[columns.index("con")], row[columns.index("con")]) not in table}
+        assert {a["row"] for a in payload["annotations"]} == expected_unsupported
+        assert all(a["reason"] == "unsupported_definition" for a in payload["annotations"])
+        same_station = {cs["set_id"]: cs for cs in stations[rid]["constant_sets"]}
+        assert all(set_id in same_station and same_station[set_id]["source_record_id"] == rid
+                   for set_id in record["published_set_ids"])
+    for rid, policy in (("aberdeen-abe-gbr-cmems", "ticon-4-bodc-restricted"),
+                        ("a121tg-a12-nld-cmems", "ticon-4-cmems-restricted")):
+        record = retained[rid]
+        assert record["licence_id"] == policy
+        assert licences[policy]["spdx"] == "NOASSERTION" and licences[policy]["commercial_use"] is False
+    assert sum(len(r["original_harmonics"]["rows"]) for r in retained.values()) == len(rows)
     assert validate_release(release) == []
 
 

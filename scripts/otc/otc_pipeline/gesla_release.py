@@ -36,11 +36,13 @@ tables); the datum checks 9-13 are DT7's.
 from __future__ import annotations
 
 import copy
+import csv
 import json
 import os
 import secrets
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -658,6 +660,153 @@ def retain_nofit(release: dict, report: BuildReport, source_sets: list, *, stati
     release["licences"] = [known_licences[lid] for lid in sorted(known_licences)]
     active = sorted((s for s in release["stations"] if s["status"] == "active"), key=lambda s: s["station_id"])
     release["stations"] = active + [s for s in release["stations"] if s["status"] != "active"]
+
+
+def retain_ticon_sources(release: dict, report: BuildReport, *, ticon: ts.TiconCarry, table: TcdTable,
+                         station_ids: Mapping, metadata: Mapping, licences: list[dict], licence_ids: Mapping,
+                         inventory, docs: list, epoch_hours: Mapping, sibling_flags: Mapping) -> None:
+    """Retain original TICON source rows after the unchanged scientific selection."""
+    from gesla.read_gesla import load_contributor_roles
+    originals = {r["upstream_record_id"]: r for r in inventory.document["identities"]
+                 if r["source"] == "ticon" and r["version"] == ts.SOURCE_VERSION}
+    if set(originals) != set(ticon.records):
+        raise ValueError("TICON source inventory does not enumerate the actual pinned CSV records")
+    lic_by_id = {lic["licence_id"]: lic for lic in release["licences"]}
+    for licence in licences:
+        if licence["licence_id"] in lic_by_id and lic_by_id[licence["licence_id"]] != licence:
+            raise ValueError(f"inconsistent original licence {licence['licence_id']}")
+        lic_by_id[licence["licence_id"]] = licence
+    lic_by_id[ts.LICENCE_ID] = copy.deepcopy(ts.LICENCE)
+    for underlying, policy in ts.RESTRICTED_POLICIES.items():
+        row = lic_by_id[underlying]
+        lic_by_id[policy] = {"licence_id": policy, "spdx": "NOASSERTION", "commercial_use": False,
+            "provider": ts.LICENCE["provider"] + "; underlying record: " + row["provider"],
+            "citation": ts.LICENCE["citation"] + "\nUnderlying record citation (stored metadata): " + row.get("citation", ""),
+            "attribution": "Internal restricted policy: NOASSERTION means OTC does not conclude a combined licence. "
+                "Published TICON attribution: " + ts.ATTRIBUTION + "\nUnderlying record attribution (stored metadata): " + row["attribution"],
+            "url": ts.LICENCE["url"], "restriction": row["restriction"], "terms_url": row["terms_url"]}
+    roles = load_contributor_roles(ROLES_PATH)
+    with open(INVENTORY_PATH, newline="") as stream:
+        sampling = {r["file_id"]: int(r["interval_s"]) for r in csv.DictReader(stream)}
+    doc_by_id = {d["record_id"]: d for d in docs}
+    stations = {s["station_id"]: s for s in release["stations"] if s["status"] == "active"}
+    previous_refusals = {r.get("ticon", r["record"]): r for r in report.not_carried}
+    used_names = {c["name"] for c in release["constituents"]}
+
+    def candidate(cs):
+        rid = cs["source_record_id"]
+        doc = doc_by_id.get(rid)
+        contributor = (metadata.get(rid) or {}).get("CONTRIBUTOR (ABBREVIATED)")
+        end = datetime.fromisoformat(cs["record_span"]["end"].replace("Z", "+00:00"))
+        return Candidate(cs, (epoch_hours.get(rid) or {}).get("hours", 0.0),
+                         int(doc["fit"]["last_s"]) if doc else int(end.timestamp()),
+                         originator=bool(contributor in roles and roles[contributor].originator),
+                         commercial=bool(lic_by_id[cs["licence_id"]]["commercial_use"]),
+                         suspect=bool(sibling_flags.get(rid)), interval_s=sampling.get(rid, 3600),
+                         fast_delivery=contributor == "UHSLC_FD")
+
+    for rid, record in sorted(ticon.records.items()):
+        if rid not in station_ids:
+            raise ValueError(f"{rid}: original TICON identity has no accepted station mapping")
+        sid = station_ids[rid]
+        if sid not in stations:
+            meta = metadata.get(rid) or {}
+            stations[sid] = {"station_id": sid, "status": "active", "name": meta.get("SITE NAME") or rid,
+                "country": record.country, "lat": record.lat, "lon": record.lon,
+                "timezone": station_timezone(record.lat, record.lon), "type": "reference", "aliases": {},
+                "recommended_set_id": None, "constant_sets": []}
+            release["stations"].append(stations[sid])
+        station = stations[sid]
+        aliases = station.setdefault("aliases", {})
+        aliases["ticon"] = sorted(set(aliases.get("ticon", [])) | {rid})
+        underlying = licence_ids.get(rid)
+        policy = ts.RESTRICTED_POLICIES.get(underlying, ts.LICENCE_ID) if underlying is not None else ts.LICENCE_ID
+        row = lic_by_id.get(underlying)
+        basis = "Original TICON-4 publication, doi:10.17882/109129, published under CC BY 4.0."
+        if row and not row["commercial_use"]:
+            basis += " Underlying source terms retained: " + row["restriction"] + " " + row["terms_url"]
+        tb = ticon.time_bases.get(rid)
+        old_finding = previous_refusals.get(rid)
+        findings = ["Original published list retained, including phase conventions OTC excludes from its preferred set."]
+        if old_finding and old_finding.get("message"):
+            findings.append(old_finding["message"])
+        if tb:
+            findings.append("Actual OTC time-base finding: " + tb.get("reason", tb["code"]))
+        if record.quality != ts.NO_ISSUES:
+            findings.append("Original TICON quality: " + record.quality)
+        reason = "published_full_list"
+        if policy != ts.LICENCE_ID:
+            reason = "time_base_disputed" if tb and tb["code"] == "disputed" else "licence_reading"
+        elif tb and tb["code"] == "disputed":
+            reason = "reliability_withheld" if "reviewer_evidence" in tb.get("reason", "") else "time_base_disputed"
+        elif tb and (tb["code"] == "corrected" or tb.get("months_dropped")):
+            reason = "time_base_unresolved"
+        elif old_finding and old_finding["reason"] == "ticon_quality":
+            reason = "refused_fit"
+        elif row and not row["commercial_use"]:
+            reason = "licence_reading"
+        finding = " ".join(findings)
+        # Existing adjusted sets keep their values; a resolved restricted policy
+        # also applies there, so the old broader row cannot bypass the restriction.
+        for cs in station["constant_sets"]:
+            if cs["source"] == ts.SOURCE and cs["source_record_id"] == rid and policy != ts.LICENCE_ID:
+                cs["licence_id"] = policy
+                cs.pop("fallback", None)
+                cs["qc_flags"] = [f for f in cs.get("qc_flags", []) if not f["flag"].startswith("fallback:")]
+                old_reason = "time_base_disputed" if cs["time_base"]["code"] == "disputed" else "licence_reading"
+                label_fallback(cs, old_reason, finding, basis=basis)
+        numerical_gap = underlying in {"gesla-cv-nc", "gesla-uz-nc"}
+        if tb and not numerical_gap:
+            cs = ts.ticon_set(record, time_base=tb, table=table, licence_id=policy,
+                              record_licence=underlying or "not resolved for the original TICON identity",
+                              checked_window=ticon.windows.get(rid), retain_source_values=True)
+            cs["set_id"] = f"{sid}/{ts.SOURCE}/{rid}/as-published"
+            cs["provenance"]["build"] = {"build_commit": release["release"]["build_commit"]}
+            if ticon.references_sha256:
+                cs["provenance"]["input_sha256"].append(ticon.references_sha256)
+            label_fallback(cs, reason, finding, basis=basis)
+            station["constant_sets"].append(cs)
+            used_names.update(c["name"] for c in cs["constituents"])
+        detail = finding
+        if not tb:
+            detail += " No actual OTC time-base annotation exists for this original identity; raw rows are not a predictive set."
+        if numerical_gap:
+            detail += " Explicit predictive source/licence binding is pending; original noncommercial raw material remains retained."
+        source_licence = (policy if policy != ts.LICENCE_ID else underlying
+                          if row and not row["commercial_use"] else ts.LICENCE_ID)
+        payload = {"format": "ticon-4-csv", "columns": list(ts.TICON_COLUMNS), "rows": record.original_rows,
+            "amplitude_unit": "cm", "amplitude_unit_basis": "native_ticon_loader", "phase_unit": "deg",
+            "phase_convention": "as_published", "amplitude_uncertainty_unit": "cm",
+            "amplitude_uncertainty_unit_basis": "native_ticon_loader_interpretation",
+            "annotations": [{"row": i, "reason": "unsupported_definition",
+                "detail": f"TICON-4 {raw[2]} has no definition in the TCD the release predicts with"}
+                for i, raw in enumerate(record.original_rows) if ts._otc_name(raw[2]) not in table]}
+        original = originals[rid]
+        identity = {"source": "ticon", "source_version": ts.SOURCE_VERSION, "source_record_id": rid,
+            "role": "published_harmonic_record", "disposition": "retained", "detail": detail,
+            "licence_id": source_licence, "published_set_ids": [c["set_id"] for c in station["constant_sets"]
+                if c["source"] == ts.SOURCE and c["source_record_id"] == rid],
+            "provenance": {"input_sha256": sorted(set(original["input_sha256"])),
+                           "inventory_sha256": inventory.provenance["sha256"]},
+            "original_harmonics": payload}
+        if source_licence != ts.LICENCE_ID:
+            identity["upstream_licence_id"] = ts.LICENCE_ID
+        station.setdefault("source_records", []).append(identity)
+        cands = [candidate(c) for c in station["constant_sets"]]
+        old_win = next((c for c in cands if c.cs["set_id"] == station["recommended_set_id"]), None)
+        win = old_win if old_win and not old_win.cs.get("fallback") else recommend(cands)[0]
+        station["constant_sets"] = [c.cs for c in set_order(win, cands)]
+        reconcile_recommendation(station, win)
+        report.withheld_stations.pop(sid, None)
+        report.retained.append({"source": "ticon", "source_version": ts.SOURCE_VERSION, "record": rid,
+                               "representation": "original_harmonics", "raw_rows": len(record.original_rows),
+                               "published_set_ids": identity["published_set_ids"], "finding": detail})
+    release["licences"] = [lic_by_id[lid] for lid in sorted(lic_by_id)]
+    table_id = release["constituents"][0]["constituent_table_version"]
+    release["constituents"] = [{"constituent_table_version": table_id, "name": name,
+                                "speed_deg_per_hour": table.speed(name)} for name in sorted(used_names)]
+    release["stations"] = sorted((s for s in release["stations"] if s["status"] == "active"),
+                                 key=lambda s: s["station_id"]) + [s for s in release["stations"] if s["status"] != "active"]
 
 
 def _uncarry(report: BuildReport, cs: Mapping, reason: str) -> None:

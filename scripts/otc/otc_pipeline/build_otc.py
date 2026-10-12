@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
                            calibration_dir=a.calibration, overlay_run=a.overlay_run, ticon_csv=a.ticon_csv,
                            ticon_refs=a.ticon_refs, congen_run=a.congen_run, datestamp=a.datestamp,
                            created=a.created, build_commit=commit, tcd_path=tcd,
-                           extra_names=combine.agency_names(agency), log=log)
+                           extra_names=combine.agency_names(agency), inventory=inventory, log=log)
     log(f"gesla build_release: {parts.report.summary()}")
     check_one_table(agency, parts)
     log(f"one TCD dump: {parts.provenance['tcd']['sha256'][:12]} (fits, astro table and every agency source)")
