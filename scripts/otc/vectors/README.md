@@ -195,10 +195,46 @@ Run the native tests against the same actual inputs:
 
 ```sh
 OTC_TIER_B_INPUT="$OUTPUT/official-calls.json" \
+    OTC_TIER_B_XTIDE_REPORT="$OUTPUT/xtide/xtide-report.json" \
+    OTC_TIER_B_COMPARISON="$PINNED_COMPARISON" \
+    OTC_TIER_B_PROVENANCE="$PINNED_PROVENANCE" \
+    OTC_TIER_B_INVENTORY="$ORIGINAL_INVENTORY" \
+    OTC_TIER_B_OLD_RELEASE="$ORIGINAL_RELEASE" \
+    OTC_TIER_B_RELEASE="$LABELLED_CANDIDATE" \
     rspec --options /dev/null spec/otc/vectors/tier_b_spec.rb
 ```
 
 The phase-error and omitted-table mutations must fail on the actual Bergen hourly comparison.
 The accepted phase conversion must pass the same hourly comparison.
-The complete agency test requires all 30 official rows to pass.
-Keep actual scientific failures and original responses; do not change source values, expected events or approved bounds to pass this test.
+The native comparison test preserves the pinned 32-row report, with 26 passes and six failures.
+Keep actual scientific failures and original responses. Do not change source values, expected events or approved bounds.
+
+### Separate retained-data gate
+
+The approved Tier B quality clarification permits six evidenced event disagreements to remain as labelled source data.
+It preserves the scientific comparison's six failures and exit status 1.
+The separate gate checks all 32 source mappings, original values, astronomical rows and pinned comparison evidence:
+
+```sh
+ruby scripts/otc/vectors/tier_b.rb --input "$OUTPUT/official-calls.json" \
+    --coverage-release "$LABELLED_CANDIDATE" --comparison "$PINNED_COMPARISON" \
+    --provenance "$PINNED_PROVENANCE" --inventory "$ORIGINAL_INVENTORY" \
+    --out "$OUTPUT/coverage"
+```
+
+This mode writes `coverage.json`. Its result describes retained-data acceptance; it does not rename a scientific failure.
+The approved comparison, input, original inventory and provenance hashes are fixed in `CoverageGate::PINNED`.
+Other windows or scientific reports require separately evidenced acceptance.
+
+The six findings belong in the actual station's existing `source_records.detail`.
+Each compact JSON line starts with `OTC metric finding: ` and identifies its comparison row, metric, values, bound and evidence hashes.
+The gate requires the exact retained source tuple and original inventory provenance.
+It resolves subjects by stable station, set, bin and reference IDs, including ACT0091's offset without an invented set.
+BGO's detail must retain its passing hourly-height metric beside the failed extreme timing metric.
+
+Use `--projection` only for a source-derived labelled projection before the producer artifact exists.
+The report marks this artifact explicitly. A projection pass does not prove producer publication or export retention.
+Set `OTC_TIER_B_PROJECTION=1` for native tests on that projection. Omit this variable for tests on the actual producer candidate.
+Run the same gate on the actual final producer candidate and preserve its hash and result separately.
+The native negative controls reject omitted labels, wrong bins or references, altered values or provenance, missing comparison rows and widened bounds.
+Implementation correctness, Tier A, API behavior, required mutations and same-input XTide correctness remain separate hard gates.

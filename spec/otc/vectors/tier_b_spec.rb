@@ -9,13 +9,154 @@ RSpec.describe 'the native Tier B official comparison' do
     script = File.join(root, 'scripts/otc/vectors/tier_b.rb')
     input = ENV.fetch('OTC_TIER_B_INPUT')
 
-    it 'applies the fixed bounds to the real cached agency predictions' do
+    it 'preserves all fixed bounds and six actual scientific failures' do
         Dir.mktmpdir('tier-b-green-') do |out|
-            log, status = Open3.capture2e(RbConfig.ruby, script, '--input', input, '--out', out)
-            expect(status.success?).to be(true), log
+            log, status = Open3.capture2e(RbConfig.ruby, script, '--input', input, '--out', out,
+                                        '--xtide-report', ENV.fetch('OTC_TIER_B_XTIDE_REPORT'))
+            expect(status.exitstatus).to eq(1), log
             report = JSON.parse(File.read(File.join(out, 'comparison.json')))
-            expect(report.fetch('rows').length).to eq(30)
-            expect(report.fetch('rows')).to all(include('passed' => true))
+            pinned = JSON.parse(File.read(ENV.fetch('OTC_TIER_B_COMPARISON')))
+            expect(report).to eq(pinned)
+            expect(report.fetch('rows').length).to eq(32)
+            expect(report.fetch('rows').count { |row| row.fetch('passed') }).to eq(26)
+            expect(report.fetch('passed')).to be(false)
+        end
+    end
+
+    def coverage_gate(release:, comparison: ENV.fetch('OTC_TIER_B_COMPARISON'))
+        Dir.mktmpdir('tier-b-coverage-') do |out|
+            args = [RbConfig.ruby, File.expand_path('../../../scripts/otc/vectors/tier_b.rb', __dir__),
+                    '--input', ENV.fetch('OTC_TIER_B_INPUT'), '--out', out,
+                    '--coverage-release', release, '--comparison', comparison,
+                    '--provenance', ENV.fetch('OTC_TIER_B_PROVENANCE'),
+                    '--inventory', ENV.fetch('OTC_TIER_B_INVENTORY')]
+            args << '--projection' if ENV['OTC_TIER_B_PROJECTION'] == '1'
+            log, status = Open3.capture2e(*args)
+            path = File.join(out, 'coverage.json')
+            [log, status, File.file?(path) ? JSON.parse(File.read(path)) : nil]
+        end
+    end
+
+    def changed_document(path)
+        Dir.mktmpdir('tier-b-negative-') do |out|
+            document = JSON.parse(File.read(path))
+            yield(document, File.join(out, 'candidate.json'))
+        end
+    end
+
+    it 'accepts all32 unchanged subjects only with exact retained metric labels' do
+        log, status, report = coverage_gate(release: ENV.fetch('OTC_TIER_B_RELEASE'))
+        expect(status.success?).to be(true), log
+        kind = ENV['OTC_TIER_B_PROJECTION'] == '1' ? 'source-derived-labelled-projection' : 'release-candidate'
+        expect(report).to include('passed' => true, 'scientific_passed' => false,
+                                  'scientific_passes' => 26, 'scientific_failures' => 6,
+                                  'artifact_kind' => kind)
+        expect(report.fetch('mappings').length).to eq(32)
+        expect(report.fetch('labels').length).to eq(6)
+    end
+
+    it 'rejects the same actual old release without retained labels' do
+        log, status, report = coverage_gate(release: ENV.fetch('OTC_TIER_B_OLD_RELEASE'))
+        expect(status.success?).to be(false), log
+        expect(report.fetch('violations').join).to include('missing source record')
+    end
+
+    it 'rejects an omitted bin-specific label on the actual candidate' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            record = document.fetch('stations').find { |station| station['station_id'] == 'OTC-f2ecceab' }.fetch('source_records').first
+            record['detail'] = record.fetch('detail').lines.reject { |line| line.include?('BOS1101:15/events') }.join
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('missing metric label')
+        end
+    end
+
+    it 'rejects a label assigned to the wrong current bin' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            record = document.fetch('stations').find { |station| station['station_id'] == 'OTC-f2ecceab' }.fetch('source_records').first
+            record['detail'] = record.fetch('detail').gsub('"bin_id":15', '"bin_id":14')
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('bin_id')
+        end
+    end
+
+    it 'rejects a changed actual source coefficient' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-f2ecceab' }
+            set = station.fetch('constant_sets').find { |item| item['source'] == 'noaa-currents' }
+            bin = set.fetch('current_bins').find { |item| item['bin'] == 1 }
+            bin.fetch('constituents').first['major_amplitude_ms'] += 0.0001
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('source values changed')
+        end
+    end
+
+    it 'rejects a missing scientific comparison row' do
+        changed_document(ENV.fetch('OTC_TIER_B_COMPARISON')) do |document, path|
+            document.fetch('rows').pop
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: ENV.fetch('OTC_TIER_B_RELEASE'), comparison: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('comparison hash')
+        end
+    end
+
+    it 'rejects a widened original scientific bound' do
+        changed_document(ENV.fetch('OTC_TIER_B_COMPARISON')) do |document, path|
+            document.fetch('rows').find { |row| row['id'] == 'kartverket/BGO/extremes' }.fetch('limits')['time_max_s'] = 182
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: ENV.fetch('OTC_TIER_B_RELEASE'), comparison: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('comparison hash')
+        end
+    end
+
+    it 'rejects a wrong subordinate reference bin in the retained label' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            record = document.fetch('stations').find { |station| station['station_id'] == 'OTC-c93802ca' }.fetch('source_records').first
+            record['detail'] = record.fetch('detail').gsub('"reference_bin_id":11', '"reference_bin_id":6')
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('reference_bin_id')
+        end
+    end
+
+    it 'rejects a false blanket Bergen hourly height failure' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            record = document.fetch('stations').find { |station| station['station_id'] == 'OTC-e75bb97b' }.fetch('source_records').first
+            record['detail'] += "\nHourly heights fail."
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('blanket BGO hourly height failure')
+        end
+    end
+
+    it 'rejects a discarded original constituent value' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            station = document.fetch('stations').find { |item| item['station_id'] == 'OTC-e75bb97b' }
+            station.fetch('constant_sets').find { |item| item['source'] == 'kartverket' }.fetch('constituents').pop
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('source values changed')
+        end
+    end
+
+    it 'rejects altered source-record input provenance' do
+        changed_document(ENV.fetch('OTC_TIER_B_RELEASE')) do |document, path|
+            record = document.fetch('stations').find { |station| station['station_id'] == 'OTC-f2ecceab' }.fetch('source_records').first
+            record.fetch('provenance').fetch('input_sha256').pop
+            File.write(path, JSON.generate(document))
+            log, status, report = coverage_gate(release: path)
+            expect(status.success?).to be(false), log
+            expect(report.fetch('violations').join).to include('original input provenance changed')
         end
     end
 
