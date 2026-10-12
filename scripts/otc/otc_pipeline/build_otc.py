@@ -158,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--country-resolutions-sha256")
     ap.add_argument("--noaa-historical-inputs", type=Path)
     ap.add_argument("--noaa-historical-inputs-sha256")
+    ap.add_argument("--noaa-historical-comparison", type=Path)
+    ap.add_argument("--noaa-historical-comparison-sha256")
     gb.inventory_arguments(ap)
     argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
@@ -172,6 +174,10 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--country-resolutions and --country-resolutions-sha256 must be supplied together")
     if (a.noaa_historical_inputs is None) != (a.noaa_historical_inputs_sha256 is None):
         raise ValueError("--noaa-historical-inputs and --noaa-historical-inputs-sha256 must be supplied together")
+    if (a.noaa_historical_comparison is None) != (a.noaa_historical_comparison_sha256 is None):
+        raise ValueError("--noaa-historical-comparison and --noaa-historical-comparison-sha256 must be supplied together")
+    if a.noaa_historical_comparison is not None and a.noaa_historical_inputs is None:
+        raise ValueError("historical comparison requires the pinned historical source inputs")
     if inventory is None and (a.chs_identities is not None or a.source_quality_findings is not None
                               or a.original_derived_inputs is not None or a.country_resolutions is not None or a.noaa_historical_inputs is not None):
         raise ValueError("original source publication inputs require the actual pinned --source-inventory")
@@ -190,6 +196,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.noaa_historical_inputs is not None:
         historical_inputs = noaa_historical.load_noaa_historical_inputs(
             a.noaa_historical_inputs, a.noaa_historical_inputs_sha256)
+    historical_comparison = None
+    if a.noaa_historical_comparison is not None:
+        historical_comparison = noaa_historical.load_noaa_historical_comparison(
+            a.noaa_historical_comparison, a.noaa_historical_comparison_sha256)
     t0 = time.time()
 
     def log(msg: str) -> None:
@@ -243,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     historical_augmentation = None
     if historical_inputs is not None:
         historical_augmentation = noaa_historical.apply_noaa_historical_offsets(
-            release, historical_inputs, build_commit=commit)
+            release, historical_inputs, build_commit=commit, comparison=historical_comparison)
         log("noaa historical augmentation: " + json.dumps(
             {key: value for key, value in historical_augmentation.items() if key not in {"members", "input_roles"}},
             sort_keys=True))

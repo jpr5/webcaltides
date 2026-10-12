@@ -4,11 +4,14 @@ This loader retains source parameters and evidence. It does not establish curren
 validity, allocate station identities, select references or publish predictions.
 """
 from copy import deepcopy
+from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 import hashlib
 import html
 import json
+import math
 from pathlib import Path, PurePosixPath
 import re
 
@@ -300,7 +303,195 @@ def _historical_target(stations: list[dict], profile: dict) -> dict | None:
     return target
 
 
-def apply_noaa_historical_offsets(release: dict, inputs: HistoricalInputs, *, build_commit: str) -> dict:
+def _comparison_payload_sha(value: dict) -> str:
+    return _digest(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8"))
+
+
+def _comparison_result(result: dict, *, implementation: bool) -> None:
+    """Check retained whole-year counts/residuals and original reporting bounds."""
+    expected_key = "expected" if implementation else "book"
+    expected = result[expected_key + "_events"]
+    native = result["native_events"]
+    pairs = result["pairs"]
+    unmatched = result["unmatched_" + expected_key]
+    extra = result["unmatched_native"]
+    bounds = {"time_max_s": 1 if implementation else 60,
+              "height_max_m": 1e-7 if implementation else 0.03048, "identical_event_counts": True}
+    if (result["bounds"] != bounds or len(expected) != 1414
+            or result[expected_key + "_event_count"] != len(expected)
+            or result["native_event_count"] != len(native) or result["paired_event_count"] != len(pairs)
+            or result["missed"] != len(unmatched) or result["extra"] != len(extra)
+            or len(pairs) + len(unmatched) != len(expected) or len(pairs) + len(extra) != len(native)):
+        raise ValueError("historical comparison whole-year counts/bounds incomplete or inconsistent")
+    for key, events, remainder in ((expected_key, expected, unmatched), ("native", native, extra)):
+        if Counter(_comparison_payload_sha(event) for event in events) != Counter(
+                _comparison_payload_sha(event) for event in [*[pair[key] for pair in pairs], *remainder]):
+            raise ValueError("historical comparison paired/unmatched values do not retain full event arrays")
+    times, heights = [], []
+    for pair in pairs:
+        original, measured = pair[expected_key], pair["native"]
+        if original["type"] != measured["type"]:
+            raise ValueError("historical comparison pairs differ in event class")
+        start = datetime.fromisoformat(original.get("time_utc", original.get("time")).replace("Z", "+00:00"))
+        stop = datetime.fromisoformat(measured["time"].replace("Z", "+00:00"))
+        time_error = abs((start - stop).total_seconds())
+        height_error = abs(original["height_m"] - measured["height_m"])
+        if (not math.isfinite(height_error) or pair["time_error_s"] != time_error
+                or not math.isclose(pair["height_error_m"], height_error, rel_tol=0, abs_tol=1e-12)):
+            raise ValueError("historical comparison residuals differ from retained actual paired values")
+        times.append(time_error)
+        heights.append(height_error)
+    if not pairs:
+        raise ValueError("historical comparison has no completed actual event pairs")
+    metrics = {"time_max_s": max(times), "time_mae_s": sum(times) / len(times),
+               "height_max_m": max(heights), "height_mae_m": sum(heights) / len(heights)}
+    if any(not isinstance(result["metrics"][key], (int, float))
+           or not math.isfinite(result["metrics"][key])
+           or not math.isclose(result["metrics"][key], value, rel_tol=1e-12, abs_tol=1e-12)
+           for key, value in metrics.items()):
+        raise ValueError("historical comparison metrics differ from complete retained residuals")
+    passed = (not unmatched and not extra and len(expected) == len(native)
+              and metrics["time_max_s"] <= bounds["time_max_s"]
+              and metrics["height_max_m"] <= bounds["height_max_m"])
+    if result["passed"] is not passed or (implementation and (not passed or result["errors"] != [])):
+        raise ValueError("historical comparison implementation/result flags disagree with actual bounds/counts")
+    if implementation:
+        policy = result["policy_checks"]
+        if (policy["default_explicit_equal"] is not True or policy["full_curve_refused"].get("passed") is not True
+                or any(policy[key].get("passed") is not True for key in ("strict_default", "strict_explicit"))):
+            raise ValueError("historical comparison implementation policy checks failed")
+
+
+def load_noaa_historical_comparison(path: Path, sha256: str) -> dict:
+    """Read a genuine complete comparison; publisher disagreement is admissible."""
+    raw = Path(path).read_bytes()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256) or _digest(raw) != sha256:
+        raise ValueError("historical comparison report SHA-256 mismatch")
+    try:
+        report = json.loads(raw)
+        if (report["format"] != "otc-noaa-historical-comparison-1"
+                or report["comparison_completed"] is not True or report["implementation_passed"] is not True
+                or report["errors"] != [] or report["source_input_acceptance_report_sha256"] != _ACCEPTANCE_SHA256
+                or len(report["profiles"]) != 2):
+            raise ValueError("historical comparison is not a complete successful implementation report")
+        hashes = [report["source_manifest_sha256"], report["prepared_source_provenance_sha256"], report["release"]["sha256"]]
+        sdk = report["sdk"]
+        if not sdk["source_files"] or not re.fullmatch(r"[0-9a-f]{40}", sdk["commit"]):
+            raise ValueError("historical comparison SDK subject is missing")
+        hashes.extend(item["sha256"] for item in sdk["source_files"])
+        ids = [profile["offset_id"] for profile in report["profiles"]]
+        if set(ids) != {f"noaa-2020-{spec[0]}-table2-{spec[1]}" for spec in _SPECS} or len(set(ids)) != 2:
+            raise ValueError("historical comparison requires both unique approved profiles")
+        for profile in report["profiles"]:
+            if (profile["comparison_completed"] is not True or profile["implementation_passed"] is not True
+                    or profile["errors"] != []):
+                raise ValueError("historical comparison profile has incomplete/failed implementation")
+            for key in ("reference_comparison", "subordinate_comparison", "implementation_check"):
+                _comparison_result(profile[key], implementation=key == "implementation_check")
+            matched = profile["reference_comparison"]["passed"] and profile["subordinate_comparison"]["passed"]
+            if profile["reference_2020_equivalence"] != ("matched_at_publisher_precision" if matched else "disagrees"):
+                raise ValueError("historical comparison outcome differs from measured publisher result")
+            for value, payload, key in ((profile["reference"], "constant_set_payload", "constant_set_payload_sha256"),
+                                        (profile["astronomy"], "payload", "payload_sha256"),
+                                        (profile["astronomy"], "convention_payload", "convention_payload_sha256")):
+                if _comparison_payload_sha(value[payload]) != value[key]:
+                    raise ValueError("historical comparison retained full scientific payload SHA-256 mismatch")
+                hashes.append(value[key])
+            descriptor = profile["prediction_input"]
+            if (_comparison_payload_sha(descriptor) != profile["prediction_input_sha256"]
+                    or descriptor["release_sha256"] != report["release"]["sha256"]
+                    or descriptor["sdk_commit"] != sdk["commit"] or descriptor["sdk_source_files"] != sdk["source_files"]
+                    or descriptor["profile"] != profile["offset_id"] or descriptor["native_requests"] != profile["native_requests"]
+                    or descriptor["own_offsets_source_payload_sha256"] != profile["own_offsets_source_payload_sha256"]
+                    or descriptor["reference_constant_set_payload_sha256"] != profile["reference"]["constant_set_payload_sha256"]
+                    or descriptor["astro_payload_sha256"] != profile["astronomy"]["payload_sha256"]
+                    or descriptor["convention_payload_sha256"] != profile["astronomy"]["convention_payload_sha256"]):
+                raise ValueError("historical comparison native prediction-input descriptor mismatch")
+            hashes.extend((profile["prediction_input_sha256"], profile["own_offsets_source_payload_sha256"],
+                           profile["table2"]["book_body_sha256"], profile["table2"]["raw_row_text_sha256"],
+                           profile["book"]["literal_json_sha256"]))
+        if any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value) for value in hashes):
+            raise ValueError("historical comparison contains malformed payload/subject SHA-256")
+    except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:
+        raise ValueError(f"historical comparison report malformed: {error}") from None
+    return dict(report, _report_sha256=sha256, _report_path=str(Path(path).resolve()))
+
+
+def _comparison_binding(release: dict, inputs: HistoricalInputs, target: dict, profile: dict,
+                        reference: dict, comparison: dict, build_commit: str) -> dict:
+    """Bind the original scientific payload; allow only the approved build stamp."""
+    offsets = profile["subordinate_offsets"]
+    provenance = offsets["provenance"]
+    measured = next(value for value in comparison["profiles"] if value["offset_id"] == offsets["offset_id"])
+    selected = next(cs for cs in reference["constant_sets"] if cs["set_id"] == reference["recommended_set_id"])
+    old = measured["reference"]["constant_set_payload"]
+    try:
+        source_payload = deepcopy(offsets)
+        source_payload["vintage"].pop("reference_2020_equivalence", None)
+        source_payload["vintage"].pop("reference_2020_equivalence_sha256", None)
+        if (comparison["source_manifest_sha256"] != inputs.manifest_sha256
+                or any(measured[key] != offsets[key] for key in ("source", "source_version", "source_record_id"))
+                or measured["station_id"] != target["station_id"]
+                or measured["own_offsets_source_payload_sha256"] != _comparison_payload_sha(source_payload)):
+            raise ValueError("historical comparison source profile/manifest binding mismatch")
+        book = provenance["book"]
+        body_path = f"evidence/2020-{book}-annual-official-book.response"
+        body_sha = next(item["sha256"] for item in inputs.members if item["path"] == body_path)
+        table = measured["table2"]
+        literal, pdf_pages, pages, name, utc = (
+            ("9cf5c4ccf3940e10366959dbdede942cfdc1db0076cc4d88db51cc5a0409600c", [160, 161, 162, 163], [140, 141, 142, 143], "Myrtle Beach, South Carolina", -5)
+            if book == "atlantic" else
+            ("3f436b2cc603e65d99ee12a1e58af04ef6ec91b20228c3e87ad5b068001ff8ba", [106, 107, 108, 109], [88, 89, 90, 91], "San Francisco (Golden Gate), California", -8))
+        if (table != {"row": provenance["annual_table_row"], "pdf_page": provenance["pdf_page"],
+                      "printed_page": provenance["printed_page"], "book_body_sha256": body_sha,
+                      "raw_row_text_sha256": _digest(provenance["raw_row_text"].encode()),
+                      "input_sha256": provenance["input_sha256"]}
+                or measured["book"]["literal_json_sha256"] != literal or measured["book"]["pdf_pages"] != pdf_pages
+                or measured["book"]["printed_pages"] != pages or measured["book"]["reference_name"] != name
+                or measured["book"]["calendar_days"] != 366 or measured["book"]["chart_datum"] != "MLLW"
+                or measured["window"] != {"start": f"2020-01-01T{-utc:02d}:00:00Z", "stop": f"2021-01-01T{-utc:02d}:00:00Z",
+                                           "utc_offset_hours": utc, "daylight_saving_applied": False}):
+            raise ValueError("historical comparison exact book/row/raw/window/datum binding mismatch")
+        ref = measured["reference"]
+        if (ref["station_id"] != reference["station_id"] or ref["set_id"] != selected["set_id"]
+                or ref["source"] != selected["source"] or ref["source_version"] != selected["source_version"]
+                or ref["input_sha256"] != selected["provenance"]["input_sha256"]):
+            raise ValueError("historical comparison selected reference/source/input binding mismatch")
+        old_stamp, new_stamp = old["provenance"]["build"]["build_commit"], selected["provenance"]["build"]["build_commit"]
+        old_copy, new_copy = deepcopy(old), deepcopy(selected)
+        old_copy["provenance"]["build"]["build_commit"] = new_stamp
+        if (not isinstance(old_stamp, str) or not isinstance(new_stamp, str)
+                or _comparison_payload_sha(old_copy) != _comparison_payload_sha(new_copy)
+                or (old_stamp != new_stamp and new_stamp != build_commit)):
+            raise ValueError("historical comparison reference payload differs beyond actual publication build stamp")
+        astro = measured["astronomy"]
+        convention = next(c for c in release["conventions"] if c["convention_id"] == selected["convention_id"])
+        table_payload = next(t for t in release["astro_tables"] if t["astro_table_id"] == convention["astro_table_id"])
+        if (astro["convention_id"] != selected["convention_id"] or astro["astro_table_id"] != convention["astro_table_id"]
+                or astro["payload_sha256"] != _comparison_payload_sha(table_payload)
+                or astro["convention_payload_sha256"] != _comparison_payload_sha(convention)):
+            raise ValueError("historical comparison astronomical/convention payload binding mismatch")
+        requests = measured["native_requests"]
+        if len(requests) != 4 or any(request["method"] != "Release.extremes" or request["datum"] != "chart" for request in requests):
+            raise ValueError("historical comparison native request method/datum binding mismatch")
+        expected_requests = [
+            {"method": "Release.extremes", "station_id": reference["station_id"], **{k: measured["window"][k] for k in ("start", "stop")}, "datum": "chart", "set_id": None},
+            {"method": "Release.extremes", "station_id": reference["station_id"], "start": f"2020-01-01T{-utc-2:02d}:00:00Z", "stop": f"2021-01-01T{-utc+2:02d}:00:00Z", "datum": "chart", "set_id": selected["set_id"]},
+            *[{"method": "Release.extremes", "station_id": target["station_id"], **{k: measured["window"][k] for k in ("start", "stop")}, "datum": "chart", "offset_id": value} for value in (None, offsets["offset_id"])],
+        ]
+        if requests != expected_requests:
+            raise ValueError("historical comparison native windows/selectors differ from actual source/reference")
+    except (KeyError, TypeError, StopIteration) as error:
+        raise ValueError(f"historical comparison binding malformed: {error}") from None
+    return {"offset_id": offsets["offset_id"], "reference_set_id": selected["set_id"],
+            "reference_station_id": reference["station_id"], "comparison_sha256": comparison["_report_sha256"],
+            "measured_payload_sha256": ref["constant_set_payload_sha256"], "published_payload_sha256": _comparison_payload_sha(selected),
+            "measured_build_commit": old_stamp, "published_build_commit": new_stamp,
+            "allowed_difference_path": "/provenance/build/build_commit"}
+
+
+def apply_noaa_historical_offsets(release: dict, inputs: HistoricalInputs, *, build_commit: str,
+                                  comparison: dict | None = None) -> dict:
     """Atomically retain both source profiles; do not select/rerank predictions."""
     stations = release["stations"]
     licences = {lic["licence_id"] for lic in release["licences"]}
@@ -310,6 +501,7 @@ def apply_noaa_historical_offsets(release: dict, inputs: HistoricalInputs, *, bu
     taken = {st["station_id"] for st in stations}
     created = 0
     rows = []
+    equivalence_bindings = []
     finder = None
     for profile in inputs.profiles:
         reference = _historical_reference(stations, profile, licences)
@@ -354,6 +546,12 @@ def apply_noaa_historical_offsets(release: dict, inputs: HistoricalInputs, *, bu
             raise ValueError(f"{profile['name']}: existing original source tuple conflicts with the sealed row")
         if not original:
             target.setdefault("source_records", []).append(deepcopy(record))
+        if comparison is not None:
+            equivalence_bindings.append(_comparison_binding(release, inputs, target, profile, reference, comparison, build_commit))
+            measured = next(value for value in comparison["profiles"] if value["offset_id"] == off["offset_id"])
+            target["subordinate_offsets"]["vintage"].update(
+                reference_2020_equivalence=measured["reference_2020_equivalence"],
+                reference_2020_equivalence_sha256=comparison["_report_sha256"])
         if index == len(planned):
             planned.append(target)
         else:
@@ -374,4 +572,7 @@ def apply_noaa_historical_offsets(release: dict, inputs: HistoricalInputs, *, bu
             "created_stations": created, "reused_stations": 2 - created,
             "source_records": rows, "members": list(inputs.members), "input_roles": list(inputs.input_roles),
             "count_unit": "two retained published parameter rows; 56 captured evidence artifacts, not 56 places",
-            "source_status": "historical2020; inferred legacy associations; retired profiles; current validity unestablished; accuracy unverified"}
+            "source_status": "historical2020; inferred legacy associations; retired profiles; current validity unestablished; accuracy unverified",
+            **({"comparison_report": {"path": comparison["_report_path"], "sha256": comparison["_report_sha256"],
+                                      "measured_release_sha256": comparison["release"]["sha256"]},
+                "reference_equivalence_bindings": equivalence_bindings} if comparison is not None else {})}

@@ -1,5 +1,7 @@
 """Pinned NOAA historical source loader: actual rows and fail-loud tamper controls."""
 import copy
+import csv
+import gzip
 import hashlib
 import json
 import os
@@ -8,6 +10,9 @@ import shutil
 import socket
 
 import pytest
+import pyarrow.parquet as pq
+from otc_pipeline.astro_tables import load_congen_run
+from otc_pipeline.release_writer import validate_release, write_release
 from otc_pipeline import build_otc
 from otc_pipeline import noaa_historical as historical
 from otc_pipeline import station_map as sm
@@ -287,3 +292,206 @@ def test_native_cli_checks_actual_historical_manifest_hash(actual_cli_args):
     actual_cli_args[actual_cli_args.index("--noaa-historical-inputs-sha256") + 1] = "0" * 64
     with pytest.raises(ValueError, match="historical input manifest SHA-256 mismatch"):
         build_otc.main(actual_cli_args)
+
+
+def test_native_comparison_ingress_fresh_actual_writer(tmp_path):
+    report_path = Path(os.environ["OTC_NOAA_COMPARISON"])
+    report_sha = os.environ["OTC_NOAA_COMPARISON_SHA"]
+    assert hashlib.sha256(report_path.read_bytes()).hexdigest() == report_sha
+    report = json.loads(report_path.read_text())
+    assert report["comparison_completed"] is True and report["implementation_passed"] is True
+    doc = json.loads(Path(os.environ["OTC_NOAA_BASE_RELEASE"]).read_text())
+    before = {st["station_id"]: hashlib.sha256(_json_bytes(st)).hexdigest() for st in doc["stations"]}
+    inputs = historical.load_noaa_historical_inputs(Path(os.environ["OTC_NOAA_INPUTS"]), os.environ["OTC_NOAA_INPUTS_SHA"])
+    if hasattr(historical, "load_noaa_historical_comparison"):
+        comparison = historical.load_noaa_historical_comparison(report_path, report_sha)
+        historical.apply_noaa_historical_offsets(doc, inputs, build_commit="73aaa87f29537606117e138e517c968272d5e315", comparison=comparison)
+    else:
+        historical.apply_noaa_historical_offsets(doc, inputs, build_commit="73aaa87f29537606117e138e517c968272d5e315")
+    assert {st["station_id"]: hashlib.sha256(_json_bytes(st)).hexdigest() for st in doc["stations"] if st["station_id"] in before} == before
+    added = [st for st in doc["stations"] if st["station_id"] not in before]
+    assert len(added) == 2
+    # Direct writer proof uses unchanged actual references/controls from that fresh
+    # full join; the single full producer publication remains the later H4 gate.
+    selected = {p["reference"]["station_id"] for p in report["profiles"]} | {"OTC-e813b80c", "OTC-bb22c37b"} | {st["station_id"] for st in added}
+    doc["stations"] = [st for st in doc["stations"] if st["station_id"] in selected]
+    assert validate_release(doc) == []
+    congen = load_congen_run(Path(os.environ["OTC_NOAA_CONGEN_RUN"]))
+    written = write_release(doc, tmp_path, datestamp="20261011", app_export=None, congen_run=congen, parquet=True, jsonl_gz=True)
+    payload = json.loads((tmp_path / "OTC_20261011.json").read_text())
+    observed = {st["subordinate_offsets"]["offset_id"]: st["subordinate_offsets"]["vintage"] for st in payload["stations"] if st.get("subordinate_offsets")}
+    print("ACTUAL fresh R3 → native loader/apply/validate/write; vintage", observed)
+    for profile in report["profiles"]:
+        vintage = observed[profile["offset_id"]]
+        assert vintage["reference_2020_equivalence"] == profile["reference_2020_equivalence"], "genuine completed H3 outcome lost on fresh producer"
+        assert vintage["reference_2020_equivalence_sha256"] == report_sha
+    expected = {st["station_id"]: st["subordinate_offsets"] for st in added}
+    for name, reader in [("OTC_20261011.json.gz", lambda p: json.loads(gzip.decompress(p.read_bytes()))["stations"]),
+                         ("OTC_20261011.jsonl", lambda p: [json.loads(line) for line in p.read_text().splitlines()]),
+                         ("OTC_20261011.jsonl.gz", lambda p: [json.loads(line) for line in gzip.decompress(p.read_bytes()).splitlines()])]:
+        rows = reader(tmp_path / name)
+        assert {st["station_id"]: st["subordinate_offsets"] for st in rows if st["station_id"] in expected} == expected
+    with (tmp_path / "OTC_20261011.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    parquet = pq.read_table(tmp_path / "OTC_20261011.parquet").to_pylist()
+    for rows in (rows, parquet):
+        actual = {row["station_id"]: json.loads(row["subordinate_offsets"]) for row in rows if row.get("subordinate_offsets")}
+        assert actual == expected
+    for station, original in zip(added, inputs.profiles, strict=True):
+        offsets = copy.deepcopy(station["subordinate_offsets"])
+        offsets["vintage"].pop("reference_2020_equivalence_sha256")
+        offsets["vintage"]["reference_2020_equivalence"] = "not_checked"
+        assert offsets == original["subordinate_offsets"]
+        assert station["source_records"] == original["source_records"]
+    print("PASS same actual fresh annotation + all eight native writer files; all16,036 old station objects and exact source values unchanged")
+
+
+@pytest.mark.parametrize("change", ["source", "row", "raw", "reference", "astro", "window", "datum", "noncomplete", "implementation", "duplicate", "errors", "bounds", "counts", "outcome", "input_descriptor", "residuals"])
+def test_native_comparison_ingress_rehashed_binding_refusals(tmp_path, change):
+    report = json.loads(Path(os.environ["OTC_NOAA_COMPARISON"]).read_text())
+    profile = report["profiles"][0]
+    if change == "source":
+        report["source_manifest_sha256"] = "0" * 64
+    elif change == "row":
+        profile["table2"]["row"] = 2514
+    elif change == "raw":
+        profile["table2"]["raw_row_text_sha256"] = "0" * 64
+    elif change == "reference":
+        profile["reference"]["constant_set_payload"]["constituents"][0]["amplitude_m"] += 0.01
+        profile["reference"]["constant_set_payload_sha256"] = hashlib.sha256(json.dumps(profile["reference"]["constant_set_payload"], sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+    elif change == "astro":
+        profile["astronomy"]["payload"]["constituents"]["M2"]["f"][0] += 0.01
+        profile["astronomy"]["payload_sha256"] = hashlib.sha256(json.dumps(profile["astronomy"]["payload"], sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+    elif change == "window":
+        profile["window"]["stop"] = "2020-12-31T05:00:00Z"
+    elif change == "datum":
+        profile["book"]["chart_datum"] = "MSL"
+    elif change == "noncomplete":
+        profile["comparison_completed"] = False
+    elif change == "implementation":
+        report["implementation_passed"] = False
+    elif change == "duplicate":
+        report["profiles"][1] = copy.deepcopy(profile)
+    elif change == "errors":
+        profile["errors"] = [{"class": "RuntimeError", "message": "deliberate corrupted captured report"}]
+    elif change == "bounds":
+        profile["reference_comparison"]["bounds"]["time_max_s"] = 1000
+    elif change == "counts":
+        profile["implementation_check"]["expected_events"].pop()
+    elif change == "outcome":
+        profile["reference_2020_equivalence"] = "matched_at_publisher_precision"
+    elif change == "input_descriptor":
+        profile["prediction_input"]["profile"] = "other"
+    else:
+        profile["implementation_check"]["pairs"][0]["height_error_m"] = 0.1
+    if change in {"reference", "astro"}:
+        descriptor = profile["prediction_input"]
+        if change == "reference":
+            descriptor["reference_constant_set_payload_sha256"] = profile["reference"]["constant_set_payload_sha256"]
+        else:
+            descriptor["astro_payload_sha256"] = profile["astronomy"]["payload_sha256"]
+        profile["prediction_input_sha256"] = hashlib.sha256(json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+    path = tmp_path / "rehashed-actual-report.json"
+    raw = json.dumps(report, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+    path.write_bytes(raw)
+    doc = json.loads(Path(os.environ["OTC_H2_SMALL_RELEASE"]).read_text())
+    before = copy.deepcopy(doc)
+    inputs = historical.load_noaa_historical_inputs(Path(os.environ["OTC_NOAA_INPUTS"]), os.environ["OTC_NOAA_INPUTS_SHA"])
+    with pytest.raises(ValueError):
+        comparison = historical.load_noaa_historical_comparison(path, hashlib.sha256(raw).hexdigest())
+        historical.apply_noaa_historical_offsets(doc, inputs, build_commit="73aaa87f29537606117e138e517c968272d5e315", comparison=comparison)
+    assert doc == before
+
+
+def test_native_comparison_ingress_wrong_file_hash():
+    with pytest.raises(ValueError, match="SHA-256"):
+        historical.load_noaa_historical_comparison(Path(os.environ["OTC_NOAA_COMPARISON"]), "0" * 64)
+
+
+def test_native_comparison_ingress_actual_publication_stamp():
+    comparison = json.loads(Path(os.environ['OTC_NOAA_COMPARISON']).read_text())
+    pairs = json.loads(Path(os.environ['OTC_H4_STAMP_PROOF']).read_text())['selected_references']
+    doc = json.loads(Path(os.environ['OTC_H2_SMALL_RELEASE']).read_text())
+    for pair in pairs:
+        reference = next(st for st in doc['stations'] if pair['reference_set_id'] == st.get('recommended_set_id'))
+        reference['constant_sets'] = [copy.deepcopy(pair['fresh_native_merge_payload'])]
+    inputs = historical.load_noaa_historical_inputs(Path(os.environ['OTC_NOAA_INPUTS']), os.environ['OTC_NOAA_INPUTS_SHA'])
+    if not hasattr(historical, 'load_noaa_historical_comparison'):
+        for pair in pairs:
+            assert pair['fresh_native_merge_payload_sha256'] == pair['old_payload_sha256'], 'strict full reference hash rejects genuine changed publication stamp'
+    loaded = historical.load_noaa_historical_comparison(Path(os.environ['OTC_NOAA_COMPARISON']), os.environ['OTC_NOAA_COMPARISON_SHA'])
+    augmentation = historical.apply_noaa_historical_offsets(doc, inputs, build_commit='73aaa87', comparison=loaded)
+    bindings = augmentation['reference_equivalence_bindings']
+    assert len(bindings) == 2
+    for pair, binding in zip(pairs, bindings, strict=True):
+        assert binding['measured_payload_sha256'] == pair['old_payload_sha256']
+        assert binding['published_payload_sha256'] == pair['fresh_native_merge_payload_sha256']
+        assert binding['measured_build_commit'] == '632607a'
+        assert binding['published_build_commit'] == '73aaa87'
+        assert binding['allowed_difference_path'] == '/provenance/build/build_commit'
+        target = next(st for st in doc['stations'] if st.get('subordinate_offsets', {}).get('offset_id') == pair['offset_id'])
+        assert target['subordinate_offsets']['vintage']['reference_2020_equivalence'] == 'disagrees'
+    print('PASS both actual native selected references: only publication stamp allowed; both complete raw hashes retained')
+
+
+@pytest.mark.parametrize('change', ['amplitude', 'version', 'input_hash', 'stamp', 'missing', 'convention'])
+def test_native_comparison_ingress_actual_nonstamp_refusals(change):
+    pairs = json.loads(Path(os.environ['OTC_H4_STAMP_PROOF']).read_text())['selected_references']
+    doc = json.loads(Path(os.environ['OTC_H2_SMALL_RELEASE']).read_text())
+    reference = next(st for st in doc['stations'] if pairs[0]['reference_set_id'] == st.get('recommended_set_id'))
+    selected = copy.deepcopy(pairs[0]['fresh_native_merge_payload'])
+    reference['constant_sets'] = [selected]
+    if change == 'amplitude':
+        selected['constituents'][0]['amplitude_m'] += 0.01
+    elif change == 'version':
+        selected['source_version'] = '20261009'
+    elif change == 'input_hash':
+        selected['provenance']['input_sha256'][0] = '0' * 64
+    elif change == 'stamp':
+        selected['provenance']['build']['build_commit'] = '0000000'
+    elif change == 'missing':
+        selected['provenance'].pop('selection_reason')
+    else:
+        convention = next(c for c in doc['conventions'] if c['convention_id'] == selected['convention_id'])
+        convention['canary']['gauges'] += 1
+    before = copy.deepcopy(doc)
+    inputs = historical.load_noaa_historical_inputs(Path(os.environ['OTC_NOAA_INPUTS']), os.environ['OTC_NOAA_INPUTS_SHA'])
+    with pytest.raises(ValueError):
+        loaded = historical.load_noaa_historical_comparison(Path(os.environ['OTC_NOAA_COMPARISON']), os.environ['OTC_NOAA_COMPARISON_SHA'])
+        historical.apply_noaa_historical_offsets(doc, inputs, build_commit='73aaa87', comparison=loaded)
+    assert doc == before
+
+
+def genuine_comparison_args(actual_cli_args):
+    return actual_cli_args + ['--noaa-historical-comparison', os.environ['OTC_NOAA_COMPARISON'],
+                              '--noaa-historical-comparison-sha256', os.environ['OTC_NOAA_COMPARISON_SHA']]
+
+
+@pytest.mark.parametrize('missing', ['--noaa-historical-comparison', '--noaa-historical-comparison-sha256'])
+def test_native_comparison_ingress_cli_requires_pair(actual_cli_args, missing):
+    args = genuine_comparison_args(actual_cli_args)
+    index = args.index(missing)
+    del args[index:index + 2]
+    with pytest.raises(ValueError, match='must be supplied together'):
+        build_otc.main(args)
+
+
+def test_native_comparison_ingress_cli_requires_source(actual_cli_args):
+    args = genuine_comparison_args(actual_cli_args)
+    for flag in ('--noaa-historical-inputs', '--noaa-historical-inputs-sha256'):
+        index = args.index(flag)
+        del args[index:index + 2]
+    with pytest.raises(ValueError, match='requires the pinned historical source inputs'):
+        build_otc.main(args)
+
+
+def test_native_comparison_ingress_cli_wrong_report_hash(actual_cli_args):
+    args = genuine_comparison_args(actual_cli_args)
+    args[-1] = '0' * 64
+    with pytest.raises(ValueError, match='comparison report SHA-256'):
+        build_otc.main(args)
+
+
+def test_native_comparison_ingress_cli_verified_guard_partial(actual_cli_args):
+    with pytest.raises(SystemExit, match='not empty'):
+        build_otc.main(genuine_comparison_args(actual_cli_args))
