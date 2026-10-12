@@ -75,11 +75,12 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
         let(:t1) { Time.utc(2027, 1, 2) }
 
         # v4 cache files were written by the code before the level adds and the "<id>@<type>" keys;
-        # v5 station, nodal and prediction caches by the libcongen-derived nodal code.
-        it 'has the station cache and the engine at v6' do
+        # v5 station, nodal and prediction caches by the libcongen-derived nodal code;
+        # v6 nodal and prediction caches by the code before M1 took NOAA's form.
+        it 'has the station cache at v6 and the engine at v7' do
             expect(described_class::CACHE_VERSION).to eq(6)
-            expect(described_class::ENGINE_VERSION).to eq(6)
-            expect(described_class.cache_key_component('tcd')).to eq('hA6tcd')
+            expect(described_class::ENGINE_VERSION).to eq(7)
+            expect(described_class.cache_key_component('tcd')).to eq('hA7tcd')
             expect(described_class.new(logger, 'x').stations_cache_file).to match(%r{\Ax/xtide_stations_v6_\h{8}_\h{8}\.json\z})
         end
 
@@ -88,7 +89,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                 with_mode('legcy') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                 expect(nodal).not_to be_empty
-                expect(nodal).to all(start_with('nodal_factors_v6_tcd_'))
+                expect(nodal).to all(start_with('nodal_factors_v7_tcd_'))
             end
         end
 
@@ -98,7 +99,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                     with_mode(mode) { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                     nodal = Dir.children(dir).grep(/\Anodal_factors_/)
                     expect(nodal).not_to be_empty
-                    expect(nodal).to all(start_with("nodal_factors_v6_#{mode}_"))
+                    expect(nodal).to all(start_with("nodal_factors_v7_#{mode}_"))
                     expect(Dir.children(dir).grep(/\Axtide_stations_/)).to all(start_with('xtide_stations_v6_'))
                 end
             end
@@ -108,7 +109,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             Dir.mktmpdir do |dir|
                 with_mode('tcd') { events(described_class.new(logger, dir), 'T7a94f47', t0, t1) }
                 tcd_sum = described_class.new(logger, dir).source_files_checksum.split('_').first
-                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v6_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v6_tcd_t#{tcd_sum}_2027_0.0.json])
+                expect(Dir.children(dir).grep(/\Anodal_factors_/).sort).to eq(%W[nodal_factors_v7_tcd_t#{tcd_sum}_2026_0.0.json nodal_factors_v7_tcd_t#{tcd_sum}_2027_0.0.json])
             end
         end
 
@@ -366,6 +367,12 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
     # corrected from the name depth (90) to the TCD value (-0.067): every velocity is
     # 90.067 lower and peak times differ by under 1 microsecond.
     #
+    # The two XTide stations have an M1 constituent. Their entries were re-recorded when
+    # M1 took NOAA's form (V without p, u and f at mid-year; see NodalSchureman's
+    # M1_NOTE): against the e441ec9 values, Boston (X49eee41) peaks moved by up to 8.3 s
+    # and 0.012 ft, Stellwagen Bank (X0730150_90) by up to 49 s and 0.006 kt, with the same
+    # number and order of events. The TICON stations have no M1 and are e441ec9 output.
+    #
     # Raw hourly heights come out of libm sin/cos, which differ by an ulp or
     # two between platforms (glibc on Linux vs macOS gave deltas up to 4.4e-16),
     # so they are compared within 1e-9. That is far below the 3-decimal
@@ -390,7 +397,7 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
             end)
         end
 
-        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 (peaks to 2.5e-6 s, hourly heights to 1e-9)' do
+        it 'reproduces e441ec9 output, with the corrected datum for X0730150_90 and M1 in NOAA form for the XTide stations (peaks to 2.5e-6 s, hourly heights to 1e-9)' do
             golden = JSON.parse(File.read("#{fixtures}/legacy_e441ec9_events.json"))
             t0, t1 = golden['window'].map { |w| Time.parse("#{w} UTC") }
             Dir.mktmpdir do |dir|
@@ -400,6 +407,36 @@ RSpec.describe Harmonics::Engine, 'nodal mode' do
                         hourly = engine.generate_predictions(id, Time.utc(2026, 12, 31, 12), Time.utc(2027, 1, 1, 12), step_seconds: 3600)
                         expect(events(engine, id, t0, t1)).to match_peaks(g['peaks']), "peaks differ for #{id}"
                         expect(hourly.map { |p| [fmt[p['time']], p['height']] }).to match_hourly(g['hourly']), "heights differ for #{id}"
+                    end
+                end
+            end
+        end
+    end
+
+    # The computed M1 (legacy mode, and years outside the TCD table) must equal
+    # the TCD table's M1, which is NOAA's form, on every day of the year. The
+    # TCD stores V0+u to 0.01 degree and f to 0.0001, so a correct value is
+    # within half of that (measured worst over 1700-2100: 0.0049 degree and
+    # 4.9e-5). Before M1 took NOAA's form, V0+u was off by 20.3 degrees at
+    # mid-year and up to 42.5 degrees on other days, and f by up to 0.42.
+    describe 'computed M1 vs the TCD table' do
+        def circ(a, b)
+            ((a - b + 180.0) % 360.0) - 180.0
+        end
+
+        it 'matches the TCD V0+u and f for every day asked, 1700-2100' do
+            Dir.mktmpdir do |dir|
+                engine = with_mode('legacy') { described_class.new(logger, dir) }
+                table = engine.send(:tcd_nodal_table)
+                m1 = table['constituents'].fetch('M1')
+                first = table['years'].first
+                (1700..2100).step(25).each do |year|
+                    v0u = m1.equilibrium_for_year(year, first)
+                    f = m1.node_factor_for_year(year, first)
+                    [[1, 1], [4, 30], [7, 2], [10, 15], [12, 31]].each do |month, day|
+                        nf = engine.send(:calculate_nodal_factors, year, month, day, 0.0, 12).fetch('M1')
+                        expect(circ(nf['V0'] + nf['u'], v0u).abs).to be <= 0.005, "V0+u for #{year}-#{month}-#{day}: #{nf['V0'] + nf['u']} vs #{v0u}"
+                        expect((nf['f'] - f).abs).to be <= 0.00005, "f for #{year}-#{month}-#{day}: #{nf['f']} vs #{f}"
                     end
                 end
             end

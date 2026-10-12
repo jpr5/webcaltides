@@ -48,10 +48,30 @@ RSpec.describe Harmonics::Engine, 'computed nodal corrections' do
             end
         end
 
-        it 'do not share a cache key with v6 output' do
-            expect(described_class::ENGINE_VERSION).to eq(6)
-            expect(described_class.cache_key_component('tcd')).to eq('hA6tcd')
-            expect(described_class.cache_key_component('legacy')).to eq('hA6legacy')
+        it 'do not share a cache key with current output' do
+            expect(described_class::ENGINE_VERSION).to eq(7)
+            expect(described_class.cache_key_component('tcd')).to eq('hA7tcd')
+            expect(described_class.cache_key_component('legacy')).to eq('hA7legacy')
+        end
+    end
+
+    # v6 cache files hold M1 in the form NOAA does not use (V with p at Jan 1,
+    # u and f for the day), so v7 must never serve them.
+    describe 'cache files from engine v6' do
+        it 'are not served in legacy mode' do
+            Dir.mktmpdir do |dir|
+                File.write("#{dir}/nodal_factors_v6_legacy_2026_7_2_0.0_h12.json", poison.to_json)
+                factors = engine('legacy', dir).send(:get_nodal_factors, 2026, 7, 2, 0.0, 12)
+                expect(factors['M2']['f']).to be_within(0.1).of(1.0)
+            end
+        end
+
+        it 'are not served in tcd mode for a year outside the TCD table' do
+            Dir.mktmpdir do |dir|
+                File.write("#{dir}/nodal_factors_v6_tcd_2101_7_2_0.0_h12.json", poison.to_json)
+                factors = engine('tcd', dir).send(:get_nodal_factors, 2101, 7, 2, 0.0, 12)
+                expect(factors['M2']['f']).to be_within(0.1).of(1.0)
+            end
         end
     end
 
@@ -144,7 +164,9 @@ RSpec.describe Harmonics::Engine, 'computed nodal corrections' do
         # Time#local(y, m, d, 24) is 00:00 the next day; so is NodalSchureman's
         # instant for u and f. V0 stays that of the requested year: Dec 31 at
         # hour 24 keeps year Y's V0, while Jan 1 at hour 0 of Y+1 takes Y+1's.
-        it 'gives Dec 31 hour 24 the u and f of Jan 1 00:00 and the V0 of its own year' do
+        # M1 is the exception: its u and f are those of the middle of the
+        # requested year, whatever the day and hour.
+        it 'gives Dec 31 hour 24 the u and f of Jan 1 00:00 (M1: of its own year) and the V0 of its own year' do
             Dir.mktmpdir do |dir|
                 e = engine('legacy', dir)
                 at24 = e.send(:get_nodal_factors, 2026, 12, 31, 0.0, 24)
@@ -152,7 +174,9 @@ RSpec.describe Harmonics::Engine, 'computed nodal corrections' do
                 same0 = e.send(:get_nodal_factors, 2026, 12, 31, 0.0, 0)
                 uf = ->(fs) { fs.transform_values { |nf| nf.values_at('f', 'u') } }
                 v0 = ->(fs) { fs.transform_values { |nf| nf['V0'] } }
-                expect(uf[at24]).to eq(uf[next0])
+                expect(uf[at24].except('M1')).to eq(uf[next0].except('M1'))
+                expect(uf[at24]['M1']).to eq(uf[same0]['M1'])
+                expect(uf[at24]['M1']).not_to eq(uf[next0]['M1'])
                 expect(v0[at24]).to eq(v0[same0])
                 expect(v0[at24]['M2']).not_to eq(v0[next0]['M2'])
             end
