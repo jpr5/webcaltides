@@ -51,6 +51,28 @@ def annotation(status="verified", **over):
                                 decided_build_commit="f5a026a")
 
 
+@pytest.mark.parametrize("status", ["verified", "disputed"])
+def test_original_source_path_preserves_supported_lines_and_uncertainty(table, tmp_path, status):
+    rec = ts.load_ticon(*ticon_csv(tmp_path, [("original-1-can-meds", "gesla4.MEDS", "Possible datum issues")]))["original-1-can-meds"]
+    tb = annotation(status, time_base_reason="original measured finding")
+    cs = ts.ticon_set(rec, time_base=tb, table=table, licence_id="ticon-4", record_licence=HELD["licence_id"],
+                      checked_window=WINDOW, retain_source_values=True)
+    assert {c["name"] for c in cs["constituents"]} == {"M2", "S2", "K1", "O1"}
+    assert all(c["amp_uncertainty_m"] == 0.0001 for c in cs["constituents"])
+    assert {c["name"] for c in cs["dropped_constituents"]} == {"M1", "3N2"}  # neither exists in this test table
+    assert cs["time_base"] == tb and "modified" not in cs["provenance"]
+
+
+def test_original_cmems_path_requires_actual_bodc_resolution(table, tmp_path):
+    rec = ts.load_ticon(*ticon_csv(tmp_path, [("original-1-gbr-cmems", "gesla4.CMEMS", "No obvious issues")]))["original-1-gbr-cmems"]
+    with pytest.raises(ts.NotCarried, match="explicit restricted policy"):
+        ts.ticon_set(rec, time_base=annotation(), table=table, licence_id="ticon-4",
+                     record_licence="gesla-cmems-nc", checked_window=WINDOW, retain_source_values=True)
+    cs = ts.ticon_set(rec, time_base=annotation(), table=table, licence_id="ticon-4-bodc-restricted",
+                      record_licence="gesla-bodc-nc", checked_window=WINDOW, retain_source_values=True)
+    assert cs["licence_id"] == "ticon-4-bodc-restricted"
+
+
 def kw(table, docs, ids, lic_ids, **over):
     k = dict(table=table, table_id=TABLE_ID, datestamp=D, created="2026-10-10T00:00:00Z", build_commit="abcdef0",
              station_ids=ids, licences=[LICENCE, HELD], licence_ids=lic_ids, withheld={HELD["licence_id"]: WHY},
@@ -187,17 +209,18 @@ def test_an_analysis_set_ranks_after_a_gauge_fit_and_before_a_model_set():
     assert [c.cs["source_record_id"] for c, _ in gr.rank([a, g])] == ["b", "a"]
 
 
-def test_a_clean_ticon_set_never_makes_an_unresolved_otc_fit_publishable(table, tmp_path):
+def test_a_clean_ticon_set_stays_preferred_to_a_retained_unresolved_otc_fit(table, tmp_path):
     docs, ids, lic = three_held(table)
     ids = {**ids, "good-0-nor-test": "OTC-T0001"}          # the published record shares held-1's station
     clock = {"kind": "clock_offset", "clock_offset_h": -8.1, "against": ["held-1-can-meds"], "decided_by": "eot20"}
     c = carry(tmp_path, [(r, "gesla4.MEDS", "No obvious issues") for r in HELD_IDS], {r: annotation(rid=r) for r in HELD_IDS})
     release, report = gr.build_release(docs, ticon=c, **kw(table, docs, ids, lic, sibling_flags={"good-0-nor-test": clock}))
     st = next(s for s in release["stations"] if s["station_id"] == "OTC-T0001")
-    assert [cs["set_id"] for cs in st["constant_sets"]] == ["OTC-T0001/ticon-4/held-1-can-meds"]
+    assert [cs["set_id"] for cs in st["constant_sets"]] == ["OTC-T0001/ticon-4/held-1-can-meds",
+                                                         "OTC-T0001/gesla-fit/good-0-nor-test"]
     assert st["recommended_set_id"] == "OTC-T0001/ticon-4/held-1-can-meds"
-    assert ("good-0-nor-test", "clock_offset_unresolved") in {(r["record"], r["reason"]) for r in report.refused}
-    assert report.published == []
+    assert st["constant_sets"][1]["fallback"]["reason"] == "time_base_unresolved"
+    assert report.published == ["good-0-nor-test"]
     assert validate_release(release) == []
     # the same flag on the withheld record itself: its TICON-4 set (the same data) carries the flag, as an OTC fit
     # would, and the clean OTC fit is recommended

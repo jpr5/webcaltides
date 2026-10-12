@@ -257,28 +257,42 @@ def _uncovered(tb: Mapping, window: tuple[str, str] | None, rec: TiconRecord) ->
 
 
 def ticon_set(rec: TiconRecord, *, time_base: Mapping | None, table: TcdTable, licence_id: str,
-              record_licence: str, checked_window: tuple[str, str] | None = None) -> dict:
+              record_licence: str, checked_window: tuple[str, str] | None = None,
+              retain_source_values: bool = False) -> dict:
     """One analysis constant set (format 1.0, without set_id and provenance.build, which the build adds) for
     a TICON-4 record, or NotCarried (cmems_relayed, no_time_base, time_base_disputed, time_base_not_shift,
     time_base_months_dropped, no_constituents). `record_licence` is the GESLA record's own licence id, named in
     selection_reason."""
-    if rec.gesla_source == CMEMS:
+    restricted_bodc = (retain_source_values and licence_id == "ticon-4-bodc-restricted"
+                       and record_licence == "gesla-bodc-nc")
+    if retain_source_values and rec.gesla_source == CMEMS and not restricted_bodc:
+        raise NotCarried(f"{rec.name}: CMEMS-relayed constants need an explicit restricted policy for "
+                         f"the actual resolved record licence {record_licence}", "cmems_relayed")
+    if rec.gesla_source == CMEMS and not restricted_bodc:
         raise NotCarried(f"{rec.name}: CMEMS-relayed (CC BY-NC); the ticon-4 licence does not cover it", "cmems_relayed")
-    if licence_id != LICENCE_ID:
+    if licence_id != LICENCE_ID and not restricted_bodc:
         raise ValueError(f"{rec.name}: a ticon-4 set has licence {LICENCE_ID}, not {licence_id}")
     if time_base is None:
         raise NotCarried(f"{rec.name}: OTC has no time-base annotation of the record", "no_time_base")
     tb = dict(time_base)
     code = tb["code"]
+    if retain_source_values and code == "corrected":
+        # The scientifically corrected set remains separate. Original source
+        # phases describe the publisher's declared axis, not OTC's correction.
+        tb = {k: tb[k] for k in ("declared", "decided_in", "decided_build_commit", "evidence") if k in tb}
+        tb.update(code="unverified", published=tb["declared"],
+                  reason=clip(f"original TICON-4 phases retained on the declared axis; OTC's time-base "
+                              f"correction is not applied to this source set: {dict(time_base)}"))
+        code = "unverified"
     if code in ("verified", "corrected") and not _covers(checked_window, rec):
         if code == "corrected":
             raise NotCarried(f"{rec.name}: OTC's correction is known for {checked_window}, not for the span TICON-4 "
                              f"analysed ({rec.start} to {rec.end})", "time_base_not_covered")
         tb = _uncovered(tb, checked_window, rec)
         code = "unverified"
-    if code == "disputed":
+    if code == "disputed" and not retain_source_values:
         raise NotCarried(f"{rec.name}: OTC disputes the record's time base: {tb['reason']}", "time_base_disputed")
-    if tb.get("months_dropped"):
+    if tb.get("months_dropped") and not retain_source_values:
         raise NotCarried(f"{rec.name}: OTC drops months {tb['months_dropped']}, which the publisher's fit holds",
                          "time_base_months_dropped")
     shift = 0.0
@@ -293,7 +307,7 @@ def ticon_set(rec: TiconRecord, *, time_base: Mapping | None, table: TcdTable, l
     cons, dropped = [], []
     for src in sorted(rec.constituents):
         name = _otc_name(src)
-        if src in LEFT_OUT:
+        if src in LEFT_OUT and not retain_source_values:
             dropped.append({"name": name, "dropped_reason": "convention", "detail": LEFT_OUT[src]})
             continue
         if name not in table:
@@ -307,19 +321,26 @@ def ticon_set(rec: TiconRecord, *, time_base: Mapping | None, table: TcdTable, l
             amp /= boxcar_response(speed)
         entry = {"name": name, "speed_deg_per_hour": speed, "amplitude_m": round(amp, 6),
                  "phase_deg": round((pha + speed * shift) % 360.0, 6) % 360.0}
+        if retain_source_values:
+            entry["amplitude_m"] = amp
+            entry["phase_deg"] = pha % 360.0
+            entry["amp_uncertainty_m"] = rec.amp_std[src] / 100.0
         if src != name:
             entry["source_name"] = src
         cons.append(entry)
     if not cons:
         raise NotCarried(f"{rec.name}: no constituent the release can predict", "no_constituents")
     flags = []
-    if code == "unverified":
-        flags.append({"flag": "time_base", "reason": clip(f"time base unverified: {tb['reason']}")})
+    if code == "unverified" or (retain_source_values and code == "disputed"):
+        flags.append({"flag": "time_base", "reason": clip(f"time base {code}: {tb['reason']}")})
     if rec.quality != NO_ISSUES:
         flags.append({"flag": "source_quality_note", "reason": f"TICON-4 record quality: {rec.quality}"})
     prov = {"input_sha256": [TICON_SHA256],
             "selection_reason": f"the record's licence ({record_licence}) does not allow publishing an OTC fit, "
                                 "so the publisher's constants are used"}
+    if retain_source_values:
+        prov["selection_reason"] = ("original published TICON-4 source values retained separately from "
+                                    "OTC's scientific selection; unsupported definitions remain original source data")
     if code == "corrected":
         prov["modified"] = (f"phases corrected for the record's time base ({tb['correction']['to']}, declared "
                             f"{tb['correction']['from']}): each phase changed by the constituent's speed times "
