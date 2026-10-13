@@ -22,7 +22,7 @@ gem 'timezone'
 # with /usr/share/zoneinfo TZInfo rejected ids that Google's lookup still returns.
 gem 'tzinfo-data'
 gem 'geocoder'
-gem 'tcd'
+gem 'tcd', '~> 1.1'
 
 gem 'rack', '>= 3.2.6'
 gem 'rack-session', '>= 2.1.2'

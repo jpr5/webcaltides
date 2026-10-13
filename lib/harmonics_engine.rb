@@ -176,7 +176,11 @@ module Harmonics
         # inputs, tcd output for years inside the table is unchanged; a nodal
         # hour outside 0..24 (or not an Integer) or a date that does not exist
         # now raises ArgumentError in every mode.
-        ENGINE_VERSION = 6
+        # v7: NodalSchureman computes M1 in NOAA's form (the XTide TCD's): V
+        # without the p term, u and f at the middle of the year. Computed M1
+        # output (legacy mode, and years outside the TCD table) changes; tcd
+        # output for years inside the table does not.
+        ENGINE_VERSION = 7
 
         # HARMONICS_NODAL selects how per-constituent nodal corrections are found:
         #   tcd    (default) - TCD per-year equilibrium argument (V0+u) and node
@@ -201,7 +205,7 @@ module Harmonics
         end
 
         # Short string naming the engine version and nodal mode ("hA" +
-        # ENGINE_VERSION + mode, e.g. "hA6tcd"),
+        # ENGINE_VERSION + mode, e.g. "hA7tcd"),
         # for callers to put in harmonics tide/currents cache file names. It holds
         # no "_20dddd" token, so it cannot shadow a file name's datestamp.
         def self.cache_key_component(mode = nodal_mode)

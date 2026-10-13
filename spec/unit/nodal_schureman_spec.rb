@@ -60,8 +60,13 @@ RSpec.describe NodalSchureman do
         end
     end
 
+    # The oracle's M1 is the form NOAA does not use (V with p at Jan 1, u and f
+    # at the instant asked for). NodalSchureman now gives M1 in NOAA's form, so
+    # M1 is checked against NOAA's values below, not against the oracle.
     describe 'oracle points' do
         oracle['cases'].each do |c|
+            next if c['constituent'] == 'M1'
+
             label = format('%-4s %d-%02d-%02d H=%02d m=%+.1f',
                            c['constituent'], c['year'], c['month'], c['day'], c['hour'], c['shift_hours'])
 
@@ -81,6 +86,38 @@ RSpec.describe NodalSchureman do
                     expect(du).to  be <= tolerance, "u: |d|=#{du}"
                 end
             end
+        end
+    end
+
+    # M1 in NOAA's form: V = T - s + h - 90 at Jan 1, u = xi - nu + Q and
+    # f = f(O1)/Qa at the middle of the year (SP98 Table 2, second form;
+    # formula 206). The reference values are V0+u and f from an SP98
+    # computation written independently of this module, which agree with the
+    # XTide TCD table and reproduce NOAA's published predictions. They are
+    # rounded to the TCD's resolution (0.01 degree, 0.0001), so the tolerance
+    # is half of that plus a little rounding slack.
+    describe 'M1 (NOAA form)' do
+        { 1900 => [97.36, 1.8399], 2026 => [25.28, 1.0994], 2090 => [263.92, 1.5172] }.each do |year, (v0u, f)|
+            it "gives NOAA's V0+u and f for #{year}, on any day of the year" do
+                [[1, 1, 0], [3, 15, 12], [7, 2, 12], [12, 31, 23]].each do |month, day, hour|
+                    r = NodalSchureman.constituent('M1', year, month: month, day: day, hour: hour)
+                    expect(circular_diff(r[:v0] + r[:u], v0u).abs).to be <= 0.0051, "V0+u #{year}-#{month}-#{day} #{hour}h: #{r[:v0] + r[:u]}"
+                    expect((r[:f] - f).abs).to be <= 0.000051, "f #{year}-#{month}-#{day} #{hour}h: #{r[:f]}"
+                end
+            end
+        end
+
+        # The first form, V with p at Jan 1 and u = -nu - Qu, differs from NOAA's
+        # by p(Jan 1) - p(mid-year), about -20.3 degrees.
+        it 'is not the first form with u at mid-year' do
+            r = NodalSchureman.constituent('M1', 2026, month: 7, day: 2)
+            expect(circular_diff(r[:v0] + r[:u], 25.28 - 20.33).abs).to be > 20.0
+        end
+
+        it 'has no p term in V0' do
+            v0 = NodalSchureman.compute(2026, month: 7, day: 2)
+            want = (v0['K1'][:v0] - NodalSchureman.s_lon(NodalSchureman.days_since_epoch(2026, 1, 1, 0, 0.0).to_f / 36_525.0)) % 360.0
+            expect(circular_diff(v0['M1'][:v0], want).abs).to be <= 1e-9
         end
     end
 end
