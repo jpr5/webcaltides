@@ -21,6 +21,11 @@
 #
 #   t0 = Y-01-01 00:00 UTC + m hours      -> V0 (uses T_h, s, h, p)
 #   t1 = Y-month-day H:00 UTC + m hours   -> u and f (use N and p)
+#   tm = t0 + half the year's length      -> u and f of M1 only
+#
+# M1 follows NOAA and the XTide TCD tables, not the specification: V is
+# SP98's second form (no p term) and u and f are taken at the middle of the
+# year, tm, whatever the day asked for. See M1_NOTE below.
 #
 # Following spec section 9, everything is evaluated in double precision,
 # except that the day count is exact (Rational) so that the hour angle of
@@ -77,7 +82,7 @@ module NodalSchureman
         'P1'   => [1, 0, -1, 0, 90],
         'Q1'   => [1, -3, 1, 1, 90],
         'S1'   => [1, 0, 0, 0, 0],
-        'M1'   => [1, -1, 1, 1, -90],
+        'M1'   => [1, -1, 1, 0, -90],      # second form; see M1_NOTE
         'M2'   => [2, -2, 2, 0, 0],
         'S2'   => [2, 0, 0, 0, 0],
         'N2'   => [2, -3, 2, 1, 0],
@@ -87,6 +92,18 @@ module NodalSchureman
         'K2'   => [2, 0, 2, 0, 0]
     }.freeze
 
+    # M1_NOTE. SP98 Table 2 gives M1 in two forms: V = T - s + h + p - 90 with
+    # u = -nu - Qu, and V = T - s + h - 90 with u = xi - nu + Q (p is absorbed
+    # in Q). With Qu = P - Q and P = p - xi the two are the same angle only
+    # when V and u are taken at the same instant. NOAA's predictions, and the
+    # XTide TCD tables they agree with, use the second form with V at t0 and
+    # u and f at the middle of the year. The first form with u at any later
+    # instant t differs from that by p(t0) - p(t) (-20.3 degrees at mid-year),
+    # and Q and 1/Qa follow the perigee (8.85 years), so u and f taken day by
+    # day also drift from NOAA's yearly values (f by up to about 30% within a
+    # year). NOAA harmonic constants for M1 only reproduce NOAA's predictions
+    # with NOAA's form, so M1 is computed that way.
+
     module_function
 
     # All 13 constituents for one year and one UTC day. Returns
@@ -95,6 +112,7 @@ module NodalSchureman
     def compute(year, month:, day:, hour: 12, shift_hours: 0.0)
         v0 = equilibrium_arguments(year, shift_hours)
         nodal = nodal_terms(year, month, day, hour, shift_hours)
+        nodal = nodal.merge('M1' => nodal_terms_at(mid_year(year, shift_hours)).fetch('M1'))
 
         CONSTITUENTS.each_with_object({}) do |name, out|
             f, u = nodal.fetch(name)
@@ -117,6 +135,13 @@ module NodalSchureman
         (jdn - EPOCH_JDN) - Rational(1, 2) + (Rational(hour) + shift_hours.to_r) / 24
     end
 
+    # Days since the epoch of tm, the middle of the year: t0 plus half the
+    # number of days from Y-01-01 to (Y+1)-01-01 (182.5 or 183).
+    def mid_year(year, shift_hours)
+        length = Date.new(year + 1, 1, 1, Date::GREGORIAN).jd - Date.new(year, 1, 1, Date::GREGORIAN).jd
+        days_since_epoch(year, 1, 1, 0, shift_hours) + Rational(length, 2)
+    end
+
     # --- V0 at t0 --------------------------------------------------------
 
     def equilibrium_arguments(year, shift_hours)
@@ -135,7 +160,11 @@ module NodalSchureman
     # --- u and f at t1 ---------------------------------------------------
 
     def nodal_terms(year, month, day, hour, shift_hours)
-        d  = days_since_epoch(year, month, day, hour, shift_hours)
+        nodal_terms_at(days_since_epoch(year, month, day, hour, shift_hours))
+    end
+
+    # u and f for the instant d days since the epoch.
+    def nodal_terms_at(d)
         t  = d.to_f / 36_525.0
         n_deg  = n_lon(t) % 720.0    # mod 720 so that N/2 keeps its half-turn
         p_deg  = p_lon(t) % 360.0
@@ -163,10 +192,9 @@ module NodalSchureman
         # (232) 2nu''
         two_nu_pp = Math.atan2(sin_i**2 * Math.sin(2 * nu), sin_i**2 * Math.cos(2 * nu) + 0.0727)
 
-        # (191)/(204) P; (203) Q in the quadrant of P; (204) Qu = P - Q
+        # (191)/(204) P; (203) Q in the quadrant of P
         big_p = p_deg * DEG - xi
         big_q = Math.atan2(0.483 * Math.sin(big_p), Math.cos(big_p))
-        q_u   = big_p - big_q
         # (197) 1/Qa
         inv_qa = Math.sqrt(2.310 + 1.435 * Math.cos(2 * big_p))
         # (214) R
@@ -190,7 +218,7 @@ module NodalSchureman
             'K1'   => [f_k1, -nu_p / DEG],
             'P1'   => [1.0, 0.0],
             'S1'   => [1.0, 0.0],
-            'M1'   => [f_m1, (-nu - q_u) / DEG],
+            'M1'   => [f_m1, (xi - nu + big_q) / DEG],   # second form; see M1_NOTE
             'M2'   => [f_m2, u_m2],
             'S2'   => [1.0, 0.0],
             'N2'   => [f_m2, u_m2],

@@ -218,3 +218,29 @@ In each file, `rspec exit` is the exit status of the test run, and
 `mutation_th_float.sh` exits 0 only when rspec ran all 783 examples and at
 least one failed (the mutant is killed); it exits 2 on a load error or a wrong
 example count, and 1 when the mutant survives.
+
+## Later change: M1 in NOAA's form
+
+After the clean-room work, the coordinator's side changed M1 in the module.
+The implementer took no part. The change was written from SP98 Table 2 and
+formula 206, and from M1's row in the XTide TCD file (data, not code). No
+other implementation's source was read.
+
+- **What changed.** V for M1 is SP98's second form, T - s + h - 90 (no p
+  term). u is xi - nu + Q. u and f are taken at the middle of the year (Jan 1
+  00:00 plus half the year, both shifted by the meridian), whatever day is
+  asked for. The other 12 constituents are unchanged.
+- **Why.** The specification, the old code and the oracle use the first form:
+  V = T - s + h + p - 90 at Jan 1, and u = -nu - Qu at the day asked for. NOAA
+  and the TCD use the second form, with u and f at mid-year. At mid-year the
+  two forms differ by p(Jan 1) - p(mid-year), which is -20.3 degrees. Q and
+  1/Qa follow the perigee, so on other days V0+u was off by up to 42.5
+  degrees and f by up to 0.42. NOAA's M1 constants reproduce NOAA's
+  predictions only with NOAA's form.
+- **Tests.** M1 is left out of the oracle comparisons. The oracle fixture is
+  not edited, because it is pinned by its SHA-256. M1 is checked against
+  NOAA's values in `spec/unit/nodal_schureman_spec.rb` and against the TCD
+  table in `spec/unit/harmonics/nodal_mode_spec.rb`.
+- **Evidence files.** The files under `evidence/` record the module as it was
+  before this change, with the spec's example counts at that time (783).
+  They were not regenerated.
