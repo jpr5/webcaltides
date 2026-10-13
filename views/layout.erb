@@ -725,18 +725,46 @@
                         GitHub
                     </a>
 
-                    <div x-data="{ open: false, timeout: null }" class="relative z-50"
-                         @mouseenter="clearTimeout(timeout); open = true"
-                         @mouseleave="timeout = setTimeout(() => open = false, 150)">
-                        <button class="text-slate-400 hover:text-ocean-400 transition-colors">
+                    <!-- Licence and credit notices for every data source.  Opens on mouse hover, tap or
+                         keyboard focus; closes on mouse leave, focus leaving, a tap outside or Escape.  Hover is
+                         mouse-only, so the synthetic mouse events of a tap cannot close it again.  On phones it is
+                         pinned to the viewport edges so it is never cut off, and it scrolls when taller than
+                         the screen. -->
+                    <div x-data="{ open: false, timeout: null }" class="relative" :class="open ? 'z-[60]' : 'z-50'"
+                         @pointerenter="if ($event.pointerType === 'mouse') { clearTimeout(timeout); open = true }"
+                         @pointerleave="if ($event.pointerType === 'mouse') timeout = setTimeout(() => open = false, 150)"
+                         @focusin="clearTimeout(timeout); open = true"
+                         @focusout="if (!$el.contains($event.relatedTarget)) open = false"
+                         @click.outside="open = false"
+                         @keydown.escape="$refs.licensesButton.focus(); open = false">
+                        <button type="button" x-ref="licensesButton" @click="open = true"
+                                :aria-expanded="open.toString()" aria-controls="licenses-popover"
+                                class="text-slate-400 hover:text-ocean-400 transition-colors">
                             Licenses
                         </button>
-                        <div x-show="open" x-cloak
+                        <div id="licenses-popover" x-show="open" x-cloak
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 scale-95"
                              x-transition:enter-end="opacity-100 scale-100"
-                             class="absolute bottom-full right-0 mb-2 w-80 p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-sm text-slate-400 leading-relaxed">
-                            This product includes data from the Canadian Hydrographic Service of the Department of Fisheries and Oceans. Inclusion does not constitute endorsement by CHS or DFO.
+                             class="fixed inset-x-4 bottom-4 max-h-[70vh] overflow-y-auto md:absolute md:inset-x-auto md:bottom-full md:right-0 md:mb-2 md:w-[36rem] md:max-h-[60vh] p-4 bg-navy-800 rounded-lg shadow-xl border border-navy-700 text-sm text-slate-400 leading-relaxed text-left space-y-3">
+                            <p id="chs-credit">
+                                This product includes data from the Canadian Hydrographic Service of the Department of Fisheries and Oceans. Inclusion does not constitute endorsement by CHS or DFO.
+                            </p>
+                            <p id="bsh-credit">
+                                German tide predictions: <%= escape_html(Clients::BshTides.attribution(Clients::BshTides.served_years)) %>. Das BSH übernimmt für die angegebenen Informationen keine Gewähr. Not for navigation.
+                            </p>
+                            <p id="kartverket-credit">
+                                Norwegian tide predictions: <a href="<%= escape_html(Clients::KartverketTides::HOME_URL) %>" class="underline hover:text-ocean-300">© Kartverket</a>, licensed under <a href="<%= escape_html(Clients::KartverketTides::LICENSE_URL) %>" class="underline hover:text-ocean-300">CC BY 4.0</a>; heights converted to the selected units, times unchanged (UTC). Not for navigation.
+                            </p>
+                            <p id="linz-credit">
+                                New Zealand tide predictions: based on <a href="<%= escape_html(Clients::LinzTides::HOME_URL) %>" class="underline hover:text-ocean-300">Toitū Te Whenua Land Information New Zealand</a> data, licensed for re-use under <a href="<%= escape_html(Clients::LinzTides::LICENSE_URL) %>" class="underline hover:text-ocean-300">CC BY 4.0</a>; times converted from New Zealand local time (Chatham Islands time for the Chatham Islands ports) to UTC, high/low labels added, heights converted to the selected units. Not the official tide tables under Maritime Rules Part 25. Not for navigation.
+                            </p>
+                            <p id="imi-credit">
+                                Irish tide predictions: data supplied by <a href="<%= escape_html(Clients::MarineInstituteTides::HOME_URL) %>" class="underline hover:text-ocean-300">Marine Institute</a>, licensed under <a href="<%= escape_html(Clients::MarineInstituteTides::LICENSE_URL) %>" class="underline hover:text-ocean-300">CC BY 4.0</a>; heights, where shown, converted from OD Malin to chart datum (LAT) with a fixed offset per station, and to the selected units; times unchanged (UTC). Storm surge not included. Not for navigation.
+                            </p>
+                            <p id="rws-credit">
+                                Dutch tide predictions: <a href="<%= escape_html(Clients::RijkswaterstaatTides::HOME_URL) %>" class="underline hover:text-ocean-300">Rijkswaterstaat</a> astronomical tide, <a href="<%= escape_html(Clients::RijkswaterstaatTides::LICENSE_URL) %>" class="underline hover:text-ocean-300">CC0</a>; heights above NAP (Dutch land datum), not chart datum, converted from cm to the selected units; times converted from +01:00 to UTC. Weather not included. Not for navigation.
+                            </p>
                         </div>
                     </div>
 
@@ -757,31 +785,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- BSH terms (AGB 5(10)) require the source credit on every presentation, so it stays visible -->
-            <p id="bsh-credit" class="mt-4 text-xs text-slate-500 leading-relaxed text-center md:text-left">
-                German tide predictions: <%= escape_html(Clients::BshTides.attribution(Clients::BshTides.served_years)) %>. Das BSH übernimmt für die angegebenen Informationen keine Gewähr. Not for navigation.
-            </p>
-
-            <!-- Kartverket's CC BY 4.0 terms require "© Kartverket" with a link wherever its data is used -->
-            <p id="kartverket-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
-                Norwegian tide predictions: <a href="<%= escape_html(Clients::KartverketTides::HOME_URL) %>" class="underline hover:text-slate-400">© Kartverket</a>, licensed under <a href="<%= escape_html(Clients::KartverketTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; heights converted to the selected units, times unchanged (UTC). Not for navigation.
-            </p>
-
-            <!-- LINZ's CC BY 4.0 terms ask for its attribution wherever its data is used -->
-            <p id="linz-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
-                New Zealand tide predictions: based on <a href="<%= escape_html(Clients::LinzTides::HOME_URL) %>" class="underline hover:text-slate-400">Toitū Te Whenua Land Information New Zealand</a> data, licensed for re-use under <a href="<%= escape_html(Clients::LinzTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; times converted from New Zealand local time (Chatham Islands time for the Chatham Islands ports) to UTC, high/low labels added, heights converted to the selected units. Not the official tide tables under Maritime Rules Part 25. Not for navigation.
-            </p>
-
-            <!-- The Marine Institute's CC BY 4.0 licence asks for credit, a licence link and a note of changes -->
-            <p id="imi-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
-                Irish tide predictions: data supplied by <a href="<%= escape_html(Clients::MarineInstituteTides::HOME_URL) %>" class="underline hover:text-slate-400">Marine Institute</a>, licensed under <a href="<%= escape_html(Clients::MarineInstituteTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC BY 4.0</a>; heights, where shown, converted from OD Malin to chart datum (LAT) with a fixed offset per station, and to the selected units; times unchanged (UTC). Storm surge not included. Not for navigation.
-            </p>
-
-            <!-- Rijkswaterstaat data is CC0 (no credit required); the footer still names the source and the height datum -->
-            <p id="rws-credit" class="mt-1 text-xs text-slate-500 leading-relaxed text-center md:text-left">
-                Dutch tide predictions: <a href="<%= escape_html(Clients::RijkswaterstaatTides::HOME_URL) %>" class="underline hover:text-slate-400">Rijkswaterstaat</a> astronomical tide, <a href="<%= escape_html(Clients::RijkswaterstaatTides::LICENSE_URL) %>" class="underline hover:text-slate-400">CC0</a>; heights above NAP (Dutch land datum), not chart datum, converted from cm to the selected units; times converted from +01:00 to UTC. Weather not included. Not for navigation.
-            </p>
         </div>
     </footer>
 </body>
