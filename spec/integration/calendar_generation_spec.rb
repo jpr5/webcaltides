@@ -686,12 +686,12 @@ RSpec.describe 'BSH credit in the web UI', type: :api do
         def footer_credit
             get '/'
             node = Nokogiri::HTML(last_response.body).at_css('footer #bsh-credit')
-            # Visible without hover: neither it nor anything around it is toggled by Alpine
-            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            # In the footer's Licenses popover, with the other licence notices
+            expect(node.parent['id']).to eq('licenses-popover')
             node.text.squish
         end
 
-        it 'shows the credit outside any hover popover, for every year served' do
+        it 'shows the credit in the Licenses popover, for every year served' do
             Timecop.freeze(Time.utc(2026, 10, 5, 12))
             expect(footer_credit).to eq("German tide predictions: #{credit}, 2026-2027. Das BSH übernimmt für die angegebenen Informationen keine Gewähr. Not for navigation.")
         end
@@ -743,11 +743,11 @@ end
 # Kartverket's CC BY 4.0 terms want "© Kartverket", with a link, wherever its data is used
 RSpec.describe 'Kartverket credit in the web UI', type: :api do
     describe 'footer' do
-        it 'shows © Kartverket with links to Kartverket and the licence, outside any hover popover' do
+        it 'shows © Kartverket with links to Kartverket and the licence, in the Licenses popover' do
             get '/'
             node = Nokogiri::HTML(last_response.body).at_css('footer #kartverket-credit')
 
-            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.parent['id']).to eq('licenses-popover')
             expect(node.text.squish).to eq('Norwegian tide predictions: © Kartverket, licensed under CC BY 4.0; heights converted to the selected units, times unchanged (UTC). Not for navigation.')
             expect(node.css('a').map { |a| [a.text, a['href']] }).to eq([
                 ['© Kartverket', 'https://www.kartverket.no/'], ['CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/']
@@ -805,11 +805,11 @@ end
 # these are not the official tide tables under Maritime Rules Part 25, so the UI never says official.
 RSpec.describe 'LINZ credit in the web UI', type: :api do
     describe 'footer' do
-        it 'credits LINZ with links to its tide predictions page and the licence, outside any hover popover' do
+        it 'credits LINZ with links to its tide predictions page and the licence, in the Licenses popover' do
             get '/'
             node = Nokogiri::HTML(last_response.body).at_css('footer #linz-credit')
 
-            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.parent['id']).to eq('licenses-popover')
             expect(node.text.squish).to eq(
                 'New Zealand tide predictions: based on Toitū Te Whenua Land Information New Zealand data, licensed for re-use under CC BY 4.0; ' \
                 'times converted from New Zealand local time (Chatham Islands time for the Chatham Islands ports) to UTC, ' \
@@ -869,11 +869,11 @@ end
 # The Marine Institute's CC BY 4.0 licence asks for credit, a licence link and a note of changes
 RSpec.describe 'Marine Institute credit in the web UI', type: :api do
     describe 'footer' do
-        it 'credits MI with links to its tidal predictions page and the licence, and says what we changed, outside any hover popover' do
+        it 'credits MI with links to its tidal predictions page and the licence, and says what we changed, in the Licenses popover' do
             get '/'
             node = Nokogiri::HTML(last_response.body).at_css('footer #imi-credit')
 
-            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.parent['id']).to eq('licenses-popover')
             expect(node.text.squish).to eq(
                 'Irish tide predictions: data supplied by Marine Institute, licensed under CC BY 4.0; ' \
                 'heights, where shown, converted from OD Malin to chart datum (LAT) with a fixed offset per station, and to the selected units; ' \
@@ -1160,11 +1160,11 @@ end
 # Rijkswaterstaat's data is CC0, but the UI names the source and that heights are above NAP
 RSpec.describe 'Rijkswaterstaat credit in the web UI', type: :api do
     describe 'footer' do
-        it 'names RWS with links, the NAP datum and what we changed, outside any hover popover' do
+        it 'names RWS with links, the NAP datum and what we changed, in the Licenses popover' do
             get '/'
             node = Nokogiri::HTML(last_response.body).at_css('footer #rws-credit')
 
-            expect(node.ancestors.to_a.unshift(node).select { |n| n.respond_to?(:[]) && n['x-show'] }).to be_empty
+            expect(node.parent['id']).to eq('licenses-popover')
             expect(node.text.squish).to eq(
                 'Dutch tide predictions: Rijkswaterstaat astronomical tide, CC0; heights above NAP (Dutch land datum), not chart datum, ' \
                 'converted from cm to the selected units; times converted from +01:00 to UTC. Weather not included. Not for navigation.'
@@ -1247,5 +1247,44 @@ RSpec.describe 'Rijkswaterstaat credit in the web UI', type: :api do
             expect(id['class'].split).to include('max-w-[calc(100%+0.5rem)]', 'truncate')
             expect(id[':title']).to eq('currentSource?.publicId || selectedSource')
         end
+    end
+end
+
+# Every licence notice lives in the footer's Licenses popover; none is footer text
+RSpec.describe 'Licenses popover in the footer', type: :api do
+    def footer
+        get '/'
+        Nokogiri::HTML(last_response.body).at_css('footer')
+    end
+
+    it 'holds the CHS notice and every agency credit, in that order' do
+        popover = footer.at_css('#licenses-popover')
+        expect(popover['x-show']).to eq('open')
+        expect(popover.css('> p').map { |n| n['id'] }).to eq(%w[chs-credit bsh-credit kartverket-credit linz-credit imi-credit rws-credit])
+        expect(popover.at_css('#chs-credit').text.squish).to eq(
+            'This product includes data from the Canadian Hydrographic Service of the Department of Fisheries and Oceans. ' \
+            'Inclusion does not constitute endorsement by CHS or DFO.'
+        )
+    end
+
+    it 'leaves no licence notice as footer text outside the popover' do
+        node = footer
+        outside = node.css('p').reject { |p| p.ancestors.any? { |a| a['id'] == 'licenses-popover' } }
+        expect(outside).to be_empty
+        expect(node.text.scan('Not for navigation').length).to eq(5)
+    end
+
+    it 'opens on tap and keyboard focus, and closes on Escape, a tap outside or focus leaving' do
+        popover = footer.at_css('#licenses-popover')
+        button = popover.parent.at_css('button')
+        expect(button.text.squish).to eq('Licenses')
+        expect(button['aria-controls']).to eq('licenses-popover')
+        # Nokogiri drops Alpine's @-shorthand attributes, so read them from the markup
+        body = last_response.body
+        markup = body[body.rindex('<div', body.index('x-ref="licensesButton"'))...body.index('id="licenses-popover"')]
+        expect(markup).to include('@click="open = true"', '@focusin=', '@focusout=', '@click.outside="open = false"', '@keydown.escape=')
+        expect(markup).to include("$event.pointerType === 'mouse'")
+        # Phones: pinned inside the viewport and scrollable, not anchored off-screen to the button
+        expect(popover['class'].split).to include('fixed', 'inset-x-4', 'max-h-[70vh]', 'overflow-y-auto', 'md:absolute', 'md:max-h-[60vh]')
     end
 end
