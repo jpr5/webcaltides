@@ -35,7 +35,7 @@ gem 'dotenv'
 
 # BP S1: scripts/gesla reads the GESLA release zip (zip64, deflate).
 group :gesla do
-    gem 'rubyzip', '~> 2.4', require: false
+    gem 'rubyzip', '~> 3.4.0', require: false
 end
 
 group :development do
