@@ -19,7 +19,7 @@ parquet = ["pyarrow==21.0.0"]
 
 [dependency-groups]
 dev = [
-    "pytest==8.4.2",
+    "pytest==9.0.3",
     "pyarrow==21.0.0",
 ]
 
