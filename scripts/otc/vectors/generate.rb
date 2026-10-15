@@ -5,7 +5,7 @@ require_relative 'lib/vector_generator'
 
 options = {}
 OptionParser.new do |parser|
-    parser.banner = 'generate.rb --release JSON --run-dir CONGEN --output JSON [--only NOAA_ID]'
+    parser.banner = 'generate.rb --release JSON --run-dir PATH --output JSON [--only NOAA_ID]'
     parser.on('--release PATH') { |value| options[:release] = value }
     parser.on('--run-dir PATH') { |value| options[:run_dir] = value }
     parser.on('--output PATH') { |value| options[:output] = value }

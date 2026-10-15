@@ -7,7 +7,18 @@ require 'tmpdir'
 RSpec.describe 'the native Tier B official comparison' do
     root = File.expand_path('../../..', __dir__)
     script = File.join(root, 'scripts/otc/vectors/tier_b.rb')
-    input = ENV.fetch('OTC_TIER_B_INPUT')
+    let(:input) { ENV.fetch('OTC_TIER_B_INPUT') }
+
+    # The pinned real-data profile is external to ordinary repository CI.
+    # A partially configured profile must still fail rather than hide missing inputs.
+    before(:context) do
+        profile = %w[OTC_TIER_B_INPUT OTC_TIER_B_XTIDE_REPORT OTC_TIER_B_COMPARISON
+                     OTC_TIER_B_PROVENANCE OTC_TIER_B_INVENTORY OTC_TIER_B_OLD_RELEASE
+                     OTC_TIER_B_RELEASE]
+        if (profile + ['OTC_TIER_B_PROJECTION']).none? { |name| ENV.key?(name) }
+            skip "Tier B requires external pinned fixtures: #{profile.join(', ')}; see scripts/otc/vectors/README.md"
+        end
+    end
 
     it 'preserves all fixed bounds and six actual scientific failures' do
         Dir.mktmpdir('tier-b-green-') do |out|

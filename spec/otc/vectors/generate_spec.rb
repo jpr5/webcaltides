@@ -11,6 +11,14 @@ RSpec.describe 'the native prediction vectors' do
     let(:inputs) { ENV.fetch('OTC_VECTOR_INPUTS') }
     let(:release) { ENV.fetch('OTC_VECTOR_RELEASE') }
 
+    # The real release and its copied inputs are an external proof profile.
+    before(:context) do
+        profile = %w[OTC_VECTOR_INPUTS OTC_VECTOR_RELEASE]
+        if profile.none? { |name| ENV.key?(name) }
+            skip "Prediction vectors require external pinned fixtures: #{profile.join(', ')}; see scripts/otc/vectors/README.md"
+        end
+    end
+
     def generate(path, *extra)
         Open3.capture2e(RbConfig.ruby, script, '--release', release,
                        '--run-dir', File.join(inputs, 'congen'), '--output', path,

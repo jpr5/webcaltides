@@ -10,6 +10,13 @@ RSpec.describe 'the native strict case oracle' do
     let(:script) { File.expand_path('../../../scripts/otc/vectors/run_cases.rb', __dir__) }
     let(:sdk) { ENV.fetch('OTC_ORACLE_SDK') }
 
+    # The authored calls and fixtures live in the external SDK checkout.
+    before(:context) do
+        unless ENV.key?('OTC_ORACLE_SDK')
+            skip 'The native case oracle requires OTC_ORACLE_SDK with authored calls and fixtures; see scripts/otc/vectors/README.md'
+        end
+    end
+
     def run_oracle(out, *extra)
         Open3.capture2e(RbConfig.ruby, script,
                        '--calls', File.join(sdk, 'conformance/tools/predict_calls.json'),
